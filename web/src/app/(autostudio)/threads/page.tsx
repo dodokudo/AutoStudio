@@ -1,13 +1,14 @@
 import { InsightsCard } from "./_components/insights-card";
 import { CompetitorHighlights } from "./_components/competitor-highlight";
-import { PostQueue } from "./_components/post-queue";
+import { PostQueueContainer } from "./_components/post-queue-container";
 import { getThreadsInsights } from "@/lib/threadsInsights";
-import { buildScheduleSlots } from "@/lib/promptBuilder";
+import { seedPlansIfNeeded } from "@/lib/bigqueryPlans";
 
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? "mark-454114";
 
 export default async function ThreadsHome() {
   const insights = await getThreadsInsights(PROJECT_ID);
+  const plans = await seedPlansIfNeeded();
 
   const resolveDeltaTone = (value: number | undefined) => {
     if (value === undefined || value === 0) return undefined;
@@ -64,22 +65,11 @@ export default async function ThreadsHome() {
     summary: item.contentSnippet,
   }));
 
-  const schedule = buildScheduleSlots(insights.meta.targetPostCount);
-  const queueItems = insights.topSelfPosts.slice(0, 5).map((post, index) => ({
-    id: post.postId ?? `plan-${index + 1}`,
-    scheduledTime: schedule[index] ?? '07:00',
-    templateId: 'auto-generated',
-    theme: insights.trendingTopics[index]?.themeTag ?? '未分類',
-    status: (index === 0 ? 'draft' : index === 1 ? 'approved' : 'scheduled') as const,
-    mainText: post.content?.slice(0, 280) ?? '',
-    comments: [],
-  }));
-
   return (
     <div className="space-y-10">
       <InsightsCard title="アカウント概況 (直近7日)" stats={stats} />
       <div className="grid gap-10 lg:grid-cols-[2fr,1.2fr]">
-        <PostQueue items={queueItems} />
+        <PostQueueContainer initialPlans={JSON.parse(JSON.stringify(plans))} />
         <CompetitorHighlights items={highlights} />
       </div>
     </div>

@@ -1,3 +1,7 @@
+"use client";
+
+import type { PlanStatus } from '@/types/threadPlan';
+
 interface QueueItem {
   id: string;
   scheduledTime: string;
@@ -5,26 +9,31 @@ interface QueueItem {
   theme: string;
   mainText: string;
   comments?: { order: number; text: string }[];
-  status: 'draft' | 'approved' | 'scheduled';
+  status: PlanStatus;
 }
 
 interface PostQueueProps {
   items: QueueItem[];
+  onApprove?: (id: string) => Promise<void> | void;
+  onReject?: (id: string) => Promise<void> | void;
+  pendingId?: string | null;
 }
 
-const statusLabel: Record<QueueItem['status'], string> = {
+const statusLabel: Record<PlanStatus, string> = {
   draft: '下書き',
   approved: '承認済み',
   scheduled: '予約済み',
+  rejected: '差戻し済み',
 };
 
-const statusColor: Record<QueueItem['status'], string> = {
+const statusColor: Record<PlanStatus, string> = {
   draft: 'text-amber-300',
   approved: 'text-emerald-400',
   scheduled: 'text-sky-400',
+  rejected: 'text-rose-400',
 };
 
-export function PostQueue({ items }: PostQueueProps) {
+export function PostQueue({ items, onApprove, onReject, pendingId }: PostQueueProps) {
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl">
       <header className="mb-4 flex items-center justify-between">
@@ -61,6 +70,30 @@ export function PostQueue({ items }: PostQueueProps) {
                 ))}
               </div>
             ) : null}
+            {(onApprove || onReject) && (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {onApprove && item.status !== 'approved' && item.status !== 'scheduled' ? (
+                  <button
+                    type="button"
+                    onClick={() => onApprove(item.id)}
+                    disabled={pendingId === item.id}
+                    className="rounded-lg bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50"
+                  >
+                    {pendingId === item.id ? '処理中…' : '承認する'}
+                  </button>
+                ) : null}
+                {onReject && item.status !== 'rejected' ? (
+                  <button
+                    type="button"
+                    onClick={() => onReject(item.id)}
+                    disabled={pendingId === item.id}
+                    className="rounded-lg bg-rose-500/20 px-3 py-2 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/30 disabled:opacity-50"
+                  >
+                    {pendingId === item.id ? '処理中…' : '差し戻す'}
+                  </button>
+                ) : null}
+              </div>
+            )}
           </article>
         ))}
       </div>

@@ -2,30 +2,42 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient } from './bigquery';
 import { buildScheduleSlots } from './promptBuilder';
 import { getThreadsInsights } from './threadsInsights';
+import type { PlanStatus, ThreadPlan } from '@/types/threadPlan';
 
 const DATASET = 'autostudio_threads';
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
-
-export type PlanStatus = 'draft' | 'approved' | 'scheduled' | 'rejected';
-
-export interface ThreadPlan {
-  plan_id: string;
-  generation_date: string;
-  scheduled_time: string;
-  template_id: string;
-  theme: string;
-  status: PlanStatus;
-  main_text: string;
-  comments: string;
-  created_at: string;
-  updated_at: string;
-}
 
 const client: BigQuery = createBigQueryClient(PROJECT_ID);
 
 async function query<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>): Promise<T[]> {
   const [rows] = await client.query({ query: sql, params });
   return rows as T[];
+}
+
+function toPlain(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+    const inner = (value as Record<string, unknown>).value;
+    return typeof inner === 'string' ? inner : String(inner ?? '');
+  }
+  return String(value);
+}
+
+function normalizePlan(plan: Record<string, unknown>): ThreadPlan {
+  return {
+    plan_id: toPlain(plan.plan_id),
+    generation_date: toPlain(plan.generation_date).slice(0, 10),
+    scheduled_time: toPlain(plan.scheduled_time) || '07:00',
+    template_id: toPlain(plan.template_id) || 'auto-generated',
+    theme: toPlain(plan.theme) || '未分類',
+    status: (plan.status ?? 'draft') as PlanStatus,
+    main_text: toPlain(plan.main_text),
+    comments: toPlain(plan.comments) || '[]',
+    created_at: toPlain(plan.created_at) || new Date().toISOString(),
+    updated_at: toPlain(plan.updated_at) || new Date().toISOString(),
+  };
 }
 
 export async function listPlans(): Promise<ThreadPlan[]> {
@@ -35,7 +47,8 @@ export async function listPlans(): Promise<ThreadPlan[]> {
     WHERE generation_date = CURRENT_DATE()
     ORDER BY scheduled_time
   `;
-  return query<ThreadPlan>(sql);
+  const rows = await query(sql);
+  return rows.map(normalizePlan);
 }
 
 export async function seedPlansIfNeeded() {
@@ -63,7 +76,7 @@ export async function seedPlansIfNeeded() {
 
   const dataset = client.dataset(DATASET);
   await dataset.table('thread_post_plans').insert(rows);
-  return rows as ThreadPlan[];
+  return listPlans();
 }
 
 export async function updatePlanStatus(planId: string, status: PlanStatus) {
@@ -73,11 +86,11 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
     WHERE plan_id = @planId AND generation_date = CURRENT_DATE()
   `;
   await client.query({ query: sql, params: { planId, status } });
-  const [plan] = await query<ThreadPlan>(
+  const [plan] = await query(
     `SELECT * FROM \`${PROJECT_ID}.${DATASET}.thread_post_plans\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
     { planId },
   );
-  return plan;
+  return plan ? normalizePlan(plan) : undefined;
 }
 
 export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }) {
@@ -112,9 +125,9 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
     },
   });
 
-  const [updated] = await query<ThreadPlan>(
+  const [updated] = await query(
     `SELECT * FROM \`${PROJECT_ID}.${DATASET}.thread_post_plans\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
     { planId: plan.plan_id },
   );
-  return updated;
+  return updated ? normalizePlan(updated) : undefined;
 }
