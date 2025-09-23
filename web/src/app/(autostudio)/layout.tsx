@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 
 const navItems = [
-  { href: '/threads', label: 'Threads' },
-  { href: '#', label: 'YouTube (coming soon)' },
-  { href: '#', label: 'Instagram (coming soon)' },
+  { id: 'threads', href: '/threads', label: 'Threads' },
+  { id: 'youtube', href: '#', label: 'YouTube (coming soon)' },
+  { id: 'instagram', href: '#', label: 'Instagram (coming soon)' },
 ];
 
 export default function AutoStudioLayout({ children }: { children: ReactNode }) {
@@ -18,7 +18,7 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
           <nav className="flex items-center gap-6 text-sm text-slate-300">
             {navItems.map((item) => (
               <Link
-                key={item.href}
+                key={item.id}
                 href={item.href === '#' ? '/threads' : item.href}
                 className={
                   item.href === '#'
