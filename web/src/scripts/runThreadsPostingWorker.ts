@@ -5,7 +5,8 @@ import {
   markJobProcessing,
   markJobResult,
 } from '@/lib/bigqueryJobs';
-import { listPlans } from '@/lib/bigqueryPlans';
+import { listPlans, updatePlanStatus } from '@/lib/bigqueryPlans';
+import { postThread } from '@/lib/threadsApi';
 
 loadEnv();
 loadEnv({ path: path.resolve(process.cwd(), '.env.local') });
@@ -27,14 +28,29 @@ async function processJob() {
       throw new Error('Plan not found for job');
     }
 
-    // TODO: Threads API 呼び出し。MVPでは仮に成功したものとして扱う。
-    const mockThreadId = `mock-${Date.now()}`;
+    const mainThreadId = await postThread(plan.main_text);
+    const comments = (() => {
+      try {
+        const parsed = JSON.parse(plan.comments ?? '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    let replyToId = mainThreadId;
+    for (const comment of comments) {
+      const commentThreadId = await postThread(comment.text, replyToId);
+      replyToId = commentThreadId;
+    }
 
     await markJobResult(job.job_id, 'succeeded', {
-      postedThreadId: mockThreadId,
+      postedThreadId: mainThreadId,
     });
 
-    console.log(`Job ${job.job_id} succeeded with thread ${mockThreadId}`);
+    await updatePlanStatus(plan.plan_id, 'scheduled');
+
+    console.log(`Job ${job.job_id} succeeded with thread ${mainThreadId}`);
   } catch (error) {
     console.error(`Job ${job.job_id} failed`, error);
     await markJobResult(job.job_id, 'failed', {

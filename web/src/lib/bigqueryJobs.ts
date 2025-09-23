@@ -113,7 +113,7 @@ export async function createJobForPlan(plan: ThreadPlan) {
       try {
         const parsed = JSON.parse(plan.comments ?? '[]');
         return Array.isArray(parsed) ? parsed : [];
-      } catch (error) {
+      } catch {
         return [];
       }
     })(),

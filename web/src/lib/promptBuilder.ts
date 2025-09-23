@@ -165,11 +165,16 @@ async function fetchTrendingTopics(client: BigQuery): Promise<PromptTrendingTopi
         ARRAY_AGG(DISTINCT uname LIMIT 5) AS accounts
       FROM enriched
       GROUP BY genre
+    ),
+    positives AS (
+      SELECT * FROM grouped WHERE avg_followers_delta >= 0 ORDER BY avg_followers_delta DESC LIMIT 3
+    ),
+    negatives AS (
+      SELECT * FROM grouped WHERE avg_followers_delta < 0 ORDER BY avg_followers_delta ASC LIMIT 3
     )
-    SELECT *
-    FROM grouped
-    ORDER BY avg_followers_delta DESC
-    LIMIT 5
+    SELECT * FROM positives
+    UNION ALL
+    SELECT * FROM negatives
   `;
   type Row = {
     theme_tag?: string;

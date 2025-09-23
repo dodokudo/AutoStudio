@@ -3,6 +3,7 @@ import { CompetitorHighlights } from "./_components/competitor-highlight";
 import { PostQueueContainer } from "./_components/post-queue-container";
 import { getThreadsInsights } from "@/lib/threadsInsights";
 import { seedPlansIfNeeded } from "@/lib/bigqueryPlans";
+import { TrendingTopics } from "./_components/trending-topics";
 
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? "mark-454114";
 
@@ -69,7 +70,17 @@ export default async function ThreadsHome() {
     <div className="space-y-10">
       <InsightsCard title="アカウント概況 (直近7日)" stats={stats} />
       <div className="grid gap-10 lg:grid-cols-[2fr,1.2fr]">
-        <PostQueueContainer initialPlans={JSON.parse(JSON.stringify(plans))} />
+        <div className="space-y-10">
+          <PostQueueContainer initialPlans={JSON.parse(JSON.stringify(plans))} />
+          <TrendingTopics
+            items={insights.trendingTopics.map((topic) => ({
+              themeTag: topic.themeTag,
+              avgFollowersDelta: topic.avgFollowersDelta,
+              avgViews: topic.avgViews,
+              sampleAccounts: topic.sampleAccounts,
+            }))}
+          />
+        </div>
         <CompetitorHighlights items={highlights} />
       </div>
     </div>
