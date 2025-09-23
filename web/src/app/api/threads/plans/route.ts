@@ -19,7 +19,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const payload = await request.json();
-    const { planId, scheduledTime, mainText, theme, status, comments } = payload ?? {};
+    const { planId, scheduledTime, mainText, templateId, theme, status, comments } = payload ?? {};
     if (!planId) {
       return NextResponse.json({ error: 'planId is required' }, { status: 400 });
     }
@@ -28,6 +28,7 @@ export async function PUT(request: NextRequest) {
       plan_id: planId,
       scheduled_time: typeof scheduledTime === 'string' ? scheduledTime : undefined,
       main_text: typeof mainText === 'string' ? mainText : undefined,
+      template_id: typeof templateId === 'string' ? templateId : undefined,
       theme: typeof theme === 'string' ? theme : undefined,
       status: status as PlanStatus | undefined,
       comments: Array.isArray(comments) ? JSON.stringify(comments) : undefined,

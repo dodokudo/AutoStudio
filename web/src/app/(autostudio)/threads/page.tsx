@@ -2,15 +2,19 @@ import { InsightsCard } from "./_components/insights-card";
 import { CompetitorHighlights } from "./_components/competitor-highlight";
 import { PostQueueContainer } from "./_components/post-queue-container";
 import { getThreadsInsights } from "@/lib/threadsInsights";
-import { seedPlansIfNeeded } from "@/lib/bigqueryPlans";
+import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
+import { getThreadsDashboard } from "@/lib/threadsDashboard";
 import { TrendingTopics } from "./_components/trending-topics";
 import { TemplateSummary } from "./_components/template-summary";
+import { DashboardCards } from "./_components/dashboard-cards";
 
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? "mark-454114";
 
 export default async function ThreadsHome() {
   const insights = await getThreadsInsights(PROJECT_ID);
-  const plans = await seedPlansIfNeeded();
+  await seedPlansIfNeeded();
+  const planSummaries = await listPlanSummaries();
+  const dashboard = await getThreadsDashboard();
 
   const resolveDeltaTone = (value: number | undefined) => {
     if (value === undefined || value === 0) return undefined;
@@ -73,7 +77,14 @@ export default async function ThreadsHome() {
       <div className="space-y-10">
         <div className="grid gap-10 lg:grid-cols-[2fr,1.2fr]">
           <div className="space-y-10">
-            <PostQueueContainer initialPlans={JSON.parse(JSON.stringify(plans))} />
+            <PostQueueContainer
+              initialPlans={JSON.parse(JSON.stringify(planSummaries))}
+              trendingThemes={insights.trendingTopics.map((topic) => topic.themeTag)}
+              templateOptions={insights.templateSummaries.map((template) => ({
+                value: template.templateId,
+                label: `${template.templateId} (v${template.version})`,
+              }))}
+            />
             <TrendingTopics
               items={insights.trendingTopics.map((topic) => ({
                 themeTag: topic.themeTag,
@@ -86,6 +97,7 @@ export default async function ThreadsHome() {
           <CompetitorHighlights items={highlights} />
         </div>
         <TemplateSummary items={insights.templateSummaries} />
+        <DashboardCards jobCounts={dashboard.jobCounts} recentLogs={dashboard.recentLogs} />
       </div>
     </div>
   );

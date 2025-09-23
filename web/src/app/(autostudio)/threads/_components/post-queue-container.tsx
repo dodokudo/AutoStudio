@@ -5,8 +5,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { PostQueue } from './post-queue';
 import type { ThreadPlanSummary } from '@/types/threadPlan';
 
+interface TemplateOption {
+  value: string;
+  label: string;
+}
+
 interface PostQueueContainerProps {
-  initialPlans: ThreadPlan[];
+  initialPlans: ThreadPlanSummary[];
+  trendingThemes?: string[];
+  templateOptions?: TemplateOption[];
 }
 
 interface PlansResponse {
@@ -22,6 +29,18 @@ const fetcher = async (url: string): Promise<PlansResponse> => {
 };
 
 function normalize(plan: ThreadPlanSummary) {
+  const comments = (() => {
+    try {
+      const parsed = JSON.parse(plan.comments ?? '[]');
+      if (Array.isArray(parsed)) {
+        return (parsed as { order: number; text: string }[]).sort((a, b) => a.order - b.order);
+      }
+    } catch (error) {
+      console.warn('Failed to parse comments', error);
+    }
+    return [] as { order: number; text: string }[];
+  })();
+
   return {
     id: plan.plan_id,
     scheduledTime: plan.scheduled_time,
@@ -29,17 +48,7 @@ function normalize(plan: ThreadPlanSummary) {
     theme: plan.theme,
     status: plan.status,
     mainText: plan.main_text,
-    comments: (() => {
-      try {
-        const parsed = JSON.parse(plan.comments ?? '[]');
-        if (Array.isArray(parsed)) {
-          return parsed as { order: number; text: string }[];
-        }
-      } catch (error) {
-        console.warn('Failed to parse comments', error);
-      }
-      return [] as { order: number; text: string }[];
-    })(),
+    comments,
     jobStatus: plan.job_status,
     jobUpdatedAt: plan.job_updated_at,
     jobErrorMessage: plan.job_error_message,
@@ -50,7 +59,7 @@ function normalize(plan: ThreadPlanSummary) {
   };
 }
 
-export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
+export function PostQueueContainer({ initialPlans, trendingThemes = [], templateOptions = [] }: PostQueueContainerProps) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const { data, mutate } = useSWR<PlansResponse>('/api/threads/plans', fetcher, {
     fallbackData: { items: initialPlans },
@@ -58,23 +67,29 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
   });
 
   const plans = useMemo(() => data?.items ?? [], [data?.items]);
+  const normalizedPlans = useMemo(() => plans.map(normalize), [plans]);
   const planKey = plans.map((plan) => plan.plan_id).join('|');
-  const [drafts, setDrafts] = useState<Record<string, { scheduledTime: string; mainText: string }>>({});
+  const [drafts, setDrafts] = useState<
+    Record<string, { scheduledTime: string; mainText: string; templateId: string; theme: string; comments: { order: number; text: string }[] }>
+  >({});
 
   useEffect(() => {
     setDrafts((current) => {
       const next = { ...current };
-      plans.forEach((plan) => {
-        if (!next[plan.plan_id]) {
-          next[plan.plan_id] = {
-            scheduledTime: plan.scheduled_time,
-            mainText: plan.main_text,
+      normalizedPlans.forEach((plan) => {
+        if (!next[plan.id]) {
+          next[plan.id] = {
+            scheduledTime: plan.scheduledTime,
+            mainText: plan.mainText,
+            templateId: plan.templateId,
+            theme: plan.theme,
+            comments: plan.comments,
           };
         }
       });
       return next;
     });
-  }, [planKey, plans]);
+  }, [planKey, normalizedPlans]);
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setPendingId(id);
@@ -85,16 +100,12 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
       if (!res.ok) {
         throw new Error(await res.text());
       }
-      const { plan } = (await res.json()) as { plan: ThreadPlan };
-      mutate(
-        (prev) =>
-          prev
-            ? {
-                items: prev.items.map((item) => (item.plan_id === plan.plan_id ? plan : item)),
-              }
-            : prev,
-        { revalidate: false },
-      );
+      await mutate();
+      setDrafts((curr) => {
+        const rest = { ...curr };
+        delete rest[id];
+        return rest;
+      });
     } catch (error) {
       console.error('Plan action failed', error);
       alert('処理に失敗しました');
@@ -105,18 +116,32 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
 
   return (
     <PostQueue
-      items={plans.map(normalize)}
+      items={normalizedPlans}
       pendingId={pendingId}
       onApprove={(id) => handleAction(id, 'approve')}
       onReject={(id) => handleAction(id, 'reject')}
       onDraftChange={(id, change) => {
-        setDrafts((current) => ({
-          ...current,
-          [id]: {
-            scheduledTime: change.scheduledTime ?? current[id]?.scheduledTime ?? plans.find((p) => p.plan_id === id)?.scheduled_time ?? '07:00',
-            mainText: change.mainText ?? current[id]?.mainText ?? plans.find((p) => p.plan_id === id)?.main_text ?? '',
-          },
-        }));
+        const base = normalizedPlans.find((plan) => plan.id === id);
+        if (!base) return;
+        setDrafts((current) => {
+          const existing = current[id] ?? {
+            scheduledTime: base.scheduledTime,
+            mainText: base.mainText,
+            templateId: base.templateId,
+            theme: base.theme,
+            comments: base.comments,
+          };
+          return {
+            ...current,
+            [id]: {
+              scheduledTime: change.scheduledTime ?? existing.scheduledTime,
+              mainText: change.mainText ?? existing.mainText,
+              templateId: change.templateId ?? existing.templateId,
+              theme: change.theme ?? existing.theme,
+              comments: existing.comments,
+            },
+          };
+        });
       }}
       onSave={async (id, changes) => {
         setPendingId(id);
@@ -124,21 +149,34 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
           const res = await fetch('/api/threads/plans', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ planId: id, scheduledTime: changes.scheduledTime, mainText: changes.mainText }),
+            body: JSON.stringify({
+              planId: id,
+              scheduledTime: changes.scheduledTime,
+              mainText: changes.mainText,
+              templateId: changes.templateId,
+              theme: changes.theme,
+              comments: changes.comments,
+            }),
           });
           if (!res.ok) {
             throw new Error(await res.text());
           }
-          const { plan } = (await res.json()) as { plan: ThreadPlan };
-          mutate(
-            (prev) =>
-              prev
-                ? {
-                    items: prev.items.map((item) => (item.plan_id === plan.plan_id ? plan : item)),
-                  }
-                : prev,
-            { revalidate: false },
-          );
+          await mutate();
+          setDrafts((curr) => {
+            const rest = { ...curr };
+            delete rest[id];
+            return rest;
+          });
+          setDrafts((curr) => ({
+            ...curr,
+            [id]: {
+              scheduledTime: changes.scheduledTime,
+              mainText: changes.mainText,
+              templateId: changes.templateId,
+              theme: changes.theme,
+              comments: changes.comments,
+            },
+          }));
         } catch (error) {
           console.error('Plan update failed', error);
           alert('保存に失敗しました');
@@ -164,6 +202,28 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
         }
       }}
       editableValues={drafts}
+      onCommentChange={(id, comments) => {
+        const base = normalizedPlans.find((plan) => plan.id === id);
+        if (!base) return;
+        setDrafts((current) => {
+          const existing = current[id] ?? {
+            scheduledTime: base.scheduledTime,
+            mainText: base.mainText,
+            templateId: base.templateId,
+            theme: base.theme,
+            comments: base.comments,
+          };
+          return {
+            ...current,
+            [id]: {
+              ...existing,
+              comments,
+            },
+          };
+        });
+      }}
+      trendingThemes={trendingThemes}
+      templateOptions={templateOptions}
     />
   );
 }
