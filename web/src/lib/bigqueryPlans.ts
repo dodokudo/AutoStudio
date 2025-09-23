@@ -33,7 +33,17 @@ async function ensurePlanTable() {
   const table = dataset.table(PLAN_TABLE);
   const [exists] = await table.exists();
   if (!exists) {
-    await table.create({ schema: PLAN_TABLE_SCHEMA });
+    try {
+      await dataset.createTable(PLAN_TABLE, {
+        schema: PLAN_TABLE_SCHEMA,
+      });
+    } catch (error) {
+      const message = (error as Error)?.message || '';
+      if (!message.includes('Already Exists')) {
+        console.error('Failed to create thread_post_plans table', error);
+        throw error;
+      }
+    }
   }
 }
 
