@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "sync:threads": "tsx src/scripts/syncThreadsData.ts",
     "prompt:preview": "tsx src/scripts/previewThreadsPrompt.ts",
-    "worker:threads": "tsx src/scripts/runThreadsPostingWorker.ts"
+    "worker:threads": "tsx src/scripts/runThreadsPostingWorker.ts",
+    "templates:update": "tsx src/scripts/updateTemplateScores.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

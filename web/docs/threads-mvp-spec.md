@@ -98,6 +98,7 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
 5. Persist generation payload in BigQuery + local storage to allow audit and re-generation.
 6. Feed back actual performance (after 72h) to `threads_prompt_template_scores`.
 7. `npm run worker:threads` で承認済みプランの投稿ジョブを処理し、`thread_posting_logs` に結果を記録する。
+8. `npm run templates:update` で投稿後72時間経過した成功ログを集計し、テンプレート評価テーブルを更新する。
 
 ## 6. Approval & Scheduling UX
 - **Dashboard layout**:
