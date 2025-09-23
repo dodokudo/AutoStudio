@@ -2,11 +2,12 @@ import 'dotenv/config';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { BigQuery, Table, Dataset } from '@google-cloud/bigquery';
+import type { Job } from '@google-cloud/bigquery';
 import { Storage } from '@google-cloud/storage';
 import { LstepConfig, loadLstepConfig } from '@/lib/lstep/config';
 import { cleanupWorkspace, downloadLstepCsv } from '@/lib/lstep/downloader';
 import { transformLstepCsv } from '@/lib/lstep/csvTransform';
-import { sendLineNotify } from '@/lib/lstep/lineNotify';
+import { sendAlertEmail } from '@/lib/lstep/emailNotify';
 import { uploadFileToGcs } from '@/lib/lstep/gcs';
 import { withRetries } from '@/lib/lstep/retry';
 import {
@@ -200,43 +201,69 @@ async function loadIntoBigQuery(
         sourceFormat: 'NEWLINE_DELIMITED_JSON',
         writeDisposition: 'WRITE_APPEND',
       });
-      await job.promise();
+      await waitForLoadJob(job as Job);
     } catch (error) {
       throw new BigQueryLoadError(`${jobDef.table} テーブルへのロードに失敗しました`, { cause: error });
     }
   }
 }
 
+async function waitForLoadJob(job: Job): Promise<void> {
+  if (typeof job.promise === 'function') {
+    await job.promise();
+    return;
+  }
+
+  // promise が型定義に存在しない環境向けのフォールバック
+  await job.getMetadata();
+}
+
 async function handleFailure(error: unknown, config: LstepConfig): Promise<void> {
   if (error instanceof CookieExpiredError || error instanceof MissingStorageStateError) {
-    await sendSafeLineNotify(config.lineNotifyToken, '[Lstep自動取得] Cookie失効を検知しました。再ログインしてCookieを再保存してください。');
+    await sendSafeAlert(config, 'Cookie失効', buildCookieExpiredBody());
     return;
   }
 
   if (error instanceof DownloadFailedError) {
-    await sendSafeLineNotify(config.lineNotifyToken, '[Lstep自動取得] CSVダウンロードに失敗しました（リトライ3回実施済み）。');
+    await sendSafeAlert(config, 'CSVダウンロード失敗', 'CSVダウンロードが3回のリトライ後も失敗しました。Cloud Run ログを確認してください。');
     return;
   }
 
   if (error instanceof ProcessingFailedError) {
-    await sendSafeLineNotify(config.lineNotifyToken, '[Lstep自動取得] CSV整形処理でエラーが発生しました。ログを確認してください。');
+    await sendSafeAlert(config, 'CSV整形エラー', 'CSV 整形処理でエラーが発生しました。Cloud Run の実行ログを確認してください。');
     return;
   }
 
   if (error instanceof BigQueryLoadError) {
-    await sendSafeLineNotify(config.lineNotifyToken, '[Lstep自動取得] BigQueryロードに失敗しました。ログを確認してください。');
+    await sendSafeAlert(config, 'BigQueryロード失敗', 'BigQuery へのロードに失敗しました。ジョブログを確認してください。');
     return;
   }
 
-  await sendSafeLineNotify(config.lineNotifyToken, '[Lstep自動取得] 想定外のエラーが発生しました。ログを確認してください。');
+  await sendSafeAlert(config, '想定外のエラー', '想定外のエラーが発生しました。Cloud Run ログを確認してください。');
 }
 
-async function sendSafeLineNotify(token: string, message: string): Promise<void> {
+async function sendSafeAlert(config: LstepConfig, subjectSuffix: string, body: string): Promise<void> {
+  const subject = `${config.emailSubjectPrefix} ${subjectSuffix}`;
+  const fullBody = `${body}\n\n再ログイン手順:\n1. npm run lstep:capture\n2. 表示されたブラウザでLstepにログイン（reCAPTCHA対応）\n3. コンソールに保存完了ログが出たら終了\n4. Cloud Run ジョブを再実行、または次回スケジュールを待つ\n`;
+
   try {
-    await sendLineNotify(token, message);
+    await sendAlertEmail(config, {
+      subject,
+      body: fullBody,
+    });
   } catch (notifyError) {
-    console.error('LINE Notify の送信に失敗しました', notifyError);
+    console.error('アラートメールの送信に失敗しました', notifyError);
   }
+}
+
+function buildCookieExpiredBody(): string {
+  return [
+    'LstepのCookieが失効しました。再ログインが必要です。',
+    '手順:',
+    '  - ターミナルで npm run lstep:capture を実行',
+    '  - 開いたブラウザから dodo.inc0 / a768768a でログイン（reCAPTCHA手動対応）',
+    '  - 保存完了後、次回バッチで自動ダウンロードが復旧します',
+  ].join('\n');
 }
 
 interface SnapshotMetadata {

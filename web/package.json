@@ -24,6 +24,7 @@
     "googleapis": "^144.0.0",
     "iconv-lite": "^0.6.3",
     "next": "15.5.3",
+    "nodemailer": "^6.9.13",
     "playwright": "^1.49.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

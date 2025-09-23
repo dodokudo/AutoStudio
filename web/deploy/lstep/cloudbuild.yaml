@@ -1,0 +1,49 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--file=deploy/lstep/Dockerfile'
+      - '--tag=${_IMAGE_URI}'
+      - '.'
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - '--image=${_IMAGE_URI}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--no-allow-unauthenticated'
+      - '--service-account=${_SERVICE_ACCOUNT}'
+      - '--set-env-vars=LSTEP_LOGIN_URL=${_LSTEP_LOGIN_URL},LSTEP_FRIENDS_URL=${_LSTEP_FRIENDS_URL},LSTEP_GCS_BUCKET=${_GCS_BUCKET},LSTEP_STORAGE_STATE_OBJECT=${_STORAGE_STATE_OBJECT},LSTEP_BQ_PROJECT_ID=${_BQ_PROJECT_ID},LSTEP_BQ_DATASET=${_BQ_DATASET},LSTEP_BQ_LOCATION=${_BQ_LOCATION},LSTEP_RAW_PREFIX=${_RAW_PREFIX},LSTEP_PROCESSED_PREFIX=${_PROCESSED_PREFIX},LSTEP_DOWNLOAD_TIMEOUT_MS=${_DOWNLOAD_TIMEOUT_MS},LSTEP_RETRY_DELAYS_MS=${_RETRY_DELAYS_MS},LSTEP_TIMEZONE=${_TIMEZONE},LSTEP_ALERT_EMAILS=${_LSTEP_ALERT_EMAILS},LSTEP_EMAIL_FROM=${_LSTEP_EMAIL_FROM},LSTEP_EMAIL_SUBJECT_PREFIX=${_LSTEP_EMAIL_SUBJECT_PREFIX},LSTEP_SMTP_HOST=${_LSTEP_SMTP_HOST},LSTEP_SMTP_PORT=${_LSTEP_SMTP_PORT},LSTEP_SMTP_SECURE=${_LSTEP_SMTP_SECURE},LSTEP_SMTP_USER=${_LSTEP_SMTP_USER}'
+      - '--set-secrets=LSTEP_SMTP_PASS=${_LSTEP_SMTP_PASS_SECRET}'
+images:
+  - '${_IMAGE_URI}'
+
+substitutions:
+  _IMAGE_URI: 'asia-northeast1-docker.pkg.dev/PROJECT_ID/autostudio/lstep:latest'
+  _SERVICE_NAME: 'autostudio-lstep'
+  _REGION: 'asia-northeast1'
+  _LSTEP_LOGIN_URL: 'https://manager.linestep.net/account/login'
+  _LSTEP_FRIENDS_URL: 'https://manager.linestep.net/friends'
+  _GCS_BUCKET: 'your-bucket'
+  _STORAGE_STATE_OBJECT: 'lstep/session/storage-state.json'
+  _BQ_PROJECT_ID: 'your-gcp-project'
+  _BQ_DATASET: 'autostudio_lstep'
+  _BQ_LOCATION: 'asia-northeast1'
+  _RAW_PREFIX: 'lstep/raw'
+  _PROCESSED_PREFIX: 'lstep/processed'
+  _DOWNLOAD_TIMEOUT_MS: '120000'
+  _RETRY_DELAYS_MS: '5000,10000,30000'
+  _TIMEZONE: 'Asia/Tokyo'
+  _SERVICE_ACCOUNT: 'autostudio-lstep@PROJECT_ID.iam.gserviceaccount.com'
+  _SECRET_PROJECT: 'your-gcp-project'
+  _LSTEP_ALERT_EMAILS: 'dodo.inc.kudo@gmail.com'
+  _LSTEP_EMAIL_FROM: '"Lstep Bot" <dodo.inc.kudo@gmail.com>'
+  _LSTEP_EMAIL_SUBJECT_PREFIX: '[Lstep自動取得]'
+  _LSTEP_SMTP_HOST: 'smtp.gmail.com'
+  _LSTEP_SMTP_PORT: '465'
+  _LSTEP_SMTP_SECURE: 'true'
+  _LSTEP_SMTP_USER: 'dodo.inc.kudo@gmail.com'
+  _LSTEP_SMTP_PASS_SECRET: 'projects/${_SECRET_PROJECT}/secrets/LSTEP_SMTP_PASS:latest'

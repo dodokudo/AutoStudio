@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 const navItems = [
   { id: 'threads', href: '/threads', label: 'Threads' },
+  { id: 'line', href: '/line', label: 'LINE' },
   { id: 'youtube', href: '#', label: 'YouTube (coming soon)' },
   { id: 'instagram', href: '#', label: 'Instagram (coming soon)' },
 ];
