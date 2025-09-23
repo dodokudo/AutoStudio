@@ -80,10 +80,10 @@ export default async function ThreadsHome() {
             <PostQueueContainer
               initialPlans={JSON.parse(JSON.stringify(planSummaries))}
               trendingThemes={insights.trendingTopics.map((topic) => topic.themeTag)}
-              templateOptions={insights.templateSummaries.map((template) => ({
+              templateOptions={insights.templateSummaries?.map((template) => ({
                 value: template.templateId,
                 label: `${template.templateId} (v${template.version})`,
-              }))}
+              })) || []}
             />
             <TrendingTopics
               items={insights.trendingTopics.map((topic) => ({
