@@ -86,6 +86,47 @@ export async function listPlans(): Promise<ThreadPlan[]> {
   return rows.map(normalizePlan);
 }
 
+export interface GeneratedPlanInput {
+  planId: string;
+  scheduledTime?: string;
+  templateId: string;
+  theme: string;
+  mainText: string;
+  comments: { order: number; text: string }[];
+  status?: PlanStatus;
+}
+
+export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSchedule: string[]) {
+  await ensurePlanTable();
+
+  const dataset = client.dataset(DATASET);
+  await client.query({
+    query: `DELETE FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE generation_date = CURRENT_DATE()`,
+  });
+
+  if (!plans.length) {
+    return [] as ThreadPlan[];
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date().toISOString();
+  const rows = plans.map((plan, index) => ({
+    plan_id: plan.planId,
+    generation_date: today,
+    scheduled_time: plan.scheduledTime ?? fallbackSchedule[index] ?? '07:00',
+    template_id: plan.templateId ?? 'auto-generated',
+    theme: plan.theme ?? '未分類',
+    status: plan.status ?? 'draft',
+    main_text: plan.mainText ?? '',
+    comments: JSON.stringify(plan.comments ?? []),
+    created_at: now,
+    updated_at: now,
+  }));
+
+  await dataset.table(PLAN_TABLE).insert(rows);
+  return listPlans();
+}
+
 export async function seedPlansIfNeeded() {
   const existing = await listPlans();
   if (existing.length > 0) {

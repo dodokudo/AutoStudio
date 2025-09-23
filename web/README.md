@@ -45,5 +45,16 @@ web/
 - `npm run templates:update` — 投稿後72時間経過した成功ログを元に、テンプレートの平均インプレッション/いいねを
   `threads_prompt_template_scores` へ記録します。
 - `/threads` ページの下部に軽量ダッシュボードを表示し、ジョブキューの状態と直近ログを可視化しています。
+- `POST /api/threads/generate` — Claude API を使って当日の投稿案を自動生成し、`thread_post_plans` を更新します。
+- `POST /api/threads/cron/run` — ワーカー実行とテンプレ評価更新をまとめてキックするCron用エンドポイント。
+
+## 必要な環境変数（抜粋）
+
+| 変数名 | 用途 |
+| --- | --- |
+| `THREADS_TOKEN` / `THREADS_ACCOUNT_ID` | Threads Graph API での投稿に使用 |
+| `CLAUDE_API_KEY` | Claude への投稿案生成リクエストに使用 |
+| `CLAUDE_MODEL` (任意) | Claude モデル指定。既定は `claude-3-5-sonnet-20240620` |
+| `BQ_PROJECT_ID` | BigQuery のプロジェクト ID (既定: `mark-454114`) |
 
 Please keep the documentation (`docs/threads-mvp-spec.md`) in sync with implementation changes so marketing and engineering share the same mental model.

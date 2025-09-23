@@ -121,28 +121,21 @@ export function PostQueueContainer({ initialPlans, trendingThemes = [], template
       onApprove={(id) => handleAction(id, 'approve')}
       onReject={(id) => handleAction(id, 'reject')}
       onDraftChange={(id, change) => {
-        const base = normalizedPlans.find((plan) => plan.id === id);
-        if (!base) return;
-        setDrafts((current) => {
-          const existing = current[id] ?? {
-            scheduledTime: base.scheduledTime,
-            mainText: base.mainText,
-            templateId: base.templateId,
-            theme: base.theme,
+      setDrafts((current) => {
+        const base = current[id] ?? normalizedPlans.find((plan) => plan.id === id);
+        if (!base) return current;
+        return {
+          ...current,
+          [id]: {
+            scheduledTime: change.scheduledTime ?? base.scheduledTime,
+            mainText: change.mainText ?? base.mainText,
+            templateId: change.templateId ?? base.templateId,
+            theme: change.theme ?? base.theme,
             comments: base.comments,
-          };
-          return {
-            ...current,
-            [id]: {
-              scheduledTime: change.scheduledTime ?? existing.scheduledTime,
-              mainText: change.mainText ?? existing.mainText,
-              templateId: change.templateId ?? existing.templateId,
-              theme: change.theme ?? existing.theme,
-              comments: existing.comments,
-            },
-          };
-        });
-      }}
+          },
+        };
+      });
+    }}
       onSave={async (id, changes) => {
         setPendingId(id);
         try {
@@ -203,20 +196,13 @@ export function PostQueueContainer({ initialPlans, trendingThemes = [], template
       }}
       editableValues={drafts}
       onCommentChange={(id, comments) => {
-        const base = normalizedPlans.find((plan) => plan.id === id);
-        if (!base) return;
         setDrafts((current) => {
-          const existing = current[id] ?? {
-            scheduledTime: base.scheduledTime,
-            mainText: base.mainText,
-            templateId: base.templateId,
-            theme: base.theme,
-            comments: base.comments,
-          };
+          const base = current[id] ?? normalizedPlans.find((plan) => plan.id === id);
+          if (!base) return current;
           return {
             ...current,
             [id]: {
-              ...existing,
+              ...base,
               comments,
             },
           };

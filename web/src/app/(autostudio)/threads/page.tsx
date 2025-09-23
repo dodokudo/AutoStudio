@@ -7,6 +7,7 @@ import { getThreadsDashboard } from "@/lib/threadsDashboard";
 import { TrendingTopics } from "./_components/trending-topics";
 import { TemplateSummary } from "./_components/template-summary";
 import { DashboardCards } from "./_components/dashboard-cards";
+import { RegenerateButton } from "./_components/regenerate-button";
 
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? "mark-454114";
 
@@ -73,6 +74,10 @@ export default async function ThreadsHome() {
 
   return (
     <div className="space-y-10">
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold text-white">Threads 自動投稿管理</h1>
+        <RegenerateButton />
+      </div>
       <InsightsCard title="アカウント概況 (直近7日)" stats={stats} />
       <div className="space-y-10">
         <div className="grid gap-10 lg:grid-cols-[2fr,1.2fr]">
