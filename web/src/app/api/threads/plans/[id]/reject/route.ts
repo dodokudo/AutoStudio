@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
+import { mutatePlanStatus } from '@/lib/threadPlans';
 
-export async function POST() {
-  return NextResponse.json(
-    {
-      message: 'Rejecting a Threads plan is not implemented yet.',
-      todo: [
-        'Return edited plan to generation backlog',
-        'Capture rejection reason for prompt fine-tuning',
-      ],
-    },
-    { status: 501 },
-  );
+export async function POST(_: Request, { params }: { params: { id: string } }) {
+  try {
+    const updated = await mutatePlanStatus(params.id, 'rejected');
+    if (!updated) {
+      return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+    }
+    return NextResponse.json({ plan: updated });
+  } catch (error) {
+    console.error('[threads/plans/reject] failed', error);
+    return NextResponse.json({ error: 'Rejection failed' }, { status: 500 });
+  }
 }
