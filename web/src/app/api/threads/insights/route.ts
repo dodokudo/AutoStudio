@@ -1,15 +1,25 @@
 import { NextResponse } from 'next/server';
+import { getThreadsInsights } from '@/lib/threadsInsights';
+
+const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
 
 export async function GET() {
-  return NextResponse.json(
-    {
-      message: 'Threads insights endpoint is not implemented yet.',
-      todo: [
-        'Fetch latest metrics from BigQuery',
-        'Aggregate 7-day trends for followers and profile views',
-        'Return top-performing self posts summary',
-      ],
-    },
-    { status: 501 },
-  );
+  try {
+    const data = await getThreadsInsights(PROJECT_ID);
+    const payload = {
+      meta: data.meta,
+      accountSummary: data.accountSummary,
+      topSelfPosts: data.topSelfPosts.slice(0, 10),
+      competitorHighlights: data.competitorHighlights,
+      trendingTopics: data.trendingTopics,
+    };
+
+    return NextResponse.json(payload, { status: 200 });
+  } catch (error) {
+    console.error('[threads/insights] failed', error);
+    return NextResponse.json(
+      { error: 'Failed to load insights data' },
+      { status: 500 },
+    );
+  }
 }

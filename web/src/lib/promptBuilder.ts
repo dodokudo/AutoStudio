@@ -227,7 +227,7 @@ async function fetchTemplateSummaries(client: BigQuery): Promise<PromptTemplateS
   return summaries.slice(0, 10);
 }
 
-function buildScheduleSlots(count: number, startHour = 7, intervalMinutes = 90): string[] {
+export function buildScheduleSlots(count: number, startHour = 7, intervalMinutes = 90): string[] {
   const slots: string[] = [];
   for (let i = 0; i < count; i += 1) {
     const minutes = startHour * 60 + i * intervalMinutes;
