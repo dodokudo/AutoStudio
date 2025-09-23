@@ -23,13 +23,16 @@ web/
 │   └── page.tsx                 # Redirects to /threads
 ├── src/lib/env.ts               # Environment variable guard
 ├── src/types/threads.ts         # Shared TypeScript types
-└── .env.example                 # Required secrets (Threads + Lstep)
+├── .env.example                 # Required secrets (Threads + Lstep)
+└── deploy/lstep/                # Cloud Run 用 Dockerfile / Cloud Build テンプレ
 
 ## Lstep 自動取得ツール（ツール4）
 
 - 仕様と手順は `docs/lstep-mvp-spec.md` にまとめています。
 - 初回 Cookie 保存: `npm run lstep:capture`
 - 自動ETL実行: `npm run lstep:ingest`（ローカル確認用。Cloud Run では Scheduler から起動）
+- Cloud Run デプロイテンプレ: `deploy/lstep/`
+- ダッシュボード: `/line` で BigQuery から日次KPI（新規友だち、タグTOP10、流入別、ファネル）を表示。`LSTEP_FUNNEL_TAGS` で段階を変更できます。
 ```
 
 ## Next Steps

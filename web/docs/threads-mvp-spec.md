@@ -122,6 +122,8 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
   - `POST /threads/generate`
   - `POST /threads/cron/run`
   - `GET /threads/dashboard`
+  - `GET /threads/prompt`
+  - `POST /threads/prompt`
   - `POST /threads/publish` (worker endpoint for scheduled jobs)
   - `GET /threads/logs`
 
