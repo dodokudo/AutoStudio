@@ -137,6 +137,7 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
           )
         )[SAFE_OFFSET(0)] AS job
       FROM \`${PROJECT_ID}.${DATASET}.thread_post_jobs\`
+      WHERE job_id IS NOT NULL
       GROUP BY plan_id
     ),
     latest_logs AS (
@@ -154,6 +155,7 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
           )
         )[SAFE_OFFSET(0)] AS log
       FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\`
+      WHERE posted_at IS NOT NULL
       GROUP BY plan_id
     )
     SELECT
@@ -164,13 +166,13 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
       p.theme,
       p.main_text,
       p.comments,
-      job.job_status,
-      job.job_updated_at,
-      job.job_error_message,
-      log.log_status,
-      log.log_error_message,
-      log.log_posted_thread_id,
-      log.log_posted_at
+      job.job.job_status AS job_status,
+      job.job.job_updated_at AS job_updated_at,
+      job.job.job_error_message AS job_error_message,
+      log.log.log_status AS log_status,
+      log.log.log_error_message AS log_error_message,
+      log.log.log_posted_thread_id AS log_posted_thread_id,
+      log.log.log_posted_at AS log_posted_at
     FROM plans p
     LEFT JOIN latest_jobs job ON p.plan_id = job.plan_id
     LEFT JOIN latest_logs log ON p.plan_id = log.plan_id

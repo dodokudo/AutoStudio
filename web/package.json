@@ -12,12 +12,19 @@
     "prompt:preview": "tsx src/scripts/previewThreadsPrompt.ts",
     "worker:threads": "tsx src/scripts/runThreadsPostingWorker.ts",
     "templates:update": "tsx src/scripts/updateTemplateScores.ts"
+    ,
+    "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
+    "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
+    "@google-cloud/storage": "^7.12.1",
+    "csv-parse": "^5.5.6",
     "dotenv": "^17.2.2",
     "googleapis": "^144.0.0",
+    "iconv-lite": "^0.6.3",
     "next": "15.5.3",
+    "playwright": "^1.49.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "swr": "^2.3.6"
