@@ -44,5 +44,6 @@ web/
   `thread_posting_logs` に記録します（現在はThreads APIのダミー処理）。
 - `npm run templates:update` — 投稿後72時間経過した成功ログを元に、テンプレートの平均インプレッション/いいねを
   `threads_prompt_template_scores` へ記録します。
+- `/threads` ページの下部に軽量ダッシュボードを表示し、ジョブキューの状態と直近ログを可視化しています。
 
 Please keep the documentation (`docs/threads-mvp-spec.md`) in sync with implementation changes so marketing and engineering share the same mental model.

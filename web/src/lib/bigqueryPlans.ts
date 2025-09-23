@@ -125,14 +125,34 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
     latest_jobs AS (
       SELECT
         plan_id,
-        (ARRAY_AGG(STRUCT(job_id, status, updated_at, error_message) ORDER BY updated_at DESC))[SAFE_OFFSET(0)] AS job
+        (
+          ARRAY_AGG(
+            STRUCT(
+              job_id AS job_id,
+              status AS job_status,
+              updated_at AS job_updated_at,
+              error_message AS job_error_message
+            )
+            ORDER BY updated_at DESC
+          )
+        )[SAFE_OFFSET(0)] AS job
       FROM \`${PROJECT_ID}.${DATASET}.thread_post_jobs\`
       GROUP BY plan_id
     ),
     latest_logs AS (
       SELECT
         plan_id,
-        (ARRAY_AGG(STRUCT(status, posted_thread_id, error_message, posted_at) ORDER BY posted_at DESC))[SAFE_OFFSET(0)] AS log
+        (
+          ARRAY_AGG(
+            STRUCT(
+              status AS log_status,
+              posted_thread_id AS log_posted_thread_id,
+              error_message AS log_error_message,
+              posted_at AS log_posted_at
+            )
+            ORDER BY posted_at DESC
+          )
+        )[SAFE_OFFSET(0)] AS log
       FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\`
       GROUP BY plan_id
     )
@@ -144,13 +164,13 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
       p.theme,
       p.main_text,
       p.comments,
-      job.status AS job_status,
-      job.updated_at AS job_updated_at,
-      job.error_message AS job_error_message,
-      log.status AS log_status,
-      log.error_message AS log_error_message,
-      log.posted_thread_id AS log_posted_thread_id,
-      log.posted_at AS log_posted_at
+      job.job_status,
+      job.job_updated_at,
+      job.job_error_message,
+      log.log_status,
+      log.log_error_message,
+      log.log_posted_thread_id,
+      log.log_posted_at
     FROM plans p
     LEFT JOIN latest_jobs job ON p.plan_id = job.plan_id
     LEFT JOIN latest_logs log ON p.plan_id = log.plan_id

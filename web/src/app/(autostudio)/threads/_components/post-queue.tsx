@@ -138,7 +138,7 @@ export function PostQueue({
               {templateOptions.length ? (
                 <datalist id={templateListId}>
                   {templateOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option key={`${item.id}-${option.value}`} value={option.value}>
                       {option.label}
                     </option>
                   ))}
