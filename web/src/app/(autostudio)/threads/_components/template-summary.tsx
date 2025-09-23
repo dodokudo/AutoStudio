@@ -8,11 +8,11 @@ interface TemplateSummaryItem {
 }
 
 interface TemplateSummaryProps {
-  items: TemplateSummaryItem[];
+  items?: TemplateSummaryItem[];
 }
 
 export function TemplateSummary({ items }: TemplateSummaryProps) {
-  if (!items.length) {
+  if (!items || !items.length) {
     return null;
   }
 
