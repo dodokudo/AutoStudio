@@ -5,6 +5,7 @@ import {
 } from '@/lib/bigqueryJobs';
 import { listPlans, updatePlanStatus } from '@/lib/bigqueryPlans';
 import { postThread } from '@/lib/threadsApi';
+import { notifyJobFailure } from '@/lib/notifications';
 
 function parseComments(comments: string) {
   try {
@@ -44,6 +45,7 @@ export async function processNextJob() {
   } catch (error) {
     const message = (error as Error).message ?? 'unknown error';
     await markJobResult(job.job_id, 'failed', { errorMessage: message });
+    await notifyJobFailure(job.plan_id, message);
     return { status: 'failed' as const, jobId: job.job_id, error: message };
   }
 }

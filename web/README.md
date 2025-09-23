@@ -32,6 +32,7 @@ web/
 - 初回 Cookie 保存: `npm run lstep:capture`
 - 自動ETL実行: `npm run lstep:ingest`（ローカル確認用。Cloud Run では Scheduler から起動）
 - Cloud Run デプロイテンプレ: `deploy/lstep/`
+- 通知: エラー時にメールを送信（`LSTEP_ALERT_EMAILS` / `LSTEP_SMTP_*` で設定）。再ログインは本人が `npm run lstep:capture` で対応。
 - ダッシュボード: `/line` で BigQuery から日次KPI（新規友だち、タグTOP10、流入別、ファネル）を表示。`LSTEP_FUNNEL_TAGS` で段階を変更できます。
 ```
 
@@ -65,5 +66,8 @@ web/
 | `CLAUDE_API_KEY` | Claude への投稿案生成リクエストに使用 |
 | `CLAUDE_MODEL` (任意) | Claude モデル指定。既定は `claude-3-5-sonnet-20240620` |
 | `BQ_PROJECT_ID` | BigQuery のプロジェクト ID (既定: `mark-454114`) |
+| `ALERT_EMAIL_ENABLED` | `true` にすると失敗時メール通知を送信 |
+| `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` | 通知メールの宛先／送信元 |
+| `ALERT_SMTP_HOST` / `ALERT_SMTP_PORT` / `ALERT_SMTP_USER` / `ALERT_SMTP_PASS` | 通知メール送信用SMTP設定 |
 
 Please keep the documentation (`docs/threads-mvp-spec.md`) in sync with implementation changes so marketing and engineering share the same mental model.

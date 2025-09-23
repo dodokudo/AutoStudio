@@ -119,11 +119,11 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
   - `POST /threads/plans/:id/reject`
   - `POST /threads/plans/:id/rerun`
   - `POST /threads/jobs/run`
-  - `POST /threads/generate`
-  - `POST /threads/cron/run`
-  - `GET /threads/dashboard`
-  - `GET /threads/prompt`
-  - `POST /threads/prompt`
+- `POST /threads/generate`
+- `POST /threads/cron/run`
+- `GET /threads/dashboard`
+- `GET /threads/prompt`
+- `POST /threads/prompt`
   - `POST /threads/publish` (worker endpoint for scheduled jobs)
   - `GET /threads/logs`
 
@@ -158,3 +158,10 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
 
 ---
 This document is the single source of truth for engineering and marketing when implementing Threads MVP inside AutoStudio.
+## 🔧 環境変数と通知
+
+- `ALERT_EMAIL_ENABLED=true` にすると、投稿ジョブ失敗や Claude 生成失敗時にメール通知を送信します。
+- SMTP の設定として `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO`, `ALERT_SMTP_HOST`, `ALERT_SMTP_PORT`, `ALERT_SMTP_USER`, `ALERT_SMTP_PASS` を指定してください。
+- Cron 実行の例
+  - 毎日 12:00 に投稿案生成: `POST /api/threads/generate`
+  - 15分おきにジョブ処理＆テンプレ評価: `POST /api/threads/cron/run`

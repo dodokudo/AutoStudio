@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildThreadsPromptPayload } from '@/lib/promptBuilder';
 import { generateClaudePlans } from '@/lib/claude';
 import { replaceTodayPlans, listPlanSummaries } from '@/lib/bigqueryPlans';
+import { notifyGenerateFailure } from '@/lib/notifications';
 
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
 
@@ -26,6 +27,7 @@ export async function POST() {
     return NextResponse.json({ items: summaries }, { status: 200 });
   } catch (error) {
     console.error('[threads/generate] failed', error);
+    await notifyGenerateFailure((error as Error).message ?? 'unknown error');
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
