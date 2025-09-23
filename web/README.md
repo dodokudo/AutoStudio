@@ -35,7 +35,10 @@ web/
 
 ## Utilities
 
-- `npm run sync:threads` — Google Sheets → BigQuery 同期スクリプト。実行前に `.env.local` に
-  `GOOGLE_APPLICATION_CREDENTIALS` を設定し、対象シートのサービスアカウント共有を確認してください。
+- `npm run sync:threads` — Google Sheets → BigQuery 同期スクリプト。Threads本体と競合リサーチ
+  シート（全投稿・対象者リスト）から `threads_*` / `competitor_posts_raw` / `competitor_account_daily`
+  に書き込みます。実行前に `.env.local` の `GOOGLE_APPLICATION_CREDENTIALS` とシート共有を設定してください。
+- `npm run prompt:preview` — BigQuery から最新データを取得し、Claude 向け投稿生成ペイロード
+  （JSON）を生成・標準出力に表示します。
 
 Please keep the documentation (`docs/threads-mvp-spec.md`) in sync with implementation changes so marketing and engineering share the same mental model.

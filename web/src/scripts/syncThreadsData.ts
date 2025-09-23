@@ -2,7 +2,7 @@ import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 import { SheetsClient } from '../lib/googleSheets';
 import { createBigQueryClient, getDataset } from '../lib/bigquery';
-import { BigQuery } from '@google-cloud/bigquery';
+import { BigQuery, TableField } from '@google-cloud/bigquery';
 
 loadEnv();
 loadEnv({ path: path.resolve(process.cwd(), '.env.local') });
@@ -52,6 +52,19 @@ interface CompetitorAccountMeta {
   genre: string | null;
 }
 
+interface CompetitorDailyMetricRow {
+  account_name: string;
+  username: string | null;
+  url: string | null;
+  genre: string | null;
+  date: string;
+  followers: number;
+  followers_delta: number;
+  posts_count: number;
+  views: number;
+  collected_at: string;
+}
+
 function parseNumber(value: string | undefined): number {
   if (!value) return 0;
   const normalized = value.replace(/[,"\\s]/g, '');
@@ -91,9 +104,41 @@ function parseDate(value: string | undefined): string | null {
 }
 
 function parseDateOnly(value: string | undefined): string | null {
-  const iso = parseDate(value);
-  if (!iso) return null;
-  return iso.slice(0, 10);
+  if (!value) return null;
+
+  const cleaned = value
+    .replace(/[（(].*?[）)]/g, '')
+    .replace(/[年月]/g, '/')
+    .replace(/日/g, '')
+    .trim();
+
+  if (!cleaned) return null;
+
+  if (/^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/.test(cleaned)) {
+    const iso = parseDate(cleaned);
+    return iso ? iso.slice(0, 10) : null;
+  }
+
+  if (/^\d{1,2}[/-]\d{1,2}$/.test(cleaned)) {
+    const [monthStr, dayStr] = cleaned.split(/[/-]/);
+    const month = Number(monthStr);
+    const day = Number(dayStr);
+    if (!month || !day) return null;
+
+    const now = new Date();
+    let year = now.getFullYear();
+    let candidate = new Date(Date.UTC(year, month - 1, day));
+
+    if (candidate.getTime() - now.getTime() > 1000 * 60 * 60 * 24 * 180) {
+      year -= 1;
+      candidate = new Date(Date.UTC(year, month - 1, day));
+    }
+
+    return candidate.toISOString().slice(0, 10);
+  }
+
+  const iso = parseDate(cleaned);
+  return iso ? iso.slice(0, 10) : null;
 }
 
 async function truncateTable(client: BigQuery, tableName: string) {
@@ -118,6 +163,20 @@ async function loadIntoBigQuery<T extends Record<string, unknown>>(
 
   await table.insert(rows, { raw: false, ignoreUnknownValues: true });
   console.log(`[done] inserted ${rows.length} rows into ${tableName}`);
+}
+
+async function ensureTable(
+  client: BigQuery,
+  tableName: string,
+  schema: TableField[],
+) {
+  const dataset = getDataset(client);
+  const table = dataset.table(tableName);
+  const [exists] = await table.exists();
+  if (!exists) {
+    await table.create({ schema });
+    console.log(`[info] created table ${tableName}`);
+  }
 }
 
 function range(sheetName: string, cells: string): string {
@@ -176,7 +235,7 @@ function parseThreadsPosts(values: string[][]): ThreadsPostRow[] {
 function buildCompetitorAccountMap(values: string[][]): Map<string, CompetitorAccountMeta> {
   const map = new Map<string, CompetitorAccountMeta>();
   if (!values.length) return map;
-  const width = values[0]?.length ?? 0;
+  const width = values.reduce((max, row) => Math.max(max, row.length), 0);
 
   for (let col = 1; col < width; ) {
     const name = values[1]?.[col]?.trim();
@@ -194,6 +253,67 @@ function buildCompetitorAccountMap(values: string[][]): Map<string, CompetitorAc
   }
 
   return map;
+}
+
+function parseCompetitorDailyMetrics(
+  values: string[][],
+  accountMeta: Map<string, CompetitorAccountMeta>,
+): CompetitorDailyMetricRow[] {
+  if (!values.length) return [];
+  const width = values.reduce((max, row) => Math.max(max, row.length), 0);
+  const nowIso = new Date().toISOString();
+  const rows: CompetitorDailyMetricRow[] = [];
+
+  for (let col = 1; col < width; ) {
+    const name = values[1]?.[col]?.trim();
+    if (!name) {
+      col += 1;
+      continue;
+    }
+
+    const meta = accountMeta.get(name) ?? {
+      username: values[2]?.[col]?.trim() || null,
+      url: values[3]?.[col]?.trim() || null,
+      genre: values[4]?.[col]?.trim() || null,
+    };
+
+    const followersCol = col;
+    const followersDeltaCol = col + 1;
+    const postsCol = col + 2;
+    const viewsCol = col + 3;
+
+    for (let rowIdx = 7; rowIdx < values.length; rowIdx += 1) {
+      const rawDate = values[rowIdx]?.[0];
+      if (!rawDate) continue;
+      const parsedDate = parseDateOnly(rawDate.replace(/\([^\)]*\)/g, '').trim());
+      if (!parsedDate) continue;
+
+      const followers = parseNumber(values[rowIdx]?.[followersCol]);
+      const followersDelta = parseNumber(values[rowIdx]?.[followersDeltaCol]);
+      const postsCount = parseNumber(values[rowIdx]?.[postsCol]);
+      const views = parseNumber(values[rowIdx]?.[viewsCol]);
+
+      if (followers === 0 && followersDelta === 0 && postsCount === 0 && views === 0) {
+        continue;
+      }
+      rows.push({
+        account_name: name,
+        username: meta.username,
+        url: meta.url,
+        genre: meta.genre,
+        date: parsedDate,
+        followers,
+        followers_delta: followersDelta,
+        posts_count: postsCount,
+        views,
+        collected_at: nowIso,
+      });
+    }
+
+    col += 5; // 4 data columns + 1 blank separator
+  }
+
+  return rows;
 }
 
 function parseCompetitorPosts(
@@ -248,12 +368,27 @@ async function main() {
   const threadsPosts = parseThreadsPosts(threadsPostsValues);
   const competitorAccountMap = buildCompetitorAccountMap(competitorTargetsValues);
   const competitorPosts = parseCompetitorPosts(competitorAllPostsValues, competitorAccountMap);
+  const competitorDailyMetrics = parseCompetitorDailyMetrics(competitorTargetsValues, competitorAccountMap);
 
   const bigQueryClient = createBigQueryClient(PROJECT_ID);
+
+  await ensureTable(bigQueryClient, 'competitor_account_daily', [
+    { name: 'account_name', type: 'STRING' },
+    { name: 'username', type: 'STRING' },
+    { name: 'url', type: 'STRING' },
+    { name: 'genre', type: 'STRING' },
+    { name: 'date', type: 'DATE' },
+    { name: 'followers', type: 'INT64' },
+    { name: 'followers_delta', type: 'INT64' },
+    { name: 'posts_count', type: 'INT64' },
+    { name: 'views', type: 'INT64' },
+    { name: 'collected_at', type: 'TIMESTAMP' },
+  ]);
 
   await loadIntoBigQuery(bigQueryClient, 'threads_daily_metrics', threadsMetrics);
   await loadIntoBigQuery(bigQueryClient, 'threads_posts', threadsPosts);
   await loadIntoBigQuery(bigQueryClient, 'competitor_posts_raw', competitorPosts);
+  await loadIntoBigQuery(bigQueryClient, 'competitor_account_daily', competitorDailyMetrics);
 
   console.log('Sync completed successfully.');
 }

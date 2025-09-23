@@ -28,7 +28,7 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
 - `Threads`: columns `Date`, `Followers (Snapshot)`, `Profile Views`, ...
 - `Threads post`: columns include `投稿ID`, `投稿日`, `投稿内容`, `閲覧数`, `いいね`, ...
 - Updated daily via existing GAS scripts; AutoStudio lives in consumer role.
-- 同期コマンド: `npm run sync:threads`（Google Sheets → BigQuery）
+- 同期コマンド: `npm run sync:threads`（Google Sheets → BigQuery、競合日次指標と投稿を同期）
 
 ### 3.2 BigQuery Tables
 - **Project**: `mark-454114`
@@ -44,6 +44,7 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
 | `competitor_posts_raw` | Direct import from secretary sheet | source-aligned fields |
 | `competitor_posts_enriched` | Adds AI tags (theme, hook, CTA style) | derived columns + `enriched_at` |
 | `competitor_trends_daily` | Aggregated trends | `date`, `theme_tag`, `avg_impressions`, `wow_change` |
+| `competitor_account_daily` | Raw daily metrics per competitor | `account_name`, `username`, `date`, `followers`, `followers_delta`, `posts_count`, `views`, `collected_at` |
 
 ## 4. Evaluation Rules
 - **Account health**: show 7-day moving averages with WoW delta for profile views & followers.
@@ -90,6 +91,7 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
   ]
 }
 ```
+4. 実装済みユーティリティ `npm run prompt:preview` で上記スキーマ準拠の入力 JSON を BigQuery から生成し、提案内容を確認できる。
 4. Persist generation payload in BigQuery + local storage to allow audit and re-generation.
 5. Feed back actual performance (after 72h) to `threads_prompt_template_scores`.
 

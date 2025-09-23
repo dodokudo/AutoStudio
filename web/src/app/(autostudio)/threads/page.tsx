@@ -1,66 +1,98 @@
-import Link from 'next/link';
+import { InsightsCard } from "./_components/insights-card";
+import { CompetitorHighlights } from "./_components/competitor-highlight";
+import { PostQueue } from "./_components/post-queue";
 
-const upcomingSections = [
+const mockInsights = {
+  title: "アカウント概況 (直近7日)",
+  stats: [
+    { label: "平均フォロワー", value: "675", delta: "+42", deltaTone: "up" },
+    { label: "平均プロフ閲覧", value: "2,263", delta: "+1,242", deltaTone: "up" },
+    { label: "最高閲覧投稿", value: "112,926", delta: "@DHB7T5kzfLG" },
+    { label: "承認待ち投稿", value: "10", delta: "本日生成" },
+  ],
+};
+
+const mockHighlights = [
   {
-    title: 'Data Sync',
-    description:
-      'Import Threads日次インサイトと投稿データをBigQueryに同期し、閲覧数ベースの評価を自動化します。',
+    accountName: "門口 拓也",
+    username: "mon_guchi",
+    impressions: "89,298",
+    likes: "60",
+    summary:
+      "フォロワー削除のノウハウ投稿。課題提示→削除手順→効果の流れが明確で、CTA はコメント欄で配布。",
+    categories: ["構成: 課題→解決", "CTA: 詳細はコメント"],
   },
   {
-    title: 'AI Generation',
-    description:
-      'Claudeを使ってハウツー系の投稿案を10本生成。テンプレート学習と競合ハイライトを組み合わせて品質を維持します。',
+    accountName: "20歳の私へ",
+    username: "2_my_past_self",
+    impressions: "55,000",
+    likes: "761",
+    summary:
+      "共感ベースのストーリー型。冒頭フックで注意喚起→箇条書きで価値提供→最後にリンク誘導の黄金パターン。",
+    categories: ["テーマ: マインド", "構成: ストーリー"],
   },
   {
-    title: 'Approval & Scheduling',
-    description:
-      'AutoStudioのUI上で承認・編集・予約。Threads APIでメイン投稿とコメントツリーを自動投稿します。',
+    accountName: "ゆる麻布",
+    impressions: "130,000",
+    likes: "163",
+    summary:
+      "日常観察×問いかけ型。シンプルな一文と共感ワードで反応を稼ぎ、リンクで詳細へ誘導。",
+    categories: ["テーマ: ライフスタイル"],
   },
   {
-    title: 'Competitor Insights',
-    description:
-      '秘書が記録した競合シートを取り込み、テーマ・構成タグを自動抽出。自社テンプレ改善に反映します。',
+    accountName: "小林一美｜リピート率8割超えカウンセリング講師",
+    username: "kazumi_kobayashi_",
+    impressions: "110,000",
+    likes: "113",
+    summary:
+      "リピート獲得術の HowTo。共感→課題→具体アクション→再現性で構成。コメント導線が秀逸。",
+    categories: ["テーマ: サロン運営", "構成: 問題→手順"],
+  },
+];
+
+const mockQueue = [
+  {
+    id: "plan-01",
+    scheduledTime: "07:00",
+    templateId: "hook_negate_v3",
+    theme: "AI効率化",
+    status: "draft" as const,
+    mainText:
+      "【メイン投稿】 ChatGPTで資料作成が5時間→5分に。\n\nやり方を3ステップで解説します。",
+    comments: [
+      { order: 1, text: "処理の手順をスクショ付きで解説。" },
+      { order: 2, text: "CTA: LINE 登録でテンプレ配布。" },
+    ],
+  },
+  {
+    id: "plan-02",
+    scheduledTime: "08:30",
+    templateId: "cta_story_v1",
+    theme: "AI学習術",
+    status: "approved" as const,
+    mainText:
+      "【メイン投稿】 AIとの壁打ちでアイデア枯渇を防ぐ。経験談ベースで語りながら、コメントで具体プロンプトを配布。",
+    comments: [{ order: 1, text: "プロンプト全文はこちら。" }],
+  },
+  {
+    id: "plan-03",
+    scheduledTime: "10:00",
+    templateId: "competitor_pick_v2",
+    theme: "競合分析",
+    status: "scheduled" as const,
+    mainText:
+      "【メイン投稿】 直近で伸びた競合3選を分解。共通していた構成と CTA の使い方をまとめました。",
   },
 ];
 
 export default function ThreadsHome() {
   return (
     <div className="space-y-10">
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-xl">
-        <h1 className="text-3xl font-semibold text-white">Threads Automation MVP</h1>
-        <p className="mt-4 max-w-3xl text-sm leading-relaxed text-slate-300">
-          AutoStudioの最初のモジュールとして、Threads投稿の生成から承認・自動投稿までを一気通貫で支援するツールを構築します。
-          現在はアーキテクチャのセットアップ段階で、仕様の詳細は
-          <Link
-            href="/threads/spec"
-            className="ml-1 underline decoration-slate-500 underline-offset-4 hover:text-white"
-          >
-            ドキュメント
-          </Link>
-          を参照してください。
-        </p>
-      </section>
-
-      <section className="grid gap-6 md:grid-cols-2">
-        {upcomingSections.map((section) => (
-          <div
-            key={section.title}
-            className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-200 shadow-lg"
-          >
-            <h2 className="text-lg font-medium text-white">{section.title}</h2>
-            <p className="mt-3 leading-relaxed text-slate-300">{section.description}</p>
-          </div>
-        ))}
-      </section>
-
-      <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-300">
-        <h2 className="text-lg font-medium text-white">開発ステータス</h2>
-        <ul className="mt-4 list-disc space-y-2 pl-6">
-          <li>Next.js + Tailwindのベースプロジェクトを初期化済み</li>
-          <li>仕様書を <code>docs/threads-mvp-spec.md</code> に格納</li>
-          <li>API・データ同期・UI作成はこれから実装予定</li>
-        </ul>
-      </section>
+      <InsightsCard {...mockInsights} />
+      <div className="grid gap-10 lg:grid-cols-[2fr,1.2fr]">
+        <PostQueue items={mockQueue} />
+        <CompetitorHighlights items={mockHighlights} />
+      </div>
     </div>
   );
 }
