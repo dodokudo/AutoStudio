@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { seedPlansIfNeeded } from '@/lib/bigqueryPlans';
+import { seedPlansIfNeeded, upsertPlan } from '@/lib/bigqueryPlans';
+import type { PlanStatus } from '@/types/threadPlan';
 
 export async function GET() {
   try {
@@ -15,16 +16,29 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  await request.json().catch(() => undefined);
-  return NextResponse.json(
-    {
-      message: 'Updating a Threads plan is not implemented yet.',
-      todo: [
-        'Validate edited content and schedule time',
-        'Persist changes in BigQuery / datastore',
-        'Emit activity log for audit trail',
-      ],
-    },
-    { status: 501 },
-  );
+  try {
+    const payload = await request.json();
+    const { planId, scheduledTime, mainText, theme, status, comments } = payload ?? {};
+    if (!planId) {
+      return NextResponse.json({ error: 'planId is required' }, { status: 400 });
+    }
+
+    const updated = await upsertPlan({
+      plan_id: planId,
+      scheduled_time: typeof scheduledTime === 'string' ? scheduledTime : undefined,
+      main_text: typeof mainText === 'string' ? mainText : undefined,
+      theme: typeof theme === 'string' ? theme : undefined,
+      status: status as PlanStatus | undefined,
+      comments: Array.isArray(comments) ? JSON.stringify(comments) : undefined,
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Failed to update plan' }, { status: 500 });
+    }
+
+    return NextResponse.json({ plan: updated });
+  } catch (error) {
+    console.error('[threads/plans] update failed', error);
+    return NextResponse.json({ error: 'Failed to update plan' }, { status: 500 });
+  }
 }

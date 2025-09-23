@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from 'swr';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PostQueue } from './post-queue';
 import type { ThreadPlan } from '@/types/threadPlan';
 
@@ -50,7 +50,24 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
     revalidateOnFocus: false,
   });
 
-  const plans = data?.items ?? [];
+  const plans = useMemo(() => data?.items ?? [], [data?.items]);
+  const planKey = plans.map((plan) => plan.plan_id).join('|');
+  const [drafts, setDrafts] = useState<Record<string, { scheduledTime: string; mainText: string }>>({});
+
+  useEffect(() => {
+    setDrafts((current) => {
+      const next = { ...current };
+      plans.forEach((plan) => {
+        if (!next[plan.plan_id]) {
+          next[plan.plan_id] = {
+            scheduledTime: plan.scheduled_time,
+            mainText: plan.main_text,
+          };
+        }
+      });
+      return next;
+    });
+  }, [planKey, plans]);
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setPendingId(id);
@@ -85,6 +102,44 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
       pendingId={pendingId}
       onApprove={(id) => handleAction(id, 'approve')}
       onReject={(id) => handleAction(id, 'reject')}
+      onDraftChange={(id, change) => {
+        setDrafts((current) => ({
+          ...current,
+          [id]: {
+            scheduledTime: change.scheduledTime ?? current[id]?.scheduledTime ?? plans.find((p) => p.plan_id === id)?.scheduled_time ?? '07:00',
+            mainText: change.mainText ?? current[id]?.mainText ?? plans.find((p) => p.plan_id === id)?.main_text ?? '',
+          },
+        }));
+      }}
+      onSave={async (id, changes) => {
+        setPendingId(id);
+        try {
+          const res = await fetch('/api/threads/plans', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ planId: id, scheduledTime: changes.scheduledTime, mainText: changes.mainText }),
+          });
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+          const { plan } = (await res.json()) as { plan: ThreadPlan };
+          mutate(
+            (prev) =>
+              prev
+                ? {
+                    items: prev.items.map((item) => (item.plan_id === plan.plan_id ? plan : item)),
+                  }
+                : prev,
+            { revalidate: false },
+          );
+        } catch (error) {
+          console.error('Plan update failed', error);
+          alert('保存に失敗しました');
+        } finally {
+          setPendingId(null);
+        }
+      }}
+      editableValues={drafts}
     />
   );
 }

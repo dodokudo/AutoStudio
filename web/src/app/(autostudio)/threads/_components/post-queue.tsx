@@ -16,6 +16,9 @@ interface PostQueueProps {
   items: QueueItem[];
   onApprove?: (id: string) => Promise<void> | void;
   onReject?: (id: string) => Promise<void> | void;
+  onSave?: (id: string, changes: { scheduledTime: string; mainText: string }) => Promise<void> | void;
+  onDraftChange?: (id: string, changes: { scheduledTime?: string; mainText?: string }) => void;
+  editableValues?: Record<string, { scheduledTime: string; mainText: string }>;
   pendingId?: string | null;
 }
 
@@ -33,7 +36,16 @@ const statusColor: Record<PlanStatus, string> = {
   rejected: 'text-rose-400',
 };
 
-export function PostQueue({ items, onApprove, onReject, pendingId }: PostQueueProps) {
+const scheduleOptions = Array.from({ length: 12 }).map((_, index) => {
+  const baseMinutes = 7 * 60 + index * 60;
+  const hour = Math.floor(baseMinutes / 60)
+    .toString()
+    .padStart(2, '0');
+  const minute = (baseMinutes % 60).toString().padStart(2, '0');
+  return `${hour}:${minute}`;
+});
+
+export function PostQueue({ items, onApprove, onReject, onSave, onDraftChange, editableValues = {}, pendingId }: PostQueueProps) {
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl">
       <header className="mb-4 flex items-center justify-between">
@@ -45,7 +57,19 @@ export function PostQueue({ items, onApprove, onReject, pendingId }: PostQueuePr
           <article key={item.id} className="rounded-xl border border-slate-800 bg-slate-900/30 p-5">
             <header className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                {item.scheduledTime}
+                <select
+                  className="bg-transparent text-inherit focus:outline-none"
+                  value={editableValues[item.id]?.scheduledTime ?? item.scheduledTime}
+                  onChange={(event) =>
+                    onDraftChange?.(item.id, { scheduledTime: event.target.value })
+                  }
+                >
+                  {scheduleOptions.map((option) => (
+                    <option key={option} value={option} className="text-black">
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </span>
               <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">
                 Template: {item.templateId}
@@ -57,7 +81,14 @@ export function PostQueue({ items, onApprove, onReject, pendingId }: PostQueuePr
                 {statusLabel[item.status]}
               </span>
             </header>
-            <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-100">{item.mainText}</p>
+            <textarea
+              className="mt-3 w-full rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              rows={4}
+              value={editableValues[item.id]?.mainText ?? item.mainText}
+              onChange={(event) =>
+                onDraftChange?.(item.id, { mainText: event.target.value })
+              }
+            />
             {item.comments && item.comments.length ? (
               <div className="mt-4 space-y-2 text-sm text-slate-300">
                 {item.comments.map((comment) => (
@@ -70,8 +101,23 @@ export function PostQueue({ items, onApprove, onReject, pendingId }: PostQueuePr
                 ))}
               </div>
             ) : null}
-            {(onApprove || onReject) && (
+            {(onApprove || onReject || onSave) && (
               <div className="mt-4 flex flex-wrap gap-3">
+                {onSave ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSave(item.id, {
+                        scheduledTime: editableValues[item.id]?.scheduledTime ?? item.scheduledTime,
+                        mainText: editableValues[item.id]?.mainText ?? item.mainText,
+                      })
+                    }
+                    disabled={pendingId === item.id}
+                    className="rounded-lg bg-sky-500/20 px-3 py-2 text-xs font-semibold text-sky-300 transition hover:bg-sky-500/30 disabled:opacity-50"
+                  >
+                    {pendingId === item.id ? '保存中…' : '変更を保存'}
+                  </button>
+                ) : null}
                 {onApprove && item.status !== 'approved' && item.status !== 'scheduled' ? (
                   <button
                     type="button"
