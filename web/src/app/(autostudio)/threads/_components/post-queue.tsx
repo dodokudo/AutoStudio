@@ -10,6 +10,13 @@ interface QueueItem {
   mainText: string;
   comments?: { order: number; text: string }[];
   status: PlanStatus;
+  jobStatus?: string;
+  jobUpdatedAt?: string;
+  jobErrorMessage?: string;
+  logStatus?: string;
+  logErrorMessage?: string;
+  logPostedThreadId?: string;
+  logPostedAt?: string;
 }
 
 interface PostQueueProps {
@@ -18,6 +25,7 @@ interface PostQueueProps {
   onReject?: (id: string) => Promise<void> | void;
   onSave?: (id: string, changes: { scheduledTime: string; mainText: string }) => Promise<void> | void;
   onDraftChange?: (id: string, changes: { scheduledTime?: string; mainText?: string }) => void;
+  onRerun?: (id: string) => Promise<void> | void;
   editableValues?: Record<string, { scheduledTime: string; mainText: string }>;
   pendingId?: string | null;
 }
@@ -45,7 +53,7 @@ const scheduleOptions = Array.from({ length: 12 }).map((_, index) => {
   return `${hour}:${minute}`;
 });
 
-export function PostQueue({ items, onApprove, onReject, onSave, onDraftChange, editableValues = {}, pendingId }: PostQueueProps) {
+export function PostQueue({ items, onApprove, onReject, onSave, onDraftChange, onRerun, editableValues = {}, pendingId }: PostQueueProps) {
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl">
       <header className="mb-4 flex items-center justify-between">
@@ -101,8 +109,18 @@ export function PostQueue({ items, onApprove, onReject, onSave, onDraftChange, e
                 ))}
               </div>
             ) : null}
-            {(onApprove || onReject || onSave) && (
+            {(onApprove || onReject || onSave || onRerun) && (
               <div className="mt-4 flex flex-wrap gap-3">
+                {onRerun ? (
+                  <button
+                    type="button"
+                    onClick={() => onRerun(item.id)}
+                    disabled={pendingId === item.id}
+                    className="rounded-lg bg-purple-500/20 px-3 py-2 text-xs font-semibold text-purple-300 transition hover:bg-purple-500/30 disabled:opacity-50"
+                  >
+                    {pendingId === item.id ? '再実行中…' : '再投稿ジョブ作成'}
+                  </button>
+                ) : null}
                 {onSave ? (
                   <button
                     type="button"
@@ -137,6 +155,31 @@ export function PostQueue({ items, onApprove, onReject, onSave, onDraftChange, e
                   >
                     {pendingId === item.id ? '処理中…' : '差し戻す'}
                   </button>
+                ) : null}
+              </div>
+            )}
+            {(item.jobStatus || item.logStatus) && (
+              <div className="mt-4 grid gap-2 rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-300">
+                {item.jobStatus ? (
+                  <p>
+                    <span className="font-semibold text-slate-200">ジョブ状態:</span> {item.jobStatus}
+                    {item.jobUpdatedAt ? ` (${new Date(item.jobUpdatedAt).toLocaleString()})` : ''}
+                    {item.jobErrorMessage ? (
+                      <span className="ml-2 text-rose-300">{item.jobErrorMessage}</span>
+                    ) : null}
+                  </p>
+                ) : null}
+                {item.logStatus ? (
+                  <p>
+                    <span className="font-semibold text-slate-200">最終結果:</span> {item.logStatus}
+                    {item.logPostedAt ? ` (${new Date(item.logPostedAt).toLocaleString()})` : ''}
+                    {item.logPostedThreadId ? (
+                      <span className="ml-2 text-emerald-300">Thread ID: {item.logPostedThreadId}</span>
+                    ) : null}
+                    {item.logErrorMessage ? (
+                      <span className="ml-2 text-rose-300">{item.logErrorMessage}</span>
+                    ) : null}
+                  </p>
                 ) : null}
               </div>
             )}

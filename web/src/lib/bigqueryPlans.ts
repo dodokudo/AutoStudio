@@ -3,7 +3,7 @@ import { createBigQueryClient } from './bigquery';
 import { buildScheduleSlots } from './promptBuilder';
 import { getThreadsInsights } from './threadsInsights';
 import { createJobForPlan, findJobByPlan } from './bigqueryJobs';
-import type { PlanStatus, ThreadPlan } from '@/types/threadPlan';
+import type { PlanStatus, ThreadPlan, ThreadPlanSummary } from '@/types/threadPlan';
 
 const DATASET = 'autostudio_threads';
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
@@ -112,6 +112,68 @@ export async function seedPlansIfNeeded() {
   const dataset = client.dataset(DATASET);
   await dataset.table(PLAN_TABLE).insert(rows);
   return listPlans();
+}
+
+export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
+  await ensurePlanTable();
+  const sql = `
+    WITH plans AS (
+      SELECT *
+      FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+      WHERE generation_date = CURRENT_DATE()
+    ),
+    latest_jobs AS (
+      SELECT
+        plan_id,
+        (ARRAY_AGG(STRUCT(job_id, status, updated_at, error_message) ORDER BY updated_at DESC))[SAFE_OFFSET(0)] AS job
+      FROM \`${PROJECT_ID}.${DATASET}.thread_post_jobs\`
+      GROUP BY plan_id
+    ),
+    latest_logs AS (
+      SELECT
+        plan_id,
+        (ARRAY_AGG(STRUCT(status, posted_thread_id, error_message, posted_at) ORDER BY posted_at DESC))[SAFE_OFFSET(0)] AS log
+      FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\`
+      GROUP BY plan_id
+    )
+    SELECT
+      p.plan_id,
+      p.scheduled_time,
+      p.status,
+      p.template_id,
+      p.theme,
+      p.main_text,
+      p.comments,
+      job.status AS job_status,
+      job.updated_at AS job_updated_at,
+      job.error_message AS job_error_message,
+      log.status AS log_status,
+      log.error_message AS log_error_message,
+      log.posted_thread_id AS log_posted_thread_id,
+      log.posted_at AS log_posted_at
+    FROM plans p
+    LEFT JOIN latest_jobs job ON p.plan_id = job.plan_id
+    LEFT JOIN latest_logs log ON p.plan_id = log.plan_id
+    ORDER BY p.scheduled_time
+  `;
+
+  const rows = await query(sql);
+  return rows.map((row) => ({
+    plan_id: toPlain(row.plan_id),
+    scheduled_time: toPlain(row.scheduled_time) || '07:00',
+    status: (row.status ?? 'draft') as PlanStatus,
+    template_id: toPlain(row.template_id) || 'auto-generated',
+    theme: toPlain(row.theme) || '未分類',
+    main_text: toPlain(row.main_text),
+    comments: toPlain(row.comments) || '[]',
+    job_status: row.job_status ? String(row.job_status) : undefined,
+    job_updated_at: row.job_updated_at ? String(row.job_updated_at) : undefined,
+    job_error_message: row.job_error_message ? String(row.job_error_message) : undefined,
+    log_status: row.log_status ? String(row.log_status) : undefined,
+    log_error_message: row.log_error_message ? String(row.log_error_message) : undefined,
+    log_posted_thread_id: row.log_posted_thread_id ? String(row.log_posted_thread_id) : undefined,
+    log_posted_at: row.log_posted_at ? String(row.log_posted_at) : undefined,
+  }));
 }
 
 export async function updatePlanStatus(planId: string, status: PlanStatus) {

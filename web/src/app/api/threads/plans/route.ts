@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { seedPlansIfNeeded, upsertPlan } from '@/lib/bigqueryPlans';
+import { listPlanSummaries, seedPlansIfNeeded, upsertPlan } from '@/lib/bigqueryPlans';
 import type { PlanStatus } from '@/types/threadPlan';
 
 export async function GET() {
   try {
-    const plans = await seedPlansIfNeeded();
-    return NextResponse.json({ items: plans });
+    await seedPlansIfNeeded();
+    const summaries = await listPlanSummaries();
+    return NextResponse.json({ items: summaries });
   } catch (error) {
     console.error('[threads/plans] failed', error);
     return NextResponse.json(

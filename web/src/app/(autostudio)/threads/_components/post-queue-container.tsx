@@ -3,14 +3,14 @@
 import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import { PostQueue } from './post-queue';
-import type { ThreadPlan } from '@/types/threadPlan';
+import type { ThreadPlanSummary } from '@/types/threadPlan';
 
 interface PostQueueContainerProps {
   initialPlans: ThreadPlan[];
 }
 
 interface PlansResponse {
-  items: ThreadPlan[];
+  items: ThreadPlanSummary[];
 }
 
 const fetcher = async (url: string): Promise<PlansResponse> => {
@@ -21,7 +21,7 @@ const fetcher = async (url: string): Promise<PlansResponse> => {
   return res.json();
 };
 
-function normalize(plan: ThreadPlan) {
+function normalize(plan: ThreadPlanSummary) {
   return {
     id: plan.plan_id,
     scheduledTime: plan.scheduled_time,
@@ -40,6 +40,13 @@ function normalize(plan: ThreadPlan) {
       }
       return [] as { order: number; text: string }[];
     })(),
+    jobStatus: plan.job_status,
+    jobUpdatedAt: plan.job_updated_at,
+    jobErrorMessage: plan.job_error_message,
+    logStatus: plan.log_status,
+    logErrorMessage: plan.log_error_message,
+    logPostedThreadId: plan.log_posted_thread_id,
+    logPostedAt: plan.log_posted_at,
   };
 }
 
@@ -135,6 +142,23 @@ export function PostQueueContainer({ initialPlans }: PostQueueContainerProps) {
         } catch (error) {
           console.error('Plan update failed', error);
           alert('保存に失敗しました');
+        } finally {
+          setPendingId(null);
+        }
+      }}
+      onRerun={async (id) => {
+        setPendingId(id);
+        try {
+          const res = await fetch(`/api/threads/plans/${id}/rerun`, {
+            method: 'POST',
+          });
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+          await mutate();
+        } catch (error) {
+          console.error('Plan rerun failed', error);
+          alert('再実行に失敗しました');
         } finally {
           setPendingId(null);
         }
