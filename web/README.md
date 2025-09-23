@@ -23,7 +23,13 @@ web/
 │   └── page.tsx                 # Redirects to /threads
 ├── src/lib/env.ts               # Environment variable guard
 ├── src/types/threads.ts         # Shared TypeScript types
-└── .env.example                 # Required secrets
+└── .env.example                 # Required secrets (Threads + Lstep)
+
+## Lstep 自動取得ツール（ツール4）
+
+- 仕様と手順は `docs/lstep-mvp-spec.md` にまとめています。
+- 初回 Cookie 保存: `npm run lstep:capture`
+- 自動ETL実行: `npm run lstep:ingest`（ローカル確認用。Cloud Run では Scheduler から起動）
 ```
 
 ## Next Steps
