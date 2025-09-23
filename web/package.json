@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "sync:threads": "tsx src/scripts/syncThreadsData.ts",
-    "prompt:preview": "tsx src/scripts/previewThreadsPrompt.ts"
+    "prompt:preview": "tsx src/scripts/previewThreadsPrompt.ts",
+    "worker:threads": "tsx src/scripts/runThreadsPostingWorker.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

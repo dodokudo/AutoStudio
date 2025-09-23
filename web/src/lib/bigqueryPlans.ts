@@ -2,6 +2,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient } from './bigquery';
 import { buildScheduleSlots } from './promptBuilder';
 import { getThreadsInsights } from './threadsInsights';
+import { createJobForPlan, findJobByPlan } from './bigqueryJobs';
 import type { PlanStatus, ThreadPlan } from '@/types/threadPlan';
 
 const DATASET = 'autostudio_threads';
@@ -125,7 +126,16 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
     `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
     { planId },
   );
-  return plan ? normalizePlan(plan) : undefined;
+  const normalized = plan ? normalizePlan(plan) : undefined;
+
+  if (normalized && status === 'approved') {
+    const existingJob = await findJobByPlan(normalized.plan_id);
+    if (!existingJob) {
+      await createJobForPlan(normalized);
+    }
+  }
+
+  return normalized;
 }
 
 export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }) {

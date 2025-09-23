@@ -398,6 +398,29 @@ async function main() {
     { name: 'updated_at', type: 'TIMESTAMP' },
   ]);
 
+  await ensureTable(bigQueryClient, 'thread_post_jobs', [
+    { name: 'job_id', type: 'STRING' },
+    { name: 'plan_id', type: 'STRING' },
+    { name: 'scheduled_time', type: 'TIMESTAMP' },
+    { name: 'status', type: 'STRING' },
+    { name: 'attempt_count', type: 'INT64' },
+    { name: 'error_message', type: 'STRING' },
+    { name: 'payload', type: 'STRING' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+    { name: 'updated_at', type: 'TIMESTAMP' },
+  ]);
+
+  await ensureTable(bigQueryClient, 'thread_posting_logs', [
+    { name: 'log_id', type: 'STRING' },
+    { name: 'job_id', type: 'STRING' },
+    { name: 'plan_id', type: 'STRING' },
+    { name: 'status', type: 'STRING' },
+    { name: 'posted_thread_id', type: 'STRING' },
+    { name: 'error_message', type: 'STRING' },
+    { name: 'posted_at', type: 'TIMESTAMP' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+  ]);
+
   await loadIntoBigQuery(bigQueryClient, 'threads_daily_metrics', threadsMetrics);
   await loadIntoBigQuery(bigQueryClient, 'threads_posts', threadsPosts);
   await loadIntoBigQuery(bigQueryClient, 'competitor_posts_raw', competitorPosts);

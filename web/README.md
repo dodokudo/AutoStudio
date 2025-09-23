@@ -40,5 +40,7 @@ web/
   に書き込みます。実行前に `.env.local` の `GOOGLE_APPLICATION_CREDENTIALS` とシート共有を設定してください。
 - `npm run prompt:preview` — BigQuery から最新データを取得し、Claude 向け投稿生成ペイロード
   （JSON）を生成・標準出力に表示します。
+- `npm run worker:threads` — BigQuery にキューされた `thread_post_jobs` を処理し、投稿成功/失敗を
+  `thread_posting_logs` に記録します（現在はThreads APIのダミー処理）。
 
 Please keep the documentation (`docs/threads-mvp-spec.md`) in sync with implementation changes so marketing and engineering share the same mental model.

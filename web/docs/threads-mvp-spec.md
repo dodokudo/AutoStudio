@@ -45,6 +45,9 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
 | `competitor_posts_enriched` | Adds AI tags (theme, hook, CTA style) | derived columns + `enriched_at` |
 | `competitor_trends_daily` | Aggregated trends | `date`, `theme_tag`, `avg_impressions`, `wow_change` |
 | `competitor_account_daily` | Raw daily metrics per competitor | `account_name`, `username`, `date`, `followers`, `followers_delta`, `posts_count`, `views`, `collected_at` |
+| `thread_post_plans` | Generated posting plans | `plan_id`, `generation_date`, `scheduled_time`, `template_id`, `theme`, `status`, `main_text`, `comments`, `created_at`, `updated_at` |
+| `thread_post_jobs` | Queue of posts awaiting publication | `job_id`, `plan_id`, `scheduled_time`, `status`, `attempt_count`, `payload`, `created_at`, `updated_at` |
+| `thread_posting_logs` | Posting results | `log_id`, `job_id`, `plan_id`, `status`, `posted_thread_id`, `error_message`, `posted_at`, `created_at` |
 
 ## 4. Evaluation Rules
 - **Account health**: show 7-day moving averages with WoW delta for profile views & followers.
@@ -92,8 +95,9 @@ Threads API (publish main post + comments) → Posting logs (BigQuery + Sheets)
 }
 ```
 4. 実装済みユーティリティ `npm run prompt:preview` で上記スキーマ準拠の入力 JSON を BigQuery から生成し、提案内容を確認できる。
-4. Persist generation payload in BigQuery + local storage to allow audit and re-generation.
-5. Feed back actual performance (after 72h) to `threads_prompt_template_scores`.
+5. Persist generation payload in BigQuery + local storage to allow audit and re-generation.
+6. Feed back actual performance (after 72h) to `threads_prompt_template_scores`.
+7. `npm run worker:threads` で承認済みプランの投稿ジョブを処理し、`thread_posting_logs` に結果を記録する。
 
 ## 6. Approval & Scheduling UX
 - **Dashboard layout**:
