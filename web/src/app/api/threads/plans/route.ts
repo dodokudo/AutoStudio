@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getThreadPlans } from '@/lib/threadPlans';
+import { seedPlansIfNeeded } from '@/lib/bigqueryPlans';
 
 export async function GET() {
   try {
-    const items = await getThreadPlans();
-    return NextResponse.json({ items });
+    const plans = await seedPlansIfNeeded();
+    return NextResponse.json({ items: plans });
   } catch (error) {
     console.error('[threads/plans] failed', error);
     return NextResponse.json(

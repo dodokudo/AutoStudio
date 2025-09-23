@@ -385,6 +385,19 @@ async function main() {
     { name: 'collected_at', type: 'TIMESTAMP' },
   ]);
 
+  await ensureTable(bigQueryClient, 'thread_post_plans', [
+    { name: 'plan_id', type: 'STRING' },
+    { name: 'generation_date', type: 'DATE' },
+    { name: 'scheduled_time', type: 'STRING' },
+    { name: 'template_id', type: 'STRING' },
+    { name: 'theme', type: 'STRING' },
+    { name: 'status', type: 'STRING' },
+    { name: 'main_text', type: 'STRING' },
+    { name: 'comments', type: 'STRING' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+    { name: 'updated_at', type: 'TIMESTAMP' },
+  ]);
+
   await loadIntoBigQuery(bigQueryClient, 'threads_daily_metrics', threadsMetrics);
   await loadIntoBigQuery(bigQueryClient, 'threads_posts', threadsPosts);
   await loadIntoBigQuery(bigQueryClient, 'competitor_posts_raw', competitorPosts);
