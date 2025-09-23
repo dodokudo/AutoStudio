@@ -8,10 +8,33 @@ const DATASET = 'autostudio_threads';
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
 
 const client: BigQuery = createBigQueryClient(PROJECT_ID);
+const PLAN_TABLE = 'thread_post_plans';
+
+const PLAN_TABLE_SCHEMA = [
+  { name: 'plan_id', type: 'STRING' },
+  { name: 'generation_date', type: 'DATE' },
+  { name: 'scheduled_time', type: 'STRING' },
+  { name: 'template_id', type: 'STRING' },
+  { name: 'theme', type: 'STRING' },
+  { name: 'status', type: 'STRING' },
+  { name: 'main_text', type: 'STRING' },
+  { name: 'comments', type: 'STRING' },
+  { name: 'created_at', type: 'TIMESTAMP' },
+  { name: 'updated_at', type: 'TIMESTAMP' },
+];
 
 async function query<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>): Promise<T[]> {
   const [rows] = await client.query({ query: sql, params });
   return rows as T[];
+}
+
+async function ensurePlanTable() {
+  const dataset = client.dataset(DATASET);
+  const table = dataset.table(PLAN_TABLE);
+  const [exists] = await table.exists();
+  if (!exists) {
+    await table.create({ schema: PLAN_TABLE_SCHEMA });
+  }
 }
 
 function toPlain(value: unknown): string {
@@ -41,9 +64,10 @@ function normalizePlan(plan: Record<string, unknown>): ThreadPlan {
 }
 
 export async function listPlans(): Promise<ThreadPlan[]> {
+  await ensurePlanTable();
   const sql = `
     SELECT *
-    FROM \`${PROJECT_ID}.${DATASET}.thread_post_plans\`
+    FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
     WHERE generation_date = CURRENT_DATE()
     ORDER BY scheduled_time
   `;
@@ -75,27 +99,29 @@ export async function seedPlansIfNeeded() {
   }));
 
   const dataset = client.dataset(DATASET);
-  await dataset.table('thread_post_plans').insert(rows);
+  await dataset.table(PLAN_TABLE).insert(rows);
   return listPlans();
 }
 
 export async function updatePlanStatus(planId: string, status: PlanStatus) {
+  await ensurePlanTable();
   const sql = `
-    UPDATE \`${PROJECT_ID}.${DATASET}.thread_post_plans\`
+    UPDATE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
     SET status = @status, updated_at = CURRENT_TIMESTAMP()
     WHERE plan_id = @planId AND generation_date = CURRENT_DATE()
   `;
   await client.query({ query: sql, params: { planId, status } });
   const [plan] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.thread_post_plans\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
     { planId },
   );
   return plan ? normalizePlan(plan) : undefined;
 }
 
 export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }) {
+  await ensurePlanTable();
   const sql = `
-    MERGE \`${PROJECT_ID}.${DATASET}.thread_post_plans\` T
+    MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
     USING (SELECT @planId AS plan_id) S
     ON T.plan_id = S.plan_id AND T.generation_date = CURRENT_DATE()
     WHEN MATCHED THEN
@@ -126,7 +152,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
   });
 
   const [updated] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.thread_post_plans\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
     { planId: plan.plan_id },
   );
   return updated ? normalizePlan(updated) : undefined;

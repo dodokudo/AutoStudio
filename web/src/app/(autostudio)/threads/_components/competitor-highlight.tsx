@@ -36,8 +36,11 @@ export function CompetitorHighlights({ items }: CompetitorHighlightProps) {
             <p className="mt-3 text-sm leading-relaxed text-slate-200">{item.summary}</p>
             {item.categories && item.categories.length ? (
               <ul className="mt-3 flex flex-wrap gap-2 text-xs">
-                {item.categories.map((category) => (
-                  <li key={category} className="rounded-full bg-slate-800 px-3 py-1 text-slate-300">
+                {item.categories.map((category, index) => (
+                  <li
+                    key={`${category}-${index}`}
+                    className="rounded-full bg-slate-800 px-3 py-1 text-slate-300"
+                  >
                     {category}
                   </li>
                 ))}
