@@ -30,7 +30,7 @@ function loadCredentials() {
 
       return credentials;
     } catch (error) {
-      console.error('[bigquery] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', error.message);
+      console.error('[bigquery] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', error instanceof Error ? error.message : String(error));
       console.error('[bigquery] Raw input (first 100 chars):', rawJson?.substring(0, 100));
       return undefined;
     }
