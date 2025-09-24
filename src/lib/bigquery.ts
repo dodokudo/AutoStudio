@@ -7,20 +7,32 @@ function loadCredentials() {
 
   if (rawJson) {
     try {
+      console.log('[bigquery] Raw JSON length:', rawJson.length);
       const maybeBase64 = rawJson.trim();
-      const jsonString = maybeBase64.startsWith('{')
-        ? maybeBase64
-        : Buffer.from(maybeBase64, 'base64').toString('utf8');
+
+      let jsonString;
+      if (maybeBase64.startsWith('{')) {
+        console.log('[bigquery] Detected raw JSON format');
+        jsonString = maybeBase64;
+      } else {
+        console.log('[bigquery] Detected Base64 format, decoding...');
+        jsonString = Buffer.from(maybeBase64, 'base64').toString('utf8');
+        console.log('[bigquery] Decoded JSON length:', jsonString.length);
+      }
 
       const credentials = JSON.parse(jsonString);
+      console.log('[bigquery] Successfully parsed credentials for project:', credentials.project_id);
 
       if (typeof credentials.private_key === 'string') {
         credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+        console.log('[bigquery] Fixed private_key newlines');
       }
 
       return credentials;
     } catch (error) {
-      console.warn('[bigquery] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON', error);
+      console.error('[bigquery] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', error.message);
+      console.error('[bigquery] Raw input (first 100 chars):', rawJson?.substring(0, 100));
+      return undefined;
     }
   }
 
