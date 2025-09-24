@@ -43,7 +43,7 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
     throw new Error('Lstep用の BigQuery データセット名が取得できません (LSTEP_BQ_DATASET)');
   }
 
-  const client = createBigQueryClient(projectId);
+  const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
 
   const [latestSnapshot] = await runQuery<{ snapshot_date: string | null }>(client, projectId, datasetId, {
     query: `SELECT MAX(snapshot_date) AS snapshot_date FROM user_core`,
@@ -76,9 +76,9 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
       )
       SELECT
         tag_name,
-        SUM(tag_flag) AS user_count
+        SUM(CASE WHEN has_tag THEN 1 ELSE 0 END) AS user_count
       FROM user_tags
-      WHERE tag_flag = 1
+      WHERE has_tag = true
         AND snapshot_date = (SELECT snapshot_date FROM latest)
       GROUP BY tag_name
       ORDER BY user_count DESC
@@ -86,22 +86,23 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
     `,
   });
 
-  const topSources = await runQuery<{ source_name: string | null; user_count: number }>(
+  const topSources = await runQuery<{ tag_name: string | null; user_count: number }>(
     client,
     projectId,
     datasetId,
     {
       query: `
         WITH latest AS (
-          SELECT MAX(snapshot_date) AS snapshot_date FROM user_sources
+          SELECT MAX(snapshot_date) AS snapshot_date FROM user_tags
         )
         SELECT
-          source_name,
-          SUM(source_flag) AS user_count
-        FROM user_sources
-        WHERE source_flag = 1
+          tag_name,
+          SUM(CASE WHEN has_tag THEN 1 ELSE 0 END) AS user_count
+        FROM user_tags
+        WHERE has_tag = true
           AND snapshot_date = (SELECT snapshot_date FROM latest)
-        GROUP BY source_name
+          AND (tag_name LIKE '%流入経路%' OR tag_name LIKE '%Instagram%' OR tag_name LIKE '%Threads%')
+        GROUP BY tag_name
         ORDER BY user_count DESC
         LIMIT 10
       `,
@@ -116,7 +117,7 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
       .map((row) => ({ date: row.snapshot_date, count: Number(row.new_friends ?? 0) }))
       .reverse(),
     topTags: topTags.map((row) => ({ name: row.tag_name ?? '不明', count: Number(row.user_count ?? 0) })),
-    topSources: topSources.map((row) => ({ name: row.source_name ?? '不明', count: Number(row.user_count ?? 0) })),
+    topSources: topSources.map((row) => ({ name: row.tag_name ?? '不明', count: Number(row.user_count ?? 0) })),
     funnel,
   };
 }
@@ -135,7 +136,7 @@ async function buildFunnel(client: BigQuery, projectId: string, datasetId: strin
   const selectExpressions = stages
     .map(
       (_, index) =>
-        `MAX(IF(tag_name = @stage${index + 1}, IFNULL(tag_flag, 0), 0)) AS stage${index + 1}_flag`,
+        `MAX(IF(tag_name = @stage${index + 1}, IF(has_tag, 1, 0), 0)) AS stage${index + 1}_flag`,
     )
     .join(',\n        ');
 

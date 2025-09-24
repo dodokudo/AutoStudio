@@ -13,7 +13,8 @@
     "worker:threads": "tsx src/scripts/runThreadsPostingWorker.ts",
     "templates:update": "tsx src/scripts/updateTemplateScores.ts",
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
-    "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts"
+    "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
+    "lstep:init": "tsx src/scripts/initLstepBigQuery.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

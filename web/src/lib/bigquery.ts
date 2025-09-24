@@ -16,12 +16,13 @@ function loadCredentials() {
   return undefined;
 }
 
-export function createBigQueryClient(projectId: string) {
+export function createBigQueryClient(projectId: string, location?: string) {
   const credentials = loadCredentials();
   return new BigQuery({
     projectId,
     credentials,
     keyFilename: credentials ? undefined : process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    location: location || process.env.LSTEP_BQ_LOCATION || 'US',
   });
 }
 
