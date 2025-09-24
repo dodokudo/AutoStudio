@@ -15,10 +15,24 @@ export const dynamic = 'force-dynamic';
 
 export default async function ThreadsHome() {
   try {
+    console.log('[threads/page] Starting data fetch...');
+    console.log('[threads/page] PROJECT_ID:', PROJECT_ID);
+
+    console.log('[threads/page] Fetching insights...');
     const insights = await getThreadsInsights(PROJECT_ID);
+    console.log('[threads/page] Insights fetched successfully');
+
+    console.log('[threads/page] Seeding plans...');
     await seedPlansIfNeeded();
+    console.log('[threads/page] Plans seeded successfully');
+
+    console.log('[threads/page] Fetching plan summaries...');
     const planSummaries = await listPlanSummaries();
+    console.log('[threads/page] Plan summaries fetched successfully');
+
+    console.log('[threads/page] Fetching dashboard...');
     const dashboard = await getThreadsDashboard();
+    console.log('[threads/page] Dashboard fetched successfully');
 
   const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
     if (value === undefined) return undefined;
@@ -111,7 +125,13 @@ export default async function ThreadsHome() {
     </div>
   );
   } catch (error) {
-    console.error('[threads/page] Error:', error);
+    console.error('[threads/page] Error occurred:', error);
+    console.error('[threads/page] Error type:', typeof error);
+    console.error('[threads/page] Error constructor:', error?.constructor?.name);
+    if (error instanceof Error) {
+      console.error('[threads/page] Error message:', error.message);
+      console.error('[threads/page] Error stack:', error.stack);
+    }
     return (
       <div className="space-y-10 p-8">
         <h1 className="text-xl font-semibold text-white">Threads 自動投稿管理</h1>
