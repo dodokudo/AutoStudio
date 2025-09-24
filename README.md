@@ -1,6 +1,6 @@
 # AutoStudio (Threads MVP)
 
-This repository hosts the AutoStudio web dashboard built with Next.js (App Router + TypeScript + Tailwind). The initial milestone focuses on the Threads automation tool that will later live alongside YouTube and Instagram modules.
+AutoStudio は Threads を皮切りに複数のマーケティング自動化ツールを束ねる Next.js 製ダッシュボードです。リポジトリ直下が Next.js アプリ本体になっており、今後のモジュール追加にも対応できる構成になっています。
 
 ## Getting Started
 
@@ -9,65 +9,53 @@ npm install
 npm run dev
 ```
 
-The default page redirects to `/threads`, which contains roadmap notes and links to the detailed specification in `docs/threads-mvp-spec.md`.
+デフォルトページは `/threads` へリダイレクトし、仕様書 `docs/threads-mvp-spec.md` への導線やロードマップを確認できます。
 
-## Project Structure (initial)
+## Project Structure
 
 ```
-web/
-├── docs/threads-mvp-spec.md     # Single source of truth for Threads MVP
-├── src/app/
-│   ├── (autostudio)/layout.tsx  # Shell with future tab navigation
-│   ├── (autostudio)/threads/... # Threads-specific pages
-│   ├── api/threads/...          # Placeholder API routes (501)
-│   └── page.tsx                 # Redirects to /threads
-├── src/lib/env.ts               # Environment variable guard
-├── src/types/threads.ts         # Shared TypeScript types
-├── .env.example                 # Required secrets (Threads + Lstep)
-└── deploy/lstep/                # Cloud Run 用 Dockerfile / Cloud Build テンプレ
+AutoStudio/
+├── src/app/                   # App Router でセクションを管理
+│   ├── (autostudio)/threads   # Threads 向け UI/ページ
+│   └── api/threads            # API Routes（生成・承認・ジョブ実行など）
+├── src/lib/                   # BigQuery/Claude/Threads API ヘルパー
+├── src/scripts/               # CLI から実行する ETL / ワーカー処理
+├── src/types/                 # 共有型定義
+├── public/                    # 静的アセット
+├── docs/                      # プロダクト仕様・手順書
+├── deploy/                    # Cloud Run / Scheduler 向けテンプレ
+├── line-bot/                  # LSTEP 連携 LINE Bot（Cloud Functions）
+├── .env.example               # 必須環境変数のサンプル
+└── vercel.json                # Vercel 用ビルド設定
+```
 
 ## Lstep 自動取得ツール（ツール4）
 
 - 仕様と手順は `docs/lstep-mvp-spec.md` にまとめています。
 - 初回 Cookie 保存: `npm run lstep:capture`
-- 自動ETL実行: `npm run lstep:ingest`（ローカル確認用。Cloud Run では Scheduler から起動）
+- 自動 ETL 実行: `npm run lstep:ingest`（ローカル確認用。Cloud Run では Scheduler で起動）
 - Cloud Run デプロイテンプレ: `deploy/lstep/`
-- 通知: エラー時にメールを送信（`LSTEP_ALERT_EMAILS` / `LSTEP_SMTP_*` で設定）。再ログインは本人が `npm run lstep:capture` で対応。
-- ダッシュボード: `/line` で BigQuery から日次KPI（新規友だち、タグTOP10、流入別、ファネル）を表示。`LSTEP_FUNNEL_TAGS` で段階を変更できます。
-```
-
-## Next Steps
-
-1. Implement data sync from Google Sheets into BigQuery tables.
-2. Connect Claude/Gemini for content generation following the documented prompt schema.
-3. Build the approval UI (insights → competitor highlights → post queue).
-4. Wire up publishing jobs to Threads API and log results for template evaluation.
+- 通知: エラー時メール送信（`LSTEP_ALERT_EMAILS` / `LSTEP_SMTP_*`）。再ログインは `npm run lstep:capture` で対応。
+- `/line` ページで BigQuery から日次 KPI を表示。`LSTEP_FUNNEL_TAGS` でファネル段階を調整可能。
 
 ## Utilities
 
-- `npm run sync:threads` — Google Sheets → BigQuery 同期スクリプト。Threads本体と競合リサーチ
-  シート（全投稿・対象者リスト）から `threads_*` / `competitor_posts_raw` / `competitor_account_daily`
-  に書き込みます。実行前に `.env.local` の `GOOGLE_APPLICATION_CREDENTIALS` とシート共有を設定してください。
-- `npm run prompt:preview` — BigQuery から最新データを取得し、Claude 向け投稿生成ペイロード
-  （JSON）を生成・標準出力に表示します。
-- `npm run worker:threads` — BigQuery にキューされた `thread_post_jobs` を処理し、投稿成功/失敗を
-  `thread_posting_logs` に記録します（現在はThreads APIのダミー処理）。
-- `npm run templates:update` — 投稿後72時間経過した成功ログを元に、テンプレートの平均インプレッション/いいねを
-  `threads_prompt_template_scores` へ記録します。
-- `/threads` ページの下部に軽量ダッシュボードを表示し、ジョブキューの状態と直近ログを可視化しています。
-- `POST /api/threads/generate` — Claude API を使って当日の投稿案を自動生成し、`thread_post_plans` を更新します。
-- `POST /api/threads/cron/run` — ワーカー実行とテンプレ評価更新をまとめてキックするCron用エンドポイント。
+- `npm run sync:threads` — Google Sheets から BigQuery へ Threads・競合データを同期。
+- `npm run prompt:preview` — BigQuery データを元に Claude へ渡す投稿生成ペイロードを作成。
+- `npm run worker:threads` — `thread_post_jobs` を処理し、Threads 投稿＆ログ記録を実行。
+- `npm run templates:update` — 投稿 72 時間後の実績からテンプレート評価を更新。
+- `npm run lstep:*` — LSTEP 向けの BigQuery 初期化、Cookie 更新、ETL 実行コマンド群。
 
-## 必要な環境変数（抜粋）
+## 必須環境変数（抜粋）
 
 | 変数名 | 用途 |
 | --- | --- |
-| `THREADS_TOKEN` / `THREADS_ACCOUNT_ID` | Threads Graph API での投稿に使用 |
+| `THREADS_TOKEN` / `THREADS_ACCOUNT_ID` | Threads Graph API で投稿するための資格情報 |
 | `CLAUDE_API_KEY` | Claude への投稿案生成リクエストに使用 |
 | `CLAUDE_MODEL` (任意) | Claude モデル指定。既定は `claude-3-5-sonnet-20240620` |
 | `BQ_PROJECT_ID` | BigQuery のプロジェクト ID (既定: `mark-454114`) |
-| `ALERT_EMAIL_ENABLED` | `true` にすると失敗時メール通知を送信 |
+| `ALERT_EMAIL_ENABLED` | `true` で失敗時メール通知を送信 |
 | `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` | 通知メールの宛先／送信元 |
-| `ALERT_SMTP_HOST` / `ALERT_SMTP_PORT` / `ALERT_SMTP_USER` / `ALERT_SMTP_PASS` | 通知メール送信用SMTP設定 |
+| `ALERT_SMTP_HOST` / `ALERT_SMTP_PORT` / `ALERT_SMTP_USER` / `ALERT_SMTP_PASS` | SMTP 通知設定 |
 
-Please keep the documentation (`docs/threads-mvp-spec.md`) in sync with implementation changes so marketing and engineering share the same mental model.
+仕様を変更した場合は `docs/threads-mvp-spec.md` を合わせて更新し、マーケティングと開発の認識を揃えてください。
