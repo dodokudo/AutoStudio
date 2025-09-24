@@ -3,16 +3,31 @@ import { BigQuery } from '@google-cloud/bigquery';
 const DATASET_ID = 'autostudio_threads';
 
 function loadCredentials() {
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  const rawJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+
+  if (rawJson) {
     try {
-      return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      const maybeBase64 = rawJson.trim();
+      const jsonString = maybeBase64.startsWith('{')
+        ? maybeBase64
+        : Buffer.from(maybeBase64, 'base64').toString('utf8');
+
+      const credentials = JSON.parse(jsonString);
+
+      if (typeof credentials.private_key === 'string') {
+        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+      }
+
+      return credentials;
     } catch (error) {
       console.warn('[bigquery] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON', error);
     }
   }
+
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     console.info('[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials');
   }
+
   return undefined;
 }
 
