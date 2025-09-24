@@ -36,11 +36,11 @@ async function runQuery<T = Record<string, unknown>>(
   return rows as T[];
 }
 
-async function fetchAccountSummary(client: BigQuery): Promise<PromptAccountSummary> {
+async function fetchAccountSummary(client: BigQuery, projectId: string): Promise<PromptAccountSummary> {
   const sql = `
     WITH recent AS (
       SELECT date, followers_snapshot, profile_views
-      FROM \`${client.projectId}.${DATASET}.threads_daily_metrics\`
+      FROM \`${projectId}.${DATASET}.threads_daily_metrics\`
       ORDER BY date DESC
       LIMIT 7
     ),
@@ -91,10 +91,10 @@ async function fetchAccountSummary(client: BigQuery): Promise<PromptAccountSumma
   };
 }
 
-async function fetchTopSelfPosts(client: BigQuery): Promise<PromptSelfPost[]> {
+async function fetchTopSelfPosts(client: BigQuery, projectId: string): Promise<PromptSelfPost[]> {
   const sql = `
     SELECT post_id, posted_at, content, impressions_total, likes_total, permalink
-    FROM \`${client.projectId}.${DATASET}.threads_posts\`
+    FROM \`${projectId}.${DATASET}.threads_posts\`
     WHERE posted_at IS NOT NULL
     ORDER BY impressions_total DESC
     LIMIT 10
@@ -118,10 +118,10 @@ async function fetchTopSelfPosts(client: BigQuery): Promise<PromptSelfPost[]> {
   }));
 }
 
-async function fetchCompetitorHighlights(client: BigQuery): Promise<PromptCompetitorHighlight[]> {
+async function fetchCompetitorHighlights(client: BigQuery, projectId: string): Promise<PromptCompetitorHighlight[]> {
   const sql = `
     SELECT account_name, username, post_date, content, impressions, likes
-    FROM \`${client.projectId}.${DATASET}.competitor_posts_raw\`
+    FROM \`${projectId}.${DATASET}.competitor_posts_raw\`
     WHERE post_date IS NOT NULL
     ORDER BY impressions DESC NULLS LAST
     LIMIT 5
@@ -145,11 +145,11 @@ async function fetchCompetitorHighlights(client: BigQuery): Promise<PromptCompet
   }));
 }
 
-async function fetchTrendingTopics(client: BigQuery): Promise<PromptTrendingTopic[]> {
+async function fetchTrendingTopics(client: BigQuery, projectId: string): Promise<PromptTrendingTopic[]> {
   const sql = `
     WITH recent AS (
       SELECT *
-      FROM \`${client.projectId}.${DATASET}.competitor_account_daily\`
+      FROM \`${projectId}.${DATASET}.competitor_account_daily\`
       WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
     ),
     enriched AS (
@@ -191,7 +191,7 @@ async function fetchTrendingTopics(client: BigQuery): Promise<PromptTrendingTopi
   }));
 }
 
-async function fetchTemplateSummaries(client: BigQuery): Promise<PromptTemplateSummary[]> {
+async function fetchTemplateSummaries(client: BigQuery, projectId: string): Promise<PromptTemplateSummary[]> {
   const sql = `
     SELECT
       t.template_id,
@@ -200,8 +200,8 @@ async function fetchTemplateSummaries(client: BigQuery): Promise<PromptTemplateS
       t.structure_notes,
       s.impression_avg72h,
       s.like_avg72h
-    FROM \`${client.projectId}.${DATASET}.threads_prompt_templates\` AS t
-    LEFT JOIN \`${client.projectId}.${DATASET}.threads_prompt_template_scores\` AS s
+    FROM \`${projectId}.${DATASET}.threads_prompt_templates\` AS t
+    LEFT JOIN \`${projectId}.${DATASET}.threads_prompt_template_scores\` AS s
       ON t.template_id = s.template_id
     ORDER BY t.status, t.template_id, t.version DESC
   `;
@@ -248,11 +248,11 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
 
   const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries] =
     await Promise.all([
-      fetchAccountSummary(client),
-      fetchTopSelfPosts(client),
-      fetchCompetitorHighlights(client),
-      fetchTrendingTopics(client),
-      fetchTemplateSummaries(client),
+      fetchAccountSummary(client, options.projectId),
+      fetchTopSelfPosts(client, options.projectId),
+      fetchCompetitorHighlights(client, options.projectId),
+      fetchTrendingTopics(client, options.projectId),
+      fetchTemplateSummaries(client, options.projectId),
     ]);
 
   const targetCount = 10;
