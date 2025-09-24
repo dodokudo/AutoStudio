@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { updatePlanStatus } from '@/lib/bigqueryPlans';
 
-export async function POST(_: Request, { params }: { params: { id: string } }) {
+export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const updated = await updatePlanStatus(params.id, 'rejected');
+    const { id } = await params;
+    const updated = await updatePlanStatus(id, 'rejected');
     if (!updated) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }

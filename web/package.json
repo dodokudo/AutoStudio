@@ -11,8 +11,7 @@
     "sync:threads": "tsx src/scripts/syncThreadsData.ts",
     "prompt:preview": "tsx src/scripts/previewThreadsPrompt.ts",
     "worker:threads": "tsx src/scripts/runThreadsPostingWorker.ts",
-    "templates:update": "tsx src/scripts/updateTemplateScores.ts"
-    ,
+    "templates:update": "tsx src/scripts/updateTemplateScores.ts",
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts"
   },
@@ -34,6 +33,7 @@
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^7.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

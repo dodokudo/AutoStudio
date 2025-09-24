@@ -11,14 +11,18 @@ import { RegenerateButton } from "./_components/regenerate-button";
 
 const PROJECT_ID = process.env.BQ_PROJECT_ID ?? "mark-454114";
 
-export default async function ThreadsHome() {
-  const insights = await getThreadsInsights(PROJECT_ID);
-  await seedPlansIfNeeded();
-  const planSummaries = await listPlanSummaries();
-  const dashboard = await getThreadsDashboard();
+export const dynamic = 'force-dynamic';
 
-  const resolveDeltaTone = (value: number | undefined) => {
-    if (value === undefined || value === 0) return undefined;
+export default async function ThreadsHome() {
+  try {
+    const insights = await getThreadsInsights(PROJECT_ID);
+    await seedPlansIfNeeded();
+    const planSummaries = await listPlanSummaries();
+    const dashboard = await getThreadsDashboard();
+
+  const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
+    if (value === undefined) return undefined;
+    if (value === 0) return 'neutral';
     return value > 0 ? 'up' : 'down';
   };
 
@@ -106,4 +110,24 @@ export default async function ThreadsHome() {
       </div>
     </div>
   );
+  } catch (error) {
+    console.error('[threads/page] Error:', error);
+    return (
+      <div className="space-y-10 p-8">
+        <h1 className="text-xl font-semibold text-white">Threads 自動投稿管理</h1>
+        <div className="rounded-md bg-red-50 p-4 border border-red-200">
+          <h3 className="text-sm font-medium text-red-800">エラーが発生しました</h3>
+          <div className="mt-2 text-sm text-red-700">
+            <p>ページの読み込み中にエラーが発生しました。しばらく待ってから再度お試しください。</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer">詳細情報</summary>
+              <pre className="mt-2 text-xs overflow-auto">
+                {error instanceof Error ? error.message : String(error)}
+              </pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }

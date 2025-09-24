@@ -421,10 +421,10 @@ async function main() {
     { name: 'created_at', type: 'TIMESTAMP' },
   ]);
 
-  await loadIntoBigQuery(bigQueryClient, 'threads_daily_metrics', threadsMetrics);
-  await loadIntoBigQuery(bigQueryClient, 'threads_posts', threadsPosts);
-  await loadIntoBigQuery(bigQueryClient, 'competitor_posts_raw', competitorPosts);
-  await loadIntoBigQuery(bigQueryClient, 'competitor_account_daily', competitorDailyMetrics);
+  await loadIntoBigQuery(bigQueryClient, 'threads_daily_metrics', threadsMetrics as unknown as Record<string, unknown>[]);
+  await loadIntoBigQuery(bigQueryClient, 'threads_posts', threadsPosts as unknown as Record<string, unknown>[]);
+  await loadIntoBigQuery(bigQueryClient, 'competitor_posts_raw', competitorPosts as unknown as Record<string, unknown>[]);
+  await loadIntoBigQuery(bigQueryClient, 'competitor_account_daily', competitorDailyMetrics as unknown as Record<string, unknown>[]);
 
   console.log('Sync completed successfully.');
 }

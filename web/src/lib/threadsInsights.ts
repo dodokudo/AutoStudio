@@ -11,6 +11,7 @@ export interface ThreadsInsightsData {
   topSelfPosts: PromptSelfPost[];
   competitorHighlights: PromptCompetitorHighlight[];
   trendingTopics: ThreadsPromptPayload['trendingTopics'];
+  templateSummaries: ThreadsPromptPayload['templateSummaries'];
 }
 
 export async function getThreadsInsights(projectId: string): Promise<ThreadsInsightsData> {
@@ -22,5 +23,6 @@ export async function getThreadsInsights(projectId: string): Promise<ThreadsInsi
     topSelfPosts: payload.topSelfPosts,
     competitorHighlights: payload.competitorHighlights,
     trendingTopics: payload.trendingTopics,
+    templateSummaries: payload.templateSummaries,
   };
 }

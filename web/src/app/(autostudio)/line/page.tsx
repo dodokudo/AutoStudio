@@ -14,6 +14,8 @@ function formatDateLabel(value: string): string {
   }).format(new Date(value));
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function LineDashboardPage() {
   if (!PROJECT_ID) {
     return (
@@ -26,7 +28,8 @@ export default async function LineDashboardPage() {
     );
   }
 
-  const dashboard = await getLineDashboardData(PROJECT_ID);
+  try {
+    const dashboard = await getLineDashboardData(PROJECT_ID);
 
   if (!dashboard.latestSnapshotDate) {
     return (
@@ -146,4 +149,24 @@ export default async function LineDashboardPage() {
       </section>
     </div>
   );
+  } catch (error) {
+    console.error('[line/page] Error:', error);
+    return (
+      <div className="space-y-6 p-8">
+        <h1 className="text-xl font-semibold text-white">LINE ダッシュボード</h1>
+        <div className="rounded-md bg-red-50 p-4 border border-red-200">
+          <h3 className="text-sm font-medium text-red-800">エラーが発生しました</h3>
+          <div className="mt-2 text-sm text-red-700">
+            <p>ページの読み込み中にエラーが発生しました。しばらく待ってから再度お試しください。</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer">詳細情報</summary>
+              <pre className="mt-2 text-xs overflow-auto">
+                {error instanceof Error ? error.message : String(error)}
+              </pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }
