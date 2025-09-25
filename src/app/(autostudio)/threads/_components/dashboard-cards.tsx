@@ -16,66 +16,82 @@ interface DashboardCardsProps {
 }
 
 const statusColor: Record<string, string> = {
-  succeeded: 'text-emerald-300',
-  failed: 'text-rose-300',
-  processing: 'text-sky-300',
-  pending: 'text-amber-300',
+  succeeded: 'text-emerald-600 bg-emerald-50',
+  failed: 'text-rose-600 bg-rose-50',
+  processing: 'text-sky-600 bg-sky-50',
+  pending: 'text-amber-600 bg-amber-50',
 };
 
 export function DashboardCards({ jobCounts, recentLogs }: DashboardCardsProps) {
   return (
     <section className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow">
-          <p className="text-xs text-slate-400">Pending jobs</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{jobCounts.pending}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow">
-          <p className="text-xs text-slate-400">Processing</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{jobCounts.processing}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow">
-          <p className="text-xs text-slate-400">Failed</p>
-          <p className="mt-2 text-2xl font-semibold text-rose-300">{jobCounts.failed}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow">
-          <p className="text-xs text-slate-400">Succeeded (Today)</p>
-          <p className="mt-2 text-2xl font-semibold text-emerald-300">{jobCounts.succeededToday}</p>
-        </div>
+        {[
+          { label: 'Pending', value: jobCounts.pending, tone: 'text-amber-600', glow: 'rgba(251,191,36,0.2)' },
+          { label: 'Processing', value: jobCounts.processing, tone: 'text-sky-600', glow: 'rgba(56,189,248,0.25)' },
+          { label: 'Failed', value: jobCounts.failed, tone: 'text-rose-600', glow: 'rgba(244,63,94,0.18)' },
+          {
+            label: 'Succeeded Today',
+            value: jobCounts.succeededToday,
+            tone: 'text-emerald-600',
+            glow: 'rgba(16,185,129,0.22)',
+          },
+        ].map((card) => (
+          <div
+            key={card.label}
+            className="relative overflow-hidden rounded-2xl bg-white/95 p-5 shadow-[0_16px_35px_rgba(15,23,42,0.08)] transition hover:-translate-y-1 hover:shadow-[0_22px_48px_rgba(71,105,173,0.16)] dark:bg-white/10"
+          >
+            <div
+              className="absolute inset-x-3 top-3 h-[5px] rounded-full"
+              style={{ background: `linear-gradient(120deg, ${card.glow}, rgba(111,126,252,0.18))` }}
+            />
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+              {card.label}
+            </p>
+            <p className={`mt-3 text-3xl font-semibold ${card.tone} dark:text-white`}>{card.value}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow">
-        <header className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">最近の投稿ログ</h3>
-          <span className="text-xs text-slate-400">最新10件</span>
+      <div className="card-strong rounded-3xl p-6 backdrop-blur-xl">
+        <header className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">最近の投稿ログ</h3>
+          <span className="text-xs text-slate-500 dark:text-slate-300">最新10件</span>
         </header>
-        <div className="space-y-3 text-xs text-slate-300">
+        <div className="space-y-3 text-xs text-slate-600 dark:text-slate-200">
           {recentLogs.length === 0 ? (
-            <p className="text-slate-400">投稿ログはまだありません。</p>
+            <p className="rounded-2xl bg-white/80 p-4 text-center text-slate-400 shadow-inner dark:bg-white/10">
+              投稿ログはまだありません。
+            </p>
           ) : (
-            recentLogs.map((log) => (
-              <div
-                key={`${log.jobId}-${log.postedAt ?? 'na'}`}
-                className="grid gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3 md:grid-cols-[1.2fr,1fr,1fr]"
-              >
-                <div>
-                  <p className="font-semibold text-slate-200">Plan {log.planId}</p>
-                  <p className="mt-1 text-slate-400">Job {log.jobId}</p>
+            recentLogs.map((log) => {
+              const tone = statusColor[log.status] ?? 'text-slate-600 bg-slate-100';
+              return (
+                <div
+                  key={`${log.jobId}-${log.postedAt ?? 'na'}`}
+                  className="grid gap-4 rounded-2xl bg-white/95 p-4 shadow-[0_12px_25px_rgba(15,23,42,0.08)] transition hover:-translate-y-[2px] hover:shadow-[0_16px_32px_rgba(52,86,155,0.14)] dark:bg-white/10 md:grid-cols-[1.2fr,1fr,1fr]"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">Plan {log.planId}</p>
+                    <p className="mt-1 text-slate-400">Job {log.jobId}</p>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 font-semibold ${tone}`}>
+                      {log.status}
+                    </span>
+                    {log.postedThreadId ? (
+                      <span className="text-slate-400 dark:text-slate-300">Thread ID: {log.postedThreadId}</span>
+                    ) : null}
+                    {log.errorMessage ? (
+                      <span className="text-rose-500 dark:text-rose-300">{log.errorMessage}</span>
+                    ) : null}
+                  </div>
+                  <div className="text-slate-400 dark:text-slate-300">
+                    {log.postedAt ? new Date(log.postedAt).toLocaleString() : '—'}
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className={`${statusColor[log.status] ?? 'text-slate-300'} font-semibold`}>{log.status}</span>
-                  {log.postedThreadId ? (
-                    <span className="text-slate-400">Thread ID: {log.postedThreadId}</span>
-                  ) : null}
-                  {log.errorMessage ? (
-                    <span className="text-rose-300">{log.errorMessage}</span>
-                  ) : null}
-                </div>
-                <div className="text-slate-400">
-                  {log.postedAt ? new Date(log.postedAt).toLocaleString() : '—'}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

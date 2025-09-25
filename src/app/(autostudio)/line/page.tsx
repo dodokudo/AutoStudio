@@ -1,6 +1,10 @@
 import { getLineDashboardData } from '@/lib/lstep/dashboard';
+import { resolveProjectId } from '@/lib/bigquery';
 
-const PROJECT_ID = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
+const PROJECT_ID = (() => {
+  const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
+  return preferred ? resolveProjectId(preferred) : undefined;
+})();
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);

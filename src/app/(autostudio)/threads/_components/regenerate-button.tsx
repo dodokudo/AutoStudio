@@ -35,7 +35,7 @@ export function RegenerateButton() {
       type="button"
       onClick={handleClick}
       disabled={disabled}
-      className="rounded-lg bg-indigo-500/20 px-4 py-2 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/30 disabled:opacity-50"
+      className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-200/50 transition hover:opacity-90 disabled:opacity-60 dark:from-primary dark:to-secondary"
     >
       {disabled ? '生成中…' : '投稿案を自動生成'}
     </button>

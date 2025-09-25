@@ -38,9 +38,10 @@ Cloud Scheduler (01:00 JST)
 
 1. `.env.local` に必要な Lstep / GCP / メール(SMTP) の情報を記入。
 2. `npm install` を実行して依存ライブラリ（Playwright 等）を取得。
-3. `npm run lstep:capture` を実行し、開いたブラウザで reCAPTCHA を含めてログイン。ログイン完了後 Enter を押すと Cookie が `gs://<bucket>/<storage_state_object>` に保存される。
-4. GCS バケットに対し、`raw/` プレフィックスへ 7 日 TTL のオブジェクトライフサイクルを設定。
-5. Cloud Run サービスをデプロイし、環境変数を設定（下記「デプロイ手順」参照）。Cloud Scheduler（01:00 JST）からサービスを起動。
+3. `npm run lstep:check` を実行し、GCS バケット / Cookie ストレージ / BigQuery 権限に問題がないかを確認。
+4. `npm run lstep:capture` を実行し、開いたブラウザで reCAPTCHA を含めてログイン。ログイン完了後 Enter を押すと Cookie が `gs://<bucket>/<storage_state_object>` に保存される。
+5. GCS バケットに対し、`raw/` プレフィックスへ 7 日 TTL のオブジェクトライフサイクルを設定。
+6. Cloud Run サービスをデプロイし、環境変数を設定（下記「デプロイ手順」参照）。Cloud Scheduler（01:00 JST）からサービスを起動。
 
 ## デプロイ手順（Cloud Run）
 
@@ -102,6 +103,7 @@ AutoStudio の LINE タブ（`/line`）では上記メトリクスを BigQuery �
 - `raw/` と `processed/` 配下に日付ディレクトリが生成されているか確認。
 - アラートメールがエラー時のみ送信されることをテスト（通知を受け取ったら、本ドキュメントの再ログイン手順に従いユーザー本人が対処）。
 - AutoStudio 側で BigQuery 接続設定（Service Account）と KPI クエリの準備。
+- 定期的に `npm run lstep:check` を実行し、権限や Cookie 有効期限の有無を確認。
 
 ## 今後の拡張ポイント
 

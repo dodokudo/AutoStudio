@@ -1,12 +1,12 @@
 import { BigQuery } from '@google-cloud/bigquery';
-import { createBigQueryClient } from './bigquery';
+import { createBigQueryClient, resolveProjectId } from './bigquery';
 import { buildScheduleSlots } from './promptBuilder';
 import { getThreadsInsights } from './threadsInsights';
 import { createJobForPlan, findJobByPlan } from './bigqueryJobs';
 import type { PlanStatus, ThreadPlan, ThreadPlanSummary } from '@/types/threadPlan';
 
 const DATASET = 'autostudio_threads';
-const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
+const PROJECT_ID = resolveProjectId();
 
 const client: BigQuery = createBigQueryClient(PROJECT_ID);
 const PLAN_TABLE = 'thread_post_plans';

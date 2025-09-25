@@ -1,5 +1,5 @@
 import { BigQuery } from '@google-cloud/bigquery';
-import { createBigQueryClient } from './bigquery';
+import { createBigQueryClient, resolveProjectId } from './bigquery';
 import type {
   PromptAccountSummary,
   PromptSelfPost,
@@ -244,15 +244,16 @@ export function buildScheduleSlots(count: number, startHour = 7, intervalMinutes
 }
 
 export async function buildThreadsPromptPayload(options: BuildPromptOptions): Promise<ThreadsPromptPayload> {
-  const client = createBigQueryClient(options.projectId);
+  const projectId = resolveProjectId(options.projectId);
+  const client = createBigQueryClient(projectId);
 
   const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries] =
     await Promise.all([
-      fetchAccountSummary(client, options.projectId),
-      fetchTopSelfPosts(client, options.projectId),
-      fetchCompetitorHighlights(client, options.projectId),
-      fetchTrendingTopics(client, options.projectId),
-      fetchTemplateSummaries(client, options.projectId),
+      fetchAccountSummary(client, projectId),
+      fetchTopSelfPosts(client, projectId),
+      fetchCompetitorHighlights(client, projectId),
+      fetchTrendingTopics(client, projectId),
+      fetchTemplateSummaries(client, projectId),
     ]);
 
   const targetCount = 10;

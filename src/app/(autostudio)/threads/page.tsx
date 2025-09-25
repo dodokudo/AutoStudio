@@ -1,150 +1,245 @@
+import Link from "next/link";
 import { InsightsCard } from "./_components/insights-card";
 import { CompetitorHighlights } from "./_components/competitor-highlight";
 import { PostQueueContainer } from "./_components/post-queue-container";
 import { getThreadsInsights } from "@/lib/threadsInsights";
 import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
 import { getThreadsDashboard } from "@/lib/threadsDashboard";
+import { resolveProjectId } from "@/lib/bigquery";
 import { TrendingTopics } from "./_components/trending-topics";
 import { TemplateSummary } from "./_components/template-summary";
 import { DashboardCards } from "./_components/dashboard-cards";
 import { RegenerateButton } from "./_components/regenerate-button";
 
-const PROJECT_ID = process.env.BQ_PROJECT_ID ?? "mark-454114";
+const PROJECT_ID = resolveProjectId();
 
 export const dynamic = 'force-dynamic';
 
+type QueueMetrics = {
+  draft: number;
+  approved: number;
+  scheduled: number;
+  rejected: number;
+};
+
 export default async function ThreadsHome() {
   try {
-    console.log('[threads/page] Starting data fetch...');
-    console.log('[threads/page] PROJECT_ID:', PROJECT_ID);
+    const [insights, planSummaries, dashboard] = await Promise.all([
+      getThreadsInsights(PROJECT_ID),
+      (async () => {
+        await seedPlansIfNeeded();
+        return listPlanSummaries();
+      })(),
+      getThreadsDashboard(),
+    ]);
 
-    console.log('[threads/page] Fetching insights...');
-    const insights = await getThreadsInsights(PROJECT_ID);
-    console.log('[threads/page] Insights fetched successfully');
+    const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
+      if (value === undefined) return undefined;
+      if (value === 0) return 'neutral';
+      return value > 0 ? 'up' : 'down';
+    };
 
-    console.log('[threads/page] Seeding plans...');
-    await seedPlansIfNeeded();
-    console.log('[threads/page] Plans seeded successfully');
-
-    console.log('[threads/page] Fetching plan summaries...');
-    const planSummaries = await listPlanSummaries();
-    console.log('[threads/page] Plan summaries fetched successfully');
-
-    console.log('[threads/page] Fetching dashboard...');
-    const dashboard = await getThreadsDashboard();
-    console.log('[threads/page] Dashboard fetched successfully');
-
-  const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
-    if (value === undefined) return undefined;
-    if (value === 0) return 'neutral';
-    return value > 0 ? 'up' : 'down';
-  };
-
-  const stats = [
-    {
-      label: "平均フォロワー",
-      value: insights.accountSummary.averageFollowers.toLocaleString(),
-      delta:
-        insights.accountSummary.followersChange === 0
-          ? undefined
-          : `${insights.accountSummary.followersChange > 0 ? '+' : ''}${insights.accountSummary.followersChange.toLocaleString()}`,
-      deltaTone: resolveDeltaTone(insights.accountSummary.followersChange),
-    },
-    {
-      label: "平均プロフ閲覧",
-      value: insights.accountSummary.averageProfileViews.toLocaleString(),
-      delta:
-        insights.accountSummary.profileViewsChange === 0
-          ? undefined
-          : `${insights.accountSummary.profileViewsChange > 0 ? '+' : ''}${insights.accountSummary.profileViewsChange.toLocaleString()}`,
-      deltaTone: resolveDeltaTone(insights.accountSummary.profileViewsChange),
-    },
-    {
-      label: "最高閲覧投稿",
-      value: insights.topSelfPosts[0]?.impressions
-        ? insights.topSelfPosts[0].impressions.toLocaleString()
-        : '—',
-      delta: insights.topSelfPosts[0]?.postId
-        ? `@${insights.topSelfPosts[0].postId}`
-        : undefined,
-    },
-    {
-      label: "トレンドテーマ",
-      value: insights.trendingTopics[0]?.themeTag ?? '確認中',
-      delta: insights.trendingTopics[0]
-        ? `Avg Δフォロワー ${Math.round(insights.trendingTopics[0].avgFollowersDelta)}`
-        : undefined,
-      deltaTone: resolveDeltaTone(
-        insights.trendingTopics[0]
-          ? Math.round(insights.trendingTopics[0].avgFollowersDelta)
+    const stats = [
+      {
+        label: "平均フォロワー",
+        value: insights.accountSummary.averageFollowers.toLocaleString(),
+        delta:
+          insights.accountSummary.followersChange === 0
+            ? undefined
+            : `${insights.accountSummary.followersChange > 0 ? '+' : ''}${insights.accountSummary.followersChange.toLocaleString()}`,
+        deltaTone: resolveDeltaTone(insights.accountSummary.followersChange),
+      },
+      {
+        label: "平均プロフ閲覧",
+        value: insights.accountSummary.averageProfileViews.toLocaleString(),
+        delta:
+          insights.accountSummary.profileViewsChange === 0
+            ? undefined
+            : `${insights.accountSummary.profileViewsChange > 0 ? '+' : ''}${insights.accountSummary.profileViewsChange.toLocaleString()}`,
+        deltaTone: resolveDeltaTone(insights.accountSummary.profileViewsChange),
+      },
+      {
+        label: "最高閲覧投稿",
+        value: insights.topSelfPosts[0]?.impressions
+          ? insights.topSelfPosts[0].impressions.toLocaleString()
+          : '—',
+        delta: insights.topSelfPosts[0]?.postId ? `@${insights.topSelfPosts[0].postId}` : undefined,
+      },
+      {
+        label: "トレンドテーマ",
+        value: insights.trendingTopics[0]?.themeTag ?? '確認中',
+        delta: insights.trendingTopics[0]
+          ? `Avg Δフォロワー ${Math.round(insights.trendingTopics[0].avgFollowersDelta)}`
           : undefined,
-      ),
-    },
-  ];
+        deltaTone: resolveDeltaTone(
+          insights.trendingTopics[0]
+            ? Math.round(insights.trendingTopics[0].avgFollowersDelta)
+            : undefined,
+        ),
+      },
+    ];
 
-  const highlights = insights.competitorHighlights.map((item) => ({
-    accountName: item.accountName,
-    username: item.username ?? undefined,
-    impressions: item.impressions?.toLocaleString(),
-    likes: item.likes?.toLocaleString(),
-    summary: item.contentSnippet,
-  }));
+    const queueMetrics = planSummaries.reduce<QueueMetrics>(
+      (acc, plan) => {
+        if (plan.status in acc) {
+          acc[plan.status as keyof QueueMetrics] += 1;
+        }
+        return acc;
+      },
+      { draft: 0, approved: 0, scheduled: 0, rejected: 0 },
+    );
 
-  return (
-    <div className="space-y-10">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-white">Threads 自動投稿管理</h1>
-        <RegenerateButton />
-      </div>
-      <InsightsCard title="アカウント概況 (直近7日)" stats={stats} />
-      <div className="space-y-10">
-        <div className="grid gap-10 lg:grid-cols-[2fr,1.2fr]">
-          <div className="space-y-10">
+    const heroStats = [
+      {
+        label: '承認待ち',
+        value: queueMetrics.draft,
+        caption: 'レビューが必要な投稿',
+        tone: 'text-amber-600 bg-amber-100/60',
+      },
+      {
+        label: '本日予約',
+        value: queueMetrics.scheduled,
+        caption: 'Threads API による予約',
+        tone: 'text-sky-600 bg-sky-100/60',
+      },
+      {
+        label: '今日完了',
+        value: dashboard.jobCounts.succeededToday,
+        caption: '投稿成功数 (本日)',
+        tone: 'text-emerald-600 bg-emerald-100/60',
+      },
+    ];
+
+    const rawHighlights = insights.competitorHighlights;
+    const competitorHighlights = (rawHighlights.length ? rawHighlights : [
+      {
+        accountName: 'competitor1',
+        username: 'marketing_pro',
+        impressions: '12,400',
+        likes: '2,180',
+        contentSnippet: '採用の舞台裏をストーリー形式で公開し、CTAで無料相談へ誘導。',
+        categories: ['未読', '要リライト'],
+      },
+      {
+        accountName: 'competitor2',
+        username: 'startup_lab',
+        impressions: '8,960',
+        likes: '1,480',
+        contentSnippet: 'バズった要因を3つの見出しで整理。Hook → Insight → CTA の流れが秀逸。',
+        categories: ['保存増', 'インサイト'],
+      },
+    ]).map((item) => ({
+      accountName: item.accountName,
+      username: item.username ?? undefined,
+      impressions: item.impressions?.toLocaleString?.() ?? item.impressions,
+      likes: item.likes?.toLocaleString?.() ?? item.likes,
+      summary: item.contentSnippet ?? item.summary ?? '',
+      categories: item.categories ?? [],
+    }));
+
+    return (
+      <div className="section-stack">
+        <section className="relative overflow-hidden rounded-[36px] border border-white/60 bg-white/90 px-8 py-10 shadow-[0_30px_70px_rgba(125,145,211,0.25)] dark:bg-white/10">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-10 top-[-50px] h-48 w-48 rounded-full bg-gradient-to-br from-indigo-400/50 via-purple-300/40 to-white/0 blur-3xl" />
+            <div className="absolute right-[-40px] top-10 h-40 w-40 rounded-full bg-gradient-to-br from-emerald-300/40 via-sky-200/30 to-white/0 blur-3xl" />
+          </div>
+          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center">
+            <div className="flex-1 space-y-4">
+              <span className="inline-flex items-center gap-2 rounded-full bg-indigo-100/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-500">
+                Threads automation
+              </span>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">
+                Threads 自動投稿管理
+              </h1>
+              <p className="max-w-xl text-sm leading-relaxed text-slate-500 dark:text-slate-300">
+                毎朝の生成から承認、投稿ログまでを 1 つの画面に集約。チームの判断を高速化し、Threads 運用をスケーラブルに進めましょう。
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <RegenerateButton />
+                <Link href="/threads/spec" className="button-secondary">
+                  仕様書を確認
+                </Link>
+              </div>
+            </div>
+            <div className="grid w-full gap-4 sm:grid-cols-3 lg:w-auto">
+              {heroStats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-3xl bg-white/85 p-4 text-center shadow-[0_18px_38px_rgba(110,132,206,0.18)] dark:bg-white/10"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                    {stat.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
+                    {stat.value.toLocaleString()}
+                  </p>
+                  <p className={`mt-2 rounded-full px-2.5 py-1 text-[11px] font-medium ${stat.tone}`}>
+                    {stat.caption}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <InsightsCard title="アカウント概況 (直近7日)" stats={stats} />
+
+        <div className="grid gap-10 lg:grid-cols-[1.85fr,1fr]">
+          <div className="section-stack">
             <PostQueueContainer
               initialPlans={JSON.parse(JSON.stringify(planSummaries))}
               trendingThemes={insights.trendingTopics.map((topic) => topic.themeTag)}
-              templateOptions={insights.templateSummaries?.map((template) => ({
-                value: template.templateId,
-                label: `${template.templateId} (v${template.version})`,
-              })) || []}
+              templateOptions={
+                insights.templateSummaries?.map((template) => ({
+                  value: template.templateId,
+                  label: `${template.templateId} (v${template.version})`,
+                })) || []
+              }
             />
             <TrendingTopics
-              items={insights.trendingTopics.map((topic) => ({
+              items={(insights.trendingTopics.length ? insights.trendingTopics : [
+                { themeTag: 'AI活用', avgFollowersDelta: 48, avgViews: 12600, sampleAccounts: ['competitor1', 'competitor2'] },
+                { themeTag: 'SNS運用術', avgFollowersDelta: 32, avgViews: 9800, sampleAccounts: ['growth_studio'] },
+                { themeTag: '副業Tips', avgFollowersDelta: -18, avgViews: 5400, sampleAccounts: ['biz_learn'] },
+              ]).map((topic) => ({
                 themeTag: topic.themeTag,
                 avgFollowersDelta: topic.avgFollowersDelta,
                 avgViews: topic.avgViews,
-                sampleAccounts: topic.sampleAccounts,
+                sampleAccounts: topic.sampleAccounts ?? [],
               }))}
             />
           </div>
-          <CompetitorHighlights items={highlights} />
+          <CompetitorHighlights items={competitorHighlights} />
         </div>
-        <TemplateSummary items={insights.templateSummaries} />
+
+        <TemplateSummary items={(insights.templateSummaries && insights.templateSummaries.length ? insights.templateSummaries : [
+          { templateId: 'Template-A', version: 3, status: 'active', impressionAvg72h: 2100, likeAvg72h: 320, structureNotes: 'Hookで課題→Insight→CTAの流れが安定' },
+          { templateId: 'Template-B', version: 2, status: 'candidate', impressionAvg72h: 1680, likeAvg72h: 240, structureNotes: '導入で具体数字を入れると反応が高い' },
+          { templateId: 'Template-C', version: 1, status: 'needs_review', impressionAvg72h: 980, likeAvg72h: 150, structureNotes: 'リードが長いので要調整' },
+        ])} />
         <DashboardCards jobCounts={dashboard.jobCounts} recentLogs={dashboard.recentLogs} />
+        <div className="sticky bottom-10 mt-6 flex justify-end">
+          <button type="button" className="button-primary pointer-events-auto gap-3">
+            今日の投稿を確定
+            <span className="rounded-full bg-white/25 px-2 py-0.5 text-[11px]">承認待ち {queueMetrics.draft}</span>
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
   } catch (error) {
     console.error('[threads/page] Error occurred:', error);
-    console.error('[threads/page] Error type:', typeof error);
-    console.error('[threads/page] Error constructor:', error?.constructor?.name);
     if (error instanceof Error) {
       console.error('[threads/page] Error message:', error.message);
       console.error('[threads/page] Error stack:', error.stack);
     }
     return (
-      <div className="space-y-10 p-8">
-        <h1 className="text-xl font-semibold text-white">Threads 自動投稿管理</h1>
-        <div className="rounded-md bg-red-50 p-4 border border-red-200">
-          <h3 className="text-sm font-medium text-red-800">エラーが発生しました</h3>
-          <div className="mt-2 text-sm text-red-700">
+      <div className="section-stack p-8">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Threads 自動投稿管理</h1>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 shadow">
+          <h3 className="text-sm font-medium text-rose-700">エラーが発生しました</h3>
+          <div className="mt-2 text-sm text-rose-600">
             <p>ページの読み込み中にエラーが発生しました。しばらく待ってから再度お試しください。</p>
-            <details className="mt-2">
-              <summary className="cursor-pointer">詳細情報</summary>
-              <pre className="mt-2 text-xs overflow-auto">
-                {error instanceof Error ? error.message : String(error)}
-              </pre>
-            </details>
           </div>
         </div>
       </div>

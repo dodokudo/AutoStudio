@@ -1,3 +1,5 @@
+import { resolveProjectId } from '../bigquery';
+
 export interface LstepConfig {
   loginUrl: string;
   friendsUrl: string;
@@ -6,7 +8,7 @@ export interface LstepConfig {
   rawPrefix: string;
   processedPrefix: string;
   dataset: string;
-  projectId?: string;
+  projectId: string;
   location: string;
   alertEmails: string[];
   emailFrom: string;
@@ -52,7 +54,7 @@ export function loadLstepConfig(): LstepConfig {
     rawPrefix: process.env.LSTEP_RAW_PREFIX ?? 'lstep/raw',
     processedPrefix: process.env.LSTEP_PROCESSED_PREFIX ?? 'lstep/processed',
     dataset: process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep',
-    projectId: process.env.LSTEP_BQ_PROJECT_ID,
+    projectId: resolveProjectId(process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID),
     location: process.env.LSTEP_BQ_LOCATION ?? 'asia-northeast1',
     alertEmails,
     emailFrom: requireEnv('LSTEP_EMAIL_FROM'),

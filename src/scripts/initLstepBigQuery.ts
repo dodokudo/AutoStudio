@@ -1,12 +1,13 @@
 #!/usr/bin/env tsx
 
 import dotenv from 'dotenv';
-import { createBigQueryClient } from '@/lib/bigquery';
+import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
 
-const PROJECT_ID = process.env.LSTEP_BQ_PROJECT_ID || process.env.BQ_PROJECT_ID;
+const rawProjectId = process.env.LSTEP_BQ_PROJECT_ID || process.env.BQ_PROJECT_ID;
+const PROJECT_ID = rawProjectId ? resolveProjectId(rawProjectId) : undefined;
 const DATASET_ID = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
 const LOCATION = process.env.LSTEP_BQ_LOCATION || 'asia-northeast1';
 

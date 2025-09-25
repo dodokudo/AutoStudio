@@ -1,7 +1,8 @@
 import { buildScheduleSlots } from './promptBuilder';
 import { getThreadsInsights } from './threadsInsights';
+import { resolveProjectId } from './bigquery';
 
-const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
+const PROJECT_ID = resolveProjectId();
 
 export type PlanStatus = 'draft' | 'approved' | 'scheduled' | 'rejected';
 

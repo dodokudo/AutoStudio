@@ -1,8 +1,8 @@
 import { BigQuery } from '@google-cloud/bigquery';
-import { createBigQueryClient } from './bigquery';
+import { createBigQueryClient, resolveProjectId } from './bigquery';
 
 const DATASET = 'autostudio_threads';
-const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
+const PROJECT_ID = resolveProjectId();
 const SCORES_TABLE = 'threads_prompt_template_scores';
 
 interface TemplateMetricRow {

@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import { promises as fs } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

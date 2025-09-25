@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Browser, BrowserContext, chromium, Download, Page } from 'playwright';
+import { Browser, chromium, Download, Page } from 'playwright';
 import { Storage } from '@google-cloud/storage';
 import { LstepConfig } from './config';
 import { downloadObjectToFile } from './gcs';

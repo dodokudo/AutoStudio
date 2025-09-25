@@ -3,8 +3,9 @@ import { buildThreadsPromptPayload } from '@/lib/promptBuilder';
 import { generateClaudePlans } from '@/lib/claude';
 import { replaceTodayPlans, listPlanSummaries } from '@/lib/bigqueryPlans';
 import { notifyGenerateFailure } from '@/lib/notifications';
+import { resolveProjectId } from '@/lib/bigquery';
 
-const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
+const PROJECT_ID = resolveProjectId();
 
 export async function POST() {
   try {

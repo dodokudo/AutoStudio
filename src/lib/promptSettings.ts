@@ -1,7 +1,8 @@
-import { BigQuery } from '@google-cloud/bigquery';
+import type { BigQuery } from '@google-cloud/bigquery';
+import { createBigQueryClient, resolveProjectId } from './bigquery';
 
 const DATASET = 'autostudio_threads';
-const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
+const PROJECT_ID = resolveProjectId();
 const TABLE = 'threads_prompt_settings';
 
 interface PromptRow {
@@ -10,10 +11,7 @@ interface PromptRow {
   created_at: string;
 }
 
-const client = new BigQuery({
-  projectId: PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+const client: BigQuery = createBigQueryClient(PROJECT_ID);
 
 async function ensureTable() {
   const dataset = client.dataset(DATASET);

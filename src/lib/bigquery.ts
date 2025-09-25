@@ -1,6 +1,14 @@
 import { BigQuery } from '@google-cloud/bigquery';
 
 const DATASET_ID = 'autostudio_threads';
+const DEFAULT_PROJECT_ID = 'mark-454114';
+
+export function resolveProjectId(value?: string): string {
+  const candidate = value ?? process.env.BQ_PROJECT_ID ?? DEFAULT_PROJECT_ID;
+  const trimmed = candidate.trim();
+  const unquoted = trimmed.replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+  return unquoted || DEFAULT_PROJECT_ID;
+}
 
 function loadCredentials() {
   const rawJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -43,10 +51,11 @@ function loadCredentials() {
   return undefined;
 }
 
-export function createBigQueryClient(projectId: string, location?: string) {
+export function createBigQueryClient(projectId?: string, location?: string) {
+  const resolvedProjectId = resolveProjectId(projectId);
   const credentials = loadCredentials();
   return new BigQuery({
-    projectId,
+    projectId: resolvedProjectId,
     credentials,
     keyFilename: credentials ? undefined : process.env.GOOGLE_APPLICATION_CREDENTIALS,
     location: location || process.env.LSTEP_BQ_LOCATION || 'US',

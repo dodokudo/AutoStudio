@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getThreadsInsights } from '@/lib/threadsInsights';
+import { resolveProjectId } from '@/lib/bigquery';
 
-const PROJECT_ID = process.env.BQ_PROJECT_ID ?? 'mark-454114';
+const PROJECT_ID = resolveProjectId();
 
 export async function GET() {
   try {
