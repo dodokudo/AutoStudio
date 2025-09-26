@@ -10,6 +10,7 @@ import { TrendingTopics } from "./_components/trending-topics";
 import { TemplateSummary } from "./_components/template-summary";
 import { DashboardCards } from "./_components/dashboard-cards";
 import { RegenerateButton } from "./_components/regenerate-button";
+import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
 
 const PROJECT_ID = resolveProjectId();
 
@@ -21,6 +22,94 @@ type QueueMetrics = {
   scheduled: number;
   rejected: number;
 };
+
+type DisplayHighlight = {
+  accountName: string;
+  username?: string;
+  impressions?: string;
+  likes?: string;
+  summary: string;
+  categories: string[];
+};
+
+type FallbackHighlight = {
+  accountName: string;
+  username?: string;
+  impressions?: string;
+  likes?: string;
+  note: string;
+  categories?: string[];
+};
+
+const FALLBACK_HIGHLIGHTS: FallbackHighlight[] = [
+  {
+    accountName: 'competitor1',
+    username: 'marketing_pro',
+    impressions: '12,400',
+    likes: '2,180',
+    note: '採用の舞台裏をストーリー形式で公開し、CTAで無料相談へ誘導。',
+    categories: ['未読', '要リライト'],
+  },
+  {
+    accountName: 'competitor2',
+    username: 'startup_lab',
+    impressions: '8,960',
+    likes: '1,480',
+    note: 'バズった要因を3つの見出しで整理。Hook → Insight → CTA の流れが秀逸。',
+    categories: ['保存増', 'インサイト'],
+  },
+];
+
+const FALLBACK_TRENDING: PromptTrendingTopic[] = [
+  { themeTag: 'AI活用', avgFollowersDelta: 48, avgViews: 12600, sampleAccounts: ['competitor1', 'competitor2'] },
+  { themeTag: 'SNS運用術', avgFollowersDelta: 32, avgViews: 9800, sampleAccounts: ['growth_studio'] },
+  { themeTag: '副業Tips', avgFollowersDelta: -18, avgViews: 5400, sampleAccounts: ['biz_learn'] },
+];
+
+const FALLBACK_TEMPLATES: PromptTemplateSummary[] = [
+  {
+    templateId: 'Template-A',
+    version: 3,
+    status: 'active',
+    impressionAvg72h: 2100,
+    likeAvg72h: 320,
+    structureNotes: 'Hookで課題→Insight→CTAの流れが安定',
+  },
+  {
+    templateId: 'Template-B',
+    version: 2,
+    status: 'candidate',
+    impressionAvg72h: 1680,
+    likeAvg72h: 240,
+    structureNotes: '導入で具体数字を入れると反応が高い',
+  },
+  {
+    templateId: 'Template-C',
+    version: 1,
+    status: 'needs_review',
+    impressionAvg72h: 980,
+    likeAvg72h: 150,
+    structureNotes: 'リードが長いので要調整',
+  },
+];
+
+function toDisplayHighlight(
+  item: PromptCompetitorHighlight | FallbackHighlight,
+): DisplayHighlight {
+  const impressions = typeof item.impressions === 'number' ? item.impressions.toLocaleString() : item.impressions;
+  const likes = typeof item.likes === 'number' ? item.likes.toLocaleString() : item.likes;
+  const summary = 'contentSnippet' in item ? item.contentSnippet : item.note;
+  const categories = 'categories' in item && item.categories ? item.categories : [];
+
+  return {
+    accountName: item.accountName,
+    username: 'username' in item ? item.username ?? undefined : undefined,
+    impressions: impressions ?? undefined,
+    likes: likes ?? undefined,
+    summary,
+    categories,
+  };
+}
 
 export default async function ThreadsHome() {
   try {
@@ -41,7 +130,7 @@ export default async function ThreadsHome() {
 
     const stats = [
       {
-        label: "平均フォロワー",
+        label: '平均フォロワー',
         value: insights.accountSummary.averageFollowers.toLocaleString(),
         delta:
           insights.accountSummary.followersChange === 0
@@ -50,7 +139,7 @@ export default async function ThreadsHome() {
         deltaTone: resolveDeltaTone(insights.accountSummary.followersChange),
       },
       {
-        label: "平均プロフ閲覧",
+        label: '平均プロフ閲覧',
         value: insights.accountSummary.averageProfileViews.toLocaleString(),
         delta:
           insights.accountSummary.profileViewsChange === 0
@@ -59,14 +148,14 @@ export default async function ThreadsHome() {
         deltaTone: resolveDeltaTone(insights.accountSummary.profileViewsChange),
       },
       {
-        label: "最高閲覧投稿",
+        label: '最高閲覧投稿',
         value: insights.topSelfPosts[0]?.impressions
           ? insights.topSelfPosts[0].impressions.toLocaleString()
           : '—',
         delta: insights.topSelfPosts[0]?.postId ? `@${insights.topSelfPosts[0].postId}` : undefined,
       },
       {
-        label: "トレンドテーマ",
+        label: 'トレンドテーマ',
         value: insights.trendingTopics[0]?.themeTag ?? '確認中',
         delta: insights.trendingTopics[0]
           ? `Avg Δフォロワー ${Math.round(insights.trendingTopics[0].avgFollowersDelta)}`
@@ -110,32 +199,23 @@ export default async function ThreadsHome() {
       },
     ];
 
-    const rawHighlights = insights.competitorHighlights;
-    const competitorHighlights = (rawHighlights.length ? rawHighlights : [
-      {
-        accountName: 'competitor1',
-        username: 'marketing_pro',
-        impressions: '12,400',
-        likes: '2,180',
-        contentSnippet: '採用の舞台裏をストーリー形式で公開し、CTAで無料相談へ誘導。',
-        categories: ['未読', '要リライト'],
-      },
-      {
-        accountName: 'competitor2',
-        username: 'startup_lab',
-        impressions: '8,960',
-        likes: '1,480',
-        contentSnippet: 'バズった要因を3つの見出しで整理。Hook → Insight → CTA の流れが秀逸。',
-        categories: ['保存増', 'インサイト'],
-      },
-    ]).map((item) => ({
-      accountName: item.accountName,
-      username: item.username ?? undefined,
-      impressions: item.impressions?.toLocaleString?.() ?? item.impressions,
-      likes: item.likes?.toLocaleString?.() ?? item.likes,
-      summary: item.contentSnippet ?? item.summary ?? '',
-      categories: item.categories ?? [],
+    const competitorHighlights: DisplayHighlight[] = (
+      insights.competitorHighlights.length ? insights.competitorHighlights : FALLBACK_HIGHLIGHTS
+    ).map((item) => toDisplayHighlight(item));
+
+    const trendingTopics = (
+      insights.trendingTopics.length ? insights.trendingTopics : FALLBACK_TRENDING
+    ).map((topic) => ({
+      themeTag: topic.themeTag,
+      avgFollowersDelta: topic.avgFollowersDelta,
+      avgViews: topic.avgViews,
+      sampleAccounts: topic.sampleAccounts ?? [],
     }));
+
+    const templateSummaries =
+      insights.templateSummaries && insights.templateSummaries.length
+        ? insights.templateSummaries
+        : FALLBACK_TEMPLATES;
 
     return (
       <div className="section-stack">
@@ -164,10 +244,7 @@ export default async function ThreadsHome() {
             </div>
             <div className="grid w-full gap-4 sm:grid-cols-3 lg:w-auto">
               {heroStats.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-3xl bg-white/85 p-4 text-center shadow-[0_18px_38px_rgba(110,132,206,0.18)] dark:bg-white/10"
-                >
+                <div key={stat.label} className="rounded-3xl bg-white/85 p-4 text-center shadow-[0_18px_38px_rgba(110,132,206,0.18)] dark:bg-white/10">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                     {stat.label}
                   </p>
@@ -197,27 +274,12 @@ export default async function ThreadsHome() {
                 })) || []
               }
             />
-            <TrendingTopics
-              items={(insights.trendingTopics.length ? insights.trendingTopics : [
-                { themeTag: 'AI活用', avgFollowersDelta: 48, avgViews: 12600, sampleAccounts: ['competitor1', 'competitor2'] },
-                { themeTag: 'SNS運用術', avgFollowersDelta: 32, avgViews: 9800, sampleAccounts: ['growth_studio'] },
-                { themeTag: '副業Tips', avgFollowersDelta: -18, avgViews: 5400, sampleAccounts: ['biz_learn'] },
-              ]).map((topic) => ({
-                themeTag: topic.themeTag,
-                avgFollowersDelta: topic.avgFollowersDelta,
-                avgViews: topic.avgViews,
-                sampleAccounts: topic.sampleAccounts ?? [],
-              }))}
-            />
+            <TrendingTopics items={trendingTopics} />
           </div>
           <CompetitorHighlights items={competitorHighlights} />
         </div>
 
-        <TemplateSummary items={(insights.templateSummaries && insights.templateSummaries.length ? insights.templateSummaries : [
-          { templateId: 'Template-A', version: 3, status: 'active', impressionAvg72h: 2100, likeAvg72h: 320, structureNotes: 'Hookで課題→Insight→CTAの流れが安定' },
-          { templateId: 'Template-B', version: 2, status: 'candidate', impressionAvg72h: 1680, likeAvg72h: 240, structureNotes: '導入で具体数字を入れると反応が高い' },
-          { templateId: 'Template-C', version: 1, status: 'needs_review', impressionAvg72h: 980, likeAvg72h: 150, structureNotes: 'リードが長いので要調整' },
-        ])} />
+        <TemplateSummary items={templateSummaries} />
         <DashboardCards jobCounts={dashboard.jobCounts} recentLogs={dashboard.recentLogs} />
         <div className="sticky bottom-10 mt-6 flex justify-end">
           <button type="button" className="button-primary pointer-events-auto gap-3">
