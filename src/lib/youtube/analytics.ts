@@ -100,20 +100,23 @@ export async function getYouTubeAnalytics(
     // デモグラフィクスデータを整形
     const ageGenderData: Record<string, number> = {};
     const genderData: Record<string, number> = {};
-    demographics.data.rows?.forEach(([ageGroup, gender, percentage]: any[]) => {
+    demographics.data.rows?.forEach((row: unknown[]) => {
+      const [ageGroup, gender, percentage] = row as [string, string, number];
       ageGenderData[`${ageGroup}_${gender}`] = Number(percentage);
       genderData[gender] = (genderData[gender] || 0) + Number(percentage);
     });
 
     // 地理データを整形
     const geographyData: Record<string, number> = {};
-    geography.data.rows?.forEach(([country, views]: any[]) => {
+    geography.data.rows?.forEach((row: unknown[]) => {
+      const [country, views] = row as [string, number];
       geographyData[country] = Number(views);
     });
 
     // トラフィックソースデータを整形
     const trafficSourceData: Record<string, number> = {};
-    trafficSources.data.rows?.forEach(([source, views]: any[]) => {
+    trafficSources.data.rows?.forEach((row: unknown[]) => {
+      const [source, views] = row as [string, number];
       trafficSourceData[source] = Number(views);
     });
 

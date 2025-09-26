@@ -1,12 +1,6 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
-interface YouTubeOAuthConfig {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-}
-
 export function createOAuth2Client(): OAuth2Client {
   const clientId = process.env.YOUTUBE_OAUTH_CLIENT_ID;
   const clientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET;

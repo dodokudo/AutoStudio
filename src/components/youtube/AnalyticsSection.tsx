@@ -48,7 +48,7 @@ export function AnalyticsSection() {
       } else {
         setError(result.error || 'データの取得に失敗しました');
       }
-    } catch (err) {
+    } catch {
       setError('ネットワークエラーが発生しました');
     } finally {
       setLoading(false);
@@ -63,7 +63,7 @@ export function AnalyticsSection() {
       if (result.authUrl) {
         window.location.href = result.authUrl;
       }
-    } catch (err) {
+    } catch {
       setError('OAuth認証の開始に失敗しました');
     }
   };
