@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import type { OAuth2Client } from 'google-auth-library';
+import type { YoutubeOAuthClient } from './oauth';
 
 export interface AnalyticsSummary {
   views: number;
@@ -9,12 +9,13 @@ export interface AnalyticsSummary {
 }
 
 export async function fetchChannelBasics(
-  client: OAuth2Client,
+  client: YoutubeOAuthClient,
   channelId: string,
   startDate: string,
   endDate: string,
 ): Promise<AnalyticsSummary> {
-  const analytics = google.youtubeAnalytics({ version: 'v2', auth: client as any });
+  google.options({ auth: client });
+  const analytics = google.youtubeAnalytics('v2');
 
   const report = await analytics.reports.query({
     ids: channelId === 'MINE' ? 'channel==MINE' : `channel==${channelId}`,
@@ -32,7 +33,7 @@ export async function fetchChannelBasics(
   };
 }
 
-export async function getChannelAnalyticsSummary(client: OAuth2Client, channelId: string) {
+export async function getChannelAnalyticsSummary(client: YoutubeOAuthClient, channelId: string) {
   const endDate = new Date().toISOString().slice(0, 10);
   const start30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const start7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

@@ -1,7 +1,8 @@
 import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
 
-export function createOAuth2Client(): OAuth2Client {
+export type YoutubeOAuthClient = InstanceType<typeof google.auth.OAuth2>;
+
+export function createOAuth2Client(): YoutubeOAuthClient {
   const clientId = process.env.YOUTUBE_OAUTH_CLIENT_ID;
   const clientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET;
   const redirectUri = process.env.YOUTUBE_OAUTH_REDIRECT_URI || 'http://localhost:3000/api/youtube/oauth/callback';
@@ -13,7 +14,7 @@ export function createOAuth2Client(): OAuth2Client {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export function getAuthUrl(oauth2Client: OAuth2Client): string {
+export function getAuthUrl(oauth2Client: YoutubeOAuthClient): string {
   const scopes = [
     'https://www.googleapis.com/auth/youtube.readonly',
     'https://www.googleapis.com/auth/yt-analytics.readonly'
@@ -26,17 +27,17 @@ export function getAuthUrl(oauth2Client: OAuth2Client): string {
   });
 }
 
-export async function exchangeCodeForTokens(oauth2Client: OAuth2Client, code: string) {
+export async function exchangeCodeForTokens(oauth2Client: YoutubeOAuthClient, code: string) {
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens);
   return tokens;
 }
 
-export function setRefreshToken(oauth2Client: OAuth2Client, refreshToken: string) {
+export function setRefreshToken(oauth2Client: YoutubeOAuthClient, refreshToken: string) {
   oauth2Client.setCredentials({ refresh_token: refreshToken });
 }
 
-export async function refreshAccessToken(oauth2Client: OAuth2Client) {
+export async function refreshAccessToken(oauth2Client: YoutubeOAuthClient) {
   const { credentials } = await oauth2Client.refreshAccessToken();
   oauth2Client.setCredentials(credentials);
   return credentials;
