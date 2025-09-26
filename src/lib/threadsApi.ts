@@ -8,9 +8,6 @@ if (!THREADS_POSTING_ENABLED) {
   console.info('[threadsApi] THREADS_POSTING_ENABLED is false. Using dry-run mode.');
 }
 
-if (THREADS_POSTING_ENABLED && (!THREADS_TOKEN || !THREADS_ACCOUNT_ID)) {
-  console.warn('[threadsApi] THREADS_TOKEN or THREADS_ACCOUNT_ID is not set. Posting will fail.');
-}
 
 async function request(path: string, options: RequestInit & { params?: Record<string, string> } = {}) {
   const url = new URL(`${GRAPH_BASE}/${path}`);
