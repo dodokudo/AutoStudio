@@ -123,18 +123,18 @@ export function PostQueue({
           <p className="text-xs text-slate-400">「投稿案を自動生成」からスタートしてください。</p>
         </div>
       ) : (
-        <div className="timeline-column space-y-7">
+        <div className="grid gap-6 xl:grid-cols-2">
           {items.map((item) => {
             const templateListId = `template-options-${item.id}`;
             const draft = editableValues[item.id] ?? item;
             const isPending = pendingId === item.id;
 
             return (
-              <article key={item.id} className="relative pl-2 sm:pl-6">
-                <div className="absolute -left-3 top-6 hidden h-6 w-6 items-center justify-center rounded-full bg-white/90 text-[11px] font-semibold text-indigo-500 shadow-md shadow-indigo-100/50 dark:bg-white/10 sm:flex">
-                  <span>{draft.scheduledTime}</span>
-                </div>
-                <div className="rounded-3xl bg-white/95 p-6 shadow-[0_24px_60px_rgba(84,110,192,0.18)] transition hover:-translate-y-1 hover:shadow-[0_28px_70px_rgba(82,94,170,0.25)] dark:bg-white/10">
+              <article
+                key={item.id}
+                className="flex h-full flex-col overflow-hidden rounded-3xl bg-white/95 p-6 shadow-[0_24px_60px_rgba(84,110,192,0.18)] transition hover:-translate-y-1 hover:shadow-[0_28px_70px_rgba(82,94,170,0.25)] dark:bg-white/10"
+              >
+                <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-200">
                     <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Time</span>
@@ -153,7 +153,7 @@ export function PostQueue({
                     <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Template</span>
                       <input
-                        className="w-28 bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
+                        className="w-32 bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
                         list={templateOptions.length ? templateListId : undefined}
                         value={draft.templateId}
                         onChange={(event) =>
@@ -175,7 +175,7 @@ export function PostQueue({
                     <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Theme</span>
                       <input
-                        className="w-32 bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
+                        className="w-36 bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
                         value={draft.theme}
                         onChange={(event) => onDraftChange?.(item.id, { theme: event.target.value })}
                       />
@@ -186,62 +186,8 @@ export function PostQueue({
                     </span>
                   </div>
 
-                  <textarea
-                    className="mt-4 w-full rounded-2xl border border-transparent bg-white/82 p-4 text-sm leading-relaxed text-slate-700 shadow-inner outline-none transition focus:border-indigo-200 focus:ring-2 focus:ring-indigo-200/60 dark:bg-white/10 dark:text-slate-100"
-                    rows={4}
-                    value={draft.mainText}
-                    onChange={(event) => onDraftChange?.(item.id, { mainText: event.target.value })}
-                  />
-
-                  {/* trending theme shortcuts removed */}
-
-                  <div className="mt-5 space-y-3 text-sm text-slate-600 dark:text-slate-200">
-                    {(draft.comments ?? []).map((comment) => (
-                      <div key={comment.order} className="rounded-2xl border border-slate-200/70 bg-white/75 p-3 shadow-sm dark:border-white/10 dark:bg-white/10">
-                        <div className="mb-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
-                          <span className="inline-flex items-center gap-2 font-semibold">
-                            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-600">コメント{comment.order}</span>
-                          </span>
-                          <button
-                            type="button"
-                            className="text-rose-500 hover:text-rose-400"
-                            onClick={() => {
-                              const next = (draft.comments ?? []).filter((c) => c.order !== comment.order);
-                              onCommentChange?.(item.id, next);
-                            }}
-                          >
-                            削除
-                          </button>
-                        </div>
-                        <textarea
-                          className="w-full rounded-xl border border-transparent bg-white/90 p-3 text-xs text-slate-600 shadow-inner outline-none transition focus:border-indigo-200 focus:ring-1 focus:ring-indigo-200/60 dark:bg-white/10 dark:text-slate-100"
-                          rows={2}
-                          value={comment.text}
-                          onChange={(event) => {
-                            const next = (draft.comments ?? []).map((c) =>
-                              c.order === comment.order ? { ...c, text: event.target.value } : c,
-                            );
-                            onCommentChange?.(item.id, next);
-                          }}
-                        />
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="rounded-full border border-dashed border-indigo-200/70 px-4 py-2 text-xs font-semibold text-indigo-600 transition hover:border-indigo-400 hover:bg-indigo-50"
-                      onClick={() => {
-                        const existing = draft.comments ?? [];
-                        const nextOrder = existing.length ? Math.max(...existing.map((c) => c.order)) + 1 : 1;
-                        const next = [...existing, { order: nextOrder, text: '' }];
-                        onCommentChange?.(item.id, next);
-                      }}
-                    >
-                      コメントを追加
-                    </button>
-                  </div>
-
                   {(onApprove || onReject || onSave || onRerun) && (
-                    <div className="mt-6 flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-3 text-xs">
                       {onRerun ? (
                         <button
                           type="button"
@@ -293,32 +239,84 @@ export function PostQueue({
                     </div>
                   )}
 
-                  {(item.jobStatus || item.logStatus) && (
-                    <div className="mt-6 grid gap-2 rounded-2xl bg-slate-50/80 p-4 text-xs text-slate-600 shadow-inner dark:bg-white/5 dark:text-slate-200">
-                      {item.jobStatus ? (
-                        <p>
-                          <span className="font-semibold text-slate-700 dark:text-slate-100">ジョブ状態:</span> {item.jobStatus}
-                          {item.jobUpdatedAt ? ` (${new Date(item.jobUpdatedAt).toLocaleString()})` : ''}
-                          {item.jobErrorMessage ? (
-                            <span className="ml-2 text-rose-500">{item.jobErrorMessage}</span>
-                          ) : null}
-                        </p>
-                      ) : null}
-                      {item.logStatus ? (
-                        <p>
-                          <span className="font-semibold text-slate-700 dark:text-slate-100">最終結果:</span> {item.logStatus}
-                          {item.logPostedAt ? ` (${new Date(item.logPostedAt).toLocaleString()})` : ''}
-                          {item.logPostedThreadId ? (
-                            <span className="ml-2 text-emerald-500">Thread ID: {item.logPostedThreadId}</span>
-                          ) : null}
-                          {item.logErrorMessage ? (
-                            <span className="ml-2 text-rose-500">{item.logErrorMessage}</span>
-                          ) : null}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
+                  <textarea
+                    className="min-h-[200px] w-full rounded-2xl border border-transparent bg-white/82 p-4 text-sm leading-relaxed text-slate-700 shadow-inner outline-none transition focus:border-indigo-200 focus:ring-2 focus:ring-indigo-200/60 dark:bg-white/10 dark:text-slate-100"
+                    rows={8}
+                    value={draft.mainText}
+                    onChange={(event) => onDraftChange?.(item.id, { mainText: event.target.value })}
+                  />
+
+                  <div className="space-y-3 text-sm text-slate-600 dark:text-slate-200">
+                    {(draft.comments ?? []).map((comment) => (
+                      <div key={comment.order} className="rounded-2xl border border-slate-200/70 bg-white/75 p-3 shadow-sm dark:border-white/10 dark:bg-white/10">
+                        <div className="mb-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">
+                          <span className="inline-flex items-center gap-2 font-semibold">
+                            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-600">コメント{comment.order}</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="text-rose-500 hover:text-rose-400"
+                            onClick={() => {
+                              const next = (draft.comments ?? []).filter((c) => c.order !== comment.order);
+                              onCommentChange?.(item.id, next);
+                            }}
+                          >
+                            削除
+                          </button>
+                        </div>
+                        <textarea
+                          className="min-h-[120px] w-full rounded-xl border border-transparent bg-white/90 p-3 text-xs text-slate-600 shadow-inner outline-none transition focus:border-indigo-200 focus:ring-1 focus:ring-indigo-200/60 dark:bg-white/10 dark:text-slate-100"
+                          rows={4}
+                          value={comment.text}
+                          onChange={(event) => {
+                            const next = (draft.comments ?? []).map((c) =>
+                              c.order === comment.order ? { ...c, text: event.target.value } : c,
+                            );
+                            onCommentChange?.(item.id, next);
+                          }}
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="rounded-full border border-dashed border-indigo-200/70 px-4 py-2 text-xs font-semibold text-indigo-600 transition hover:border-indigo-400 hover:bg-indigo-50"
+                      onClick={() => {
+                        const existing = draft.comments ?? [];
+                        const nextOrder = existing.length ? Math.max(...existing.map((c) => c.order)) + 1 : 1;
+                        const next = [...existing, { order: nextOrder, text: '' }];
+                        onCommentChange?.(item.id, next);
+                      }}
+                    >
+                      コメントを追加
+                    </button>
+                  </div>
                 </div>
+
+                {(item.jobStatus || item.logStatus) && (
+                  <div className="mt-6 grid gap-2 rounded-2xl bg-slate-50/80 p-4 text-xs text-slate-600 shadow-inner dark:bg-white/5 dark:text-slate-200">
+                    {item.jobStatus ? (
+                      <p>
+                        <span className="font-semibold text-slate-700 dark:text-slate-100">ジョブ状態:</span> {item.jobStatus}
+                        {item.jobUpdatedAt ? ` (${new Date(item.jobUpdatedAt).toLocaleString()})` : ''}
+                        {item.jobErrorMessage ? (
+                          <span className="ml-2 text-rose-500">{item.jobErrorMessage}</span>
+                        ) : null}
+                      </p>
+                    ) : null}
+                    {item.logStatus ? (
+                      <p>
+                        <span className="font-semibold text-slate-700 dark:text-slate-100">最終結果:</span> {item.logStatus}
+                        {item.logPostedAt ? ` (${new Date(item.logPostedAt).toLocaleString()})` : ''}
+                        {item.logPostedThreadId ? (
+                          <span className="ml-2 text-emerald-500">Thread ID: {item.logPostedThreadId}</span>
+                        ) : null}
+                        {item.logErrorMessage ? (
+                          <span className="ml-2 text-rose-500">{item.logErrorMessage}</span>
+                        ) : null}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </article>
             );
           })}

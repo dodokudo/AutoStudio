@@ -2,6 +2,9 @@ export interface PromptMeta {
   generationId: string;
   targetPostCount: number;
   recommendedSchedule: string[];
+  rangeDays: number;
+  rangeStart: string;
+  rangeEnd: string;
 }
 
 export interface PromptAccountSummary {
@@ -53,4 +56,5 @@ export interface ThreadsPromptPayload {
   competitorHighlights: PromptCompetitorHighlight[];
   trendingTopics: PromptTrendingTopic[];
   templateSummaries: PromptTemplateSummary[];
+  postCount: number;
 }

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { InsightsCard } from "./_components/insights-card";
 import { CompetitorHighlights } from "./_components/competitor-highlight";
 import { PostQueueContainer } from "./_components/post-queue-container";
@@ -6,11 +5,11 @@ import { getThreadsInsights } from "@/lib/threadsInsights";
 import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
 import { getThreadsDashboard } from "@/lib/threadsDashboard";
 import { resolveProjectId } from "@/lib/bigquery";
-import { TrendingTopics } from "./_components/trending-topics";
 import { TemplateSummary } from "./_components/template-summary";
 import { DashboardCards } from "./_components/dashboard-cards";
 import { RegenerateButton } from "./_components/regenerate-button";
-import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
+import { InsightsRangeSelector } from "./_components/insights-range-selector";
+import type { PromptCompetitorHighlight, PromptTemplateSummary } from "@/types/prompt";
 
 const PROJECT_ID = resolveProjectId();
 

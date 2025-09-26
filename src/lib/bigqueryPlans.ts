@@ -110,7 +110,7 @@ export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSch
     const sql = `
       MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
       USING (SELECT @planId AS plan_id, DATE(@generationDate) AS generation_date) S
-      ON T.plan_id = S.plan_id AND T.generation_date = S.generation_date
+      ON T.plan_id = S.plan_id AND SAFE_CAST(T.generation_date AS DATE) = S.generation_date
       WHEN MATCHED THEN
         UPDATE SET
           scheduled_time = @scheduledTime,
@@ -304,7 +304,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
   const sql = `
     MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
     USING (SELECT @planId AS plan_id) S
-    ON T.plan_id = S.plan_id AND T.generation_date = CURRENT_DATE()
+    ON T.plan_id = S.plan_id AND SAFE_CAST(T.generation_date AS DATE) = CURRENT_DATE()
     WHEN MATCHED THEN
       UPDATE SET
         scheduled_time = COALESCE(@scheduledTime, T.scheduled_time),

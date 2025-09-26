@@ -12,6 +12,7 @@ import type {
 interface BuildPromptOptions {
   projectId: string;
   referenceDate?: string;
+  rangeDays?: number;
 }
 
 const DATASET = 'autostudio_threads';
@@ -36,13 +37,20 @@ async function runQuery<T = Record<string, unknown>>(
   return rows as T[];
 }
 
-async function fetchAccountSummary(client: BigQuery, projectId: string): Promise<PromptAccountSummary> {
+async function fetchAccountSummary(
+  client: BigQuery,
+  projectId: string,
+  rangeDays: number,
+  startDate: string,
+  endDate: string,
+): Promise<PromptAccountSummary> {
   const sql = `
     WITH recent AS (
       SELECT date, followers_snapshot, profile_views
       FROM \`${projectId}.${DATASET}.threads_daily_metrics\`
+      WHERE date BETWEEN @startDate AND @endDate
       ORDER BY date DESC
-      LIMIT 7
+      LIMIT @rangeDays
     ),
     stats AS (
       SELECT
@@ -70,7 +78,11 @@ async function fetchAccountSummary(client: BigQuery, projectId: string): Promise
     profile_views_change: number | null;
     dates: string[];
   };
-  const rows = await runQuery<Row>(client, sql);
+  const rows = await runQuery<Row>(client, sql, {
+    startDate,
+    endDate,
+    rangeDays,
+  });
   if (!rows.length) {
     return {
       averageFollowers: 0,
@@ -91,11 +103,17 @@ async function fetchAccountSummary(client: BigQuery, projectId: string): Promise
   };
 }
 
-async function fetchTopSelfPosts(client: BigQuery, projectId: string): Promise<PromptSelfPost[]> {
+async function fetchTopSelfPosts(
+  client: BigQuery,
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<PromptSelfPost[]> {
   const sql = `
     SELECT post_id, posted_at, content, impressions_total, likes_total, permalink
     FROM \`${projectId}.${DATASET}.threads_posts\`
     WHERE posted_at IS NOT NULL
+      AND DATE(posted_at) BETWEEN @startDate AND @endDate
     ORDER BY impressions_total DESC
     LIMIT 10
   `;
@@ -107,7 +125,7 @@ async function fetchTopSelfPosts(client: BigQuery, projectId: string): Promise<P
     likes_total?: number;
     permalink?: string;
   };
-  const rows = await runQuery<Row>(client, sql);
+  const rows = await runQuery<Row>(client, sql, { startDate, endDate });
   return rows.map((row) => ({
     postId: row.post_id ?? '',
     postedAt: toPlainString(row.posted_at) ?? null,
@@ -118,11 +136,17 @@ async function fetchTopSelfPosts(client: BigQuery, projectId: string): Promise<P
   }));
 }
 
-async function fetchCompetitorHighlights(client: BigQuery, projectId: string): Promise<PromptCompetitorHighlight[]> {
+async function fetchCompetitorHighlights(
+  client: BigQuery,
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<PromptCompetitorHighlight[]> {
   const sql = `
     SELECT account_name, username, post_date, content, impressions, likes
     FROM \`${projectId}.${DATASET}.competitor_posts_raw\`
     WHERE post_date IS NOT NULL
+      AND DATE(post_date) BETWEEN @startDate AND @endDate
     ORDER BY impressions DESC NULLS LAST
     LIMIT 5
   `;
@@ -134,7 +158,7 @@ async function fetchCompetitorHighlights(client: BigQuery, projectId: string): P
     impressions?: number | null;
     likes?: number | null;
   };
-  const rows = await runQuery<Row>(client, sql);
+  const rows = await runQuery<Row>(client, sql, { startDate, endDate });
   return rows.map((row) => ({
     accountName: row.account_name ?? 'unknown',
     username: row.username ?? null,
@@ -145,12 +169,29 @@ async function fetchCompetitorHighlights(client: BigQuery, projectId: string): P
   }));
 }
 
-async function fetchTrendingTopics(client: BigQuery, projectId: string): Promise<PromptTrendingTopic[]> {
+
+async function fetchPostCount(client: BigQuery, projectId: string, startDate: string, endDate: string): Promise<number> {
+  const sql = `
+    SELECT COUNT(1) AS total
+    FROM \`${projectId}.${DATASET}.threads_posts\`
+    WHERE posted_at IS NOT NULL
+      AND DATE(posted_at) BETWEEN @startDate AND @endDate
+  `;
+  type Row = { total?: number };
+  const rows = await runQuery<Row>(client, sql, { startDate, endDate });
+  return Number(rows[0]?.total ?? 0);
+}
+async function fetchTrendingTopics(
+  client: BigQuery,
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<PromptTrendingTopic[]> {
   const sql = `
     WITH recent AS (
       SELECT *
       FROM \`${projectId}.${DATASET}.competitor_account_daily\`
-      WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+      WHERE date BETWEEN @startDate AND @endDate
     ),
     enriched AS (
       SELECT account_name, COALESCE(username, account_name) AS uname, COALESCE(genre, 'その他') AS genre,
@@ -182,7 +223,7 @@ async function fetchTrendingTopics(client: BigQuery, projectId: string): Promise
     avg_views?: number;
     accounts?: string[];
   };
-  const rows = await runQuery<Row>(client, sql);
+  const rows = await runQuery<Row>(client, sql, { startDate, endDate });
   return rows.map((row) => ({
     themeTag: row.theme_tag ?? 'その他',
     avgFollowersDelta: Number(row.avg_followers_delta ?? 0),
@@ -247,13 +288,23 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
   const projectId = resolveProjectId(options.projectId);
   const client = createBigQueryClient(projectId);
 
-  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries] =
+  const rangeDays = Math.max(1, options.rangeDays ?? 7);
+  const referenceDate = options.referenceDate ? new Date(`${options.referenceDate}T00:00:00Z`) : new Date();
+  const endDate = new Date(referenceDate);
+  const startDate = new Date(endDate);
+  startDate.setUTCDate(startDate.getUTCDate() - (rangeDays - 1));
+
+  const startDateStr = startDate.toISOString().slice(0, 10);
+  const endDateStr = endDate.toISOString().slice(0, 10);
+
+  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries, postCount] =
     await Promise.all([
-      fetchAccountSummary(client, projectId),
-      fetchTopSelfPosts(client, projectId),
-      fetchCompetitorHighlights(client, projectId),
-      fetchTrendingTopics(client, projectId),
+      fetchAccountSummary(client, projectId, rangeDays, startDateStr, endDateStr),
+      fetchTopSelfPosts(client, projectId, startDateStr, endDateStr),
+      fetchCompetitorHighlights(client, projectId, startDateStr, endDateStr),
+      fetchTrendingTopics(client, projectId, startDateStr, endDateStr),
       fetchTemplateSummaries(client, projectId),
+      fetchPostCount(client, projectId, startDateStr, endDateStr),
     ]);
 
   const targetCount = 4;
@@ -264,11 +315,15 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
       generationId,
       targetPostCount: targetCount,
       recommendedSchedule: buildScheduleSlots(targetCount),
+      rangeDays,
+      rangeStart: startDateStr,
+      rangeEnd: endDateStr,
     },
     accountSummary,
     topSelfPosts,
     competitorHighlights,
     trendingTopics,
     templateSummaries,
+    postCount,
   };
 }

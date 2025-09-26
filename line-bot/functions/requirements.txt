@@ -1,0 +1,5 @@
+functions-framework==3.*
+line-bot-sdk==3.*
+google-cloud-bigquery==3.*
+google-cloud-secret-manager==2.*
+openai==0.28.*

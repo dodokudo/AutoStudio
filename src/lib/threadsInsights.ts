@@ -12,10 +12,23 @@ export interface ThreadsInsightsData {
   competitorHighlights: PromptCompetitorHighlight[];
   trendingTopics: ThreadsPromptPayload['trendingTopics'];
   templateSummaries: ThreadsPromptPayload['templateSummaries'];
+  postCount: number;
 }
 
-export async function getThreadsInsights(projectId: string): Promise<ThreadsInsightsData> {
-  const payload = await buildThreadsPromptPayload({ projectId });
+interface ThreadsInsightsOptions {
+  rangeDays?: number;
+  referenceDate?: string;
+}
+
+export async function getThreadsInsights(
+  projectId: string,
+  options: ThreadsInsightsOptions = {},
+): Promise<ThreadsInsightsData> {
+  const payload = await buildThreadsPromptPayload({
+    projectId,
+    rangeDays: options.rangeDays,
+    referenceDate: options.referenceDate,
+  });
 
   return {
     meta: payload.meta,
@@ -24,5 +37,6 @@ export async function getThreadsInsights(projectId: string): Promise<ThreadsInsi
     competitorHighlights: payload.competitorHighlights,
     trendingTopics: payload.trendingTopics,
     templateSummaries: payload.templateSummaries,
+    postCount: payload.postCount,
   };
 }

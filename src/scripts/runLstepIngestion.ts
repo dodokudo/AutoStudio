@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { BigQuery, Table, Dataset } from '@google-cloud/bigquery';

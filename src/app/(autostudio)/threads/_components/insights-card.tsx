@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 interface InsightStat {
   label: string;
   value: string;
@@ -9,6 +11,7 @@ interface InsightsCardProps {
   title: string;
   stats: InsightStat[];
   note?: string;
+  actions?: ReactNode;
 }
 
 const toneClassMap: Record<NonNullable<InsightStat['deltaTone']>, string> = {
@@ -23,7 +26,7 @@ const indicatorBackground: Record<NonNullable<InsightStat['deltaTone']>, string>
   neutral: 'bg-slate-100/80 text-slate-500',
 };
 
-export function InsightsCard({ title, stats, note }: InsightsCardProps) {
+export function InsightsCard({ title, stats, note, actions }: InsightsCardProps) {
   return (
     <section className="card-strong rounded-[32px] p-8 backdrop-blur-xl">
       <header className="mb-7 flex flex-wrap items-center justify-between gap-3">
@@ -32,8 +35,9 @@ export function InsightsCard({ title, stats, note }: InsightsCardProps) {
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
           {note ? <span className="text-xs text-slate-500 dark:text-slate-300">{note}</span> : null}
         </div>
-        <div className="hidden items-center gap-2 text-xs text-slate-500 dark:text-slate-300 lg:flex">
-          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/70 bg-white/70 px-3 py-1 shadow-sm dark:border-white/10 dark:bg-white/10">
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
+          {actions ?? null}
+          <span className="hidden items-center gap-1 rounded-full border border-slate-200/70 bg-white/70 px-3 py-1 shadow-sm dark:border-white/10 dark:bg-white/10 lg:inline-flex">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
             リアルタイム更新
           </span>

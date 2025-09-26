@@ -98,7 +98,6 @@ def generate_ai_response(user_message):
         logger.error(f"OpenAI API error: {e}")
         return "申し訳ございません。現在、AIサービスに接続できません。後ほどお試しください。"
 
-@handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
     """テキストメッセージの処理"""
     start_time = datetime.utcnow()
@@ -148,6 +147,10 @@ def handle_text_message(event):
             response_time_ms=0,
             error=str(e)
         )
+
+# handlerが存在する場合のみイベントハンドラーを追加
+if handler:
+    handler.add(MessageEvent, message=TextMessage)(handle_text_message)
 
 @functions_framework.http
 def line_webhook(request):
