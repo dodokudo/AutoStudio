@@ -122,6 +122,17 @@ function deriveThemes(videos: YoutubeVideoSummary[]): YoutubeThemeSuggestion[] {
   return themes;
 }
 
+function toTimestamp(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object' && value && 'value' in value) {
+    const inner = (value as { value?: unknown }).value;
+    return typeof inner === 'string' ? inner : undefined;
+  }
+  return undefined;
+}
+
 export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
   const projectId = resolveProjectId();
   const datasetId = process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media';
@@ -221,7 +232,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       commentCount: row.comment_count ?? undefined,
       viewVelocity: row.view_velocity ?? undefined,
       engagementRate: row.engagement_rate ?? undefined,
-      publishedAt: row.published_at ? new Date(row.published_at.value ?? row.published_at).toISOString() : undefined,
+      publishedAt: toTimestamp(row.published_at) ? new Date(toTimestamp(row.published_at)!).toISOString() : undefined,
       tags: row.tags ?? undefined,
     }));
   }
