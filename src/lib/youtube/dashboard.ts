@@ -38,6 +38,7 @@ export interface YoutubeDashboardData {
     };
     comparison: ComparisonSummary | null;
   };
+  competitors: YoutubeCompetitorSummary[];
 }
 
 interface AnalyticsSummary {
@@ -52,6 +53,19 @@ interface ComparisonSummary {
   competitorViewVelocity: number | null;
   ownEngagementRate: number | null;
   competitorEngagementRate: number | null;
+}
+
+interface YoutubeCompetitorSummary {
+  channelId: string;
+  channelTitle: string;
+  subscriberCount?: number;
+  viewCount?: number;
+  videoCount?: number;
+  avgViewVelocity?: number | null;
+  avgEngagementRate?: number | null;
+  latestVideoTitle?: string;
+  latestVideoViewCount?: number | null;
+  latestVideoPublishedAt?: string;
 }
 
 const STOPWORDS = new Set([
@@ -257,6 +271,9 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
 
   const themes = deriveThemes(topVideos);
   const analytics = await buildAnalyticsSummary(client, projectId, datasetId, latestSnapshotDate ?? undefined);
+  const competitors = latestSnapshotDate
+    ? await buildCompetitorSummary(client, projectId, datasetId, latestSnapshotDate)
+    : [];
 
   return {
     overview: {
@@ -271,6 +288,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
     topVideos,
     themes,
     analytics,
+    competitors,
   };
 }
 
@@ -384,4 +402,98 @@ async function buildAnalyticsSummary(
     },
     comparison,
   };
+}
+
+async function buildCompetitorSummary(
+  client: ReturnType<typeof createBigQueryClient>,
+  projectId: string,
+  datasetId: string,
+  snapshotDate: string,
+): Promise<YoutubeCompetitorSummary[]> {
+  const [rows] = await client.query({
+    query: `
+      WITH latest_channels AS (
+        SELECT
+          channel_id,
+          channel_title,
+          subscriber_count,
+          view_count,
+          video_count
+        FROM \`${projectId}.${datasetId}.media_channels_snapshot\`
+        WHERE media = 'youtube'
+          AND snapshot_date = @snapshot_date
+          AND (is_self IS NULL OR is_self = FALSE)
+      ),
+      channel_video_stats AS (
+        SELECT
+          channel_id,
+          AVG(view_velocity) AS avg_view_velocity,
+          AVG(engagement_rate) AS avg_engagement_rate
+        FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
+        WHERE media = 'youtube'
+          AND snapshot_date = @snapshot_date
+        GROUP BY channel_id
+      ),
+      latest_video AS (
+        SELECT
+          channel_id,
+          title,
+          view_count,
+          published_at,
+          ROW_NUMBER() OVER (
+            PARTITION BY channel_id
+            ORDER BY SAFE_CAST(published_at AS TIMESTAMP) DESC
+          ) AS rn
+        FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
+        WHERE media = 'youtube'
+          AND snapshot_date = @snapshot_date
+      )
+      SELECT
+        c.channel_id,
+        c.channel_title,
+        c.subscriber_count,
+        c.view_count,
+        c.video_count,
+        s.avg_view_velocity,
+        s.avg_engagement_rate,
+        v.title AS latest_video_title,
+        v.view_count AS latest_video_view_count,
+        v.published_at AS latest_video_published_at
+      FROM latest_channels c
+      LEFT JOIN channel_video_stats s USING (channel_id)
+      LEFT JOIN (
+        SELECT * FROM latest_video WHERE rn = 1
+      ) v USING (channel_id)
+      ORDER BY s.avg_view_velocity DESC NULLS LAST
+      LIMIT 10
+    `,
+    params: { snapshot_date: snapshotDate },
+  });
+
+  return (rows as Array<{
+    channel_id: string;
+    channel_title: string | null;
+    subscriber_count: number | null;
+    view_count: number | null;
+    video_count: number | null;
+    avg_view_velocity: number | null;
+    avg_engagement_rate: number | null;
+    latest_video_title: string | null;
+    latest_video_view_count: number | null;
+    latest_video_published_at: unknown;
+  }>).map((row) => ({
+    channelId: row.channel_id,
+    channelTitle: row.channel_title ?? row.channel_id,
+    subscriberCount: row.subscriber_count ?? undefined,
+    viewCount: row.view_count ?? undefined,
+    videoCount: row.video_count ?? undefined,
+    avgViewVelocity: row.avg_view_velocity ?? null,
+    avgEngagementRate: row.avg_engagement_rate ?? null,
+    latestVideoTitle: row.latest_video_title ?? undefined,
+    latestVideoViewCount: row.latest_video_view_count ?? null,
+    latestVideoPublishedAt: (() => {
+      const ts = toTimestamp(row.latest_video_published_at);
+      return ts ? new Date(ts).toISOString() : undefined;
+    })(),
+  }));
 }

@@ -188,7 +188,8 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
             }));
           } catch (error) {
             console.error('Plan update failed', error);
-            alert('保存に失敗しました');
+            const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
+            alert(`保存に失敗しました: ${errorMessage}`);
           } finally {
             setPendingId(null);
           }

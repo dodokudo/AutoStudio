@@ -140,13 +140,27 @@ export async function ensureYoutubeTables(context: YoutubeBigQueryContext) {
   }
 }
 
-async function deleteExistingChannels(context: YoutubeBigQueryContext, snapshotDate: string, channelIds: string[]) {
+async function deleteExistingChannels(
+  _context: YoutubeBigQueryContext,
+  _snapshotDate: string,
+  _channelIds: string[],
+) {
+  void _context;
+  void _snapshotDate;
+  void _channelIds;
   // Temporarily disabled due to streaming buffer limitation
   console.log('[youtube] Skipping delete operation due to streaming buffer');
   return;
 }
 
-async function deleteExistingVideos(context: YoutubeBigQueryContext, snapshotDate: string, videoIds: string[]) {
+async function deleteExistingVideos(
+  _context: YoutubeBigQueryContext,
+  _snapshotDate: string,
+  _videoIds: string[],
+) {
+  void _context;
+  void _snapshotDate;
+  void _videoIds;
   // Temporarily disabled due to streaming buffer limitation
   console.log('[youtube] Skipping delete operation due to streaming buffer');
   return;

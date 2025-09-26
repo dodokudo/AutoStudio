@@ -94,7 +94,7 @@ function buildProperties(payload: NotionContentPayload): PageProperties {
 
   if (payload.targetPersona?.length) {
     (properties as Record<string, unknown>)['Target Persona'] = {
-      multi_select: payload.targetPersona.map((value) => ({ name: value })),
+      rich_text: toRichText(payload.targetPersona.join(', ')),
     };
   }
 

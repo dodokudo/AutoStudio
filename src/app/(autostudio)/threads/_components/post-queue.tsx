@@ -69,8 +69,8 @@ const statusAccent: Record<PlanStatus, string> = {
   rejected: 'bg-rose-100 text-rose-600',
 };
 
-const scheduleOptions = Array.from({ length: 16 }).map((_, index) => {
-  const baseMinutes = 6 * 60 + index * 45;
+const scheduleOptions = Array.from({ length: 48 }).map((_, index) => {
+  const baseMinutes = index * 30;
   const hour = Math.floor(baseMinutes / 60)
     .toString()
     .padStart(2, '0');
@@ -143,17 +143,18 @@ export function PostQueue({
                   <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-200">
                     <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Time</span>
-                      <select
+                      <input
+                        type="time"
                         className="bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
                         value={draft.scheduledTime}
                         onChange={(event) => onDraftChange?.(item.id, { scheduledTime: event.target.value })}
-                      >
+                        list={`time-options-${item.id}`}
+                      />
+                      <datalist id={`time-options-${item.id}`}>
                         {scheduleOptions.map((option) => (
-                          <option key={option} value={option} className="text-slate-800">
-                            {option}
-                          </option>
+                          <option key={option} value={option} />
                         ))}
-                      </select>
+                      </datalist>
                     </label>
                     <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
                       <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Template</span>

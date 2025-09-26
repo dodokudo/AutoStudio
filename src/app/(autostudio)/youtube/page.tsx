@@ -1,5 +1,4 @@
 import { resolveProjectId } from '@/lib/bigquery';
-import { getThreadsInsights } from '@/lib/threadsInsights';
 import { getYoutubeDashboardData } from '@/lib/youtube/dashboard';
 import {
   createYoutubeBigQueryContext,
@@ -45,8 +44,6 @@ function formatDateTime(value?: string) {
   }
 }
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
 export const dynamic = 'force-dynamic';
 
 export default async function YoutubeDashboardPage() {
@@ -58,8 +55,6 @@ export default async function YoutubeDashboardPage() {
     const context = createYoutubeBigQueryContext(projectId, datasetId);
     await ensureYoutubeTables(context);
     const scripts: StoredContentScript[] = await listContentScripts(context, { limit: 12 });
-
-    const threadsInsights = await getThreadsInsights(projectId, { rangeDays: 7 });
 
     const overviewCards = [
       {
@@ -103,32 +98,17 @@ export default async function YoutubeDashboardPage() {
       },
     ];
 
-    const scriptsGenerated7 = scripts.filter((script) => {
-      if (!script.updatedAt) return false;
-      const updated = new Date(script.updatedAt).getTime();
-      if (Number.isNaN(updated)) return false;
-      return Date.now() - updated <= 7 * ONE_DAY_MS;
-    }).length;
-
-    const crossMediaRows = [
-      {
-        label: 'フォロワー増 (直近7日)',
-        threads: `${threadsInsights.accountSummary.followersChange >= 0 ? '+' : ''}${formatNumber(
-          threadsInsights.accountSummary.followersChange,
-        )}`,
-        youtube: `${own7.subscriberNet >= 0 ? '+' : ''}${formatNumber(own7.subscriberNet)}`,
-      },
-      {
-        label: 'リーチ / 視聴 (7日)',
-        threads: `${formatNumber(Math.round(threadsInsights.accountSummary.averageProfileViews))} プロフ閲覧`,
-        youtube: `${formatNumber(own7.views)} 再生`,
-      },
-      {
-        label: 'コンテンツ件数 (7日)',
-        threads: `${threadsInsights.postCount} 投稿`,
-        youtube: `${scriptsGenerated7} 台本`,
-      },
-    ];
+    const competitorRows = data.competitors.map((competitor) => ({
+      channel: competitor.channelTitle,
+      subscribers: competitor.subscriberCount ? `${formatNumber(competitor.subscriberCount)} 人` : '–',
+      viewVelocity: competitor.avgViewVelocity ? `${formatNumber(Math.round(competitor.avgViewVelocity))} /日` : '–',
+      engagement: formatPercentage(competitor.avgEngagementRate),
+      latestVideo:
+        competitor.latestVideoTitle
+          ? `${competitor.latestVideoTitle} (${competitor.latestVideoViewCount ? formatNumber(competitor.latestVideoViewCount) : '–'}回)`
+          : '–',
+      latestPublishedAt: competitor.latestVideoPublishedAt ? formatDateTime(competitor.latestVideoPublishedAt) : '–',
+    }));
 
     return (
       <div className="space-y-10">
@@ -177,27 +157,37 @@ export default async function YoutubeDashboardPage() {
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-            <h2 className="text-base font-semibold text-white">Threads × YouTube ファネル</h2>
-            <p className="mt-1 text-xs text-slate-400">直近7日の結果を媒体別に比較</p>
+            <h2 className="text-base font-semibold text-white">競合チャンネルの動向</h2>
+            <p className="mt-1 text-xs text-slate-400">最新スナップショットから伸びているチャンネルを抽出。</p>
             <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
-              <table className="w-full table-auto text-left text-xs text-slate-300">
-                <thead className="bg-slate-900/80 text-slate-400">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">指標</th>
-                    <th className="px-3 py-2 font-medium">Threads</th>
-                    <th className="px-3 py-2 font-medium">YouTube</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {crossMediaRows.map((row) => (
-                    <tr key={row.label} className="border-t border-slate-800 last:border-b">
-                      <td className="px-3 py-2 font-medium text-white">{row.label}</td>
-                      <td className="px-3 py-2">{row.threads}</td>
-                      <td className="px-3 py-2">{row.youtube}</td>
+              {competitorRows.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-400">競合チャンネルのデータがありません。</div>
+              ) : (
+                <table className="w-full table-auto text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900/80 text-slate-400">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">チャンネル</th>
+                      <th className="px-3 py-2 font-medium">登録者</th>
+                      <th className="px-3 py-2 font-medium">平均伸び速度</th>
+                      <th className="px-3 py-2 font-medium">平均ER</th>
+                      <th className="px-3 py-2 font-medium">最新動画</th>
+                      <th className="px-3 py-2 font-medium">投稿日</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {competitorRows.map((row) => (
+                      <tr key={row.channel} className="border-t border-slate-800 last:border-b">
+                        <td className="px-3 py-2 font-medium text-white">{row.channel}</td>
+                        <td className="px-3 py-2">{row.subscribers}</td>
+                        <td className="px-3 py-2">{row.viewVelocity}</td>
+                        <td className="px-3 py-2">{row.engagement}</td>
+                        <td className="px-3 py-2">{row.latestVideo}</td>
+                        <td className="px-3 py-2">{row.latestPublishedAt}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </section>

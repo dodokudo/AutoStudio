@@ -17,6 +17,7 @@ npm run dev
 AutoStudio/
 ├── src/app/                   # App Router でセクションを管理
 │   ├── (autostudio)/threads   # Threads 向け UI/ページ
+│   ├── (autostudio)/instagram # Instagram 競合リサーチ & 台本表示
 │   └── api/threads            # API Routes（生成・承認・ジョブ実行など）
 ├── src/lib/                   # BigQuery/Claude/Threads API ヘルパー
 ├── src/scripts/               # CLI から実行する ETL / ワーカー処理
@@ -45,6 +46,7 @@ AutoStudio/
 - `npm run worker:threads` — `thread_post_jobs` を処理し、Threads 投稿＆ログ記録を実行。
 - `npm run templates:update` — 投稿 72 時間後の実績からテンプレート評価を更新。
 - `npm run lstep:*` — LSTEP 向けの BigQuery 初期化、Cookie 更新、ETL 実行コマンド群（`lstep:check` で事前検証、`lstep:capture` で Cookie 保存、`lstep:init`/`lstep:ingest` で取り込み実行）。
+- `npm run ig:*` — Instagram ツール向けのジョブ（`ig:fetch` 競合リール取得、`ig:transcribe` 文字起こし、`ig:generate` 台本生成、`ig:notify` メール通知）。
 
 ## 必須環境変数（抜粋）
 

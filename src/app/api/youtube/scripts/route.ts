@@ -85,7 +85,9 @@ export async function POST(request: Request) {
       additionalNotes,
     });
 
+    console.log('[youtube/scripts] Requesting Claude script generation...');
     const claudeRaw = await requestClaudeYoutubeScript(prompt);
+    console.log('[youtube/scripts] Claude response received, parsing...');
     const claudeScript = parseClaudeYoutubeScriptResponse(claudeRaw);
 
     const contentId = `yt-script-${randomUUID()}`;
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
       scriptBodyLines.push(`【制作メモ】\n${claudeScript.notes}`);
     }
 
+    console.log('[youtube/scripts] Creating Notion page...');
     const notionClient = createNotionClient();
     const notionDatabaseId = getNotionContentDatabaseId();
     const notionPageId = await upsertContentPage(notionClient, notionDatabaseId, {
@@ -127,7 +130,9 @@ export async function POST(request: Request) {
         .filter((url): url is string => Boolean(url)),
       body: scriptBodyLines.join('\n'),
     });
+    console.log('[youtube/scripts] Notion page created:', notionPageId);
 
+    console.log('[youtube/scripts] Saving to BigQuery...');
     const context = createYoutubeBigQueryContext(projectId, DATASET_ID);
     await ensureYoutubeTables(context);
     await insertContentScript(context, {
@@ -145,6 +150,7 @@ export async function POST(request: Request) {
       summary: claudeScript.summary,
       title: claudeScript.videoTitle,
     });
+    console.log('[youtube/scripts] Successfully completed script generation');
 
     return NextResponse.json({
       contentId,
