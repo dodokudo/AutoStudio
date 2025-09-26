@@ -169,7 +169,6 @@ async function fetchCompetitorHighlights(
   }));
 }
 
-
 async function fetchPostCount(client: BigQuery, projectId: string, startDate: string, endDate: string): Promise<number> {
   const sql = `
     SELECT COUNT(1) AS total
@@ -181,6 +180,7 @@ async function fetchPostCount(client: BigQuery, projectId: string, startDate: st
   const rows = await runQuery<Row>(client, sql, { startDate, endDate });
   return Number(rows[0]?.total ?? 0);
 }
+
 async function fetchTrendingTopics(
   client: BigQuery,
   projectId: string,

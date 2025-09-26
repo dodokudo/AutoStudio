@@ -29,7 +29,7 @@ const indicatorBackground: Record<NonNullable<InsightStat['deltaTone']>, string>
 export function InsightsCard({ title, stats, note, actions }: InsightsCardProps) {
   return (
     <section className="card-strong rounded-[32px] p-8 backdrop-blur-xl">
-      <header className="mb-7 flex flex-wrap items-center justify-between gap-3">
+      <header className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-indigo-400">Threads Pulse</p>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
@@ -43,7 +43,7 @@ export function InsightsCard({ title, stats, note, actions }: InsightsCardProps)
           </span>
         </div>
       </header>
-      <dl className="stat-grid">
+      <dl className="grid gap-4 md:grid-cols-3">
         {stats.map((stat) => (
           <div
             key={stat.label}

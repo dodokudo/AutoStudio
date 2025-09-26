@@ -9,9 +9,16 @@ import { TemplateSummary } from "./_components/template-summary";
 import { DashboardCards } from "./_components/dashboard-cards";
 import { RegenerateButton } from "./_components/regenerate-button";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
-import type { PromptCompetitorHighlight, PromptTemplateSummary } from "@/types/prompt";
+import { TrendingTopics } from "./_components/trending-topics";
+import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
 
 const PROJECT_ID = resolveProjectId();
+
+const INSIGHTS_RANGE_OPTIONS = [
+  { label: "3日間", value: "3d", days: 3 },
+  { label: "7日間", value: "7d", days: 7 },
+  { label: "30日間", value: "30d", days: 30 },
+] as const;
 
 export const dynamic = 'force-dynamic';
 
@@ -110,10 +117,18 @@ function toDisplayHighlight(
   };
 }
 
-export default async function ThreadsHome() {
+export default async function ThreadsHome({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[]>;
+}) {
+  const rangeParam = typeof searchParams?.range === "string" ? searchParams.range : undefined;
+  const activeRange = INSIGHTS_RANGE_OPTIONS.find((option) => option.value === rangeParam) ?? INSIGHTS_RANGE_OPTIONS[1];
+  const rangeDays = activeRange.days;
+
   try {
     const [insights, planSummaries, dashboard] = await Promise.all([
-      getThreadsInsights(PROJECT_ID),
+      getThreadsInsights(PROJECT_ID, { rangeDays }),
       (async () => {
         await seedPlansIfNeeded();
         return listPlanSummaries();
@@ -147,23 +162,10 @@ export default async function ThreadsHome() {
         deltaTone: resolveDeltaTone(insights.accountSummary.profileViewsChange),
       },
       {
-        label: '最高閲覧投稿',
-        value: insights.topSelfPosts[0]?.impressions
-          ? insights.topSelfPosts[0].impressions.toLocaleString()
-          : '—',
-        delta: insights.topSelfPosts[0]?.postId ? `@${insights.topSelfPosts[0].postId}` : undefined,
-      },
-      {
-        label: 'トレンドテーマ',
-        value: insights.trendingTopics[0]?.themeTag ?? '確認中',
-        delta: insights.trendingTopics[0]
-          ? `Avg Δフォロワー ${Math.round(insights.trendingTopics[0].avgFollowersDelta)}`
-          : undefined,
-        deltaTone: resolveDeltaTone(
-          insights.trendingTopics[0]
-            ? Math.round(insights.trendingTopics[0].avgFollowersDelta)
-            : undefined,
-        ),
+        label: '期間内投稿数',
+        value: insights.postCount.toLocaleString(),
+        delta: `推奨 ${insights.meta.targetPostCount} 投稿`,
+        deltaTone: 'neutral' as const,
       },
     ];
 
@@ -216,6 +218,8 @@ export default async function ThreadsHome() {
         ? insights.templateSummaries
         : FALLBACK_TEMPLATES;
 
+    const rangeSelectorOptions = INSIGHTS_RANGE_OPTIONS.map(({ label, value }) => ({ label, value }));
+
     return (
       <div className="section-stack">
         <section className="relative overflow-hidden rounded-[36px] border border-white/60 bg-white/90 px-8 py-10 shadow-[0_30px_70px_rgba(125,145,211,0.25)] dark:bg-white/10">
@@ -223,25 +227,11 @@ export default async function ThreadsHome() {
             <div className="absolute -left-10 top-[-50px] h-48 w-48 rounded-full bg-gradient-to-br from-indigo-400/50 via-purple-300/40 to-white/0 blur-3xl" />
             <div className="absolute right-[-40px] top-10 h-40 w-40 rounded-full bg-gradient-to-br from-emerald-300/40 via-sky-200/30 to-white/0 blur-3xl" />
           </div>
-          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center">
-            <div className="flex-1 space-y-4">
-              <span className="inline-flex items-center gap-2 rounded-full bg-indigo-100/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-500">
-                Threads automation
-              </span>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">
-                Threads 自動投稿管理
-              </h1>
-              <p className="max-w-xl text-sm leading-relaxed text-slate-500 dark:text-slate-300">
-                毎朝の生成から承認、投稿ログまでを 1 つの画面に集約。チームの判断を高速化し、Threads 運用をスケーラブルに進めましょう。
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <RegenerateButton />
-                <Link href="/threads/spec" className="button-secondary">
-                  仕様書を確認
-                </Link>
-              </div>
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-center justify-center xl:justify-start">
+              <RegenerateButton />
             </div>
-            <div className="grid w-full gap-4 sm:grid-cols-3 lg:w-auto">
+            <div className="grid w-full gap-4 sm:grid-cols-3 xl:flex-1 xl:grid-cols-3">
               {heroStats.map((stat) => (
                 <div key={stat.label} className="rounded-3xl bg-white/85 p-4 text-center shadow-[0_18px_38px_rgba(110,132,206,0.18)] dark:bg-white/10">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
@@ -259,7 +249,12 @@ export default async function ThreadsHome() {
           </div>
         </section>
 
-        <InsightsCard title="アカウント概況 (直近7日)" stats={stats} />
+        <InsightsCard
+          title="アカウント概況"
+          stats={stats}
+          note={`レポート期間: ${activeRange.label}`}
+          actions={<InsightsRangeSelector options={rangeSelectorOptions} value={activeRange.value} />}
+        />
 
         <div className="grid gap-10 lg:grid-cols-[1.85fr,1fr]">
           <div className="section-stack">

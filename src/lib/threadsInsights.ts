@@ -15,7 +15,7 @@ export interface ThreadsInsightsData {
   postCount: number;
 }
 
-interface ThreadsInsightsOptions {
+export interface ThreadsInsightsOptions {
   rangeDays?: number;
   referenceDate?: string;
 }
