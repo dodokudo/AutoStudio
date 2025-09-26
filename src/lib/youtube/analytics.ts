@@ -30,7 +30,10 @@ export async function getYouTubeAnalytics(
   startDate: string = '2024-01-01',
   endDate: string = new Date().toISOString().split('T')[0]
 ): Promise<YouTubeAnalyticsData> {
-  const analytics = google.youtubeAnalytics({ version: 'v2', auth: oauth2Client as any });
+  const analytics = google.youtubeAnalytics({
+    version: 'v2',
+    auth: oauth2Client as InstanceType<typeof OAuth2Client>
+  });
 
   try {
     // 基本メトリクス取得
