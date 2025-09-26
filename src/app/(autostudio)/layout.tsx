@@ -16,7 +16,7 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
               </span>
               <div className="leading-tight">
                 <span className="block text-base font-semibold">AutoStudio</span>
-                <span className="text-[11px] font-medium uppercase tracking-[0.26em] text-slate-400 dark:text-slate-500">Automation Suite</span>
+                <span className="text-[11px] font-medium uppercase tracking-[0.26em] text-slate-400 dark:text-slate-500">Autopilot System</span>
               </div>
             </Link>
             <NavigationTabs />
