@@ -49,6 +49,28 @@ export interface PromptTemplateSummary {
   structureNotes?: string;
 }
 
+export interface PromptSelfPostBreakdown {
+  postId: string;
+  impressions: number;
+  likes: number;
+  mainPost: string;
+  comments: string[];
+  permalink: string;
+}
+
+export interface PromptCompetitorStructure {
+  accountName: string;
+  username: string | null;
+  structureSummary: string;
+  example: string;
+}
+
+export interface PromptWritingChecklist {
+  enforcedTheme: string;
+  aiKeywords: string[];
+  reminders: string[];
+}
+
 export interface ThreadsPromptPayload {
   meta: PromptMeta;
   accountSummary: PromptAccountSummary;
@@ -57,4 +79,7 @@ export interface ThreadsPromptPayload {
   trendingTopics: PromptTrendingTopic[];
   templateSummaries: PromptTemplateSummary[];
   postCount: number;
+  curatedSelfPosts: PromptSelfPostBreakdown[];
+  competitorStructures: PromptCompetitorStructure[];
+  writingChecklist: PromptWritingChecklist;
 }

@@ -28,6 +28,37 @@ export interface AnalyticsRow extends YoutubeAnalyticsRow {
   collectedAt: string;
 }
 
+export interface ContentScriptRow {
+  media: string;
+  contentId: string;
+  themeKeyword?: string;
+  targetPersona?: string[];
+  videoType?: string;
+  status: string;
+  notionPageId?: string;
+  generatedAt: string;
+  updatedAt: string;
+  author?: string;
+  payloadJson: string;
+  summary?: string;
+  title?: string;
+}
+
+export interface StoredContentScript {
+  contentId: string;
+  themeKeyword?: string;
+  targetPersona?: string[];
+  videoType?: string;
+  status: string;
+  notionPageId?: string;
+  generatedAt: string;
+  updatedAt: string;
+  author?: string;
+  summary?: string;
+  title?: string;
+  payloadJson: Record<string, unknown> | null;
+}
+
 export function createYoutubeBigQueryContext(projectId: string, datasetId: string): YoutubeBigQueryContext {
   const client = createBigQueryClient(projectId);
   return { client, projectId, datasetId };
@@ -84,7 +115,24 @@ export async function ensureYoutubeTables(context: YoutubeBigQueryContext) {
       collected_at TIMESTAMP NOT NULL
     )
     PARTITION BY date
-    CLUSTER BY media, metric_type`
+    CLUSTER BY media, metric_type`,
+    `CREATE TABLE IF NOT EXISTS ${datasetQualified}.media_content_scripts (
+      media STRING NOT NULL,
+      content_id STRING NOT NULL,
+      theme_keyword STRING,
+      target_persona ARRAY<STRING>,
+      video_type STRING,
+      status STRING,
+      notion_page_id STRING,
+      generated_at TIMESTAMP NOT NULL,
+      updated_at TIMESTAMP NOT NULL,
+      author STRING,
+      payload_json STRING,
+      summary STRING,
+      title STRING
+    )
+    PARTITION BY DATE(generated_at)
+    CLUSTER BY media, status`
   ];
 
   for (const statement of ddlStatements) {
@@ -196,4 +244,87 @@ export async function insertAnalytics(context: YoutubeBigQueryContext, rows: Ana
 
   await table.insert(formatted, { ignoreUnknownValues: true });
   console.info(`[youtube] inserted ${formatted.length} analytics metrics into ${projectId}.${datasetId}.media_metrics_daily`);
+}
+
+export async function insertContentScript(context: YoutubeBigQueryContext, row: ContentScriptRow) {
+  const { client, datasetId, projectId } = context;
+  const table = client.dataset(datasetId).table('media_content_scripts');
+
+  const formatted = {
+    media: row.media,
+    content_id: row.contentId,
+    theme_keyword: row.themeKeyword ?? null,
+    target_persona: row.targetPersona ?? [],
+    video_type: row.videoType ?? null,
+    status: row.status,
+    notion_page_id: row.notionPageId ?? null,
+    generated_at: row.generatedAt,
+    updated_at: row.updatedAt,
+    author: row.author ?? null,
+    payload_json: row.payloadJson,
+    summary: row.summary ?? null,
+    title: row.title ?? null,
+  };
+
+  await table.insert([formatted], { ignoreUnknownValues: true });
+  console.info(`[youtube] inserted script ${row.contentId} into ${projectId}.${datasetId}.media_content_scripts`);
+}
+
+export async function listContentScripts(
+  context: YoutubeBigQueryContext,
+  options: { limit?: number } = {},
+): Promise<StoredContentScript[]> {
+  const { client, projectId, datasetId } = context;
+  const limit = options.limit ?? 20;
+
+  const [rows] = await client.query({
+    query: `
+      SELECT
+        content_id,
+        theme_keyword,
+        target_persona,
+        video_type,
+        status,
+        notion_page_id,
+        generated_at,
+        updated_at,
+        author,
+        summary,
+        title,
+        payload_json
+      FROM \`${projectId}.${datasetId}.media_content_scripts\`
+      WHERE media = 'youtube'
+      ORDER BY generated_at DESC
+      LIMIT @limit
+    `,
+    params: { limit },
+  });
+
+  return rows.map((row) => ({
+    contentId: row.content_id ? String(row.content_id) : '',
+    themeKeyword: row.theme_keyword ?? undefined,
+    targetPersona: Array.isArray(row.target_persona) ? row.target_persona : undefined,
+    videoType: row.video_type ?? undefined,
+    status: row.status ?? 'unknown',
+    notionPageId: row.notion_page_id ?? undefined,
+    generatedAt: row.generated_at ? String(row.generated_at) : '',
+    updatedAt: row.updated_at ? String(row.updated_at) : '',
+    author: row.author ?? undefined,
+    summary: row.summary ?? undefined,
+    title: row.title ?? undefined,
+    payloadJson: row.payload_json ? safeParseJSON(row.payload_json) : null,
+  }));
+}
+
+function safeParseJSON(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as Record<string, unknown>;
+    }
+  } catch (error) {
+    console.warn('[youtube] Failed to parse payload_json:', (error as Error).message);
+  }
+  return null;
 }

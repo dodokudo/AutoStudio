@@ -2,6 +2,8 @@ import { buildThreadsPromptPayload } from './promptBuilder';
 import type {
   PromptCompetitorHighlight,
   PromptSelfPost,
+  PromptSelfPostBreakdown,
+  PromptCompetitorStructure,
   ThreadsPromptPayload,
 } from '../types/prompt';
 
@@ -13,6 +15,9 @@ export interface ThreadsInsightsData {
   trendingTopics: ThreadsPromptPayload['trendingTopics'];
   templateSummaries: ThreadsPromptPayload['templateSummaries'];
   postCount: number;
+  curatedSelfPosts: PromptSelfPostBreakdown[];
+  competitorStructures: PromptCompetitorStructure[];
+  writingChecklist: ThreadsPromptPayload['writingChecklist'];
 }
 
 export interface ThreadsInsightsOptions {
@@ -42,5 +47,8 @@ export async function getThreadsInsights(
     trendingTopics: payload.trendingTopics,
     templateSummaries: payload.templateSummaries,
     postCount: payload.postCount,
+    curatedSelfPosts: payload.curatedSelfPosts,
+    competitorStructures: payload.competitorStructures,
+    writingChecklist: payload.writingChecklist,
   };
 }

@@ -153,18 +153,52 @@ export async function seedPlansIfNeeded() {
   const schedule = buildScheduleSlots(insights.meta.targetPostCount);
   const now = new Date().toISOString();
 
-  const rows = insights.topSelfPosts.slice(0, 10).map((post, index) => ({
-    plan_id: post.postId ?? `plan-${index + 1}`,
+  const sourcePosts = insights.curatedSelfPosts.length
+    ? insights.curatedSelfPosts
+    : insights.topSelfPosts.map((post) => ({
+        postId: post.postId,
+        impressions: post.impressions,
+        likes: post.likes,
+        mainPost: post.content,
+        comments: [],
+        permalink: post.permalink,
+      }));
+
+  const rows = sourcePosts.slice(0, insights.meta.targetPostCount).map((post, index) => ({
+    plan_id: post.postId || `seed-${index + 1}`,
     generation_date: new Date().toISOString().slice(0, 10),
     scheduled_time: schedule[index] ?? '07:00',
     template_id: 'auto-generated',
-    theme: insights.trendingTopics[index]?.themeTag ?? '未分類',
+    theme: insights.writingChecklist.enforcedTheme,
     status: (index === 0 ? 'draft' : index === 1 ? 'approved' : 'scheduled') as PlanStatus,
-    main_text: post.content?.slice(0, 280) ?? '',
-    comments: JSON.stringify([]),
+    main_text: (post as { mainPost?: string }).mainPost?.slice(0, 280) ?? (post as { main_text?: string }).main_text ?? '',
+    comments: JSON.stringify(
+      ('comments' in post && Array.isArray(post.comments)
+        ? post.comments
+        : []
+      ).map((text, commentIndex) => ({ order: commentIndex + 1, text })),
+    ),
     created_at: now,
     updated_at: now,
   }));
+
+  if (rows.length === 0) {
+    const fallbackCount = Math.max(1, insights.meta.targetPostCount || 3);
+    for (let index = 0; index < fallbackCount; index += 1) {
+      rows.push({
+        plan_id: `seed-fallback-${index + 1}`,
+        generation_date: new Date().toISOString().slice(0, 10),
+        scheduled_time: schedule[index] ?? '07:00',
+        template_id: 'auto-generated',
+        theme: insights.writingChecklist.enforcedTheme,
+        status: 'draft' as PlanStatus,
+        main_text: 'AI活用の投稿案を準備中です。再作成ボタンで最新データを取得してください。',
+        comments: JSON.stringify([]),
+        created_at: now,
+        updated_at: now,
+      });
+    }
+  }
 
   for (const row of rows) {
     await client.query({

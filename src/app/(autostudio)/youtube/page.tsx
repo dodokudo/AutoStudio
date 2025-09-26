@@ -1,4 +1,5 @@
 import { getYoutubeDashboardData } from '@/lib/youtube/dashboard';
+import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
 
 function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
   return new Intl.NumberFormat('ja-JP', options).format(value);
@@ -42,7 +43,7 @@ export default async function YoutubeDashboardPage() {
         <header className="flex flex-col gap-2">
           <h1 className="text-xl font-semibold text-white">YouTube ダッシュボード</h1>
           {data.overview.latestSnapshotDate ? (
-            <p className="text-xs text-slate-400">最新スナップショット: {data.overview.latestSnapshotDate}</p>
+            <p className="text-xs text-slate-400">最新スナップショット: {String(data.overview.latestSnapshotDate)}</p>
           ) : (
             <p className="text-xs text-slate-400">まだデータが取り込まれていません。</p>
           )}
@@ -66,10 +67,14 @@ export default async function YoutubeDashboardPage() {
               {data.themes.map((theme) => (
                 <div key={theme.keyword} className="rounded-md border border-slate-800 bg-slate-900/70 p-4">
                   <div className="flex items-center justify-between gap-4">
-                    <div>
+                    <div className="flex-1">
                       <p className="text-sm font-semibold text-white">{theme.keyword}</p>
                       <p className="text-xs text-slate-400">スコア: {formatNumber(Math.round(theme.score))}</p>
                     </div>
+                    <ScriptGenerateButton
+                      themeKeyword={theme.keyword}
+                      representativeVideo={theme.representativeVideos[0]}
+                    />
                   </div>
                   <ul className="mt-3 space-y-2 text-xs text-slate-300">
                     {theme.representativeVideos.slice(0, 3).map((video) => (
@@ -123,6 +128,7 @@ export default async function YoutubeDashboardPage() {
                 <th className="py-2 pr-3 font-medium">再生数</th>
                 <th className="py-2 pr-3 font-medium">伸び速度</th>
                 <th className="py-2 pr-3 font-medium">ER</th>
+                <th className="py-2 pr-3 font-medium">アクション</th>
               </tr>
             </thead>
             <tbody>
@@ -149,11 +155,17 @@ export default async function YoutubeDashboardPage() {
                   <td className="py-2 pr-3">
                     {formatPercentage(theme.representativeVideos[0]?.engagementRate)}
                   </td>
+                  <td className="py-2 pr-3">
+                    <ScriptGenerateButton
+                      themeKeyword={theme.keyword}
+                      representativeVideo={theme.representativeVideos[0]}
+                    />
+                  </td>
                 </tr>
               ))}
               {data.themes.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-4 text-center text-slate-400">
+                  <td colSpan={6} className="py-4 text-center text-slate-400">
                     キーワード分析結果がまだありません。
                   </td>
                 </tr>

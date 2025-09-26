@@ -15,7 +15,8 @@ BigQuery dataset: autostudio_media
   ├─ media_videos_snapshot
   ├─ media_video_themes
   ├─ media_content_scripts
-  └─ media_metrics_daily
+  ├─ media_metrics_daily
+  └─ media_content_scripts
           ▲
           │ (OAuth refresh token)
 YouTube Analytics API (own channel performance)
@@ -130,7 +131,7 @@ Existing script pages can be migrated by adding the properties above and filling
 ## 8. API Routes & Scripts
 - `src/app/api/youtube/competitors/route.ts` — GET/POST for CRUD of competitor list (backed by BigQuery table or JSON config).
 - `src/app/api/youtube/themes/route.ts` — GET aggregated themes.
-- `src/app/api/youtube/scripts/route.ts` — POST to generate script, GET to list existing scripts.
+- `src/app/api/youtube/scripts/route.ts` — GET: 直近スクリプト一覧, POST: Claude生成→Notion同期→BigQuery保存。
 - CLI scripts:
   - `npm run youtube:sync` → `src/scripts/runYoutubeSync.ts` (channels + videos + analytics + theme derivation).
   - `npm run youtube:oauth` → helper to perform OAuth flow and print refresh token (one-off).

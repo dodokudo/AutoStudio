@@ -76,13 +76,13 @@ function buildProperties(payload: NotionContentPayload): PageProperties {
       title: toRichText(payload.title),
     },
     Media: {
-      select: { name: payload.media },
+      url: payload.media,
     },
     'Content Type': {
       select: { name: payload.contentType },
     },
     Status: {
-      select: { name: payload.status },
+      status: { name: payload.status },
     },
     'AutoStudio ID': {
       rich_text: toRichText(payload.autoStudioId),
@@ -117,9 +117,9 @@ function buildProperties(payload: NotionContentPayload): PageProperties {
   }
 
   if (payload.sourceUrls?.length) {
-    const text = payload.sourceUrls.join('\n');
+    const firstUrl = payload.sourceUrls[0];
     (properties as Record<string, unknown>)['Source Videos'] = {
-      rich_text: toRichText(text),
+      url: firstUrl,
     };
   }
 

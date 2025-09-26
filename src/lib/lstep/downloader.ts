@@ -44,7 +44,7 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     const page = await context.newPage();
 
     // まずログイン後のダッシュボードに移動
-    await page.goto('https://manager.linestep.net/', { waitUntil: 'networkidle' });
+    await page.goto('https://manager.linestep.net/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     if (isLoginPage(page)) {
       throw new CookieExpiredError('Lstepのログインページへリダイレクトされました');

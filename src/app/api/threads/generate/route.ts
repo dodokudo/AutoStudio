@@ -13,14 +13,21 @@ export async function POST() {
     const claudeResult = await generateClaudePlans(payload);
 
     const fallbackSchedule = payload.meta.recommendedSchedule;
-    const generatedPlans = claudeResult.posts.map((post, index) => ({
-      planId: post.planId ?? `gen-${index + 1}`,
-      scheduledTime: post.scheduledTime ?? fallbackSchedule[index] ?? undefined,
-      templateId: post.templateId ?? 'auto-generated',
-      theme: post.theme ?? '未分類',
-      mainText: post.main,
-      comments: (post.comments ?? []).map((text, commentIndex) => ({ order: commentIndex + 1, text })),
-    }));
+    const generatedPlans = claudeResult.posts.map((post, index) => {
+      const planId = post.planId?.trim() || `gen-${index + 1}`;
+      const scheduledTime = post.scheduledTime?.trim() || fallbackSchedule[index] || undefined;
+      const templateId = post.templateId?.trim() || 'auto-generated';
+      const theme = post.theme?.trim() || payload.writingChecklist.enforcedTheme;
+
+      return {
+        planId,
+        scheduledTime,
+        templateId,
+        theme,
+        mainText: post.mainPost,
+        comments: (post.comments ?? []).map((text, commentIndex) => ({ order: commentIndex + 1, text })),
+      };
+    });
 
     await replaceTodayPlans(generatedPlans, fallbackSchedule);
     const summaries = await listPlanSummaries();

@@ -7,6 +7,9 @@ import type {
   PromptTrendingTopic,
   PromptTemplateSummary,
   ThreadsPromptPayload,
+  PromptSelfPostBreakdown,
+  PromptCompetitorStructure,
+  PromptWritingChecklist,
 } from '../types/prompt';
 
 interface BuildPromptOptions {
@@ -18,6 +21,22 @@ interface BuildPromptOptions {
 }
 
 const DATASET = 'autostudio_threads';
+
+const AI_KEYWORDS = ['ai', 'chatgpt', 'claude', 'llm', '自動化', '生成ai', 'gpt', 'midjourney'];
+const MAX_CURATED_POSTS = 5;
+const MAX_COMPETITOR_STRUCTURES = 5;
+
+const WRITING_CHECKLIST: PromptWritingChecklist = {
+  enforcedTheme: 'AI活用に関する実践的なTipsと体験談のみ',
+  aiKeywords: ['AI', '生成AI', 'ChatGPT', 'Claude', '自動化', 'LLM'],
+  reminders: [
+    '関西弁トーンを必ず3箇所以上に散りばめる',
+    '冒頭3秒で具体的な数値とインパクトを提示',
+    'メイン投稿150-200文字、コメントは400-600文字を目安に',
+    'コメント1は体験談＋HowTo、コメント2は応用・注意喚起・行動促進',
+    '「AI以外のテーマ」は扱わない。競合例は構文だけ参考にする',
+  ],
+};
 
 function toPlainString(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -136,6 +155,89 @@ async function fetchTopSelfPosts(
     content: row.content ?? '',
     permalink: row.permalink ?? '',
   }));
+}
+
+function normalizeWhitespace(value: string): string {
+  return value
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([!?.,。！？、])/g, '$1')
+    .trim();
+}
+
+function splitContentIntoMainAndComments(content: string): { mainPost: string; comments: string[] } {
+  const segments = content
+    .split(/\n{2,}/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length === 0) {
+    return { mainPost: content.trim(), comments: [] };
+  }
+
+  const mainPost = segments[0];
+  const commentCandidates = segments.slice(1);
+  const comments: string[] = [];
+
+  for (const candidate of commentCandidates) {
+    if (!candidate) continue;
+    if (comments.length >= 2) break;
+    comments.push(candidate);
+  }
+
+  return { mainPost, comments };
+}
+
+function isAiFocused(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return AI_KEYWORDS.some((keyword) => lower.includes(keyword));
+}
+
+function curateSelfPosts(posts: PromptSelfPost[]): PromptSelfPostBreakdown[] {
+  const aiPosts = posts.filter((post) => isAiFocused(post.content));
+  const target = aiPosts.length ? aiPosts : posts;
+
+  return target.slice(0, MAX_CURATED_POSTS).map((post) => {
+    const { mainPost, comments } = splitContentIntoMainAndComments(post.content);
+    return {
+      postId: post.postId,
+      impressions: post.impressions,
+      likes: post.likes,
+      mainPost: normalizeWhitespace(mainPost),
+      comments: comments.map(normalizeWhitespace),
+      permalink: post.permalink,
+    } satisfies PromptSelfPostBreakdown;
+  });
+}
+
+function summarizeStructure(snippet: string): string {
+  const lines = snippet.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return '短文インサイト';
+
+  const hasBullets = lines.some((line) => /^[・\-*]/.test(line));
+  const hasNumbers = lines.some((line) => /^\d+\./.test(line));
+  const hasQuestions = snippet.includes('？') || snippet.includes('?');
+  const hasSteps = /ステップ|手順|STEP/i.test(snippet);
+
+  const fragments: string[] = [];
+  if (hasNumbers || hasSteps) fragments.push('段階説明');
+  if (hasBullets) fragments.push('箇条書き');
+  if (hasQuestions) fragments.push('疑問投げかけ');
+  if (snippet.length > 180) fragments.push('長文解説');
+  if (!fragments.length) fragments.push('短文提示');
+
+  return fragments.join(' / ');
+}
+
+function buildCompetitorStructures(highlights: PromptCompetitorHighlight[]): PromptCompetitorStructure[] {
+  return highlights
+    .slice(0, MAX_COMPETITOR_STRUCTURES)
+    .map((item) => ({
+      accountName: item.accountName,
+      username: item.username,
+      structureSummary: summarizeStructure(item.contentSnippet),
+      example: item.contentSnippet,
+    }));
 }
 
 async function fetchCompetitorHighlights(
@@ -339,6 +441,9 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
   const targetCount = 4;
   const generationId = options.referenceDate ?? new Date().toISOString().slice(0, 10);
 
+  const curatedSelfPosts = curateSelfPosts(topSelfPosts);
+  const competitorStructures = buildCompetitorStructures(competitorHighlights);
+
   return {
     meta: {
       generationId,
@@ -354,5 +459,8 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
     trendingTopics,
     templateSummaries,
     postCount,
+    curatedSelfPosts,
+    competitorStructures,
+    writingChecklist: WRITING_CHECKLIST,
   };
 }

@@ -48,18 +48,43 @@ This will:
 - fetch competitor channel/video data
 - fetch your channel analytics (if OAuth env is set)
 
-Schedule this command daily (Cloud Scheduler → Cloud Run job, or GitHub Actions) at 06:00 JST for fresh data.
+スケジュール実行のセットアップは後述の「日次バッチの自動化」を参照してください。
 
 ## 5. AutoStudio dashboard
 - Start the app with `npm run dev` and open http://localhost:3000/youtube to view the dashboard.
 - Hot themes are computed from the latest top videos; if no data appears, confirm the BigQuery tables contain records for today.
 
 ## 6. Notion sync test
-To verify the Notion integration after script generation is implemented:
-1. Run a one-off script in `tsx` to call `upsertContentPage` with dummy data.
-2. Confirm a new page appears in the Notion database and that properties update on subsequent calls.
+疎通確認用に次のコマンドを実行します。
 
-## 7. Next steps
-- Wire Claude generation to `/api/youtube/scripts` (todo). Use `docs/prompts/youtube-script.md` as the base prompt.
-- Extend `media_video_themes` table if you prefer to persist theme scoring instead of computing in Node.
-- Set up Cloud Scheduler → Cloud Run job to execute `npm run youtube:sync` automatically.
+```
+npm run notion:test
+```
+
+正常に終了すると Notion データベースに「テスト: AutoStudio 連携確認」というページが作成され、同じ ID で再実行すると更新になります。
+
+## 7. Claude台本生成API
+- `POST /api/youtube/scripts`
+  - リクエスト例:
+    ```json
+    {
+      "themeKeyword": "Flow と Veo3 の組み合わせ活用",
+      "videoType": "B",
+      "targetPersona": "月商1000万円を目指すマーケター",
+      "notes": "Flowの導線設計を深掘りしたい"
+    }
+    ```
+  - 生成された台本は BigQuery `media_content_scripts` に保存され、Notion にドラフトページが作成されます。
+  - 応答JSONには scriptSections、LINE誘導キーワード、Notion ページIDが含まれます。
+
+## 8. 日次バッチの自動化
+- `deploy/youtube-sync/` に Cloud Run × Cloud Scheduler 用のテンプレートを追加。
+  - `Dockerfile` : `npm run youtube:sync` を実行するコンテナ。
+  - `cloudbuild.yaml` : コンテナビルドと Cloud Run へのデプロイ。
+  - `scheduler-job.yaml` : JST 06:00 に Cloud Run サービスを起動するスケジュール設定例。
+  - `env.yaml` : 必要環境変数の一覧（Secret Manager で管理する前提）。
+- LSTEP モジュール同様に `gcloud builds submit` → `gcloud scheduler jobs create http` の流れで日次化できます。
+
+## 9. 次の拡張アイデア
+- `media_video_themes` を永続化し、テーマのスコア推移を可視化。
+- Notion 側での編集内容を逆同期し、AutoStudio 内のステータス更新につなげる。
