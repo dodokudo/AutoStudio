@@ -54,7 +54,7 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     try {
       await page.click('text=友だちリスト', { timeout: 10000 });
       await page.waitForLoadState('networkidle');
-    } catch (error) {
+    } catch {
       // 別の方法で友だちリストに移動を試行
       await page.click('text=1対1トーク', { timeout: 5000 });
       await page.waitForTimeout(1000);
@@ -159,7 +159,8 @@ async function clickByText(page: Page, text: string, timeout: number): Promise<v
   await locator.first().click();
 }
 
-async function clickByMultipleSelectors(page: Page, selectors: string[], timeout: number): Promise<void> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function clickByMultipleSelectors(page: Page, selectors: string[], _timeout: number): Promise<void> {
   let lastError: Error | null = null;
 
   for (const selector of selectors) {
