@@ -137,7 +137,11 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
 
   const latestRows = latestRowsRaw as Array<{ snapshot_date: string | null }>;
 
-  const latestSnapshotDate = latestRows[0]?.snapshot_date ?? null;
+  const latestSnapshotDate = latestRows[0]?.snapshot_date
+    ? (typeof latestRows[0].snapshot_date === 'string'
+       ? latestRows[0].snapshot_date
+       : new Date(latestRows[0].snapshot_date.value ?? latestRows[0].snapshot_date).toISOString().slice(0, 10))
+    : null;
 
   const [overviewRowsRaw] = await client.query({
     query: `
@@ -217,7 +221,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       commentCount: row.comment_count ?? undefined,
       viewVelocity: row.view_velocity ?? undefined,
       engagementRate: row.engagement_rate ?? undefined,
-      publishedAt: row.published_at ?? undefined,
+      publishedAt: row.published_at ? new Date(row.published_at.value ?? row.published_at).toISOString() : undefined,
       tags: row.tags ?? undefined,
     }));
   }

@@ -159,7 +159,15 @@ export default async function YoutubeDashboardPage() {
                   <td className="py-2 pr-3">
                     <ScriptGenerateButton
                       themeKeyword={theme.keyword}
-                      representativeVideo={theme.representativeVideos[0]}
+                      representativeVideo={theme.representativeVideos[0] ? {
+                        videoId: theme.representativeVideos[0].videoId,
+                        title: theme.representativeVideos[0].title,
+                        channelTitle: theme.representativeVideos[0].channelTitle,
+                        channelId: theme.representativeVideos[0].channelId,
+                        viewCount: theme.representativeVideos[0].viewCount,
+                        viewVelocity: theme.representativeVideos[0].viewVelocity,
+                        engagementRate: theme.representativeVideos[0].engagementRate,
+                      } : undefined}
                     />
                   </td>
                 </tr>

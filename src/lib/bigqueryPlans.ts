@@ -80,7 +80,7 @@ export async function listPlans(): Promise<ThreadPlan[]> {
   const sql = `
     SELECT *
     FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-    WHERE generation_date = CURRENT_DATE()
+    WHERE generation_date = CURRENT_DATE("Asia/Tokyo")
     ORDER BY scheduled_time
   `;
 
@@ -152,7 +152,7 @@ export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSch
     const sql = `
       MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
       USING (SELECT @planId AS plan_id, DATE(@generationDate) AS generation_date) S
-      ON T.plan_id = S.plan_id AND SAFE_CAST(T.generation_date AS DATE) = S.generation_date
+      ON T.plan_id = S.plan_id AND T.generation_date = S.generation_date
       WHEN MATCHED THEN
         UPDATE SET
           scheduled_time = @scheduledTime,
@@ -296,7 +296,7 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
     WITH plans AS (
       SELECT *
       FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-      WHERE generation_date = CURRENT_DATE()
+      WHERE generation_date = CURRENT_DATE("Asia/Tokyo")
     ),
     latest_jobs AS (
       SELECT
@@ -379,11 +379,11 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
     SET status = @status, updated_at = CURRENT_TIMESTAMP()
-    WHERE plan_id = @planId AND generation_date = CURRENT_DATE()
+    WHERE plan_id = @planId AND generation_date = CURRENT_DATE("Asia/Tokyo")
   `;
   await client.query({ query: sql, params: { planId, status } });
   const [plan] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE("Asia/Tokyo")`,
     { planId },
   );
   const normalized = plan ? normalizePlan(plan) : undefined;
@@ -403,7 +403,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
   const sql = `
     MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
     USING (SELECT @planId AS plan_id) S
-    ON T.plan_id = S.plan_id AND T.generation_date = CURRENT_DATE()
+    ON T.plan_id = S.plan_id AND T.generation_date = CURRENT_DATE("Asia/Tokyo")
     WHEN MATCHED THEN
       UPDATE SET
         scheduled_time = COALESCE(@scheduledTime, T.scheduled_time),
@@ -415,7 +415,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
         updated_at = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN
       INSERT (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, created_at, updated_at)
-      VALUES (@planId, CURRENT_DATE(), COALESCE(@scheduledTime, '07:00'), COALESCE(@templateId, 'auto-generated'), COALESCE(@theme, '未分類'), COALESCE(@status, 'draft'), COALESCE(@mainText, ''), COALESCE(@comments, '[]'), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+      VALUES (@planId, CURRENT_DATE("Asia/Tokyo"), COALESCE(@scheduledTime, '07:00'), COALESCE(@templateId, 'auto-generated'), COALESCE(@theme, '未分類'), COALESCE(@status, 'draft'), COALESCE(@mainText, ''), COALESCE(@comments, '[]'), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
   `;
 
   await client.query({
@@ -432,7 +432,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
   });
 
   const [updated] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE("Asia/Tokyo")`,
     { planId: plan.plan_id },
   );
   return updated ? normalizePlan(updated) : undefined;

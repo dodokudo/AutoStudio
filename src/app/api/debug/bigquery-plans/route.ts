@@ -35,7 +35,7 @@ export async function GET() {
         plan_id,
         generation_date,
         SAFE_CAST(generation_date AS DATE) as generation_date_cast,
-        CURRENT_DATE() as current_date,
+        CURRENT_DATE("Asia/Tokyo") as current_date,
         scheduled_time,
         template_id,
         theme,
@@ -45,7 +45,7 @@ export async function GET() {
         created_at,
         updated_at
       FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-      WHERE SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()
+      WHERE generation_date = CURRENT_DATE("Asia/Tokyo")
       ORDER BY created_at DESC
     `;
 
