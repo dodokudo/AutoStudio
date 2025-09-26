@@ -1,7 +1,7 @@
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 
 const THREADS_TOKEN = process.env.THREADS_TOKEN;
-const THREADS_ACCOUNT_ID = process.env.THREADS_ACCOUNT_ID;
+const THREADS_BUSINESS_ID = process.env.THREADS_BUSINESS_ID;
 const THREADS_POSTING_ENABLED = process.env.THREADS_POSTING_ENABLED === 'true';
 
 if (!THREADS_POSTING_ENABLED) {
@@ -38,7 +38,7 @@ async function createContainer(text: string, replyToId?: string) {
     reply_to_id: replyToId,
   };
 
-  const response = await request(`${THREADS_ACCOUNT_ID}/threads`, {
+  const response = await request(`${THREADS_BUSINESS_ID}/threads`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -64,7 +64,7 @@ async function waitForContainer(containerId: string) {
 }
 
 async function publishContainer(containerId: string) {
-  const res = await request(`${THREADS_ACCOUNT_ID}/threads_publish`, {
+  const res = await request(`${THREADS_BUSINESS_ID}/threads_publish`, {
     method: 'POST',
     params: { creation_id: containerId },
   });
@@ -86,7 +86,7 @@ export async function postThread(text: string, replyToId?: string) {
     return mockId;
   }
 
-  if (!THREADS_TOKEN || !THREADS_ACCOUNT_ID) {
+  if (!THREADS_TOKEN || !THREADS_BUSINESS_ID) {
     throw new Error('Threads API credentials are not configured');
   }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
-import 'dotenv/config';
+import { config } from 'dotenv';
+config({ path: '.env.local' });
 import { randomUUID } from 'node:crypto';
 import { BigQuery } from '@google-cloud/bigquery';
 import { loadInstagramConfig } from '@/lib/instagram/config';

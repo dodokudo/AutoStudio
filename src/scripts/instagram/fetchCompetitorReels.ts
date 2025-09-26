@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
-import 'dotenv/config';
+import { config } from 'dotenv';
+config({ path: '.env.local' });
 import { google } from 'googleapis';
 import { BigQuery } from '@google-cloud/bigquery';
 import { ensureInstagramTables, createInstagramBigQuery } from '@/lib/instagram/bigquery';
@@ -36,6 +37,7 @@ async function main(): Promise<void> {
       competitor: competitor.username,
       folderId: competitor.driveFolderId,
       snapshotDate,
+      datasetId: config.dataset,
     });
   }
   console.log('[instagram/fetch] Completed');
@@ -47,10 +49,11 @@ interface SyncDriveParams {
   competitor: string;
   folderId: string;
   snapshotDate: string;
+  datasetId: string;
 }
 
 async function syncDriveFolder(params: SyncDriveParams): Promise<void> {
-  const { drive, competitor, folderId, snapshotDate } = params;
+  const { drive, competitor, folderId, snapshotDate, datasetId } = params;
   const files = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
     fields: 'files(id, name, mimeType, webViewLink, createdTime, modifiedTime)',
@@ -83,8 +86,7 @@ async function syncDriveFolder(params: SyncDriveParams): Promise<void> {
   }
 
   const bigquery = params.bigquery;
-  const config = loadInstagramConfig();
-  const dataset = bigquery.dataset(config.dataset);
+  const dataset = bigquery.dataset(datasetId);
   const table = dataset.table('competitor_reels_raw');
   await table.insert(rows, { raw: false });
   console.log(`[instagram/fetch] Inserted ${rows.length} rows for ${competitor}`);

@@ -18,6 +18,21 @@ const LOG_TABLE_SCHEMA = [
   { name: 'created_at', type: 'TIMESTAMP' },
 ];
 
+const COMMENT_SCHEDULE_TABLE = 'comment_schedules';
+const COMMENT_SCHEDULE_SCHEMA = [
+  { name: 'schedule_id', type: 'STRING' },
+  { name: 'plan_id', type: 'STRING' },
+  { name: 'parent_thread_id', type: 'STRING' },
+  { name: 'comment_order', type: 'INTEGER' },
+  { name: 'comment_text', type: 'STRING' },
+  { name: 'scheduled_time', type: 'TIMESTAMP' },
+  { name: 'status', type: 'STRING' },
+  { name: 'posted_thread_id', type: 'STRING' },
+  { name: 'error_message', type: 'STRING' },
+  { name: 'executed_at', type: 'TIMESTAMP' },
+  { name: 'created_at', type: 'TIMESTAMP' },
+];
+
 async function ensureLogTable() {
   const client = createBigQueryClient(PROJECT_ID);
   const dataset = client.dataset(DATASET);
@@ -26,6 +41,23 @@ async function ensureLogTable() {
   if (!logExists) {
     try {
       await dataset.createTable(LOG_TABLE, { schema: LOG_TABLE_SCHEMA });
+    } catch (error) {
+      const message = (error as Error)?.message || '';
+      if (!message.includes('Already Exists')) {
+        throw error;
+      }
+    }
+  }
+}
+
+async function ensureCommentScheduleTable() {
+  const client = createBigQueryClient(PROJECT_ID);
+  const dataset = client.dataset(DATASET);
+  const scheduleTable = dataset.table(COMMENT_SCHEDULE_TABLE);
+  const [scheduleExists] = await scheduleTable.exists();
+  if (!scheduleExists) {
+    try {
+      await dataset.createTable(COMMENT_SCHEDULE_TABLE, { schema: COMMENT_SCHEDULE_SCHEMA });
     } catch (error) {
       const message = (error as Error)?.message || '';
       if (!message.includes('Already Exists')) {
@@ -55,6 +87,39 @@ function validateTextLength(mainText?: string, comments?: { text: string }[]): s
   return null;
 }
 
+async function scheduleComments(planId: string, mainThreadId: string, comments: { order: number; text: string }[]) {
+  for (let i = 0; i < comments.length; i++) {
+    const comment = comments[i];
+    const delayMinutes = (i + 1) * 2; // 2分, 4分, 6分...の間隔
+
+    // BigQueryにコメント投稿スケジュールを保存
+    const client = createBigQueryClient(PROJECT_ID);
+    const scheduleId = `schedule-${planId}-${comment.order}-${Date.now()}`;
+    const scheduledTime = new Date(Date.now() + delayMinutes * 60 * 1000);
+
+    const insertScheduleQuery = `
+      INSERT INTO \`${PROJECT_ID}.${DATASET}.comment_schedules\`
+      (schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status, created_at)
+      VALUES (@schedule_id, @plan_id, @parent_thread_id, @comment_order, @comment_text, @scheduled_time, @status, CURRENT_TIMESTAMP())
+    `;
+
+    await client.query({
+      query: insertScheduleQuery,
+      params: {
+        schedule_id: scheduleId,
+        plan_id: planId,
+        parent_thread_id: mainThreadId,
+        comment_order: comment.order,
+        comment_text: comment.text,
+        scheduled_time: scheduledTime.toISOString(),
+        status: 'pending'
+      }
+    });
+
+    console.log(`[threads/publish] Scheduled comment ${comment.order} for ${delayMinutes} minutes later (${scheduledTime.toISOString()})`);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as PublishRequest;
@@ -68,6 +133,7 @@ export async function POST(request: NextRequest) {
 
     const client = createBigQueryClient(PROJECT_ID);
     await ensureLogTable();
+    await ensureCommentScheduleTable();
 
     // Get the plan from BigQuery
     const getPlanQuery = `
@@ -114,26 +180,11 @@ export async function POST(request: NextRequest) {
     const mainThreadId = await postThread(plan.main_text);
     console.log(`[threads/publish] Main thread posted with ID: ${mainThreadId}`);
 
-    // Post comments as replies
+    // Schedule comments for delayed posting
     const commentResults: { order: number; thread_id: string }[] = [];
-    let lastThreadId = mainThreadId;
-
-    for (const comment of comments.sort((a, b) => a.order - b.order)) {
-      try {
-        console.log(`[threads/publish] Posting comment ${comment.order}...`);
-        const commentThreadId = await postThread(comment.text, lastThreadId);
-        console.log(`[threads/publish] Comment ${comment.order} posted with ID: ${commentThreadId}`);
-
-        commentResults.push({
-          order: comment.order,
-          thread_id: commentThreadId
-        });
-
-        lastThreadId = commentThreadId;
-      } catch (error) {
-        console.error(`[threads/publish] Failed to post comment ${comment.order}:`, error);
-        // Continue with other comments even if one fails
-      }
+    if (comments.length > 0) {
+      console.log(`[threads/publish] Scheduling ${comments.length} comments for delayed posting...`);
+      await scheduleComments(plan_id, mainThreadId, comments);
     }
 
     // Create log entry

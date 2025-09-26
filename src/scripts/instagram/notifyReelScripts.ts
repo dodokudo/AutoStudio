@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
-import 'dotenv/config';
+import { config } from 'dotenv';
+config({ path: '.env.local' });
 import nodemailer from 'nodemailer';
 import { BigQuery } from '@google-cloud/bigquery';
 import { loadInstagramConfig } from '@/lib/instagram/config';

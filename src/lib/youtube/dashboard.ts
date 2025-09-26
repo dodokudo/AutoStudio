@@ -232,12 +232,13 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
           AND v.snapshot_date = @snapshot_date
           AND c.is_self = TRUE
         ORDER BY v.view_velocity DESC
-        LIMIT 30
+        LIMIT 60
       `,
       params: { snapshot_date: latestSnapshotDate },
     });
 
-    const videoRows = videoRowsRaw as Array<{
+    const seenVideoIds = new Set<string>();
+    topVideos = (videoRowsRaw as Array<{
       content_id: string;
       title: string | null;
       channel_id: string;
@@ -249,24 +250,29 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       engagement_rate: number | null;
       published_at: unknown;
       tags: string[] | null;
-    }>;
-
-    topVideos = videoRows.map((row) => {
-      const publishedAtRaw = toTimestamp(row.published_at);
-      return {
-        videoId: row.content_id,
-        title: row.title ?? '',
-        channelId: row.channel_id,
-        channelTitle: row.channel_title ?? undefined,
-        viewCount: row.view_count ?? undefined,
-        likeCount: row.like_count ?? undefined,
-        commentCount: row.comment_count ?? undefined,
-        viewVelocity: row.view_velocity ?? undefined,
-        engagementRate: row.engagement_rate ?? undefined,
-        publishedAt: publishedAtRaw ? new Date(publishedAtRaw).toISOString() : undefined,
-        tags: row.tags ?? undefined,
-      };
-    });
+    }> )
+      .map((row) => {
+        const publishedAtRaw = toTimestamp(row.published_at);
+        return {
+          videoId: row.content_id,
+          title: row.title ?? '',
+          channelId: row.channel_id,
+          channelTitle: row.channel_title ?? undefined,
+          viewCount: row.view_count ?? undefined,
+          likeCount: row.like_count ?? undefined,
+          commentCount: row.comment_count ?? undefined,
+          viewVelocity: row.view_velocity ?? undefined,
+          engagementRate: row.engagement_rate ?? undefined,
+          publishedAt: publishedAtRaw ? new Date(publishedAtRaw).toISOString() : undefined,
+          tags: row.tags ?? undefined,
+        };
+      })
+      .filter((video) => {
+        if (seenVideoIds.has(video.videoId)) return false;
+        seenVideoIds.add(video.videoId);
+        return true;
+      })
+      .slice(0, 30);
   }
 
   const themes = deriveThemes(topVideos);
@@ -412,17 +418,24 @@ async function buildCompetitorSummary(
 ): Promise<YoutubeCompetitorSummary[]> {
   const [rows] = await client.query({
     query: `
-      WITH latest_channels AS (
+      WITH ranked_channels AS (
         SELECT
           channel_id,
           channel_title,
           subscriber_count,
           view_count,
-          video_count
+          video_count,
+          collected_at,
+          ROW_NUMBER() OVER (PARTITION BY channel_id ORDER BY collected_at DESC) AS rn
         FROM \`${projectId}.${datasetId}.media_channels_snapshot\`
         WHERE media = 'youtube'
           AND snapshot_date = @snapshot_date
           AND (is_self IS NULL OR is_self = FALSE)
+      ),
+      latest_channels AS (
+        SELECT channel_id, channel_title, subscriber_count, view_count, video_count
+        FROM ranked_channels
+        WHERE rn = 1
       ),
       channel_video_stats AS (
         SELECT

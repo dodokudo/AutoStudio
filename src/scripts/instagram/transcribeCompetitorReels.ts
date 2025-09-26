@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
-import 'dotenv/config';
+import { config } from 'dotenv';
+config({ path: '.env.local' });
 import { google } from 'googleapis';
 import { BigQuery } from '@google-cloud/bigquery';
 import { loadInstagramConfig } from '@/lib/instagram/config';
@@ -75,10 +76,12 @@ async function transcribeWithGemini(params: { row: PendingRow; drive: ReturnType
     alt: 'media',
   }, { responseType: 'arraybuffer' });
 
-  const buffer = Buffer.from(fileResponse.data as ArrayBuffer);
+  const buffer = Buffer.from(fileResponse.data as ArrayBufferLike);
   if (!buffer.length) {
     return null;
   }
+
+  const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 
   const uploadUrl = 'https://generativelanguage.googleapis.com/v1beta/files';
   const uploadResponse = await fetch(uploadUrl, {
@@ -86,7 +89,7 @@ async function transcribeWithGemini(params: { row: PendingRow; drive: ReturnType
     headers: {
       'x-goog-api-key': config.geminiApiKey,
     },
-    body: createMultipart(buffer, row.instagram_media_id),
+    body: createMultipart(arrayBuffer, row.instagram_media_id),
   });
 
   if (!uploadResponse.ok) {
@@ -152,7 +155,7 @@ async function transcribeWithGemini(params: { row: PendingRow; drive: ReturnType
   return payload;
 }
 
-function createMultipart(buffer: Buffer, filename: string): FormData {
+function createMultipart(buffer: ArrayBuffer, filename: string): FormData {
   const formData = new FormData();
   const file = new Blob([buffer], { type: 'video/mp4' });
   formData.append('file', file, `${filename}.mp4`);
