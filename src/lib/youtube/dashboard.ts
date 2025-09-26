@@ -140,7 +140,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
   const latestSnapshotDate = latestRows[0]?.snapshot_date
     ? (typeof latestRows[0].snapshot_date === 'string'
        ? latestRows[0].snapshot_date
-       : new Date(latestRows[0].snapshot_date.value ?? latestRows[0].snapshot_date).toISOString().slice(0, 10))
+       : new Date((latestRows[0].snapshot_date as any)?.value ?? latestRows[0].snapshot_date).toISOString().slice(0, 10))
     : null;
 
   const [overviewRowsRaw] = await client.query({
