@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const channelTitle = channelResponse.data.items?.[0]?.snippet?.title;
 
     return NextResponse.redirect(
-      `${request.nextUrl.origin}/youtube?success=true&channel=${encodeURIComponent(channelTitle || 'Unknown')}`
+      `${request.nextUrl.origin}/youtube?success=true&channel=${encodeURIComponent(channelTitle || 'Unknown')}&refresh_token=${encodeURIComponent(refreshToken || '')}`
     );
   } catch (error) {
     console.error('[youtube/callback] Error:', error);

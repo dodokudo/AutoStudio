@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listPlanSummaries, seedPlansIfNeeded, upsertPlan } from '@/lib/bigqueryPlans';
 import type { PlanStatus } from '@/types/threadPlan';
 
+function validateTextLength(mainText?: string, comments?: { text: string }[]): string | null {
+  if (mainText && mainText.length > 500) {
+    return 'メイン投稿は500文字以内である必要があります';
+  }
+
+  if (comments && Array.isArray(comments)) {
+    for (let i = 0; i < comments.length; i++) {
+      if (comments[i]?.text && comments[i].text.length > 500) {
+        return `コメント${i + 1}は500文字以内である必要があります`;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function GET() {
   try {
     await seedPlansIfNeeded();
@@ -22,6 +38,12 @@ export async function PUT(request: NextRequest) {
     const { planId, scheduledTime, mainText, templateId, theme, status, comments } = payload ?? {};
     if (!planId) {
       return NextResponse.json({ error: 'planId is required' }, { status: 400 });
+    }
+
+    // 文字数バリデーション
+    const validationError = validateTextLength(mainText, comments);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
     const updated = await upsertPlan({

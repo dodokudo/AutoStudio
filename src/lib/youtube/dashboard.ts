@@ -31,6 +31,27 @@ export interface YoutubeDashboardData {
   overview: YoutubeOverview;
   topVideos: YoutubeVideoSummary[];
   themes: YoutubeThemeSuggestion[];
+  analytics: {
+    own: {
+      last30Days: AnalyticsSummary;
+      last7Days: AnalyticsSummary;
+    };
+    comparison: ComparisonSummary | null;
+  };
+}
+
+interface AnalyticsSummary {
+  views: number;
+  watchTimeMinutes: number;
+  averageViewDurationSeconds: number;
+  subscriberNet: number;
+}
+
+interface ComparisonSummary {
+  ownViewVelocity: number | null;
+  competitorViewVelocity: number | null;
+  ownEngagementRate: number | null;
+  competitorEngagementRate: number | null;
 }
 
 const STOPWORDS = new Set([
@@ -110,7 +131,7 @@ function deriveThemes(videos: YoutubeVideoSummary[]): YoutubeThemeSuggestion[] {
     }
   }
 
-  const themes = Array.from(map.entries())
+  return Array.from(map.entries())
     .map(([keyword, value]) => ({
       keyword,
       score: value.score,
@@ -118,8 +139,6 @@ function deriveThemes(videos: YoutubeVideoSummary[]): YoutubeThemeSuggestion[] {
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
-
-  return themes;
 }
 
 function toTimestamp(value: unknown): string | undefined {
@@ -147,18 +166,13 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
   });
 
   const latestRows = latestRowsRaw as Array<{ snapshot_date: string | null }>;
-
-  const latestSnapshotDate = latestRows[0]?.snapshot_date
-    ? (typeof latestRows[0].snapshot_date === 'string'
-       ? latestRows[0].snapshot_date
-       : new Date((latestRows[0].snapshot_date as { value?: string })?.value ?? latestRows[0].snapshot_date).toISOString().slice(0, 10))
-    : null;
+  const latestSnapshotDate = latestRows[0]?.snapshot_date ?? null;
 
   const [overviewRowsRaw] = await client.query({
     query: `
       SELECT
         SUM(CASE WHEN metric_type = 'views' THEN value ELSE 0 END) AS total_views_30d,
-        AVG(CASE WHEN metric_type = 'averageViewDuration' THEN value ELSE NULL END) AS avg_view_duration,
+        SUM(CASE WHEN metric_type = 'estimatedMinutesWatched' THEN value ELSE 0 END) AS total_watch_minutes_30d,
         SUM(CASE WHEN metric_type = 'subscribersGained' THEN value ELSE 0 END)
           - SUM(CASE WHEN metric_type = 'subscribersLost' THEN value ELSE 0 END) AS subscriber_delta_30d
       FROM \`${projectId}.${datasetId}.media_metrics_daily\`
@@ -169,13 +183,13 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
 
   const overviewRows = overviewRowsRaw as Array<{
     total_views_30d: number | null;
-    avg_view_duration: number | null;
+    total_watch_minutes_30d: number | null;
     subscriber_delta_30d: number | null;
   }>;
 
   const overviewRow = overviewRows[0] ?? {
     total_views_30d: 0,
-    avg_view_duration: 0,
+    total_watch_minutes_30d: 0,
     subscriber_delta_30d: 0,
   };
 
@@ -202,6 +216,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
           AND c.media = 'youtube'
         WHERE v.media = 'youtube'
           AND v.snapshot_date = @snapshot_date
+          AND c.is_self = TRUE
         ORDER BY v.view_velocity DESC
         LIMIT 30
       `,
@@ -218,35 +233,155 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       comment_count: number | null;
       view_velocity: number | null;
       engagement_rate: number | null;
-      published_at: string | null;
+      published_at: unknown;
       tags: string[] | null;
     }>;
 
-    topVideos = videoRows.map((row) => ({
-      videoId: row.content_id,
-      title: row.title ?? '',
-      channelId: row.channel_id,
-      channelTitle: row.channel_title ?? undefined,
-      viewCount: row.view_count ?? undefined,
-      likeCount: row.like_count ?? undefined,
-      commentCount: row.comment_count ?? undefined,
-      viewVelocity: row.view_velocity ?? undefined,
-      engagementRate: row.engagement_rate ?? undefined,
-      publishedAt: toTimestamp(row.published_at) ? new Date(toTimestamp(row.published_at)!).toISOString() : undefined,
-      tags: row.tags ?? undefined,
-    }));
+    topVideos = videoRows.map((row) => {
+      const publishedAtRaw = toTimestamp(row.published_at);
+      return {
+        videoId: row.content_id,
+        title: row.title ?? '',
+        channelId: row.channel_id,
+        channelTitle: row.channel_title ?? undefined,
+        viewCount: row.view_count ?? undefined,
+        likeCount: row.like_count ?? undefined,
+        commentCount: row.comment_count ?? undefined,
+        viewVelocity: row.view_velocity ?? undefined,
+        engagementRate: row.engagement_rate ?? undefined,
+        publishedAt: publishedAtRaw ? new Date(publishedAtRaw).toISOString() : undefined,
+        tags: row.tags ?? undefined,
+      };
+    });
   }
 
   const themes = deriveThemes(topVideos);
+  const analytics = await buildAnalyticsSummary(client, projectId, datasetId, latestSnapshotDate ?? undefined);
 
   return {
     overview: {
       totalViews30d: overviewRow.total_views_30d ?? 0,
-      avgViewDuration: overviewRow.avg_view_duration ?? 0,
+      avgViewDuration:
+        overviewRow.total_views_30d && overviewRow.total_views_30d > 0
+          ? (overviewRow.total_watch_minutes_30d ?? 0) * 60 / overviewRow.total_views_30d
+          : 0,
       subscriberDelta30d: overviewRow.subscriber_delta_30d ?? 0,
       latestSnapshotDate,
     },
     topVideos,
     themes,
+    analytics,
+  };
+}
+
+async function buildAnalyticsSummary(
+  client: ReturnType<typeof createBigQueryClient>,
+  projectId: string,
+  datasetId: string,
+  latestSnapshotDate?: string,
+) {
+  const [ownRows] = await client.query({
+    query: `
+      SELECT
+        metric_type,
+        SUM(IF(date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), value, 0)) AS total_30,
+        SUM(IF(date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY), value, 0)) AS total_7
+      FROM \`${projectId}.${datasetId}.media_metrics_daily\`
+      WHERE media = 'youtube'
+      GROUP BY metric_type
+    `,
+  });
+
+  const metrics = new Map<string, { total_30: number; total_7: number }>();
+  for (const row of ownRows as Array<{ metric_type: string; total_30: number | null; total_7: number | null }>) {
+    metrics.set(row.metric_type, {
+      total_30: Number(row.total_30 ?? 0),
+      total_7: Number(row.total_7 ?? 0),
+    });
+  }
+
+  const views30 = metrics.get('views')?.total_30 ?? 0;
+  const views7 = metrics.get('views')?.total_7 ?? 0;
+  const watchMinutes30 = metrics.get('estimatedMinutesWatched')?.total_30 ?? 0;
+  const watchMinutes7 = metrics.get('estimatedMinutesWatched')?.total_7 ?? 0;
+  const subscribersGained30 = metrics.get('subscribersGained')?.total_30 ?? 0;
+  const subscribersGained7 = metrics.get('subscribersGained')?.total_7 ?? 0;
+  const subscribersLost30 = metrics.get('subscribersLost')?.total_30 ?? 0;
+  const subscribersLost7 = metrics.get('subscribersLost')?.total_7 ?? 0;
+
+  const ownSummary30: AnalyticsSummary = {
+    views: Math.round(views30),
+    watchTimeMinutes: Math.round(watchMinutes30),
+    averageViewDurationSeconds: views30 > 0 ? Math.round((watchMinutes30 * 60) / views30) : 0,
+    subscriberNet: Math.round(subscribersGained30 - subscribersLost30),
+  };
+
+  const ownSummary7: AnalyticsSummary = {
+    views: Math.round(views7),
+    watchTimeMinutes: Math.round(watchMinutes7),
+    averageViewDurationSeconds: views7 > 0 ? Math.round((watchMinutes7 * 60) / views7) : 0,
+    subscriberNet: Math.round(subscribersGained7 - subscribersLost7),
+  };
+
+  let comparison: ComparisonSummary | null = null;
+
+  if (latestSnapshotDate) {
+    const [comparisonRows] = await client.query({
+      query: `
+        WITH latest_self AS (
+          SELECT
+            AVG(view_velocity) AS own_view_velocity,
+            AVG(engagement_rate) AS own_engagement_rate
+          FROM \`${projectId}.${datasetId}.media_videos_snapshot\` v
+          JOIN \`${projectId}.${datasetId}.media_channels_snapshot\` c
+            ON v.channel_id = c.channel_id AND v.snapshot_date = c.snapshot_date
+          WHERE v.media = 'youtube'
+            AND v.snapshot_date = @snapshot_date
+            AND c.is_self = TRUE
+        ),
+        latest_competitors AS (
+          SELECT
+            AVG(view_velocity) AS competitor_view_velocity,
+            AVG(engagement_rate) AS competitor_engagement_rate
+          FROM \`${projectId}.${datasetId}.media_videos_snapshot\` v
+          JOIN \`${projectId}.${datasetId}.media_channels_snapshot\` c
+            ON v.channel_id = c.channel_id AND v.snapshot_date = c.snapshot_date
+          WHERE v.media = 'youtube'
+            AND v.snapshot_date = @snapshot_date
+            AND (c.is_self IS NULL OR c.is_self = FALSE)
+        )
+        SELECT
+          own_view_velocity,
+          own_engagement_rate,
+          competitor_view_velocity,
+          competitor_engagement_rate
+        FROM latest_self CROSS JOIN latest_competitors
+      `,
+      params: { snapshot_date: latestSnapshotDate },
+    });
+
+    const row = (comparisonRows as Array<{
+      own_view_velocity: number | null;
+      own_engagement_rate: number | null;
+      competitor_view_velocity: number | null;
+      competitor_engagement_rate: number | null;
+    }>)[0];
+
+    if (row) {
+      comparison = {
+        ownViewVelocity: row.own_view_velocity ?? null,
+        competitorViewVelocity: row.competitor_view_velocity ?? null,
+        ownEngagementRate: row.own_engagement_rate ?? null,
+        competitorEngagementRate: row.competitor_engagement_rate ?? null,
+      };
+    }
+  }
+
+  return {
+    own: {
+      last30Days: ownSummary30,
+      last7Days: ownSummary7,
+    },
+    comparison,
   };
 }

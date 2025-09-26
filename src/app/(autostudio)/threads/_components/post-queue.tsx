@@ -90,6 +90,10 @@ export function PostQueue({
   pendingId,
   templateOptions = [],
 }: PostQueueProps) {
+  const isTextTooLong = (mainText: string, comments: { text: string }[]) => {
+    if (mainText.length > 500) return true;
+    return comments.some(comment => comment.text.length > 500);
+  };
   const summary = items.reduce(
     (acc, item) => {
       acc.total += 1;
@@ -128,55 +132,56 @@ export function PostQueue({
             const templateListId = `template-options-${item.id}`;
             const draft = editableValues[item.id] ?? item;
             const isPending = pendingId === item.id;
+            const hasTextError = isTextTooLong(draft.mainText, draft.comments);
 
             return (
               <article
                 key={item.id}
                 className="flex h-full flex-col overflow-hidden rounded-3xl bg-white/95 p-6 shadow-[0_24px_60px_rgba(84,110,192,0.18)] transition hover:-translate-y-1 hover:shadow-[0_28px_70px_rgba(82,94,170,0.25)] dark:bg-white/10"
               >
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-200">
-                      <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Time</span>
-                        <select
-                          className="bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
-                          value={draft.scheduledTime}
-                          onChange={(event) => onDraftChange?.(item.id, { scheduledTime: event.target.value })}
-                        >
-                          {scheduleOptions.map((option) => (
-                            <option key={option} value={option} className="text-slate-800">
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Template</span>
-                        <input
-                          className="w-32 bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
-                          list={templateOptions.length ? templateListId : undefined}
-                          value={draft.templateId}
-                          onChange={(event) =>
-                            onDraftChange?.(item.id, {
-                              templateId: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      {templateOptions.length ? (
-                        <datalist id={templateListId}>
-                          {templateOptions.map((option) => (
-                            <option key={`${item.id}-${option.value}`} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </datalist>
-                      ) : null}
-                    </div>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-200">
+                    <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Time</span>
+                      <select
+                        className="bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
+                        value={draft.scheduledTime}
+                        onChange={(event) => onDraftChange?.(item.id, { scheduledTime: event.target.value })}
+                      >
+                        {scheduleOptions.map((option) => (
+                          <option key={option} value={option} className="text-slate-800">
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-1.5 text-slate-600 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-indigo-200/80 dark:bg-white/10 dark:text-slate-200 dark:ring-white/10">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Template</span>
+                      <input
+                        className="w-32 bg-transparent text-sm font-medium text-slate-700 outline-none dark:text-white"
+                        list={templateOptions.length ? templateListId : undefined}
+                        value={draft.templateId}
+                        onChange={(event) =>
+                          onDraftChange?.(item.id, {
+                            templateId: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    {templateOptions.length ? (
+                      <datalist id={templateListId}>
+                        {templateOptions.map((option) => (
+                          <option key={`${item.id}-${option.value}`} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </datalist>
+                    ) : null}
+                  </div>
 
-                    {(onApprove || onReject || onSave || onRerun) && (
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-200">
+                  {(onApprove || onReject || onSave || onRerun) && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-200">
+                      <div className="flex flex-wrap items-center gap-3">
                         {onRerun ? (
                           <button
                             type="button"
@@ -199,8 +204,9 @@ export function PostQueue({
                                 comments: draft.comments ?? item.comments,
                               })
                             }
-                            disabled={isPending}
+                            disabled={isPending || hasTextError}
                             className="button-secondary disabled:opacity-50"
+                            title={hasTextError ? 'メイン投稿またはコメントが500文字を超えています' : ''}
                           >
                             {isPending ? '保存中…' : '保存'}
                           </button>
@@ -209,8 +215,9 @@ export function PostQueue({
                           <button
                             type="button"
                             onClick={() => onApprove(item.id)}
-                            disabled={isPending}
+                            disabled={isPending || hasTextError}
                             className="button-primary disabled:opacity-60"
+                            title={hasTextError ? 'メイン投稿またはコメントが500文字を超えています' : ''}
                           >
                             {isPending ? '承認中…' : '承認'}
                           </button>
@@ -225,21 +232,37 @@ export function PostQueue({
                             {isPending ? '処理中…' : '戻す'}
                           </button>
                         ) : null}
-                        <span className={`ml-auto inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${statusAccent[item.status]}`}>
-                          <span className="h-2 w-2 rounded-full bg-current opacity-70" />
-                          {statusLabel[item.status]}
-                        </span>
                       </div>
-                    )}
-                  </div>
+                      <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${statusAccent[item.status]}`}>
+                        <span className="h-2 w-2 rounded-full bg-current opacity-70" />
+                        {statusLabel[item.status]}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-4">
-                    <textarea
-                      className="min-h-[300px] w-full rounded-2xl border border-transparent bg-white/82 p-4 text-sm leading-relaxed text-slate-700 shadow-inner outline-none transition focus:border-indigo-200 focus:ring-2 focus:ring-indigo-200/60 dark:bg-white/10 dark:text-slate-100"
-                      rows={10}
-                      value={draft.mainText}
-                      onChange={(event) => onDraftChange?.(item.id, { mainText: event.target.value })}
-                    />
+                    <div className="relative">
+                      <textarea
+                        className={`min-h-[300px] w-full rounded-2xl border p-4 text-sm leading-relaxed shadow-inner outline-none transition focus:ring-2 dark:bg-white/10 dark:text-slate-100 ${
+                          draft.mainText.length > 500
+                            ? 'border-red-300 bg-red-50 text-red-900 focus:border-red-400 focus:ring-red-200/60'
+                            : 'border-transparent bg-white/82 text-slate-700 focus:border-indigo-200 focus:ring-indigo-200/60'
+                        }`}
+                        rows={10}
+                        value={draft.mainText}
+                        onChange={(event) => onDraftChange?.(item.id, { mainText: event.target.value })}
+                        maxLength={600}
+                      />
+                      <div className={`absolute bottom-3 right-3 text-xs font-medium ${
+                        draft.mainText.length > 500
+                          ? 'text-red-600'
+                          : draft.mainText.length > 450
+                          ? 'text-amber-600'
+                          : 'text-slate-400'
+                      }`}>
+                        {draft.mainText.length}/500
+                      </div>
+                    </div>
 
                     <div className="space-y-3 text-sm text-slate-600 dark:text-slate-200">
                       {(draft.comments ?? []).map((comment) => (
@@ -259,17 +282,33 @@ export function PostQueue({
                               削除
                             </button>
                           </div>
-                          <textarea
-                            className="min-h-[180px] w-full rounded-xl border border-transparent bg-white/90 p-3 text-xs text-slate-600 shadow-inner outline-none transition focus:border-indigo-200 focus:ring-1 focus:ring-indigo-200/60 dark:bg-white/10 dark:text-slate-100"
-                            rows={6}
-                            value={comment.text}
-                            onChange={(event) => {
-                              const next = (draft.comments ?? []).map((c) =>
-                                c.order === comment.order ? { ...c, text: event.target.value } : c,
-                              );
-                              onCommentChange?.(item.id, next);
-                            }}
-                          />
+                          <div className="relative">
+                            <textarea
+                              className={`min-h-[180px] w-full rounded-xl border p-3 text-xs shadow-inner outline-none transition focus:ring-1 dark:bg-white/10 dark:text-slate-100 ${
+                                comment.text.length > 500
+                                  ? 'border-red-300 bg-red-50 text-red-900 focus:border-red-400 focus:ring-red-200/60'
+                                  : 'border-transparent bg-white/90 text-slate-600 focus:border-indigo-200 focus:ring-indigo-200/60'
+                              }`}
+                              rows={6}
+                              value={comment.text}
+                              onChange={(event) => {
+                                const next = (draft.comments ?? []).map((c) =>
+                                  c.order === comment.order ? { ...c, text: event.target.value } : c,
+                                );
+                                onCommentChange?.(item.id, next);
+                              }}
+                              maxLength={600}
+                            />
+                            <div className={`absolute bottom-2 right-2 text-xs font-medium ${
+                              comment.text.length > 500
+                                ? 'text-red-600'
+                                : comment.text.length > 450
+                                ? 'text-amber-600'
+                                : 'text-slate-400'
+                            }`}>
+                              {comment.text.length}/500
+                            </div>
+                          </div>
                         </div>
                       ))}
                       <button

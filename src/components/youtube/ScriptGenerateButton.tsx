@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 interface ScriptGenerateButtonProps {
@@ -16,6 +17,7 @@ interface ScriptGenerateButtonProps {
 }
 
 export function ScriptGenerateButton({ themeKeyword, representativeVideo }: ScriptGenerateButtonProps) {
+  const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -24,28 +26,23 @@ export function ScriptGenerateButton({ themeKeyword, representativeVideo }: Scri
     setResult(null);
 
     try {
-      const sourceVideos = representativeVideo
-        ? [`https://youtube.com/watch?v=${representativeVideo.videoId}`]
-        : undefined;
-
-      const response = await fetch('/api/youtube/generate-script', {
+      const response = await fetch('/api/youtube/scripts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           themeKeyword,
-          targetPersona: '月商1000万円を目指すマーケター',
-          sourceVideos,
+          videoType: 'B',
+          notes: representativeVideo ? `主な参考動画: https://youtube.com/watch?v=${representativeVideo.videoId}` : undefined,
         }),
       });
 
       const data = await response.json();
 
-      if (data.success) {
-        setResult(`台本生成完了！\nNotion Page ID: ${data.pageId}\nテーマ: ${data.themeKeyword}`);
+      if (response.ok) {
+        setResult('台本を生成し、Notionに保存しました。');
+        router.refresh();
       } else {
-        setResult(`エラー: ${data.error}`);
+        setResult(`エラー: ${data.error ?? '未知のエラー'}`);
       }
     } catch (error) {
       setResult(`エラー: ${error instanceof Error ? error.message : '不明なエラー'}`);
@@ -55,18 +52,16 @@ export function ScriptGenerateButton({ themeKeyword, representativeVideo }: Scri
   };
 
   return (
-    <div className="mt-2">
+    <div className="flex flex-col gap-2">
       <button
         onClick={handleGenerate}
         disabled={isGenerating}
-        className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
+        className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-800"
       >
         {isGenerating ? '台本生成中...' : '台本生成'}
       </button>
       {result && (
-        <div className="mt-2 rounded-md border border-slate-700 bg-slate-800/50 p-2 text-xs">
-          <pre className="whitespace-pre-wrap text-slate-300">{result}</pre>
-        </div>
+        <p className="text-[11px] text-slate-400">{result}</p>
       )}
     </div>
   );

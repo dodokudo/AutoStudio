@@ -39,6 +39,22 @@ interface PublishRequest {
   plan_id: string;
 }
 
+function validateTextLength(mainText?: string, comments?: { text: string }[]): string | null {
+  if (mainText && mainText.length > 500) {
+    return 'メイン投稿は500文字以内である必要があります';
+  }
+
+  if (comments && Array.isArray(comments)) {
+    for (let i = 0; i < comments.length; i++) {
+      if (comments[i]?.text && comments[i].text.length > 500) {
+        return `コメント${i + 1}は500文字以内である必要があります`;
+      }
+    }
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as PublishRequest;
@@ -84,6 +100,13 @@ export async function POST(request: NextRequest) {
       comments = JSON.parse(plan.comments || '[]');
     } catch (error) {
       console.warn(`[threads/publish] Failed to parse comments for plan ${plan_id}:`, error);
+    }
+
+    // 文字数バリデーション
+    const validationError = validateTextLength(plan.main_text, comments);
+    if (validationError) {
+      console.error(`[threads/publish] Validation error for plan ${plan_id}:`, validationError);
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
     // Post main thread

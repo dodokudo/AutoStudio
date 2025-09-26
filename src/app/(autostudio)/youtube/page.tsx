@@ -1,13 +1,20 @@
+import { resolveProjectId } from '@/lib/bigquery';
+import { getThreadsInsights } from '@/lib/threadsInsights';
 import { getYoutubeDashboardData } from '@/lib/youtube/dashboard';
+import {
+  createYoutubeBigQueryContext,
+  ensureYoutubeTables,
+  listContentScripts,
+  type StoredContentScript,
+} from '@/lib/youtube/bigquery';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
-import { AnalyticsSection } from '@/components/youtube/AnalyticsSection';
 
 function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
   return new Intl.NumberFormat('ja-JP', options).format(value);
 }
 
-function formatPercentage(value: number | undefined) {
-  if (value === undefined || Number.isNaN(value)) return '–';
+function formatPercentage(value: number | null | undefined) {
+  if (value === undefined || value === null || Number.isNaN(value)) return '–';
   return `${(value * 100).toFixed(1)}%`;
 }
 
@@ -18,11 +25,41 @@ function formatDuration(seconds: number) {
   return `${minutes}分${sec.toString().padStart(2, '0')}秒`;
 }
 
+function buildNotionUrl(pageId?: string) {
+  if (!pageId) return undefined;
+  const compact = pageId.replace(/-/g, '');
+  return `https://www.notion.so/${compact}`;
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return '–';
+  try {
+    return new Intl.DateTimeFormat('ja-JP', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 export const dynamic = 'force-dynamic';
 
 export default async function YoutubeDashboardPage() {
   try {
     const data = await getYoutubeDashboardData();
+
+    const projectId = resolveProjectId();
+    const datasetId = process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media';
+    const context = createYoutubeBigQueryContext(projectId, datasetId);
+    await ensureYoutubeTables(context);
+    const scripts: StoredContentScript[] = await listContentScripts(context, { limit: 12 });
+
+    const threadsInsights = await getThreadsInsights(projectId, { rangeDays: 7 });
 
     const overviewCards = [
       {
@@ -36,6 +73,60 @@ export default async function YoutubeDashboardPage() {
       {
         label: '登録者純増 (30日)',
         value: formatNumber(Math.round(data.overview.subscriberDelta30d)),
+      },
+    ];
+
+    const own30 = data.analytics.own.last30Days;
+    const own7 = data.analytics.own.last7Days;
+    const comparison = data.analytics.comparison;
+
+    const ownMetricsRows = [
+      {
+        label: '視聴回数',
+        value30: `${formatNumber(own30.views)} 回`,
+        value7: `${formatNumber(own7.views)} 回`,
+      },
+      {
+        label: '視聴時間',
+        value30: `${formatNumber(own30.watchTimeMinutes)} 分`,
+        value7: `${formatNumber(own7.watchTimeMinutes)} 分`,
+      },
+      {
+        label: '平均視聴持続',
+        value30: formatDuration(own30.averageViewDurationSeconds),
+        value7: formatDuration(own7.averageViewDurationSeconds),
+      },
+      {
+        label: '登録者純増',
+        value30: `${own30.subscriberNet >= 0 ? '+' : ''}${formatNumber(own30.subscriberNet)}`,
+        value7: `${own7.subscriberNet >= 0 ? '+' : ''}${formatNumber(own7.subscriberNet)}`,
+      },
+    ];
+
+    const scriptsGenerated7 = scripts.filter((script) => {
+      if (!script.updatedAt) return false;
+      const updated = new Date(script.updatedAt).getTime();
+      if (Number.isNaN(updated)) return false;
+      return Date.now() - updated <= 7 * ONE_DAY_MS;
+    }).length;
+
+    const crossMediaRows = [
+      {
+        label: 'フォロワー増 (直近7日)',
+        threads: `${threadsInsights.accountSummary.followersChange >= 0 ? '+' : ''}${formatNumber(
+          threadsInsights.accountSummary.followersChange,
+        )}`,
+        youtube: `${own7.subscriberNet >= 0 ? '+' : ''}${formatNumber(own7.subscriberNet)}`,
+      },
+      {
+        label: 'リーチ / 視聴 (7日)',
+        threads: `${formatNumber(Math.round(threadsInsights.accountSummary.averageProfileViews))} プロフ閲覧`,
+        youtube: `${formatNumber(own7.views)} 再生`,
+      },
+      {
+        label: 'コンテンツ件数 (7日)',
+        threads: `${threadsInsights.postCount} 投稿`,
+        youtube: `${scriptsGenerated7} 台本`,
       },
     ];
 
@@ -58,6 +149,104 @@ export default async function YoutubeDashboardPage() {
             </div>
           ))}
         </section>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
+            <h2 className="text-base font-semibold text-white">自チャンネル指標</h2>
+            <p className="mt-1 text-xs text-slate-400">自チャンネルのパフォーマンス（直近30日 / 7日）</p>
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
+              <table className="w-full table-auto text-left text-xs text-slate-300">
+                <thead className="bg-slate-900/80 text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">指標</th>
+                    <th className="px-3 py-2 font-medium">直近30日</th>
+                    <th className="px-3 py-2 font-medium">直近7日</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ownMetricsRows.map((row) => (
+                    <tr key={row.label} className="border-t border-slate-800 last:border-b">
+                      <td className="px-3 py-2 font-medium text-white">{row.label}</td>
+                      <td className="px-3 py-2">{row.value30}</td>
+                      <td className="px-3 py-2">{row.value7}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
+            <h2 className="text-base font-semibold text-white">Threads × YouTube ファネル</h2>
+            <p className="mt-1 text-xs text-slate-400">直近7日の結果を媒体別に比較</p>
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
+              <table className="w-full table-auto text-left text-xs text-slate-300">
+                <thead className="bg-slate-900/80 text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">指標</th>
+                    <th className="px-3 py-2 font-medium">Threads</th>
+                    <th className="px-3 py-2 font-medium">YouTube</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {crossMediaRows.map((row) => (
+                    <tr key={row.label} className="border-t border-slate-800 last:border-b">
+                      <td className="px-3 py-2 font-medium text-white">{row.label}</td>
+                      <td className="px-3 py-2">{row.threads}</td>
+                      <td className="px-3 py-2">{row.youtube}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {comparison && (
+          <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
+            <h2 className="text-base font-semibold text-white">自分 vs 競合</h2>
+            <p className="mt-1 text-xs text-slate-400">最新スナップショットでの平均値比較</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">伸び速度 / 日</p>
+                <div className="mt-3 flex items-baseline gap-3 text-sm">
+                  <div className="flex-1">
+                    <p className="text-[11px] text-slate-400">自チャンネル</p>
+                    <p className="text-xl font-semibold text-white">
+                      {comparison.ownViewVelocity ? formatNumber(Math.round(comparison.ownViewVelocity)) : '–'}
+                    </p>
+                  </div>
+                  <div className="flex-1 text-right">
+                    <p className="text-[11px] text-slate-400">競合平均</p>
+                    <p className="text-xl font-semibold text-indigo-300">
+                      {comparison.competitorViewVelocity
+                        ? formatNumber(Math.round(comparison.competitorViewVelocity))
+                        : '–'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">エンゲージメント率</p>
+                <div className="mt-3 flex items-baseline gap-3 text-sm">
+                  <div className="flex-1">
+                    <p className="text-[11px] text-slate-400">自チャンネル</p>
+                    <p className="text-xl font-semibold text-white">
+                      {formatPercentage(comparison.ownEngagementRate)}
+                    </p>
+                  </div>
+                  <div className="flex-1 text-right">
+                    <p className="text-[11px] text-slate-400">競合平均</p>
+                    <p className="text-xl font-semibold text-indigo-300">
+                      {formatPercentage(comparison.competitorEngagementRate)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-[11px] text-slate-500">競合平均は同日のスナップショットから算出しています。</p>
+          </section>
+        )}
 
         <section className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
@@ -107,7 +296,8 @@ export default async function YoutubeDashboardPage() {
                     <span className="text-slate-400">
                       伸び速度: {video.viewVelocity ? formatNumber(Math.round(video.viewVelocity)) : '–'} /日
                     </span>
-                    <span className="text-slate-400">ER: {formatPercentage(video.engagementRate)}</span>
+                    <span className="text-slate-400">ER: {formatPercentage(video.engagementRate)}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -153,22 +343,9 @@ export default async function YoutubeDashboardPage() {
                       ? formatNumber(Math.round(theme.representativeVideos[0].viewVelocity!))
                       : '–'}
                   </td>
+                  <td className="py-2 pr-3">{formatPercentage(theme.representativeVideos[0]?.engagementRate)}</td>
                   <td className="py-2 pr-3">
-                    {formatPercentage(theme.representativeVideos[0]?.engagementRate)}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <ScriptGenerateButton
-                      themeKeyword={theme.keyword}
-                      representativeVideo={theme.representativeVideos[0] ? {
-                        videoId: theme.representativeVideos[0].videoId,
-                        title: theme.representativeVideos[0].title,
-                        channelTitle: theme.representativeVideos[0].channelTitle,
-                        channelId: theme.representativeVideos[0].channelId,
-                        viewCount: theme.representativeVideos[0].viewCount,
-                        viewVelocity: theme.representativeVideos[0].viewVelocity,
-                        engagementRate: theme.representativeVideos[0].engagementRate,
-                      } : undefined}
-                    />
+                    <ScriptGenerateButton themeKeyword={theme.keyword} representativeVideo={theme.representativeVideos[0]} />
                   </td>
                 </tr>
               ))}
@@ -183,8 +360,58 @@ export default async function YoutubeDashboardPage() {
           </table>
         </section>
 
-        {/* YouTube Analytics セクション */}
-        <AnalyticsSection />
+        <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
+          <h2 className="text-base font-semibold text-white">生成済み台本</h2>
+          <p className="mt-1 text-xs text-slate-400">最新の台本ドラフトとステータスを一覧表示します。</p>
+          <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
+            {scripts.length === 0 ? (
+              <div className="p-6 text-center text-sm text-slate-400">まだ生成済み台本がありません。</div>
+            ) : (
+              <table className="w-full table-auto text-left text-xs text-slate-300">
+                <thead className="bg-slate-900/80 text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">タイトル</th>
+                    <th className="px-3 py-2 font-medium">テーマ</th>
+                    <th className="px-3 py-2 font-medium">ステータス</th>
+                    <th className="px-3 py-2 font-medium">更新日</th>
+                    <th className="px-3 py-2 font-medium">Notion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scripts.map((script) => {
+                    const notionUrl = buildNotionUrl(script.notionPageId);
+                    return (
+                      <tr key={script.contentId} className="border-t border-slate-800 last:border-b">
+                        <td className="px-3 py-2 font-medium text-white">{script.title ?? script.contentId}</td>
+                        <td className="px-3 py-2">{script.themeKeyword ?? '未設定'}</td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center rounded-full bg-slate-800 px-2 py-1 text-[11px] text-slate-200">
+                            {script.status ?? 'draft'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{formatDateTime(script.updatedAt)}</td>
+                        <td className="px-3 py-2">
+                          {notionUrl ? (
+                            <a
+                              href={notionUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500 hover:text-white"
+                            >
+                              Notionを開く
+                            </a>
+                          ) : (
+                            <span className="text-slate-500">未連携</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
       </div>
     );
   } catch (error) {
