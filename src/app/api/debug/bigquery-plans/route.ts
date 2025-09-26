@@ -29,13 +29,18 @@ export async function GET() {
 
     const [allRows] = await client.query({ query: allRecordsQuery });
 
-    // Get today's records specifically
+    // Get today's records specifically with detailed comparison
     const todayQuery = `
       SELECT
         plan_id,
         generation_date,
-        SAFE_CAST(generation_date AS DATE) as generation_date_cast,
-        CURRENT_DATE("Asia/Tokyo") as current_date,
+        generation_date as generation_date_raw,
+        CURRENT_DATE("Asia/Tokyo") as current_date_tokyo,
+        CURRENT_DATE() as current_date_utc,
+        '2025-09-26' as test_date,
+        CASE WHEN generation_date = CURRENT_DATE("Asia/Tokyo") THEN 'MATCH_TOKYO' ELSE 'NO_MATCH_TOKYO' END as tokyo_match,
+        CASE WHEN generation_date = CURRENT_DATE() THEN 'MATCH_UTC' ELSE 'NO_MATCH_UTC' END as utc_match,
+        CASE WHEN generation_date = '2025-09-26' THEN 'MATCH_STRING' ELSE 'NO_MATCH_STRING' END as string_match,
         scheduled_time,
         template_id,
         theme,
@@ -45,7 +50,7 @@ export async function GET() {
         created_at,
         updated_at
       FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-      WHERE generation_date = CURRENT_DATE("Asia/Tokyo")
+      WHERE generation_date IS NOT NULL
       ORDER BY created_at DESC
     `;
 

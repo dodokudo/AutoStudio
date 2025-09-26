@@ -76,7 +76,13 @@ function normalizePlan(plan: Record<string, unknown>): ThreadPlan {
 
 export async function listPlans(): Promise<ThreadPlan[]> {
   await ensurePlanTable();
-  const today = new Date().toISOString().slice(0, 10);
+  // 日本時間での今日の日付を取得
+  const today = new Date().toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).replace(/\//g, '-');
   const sql = `
     SELECT *
     FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
@@ -125,8 +131,14 @@ export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSch
     return [] as ThreadPlan[];
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  console.log('[replaceTodayPlans] Today date:', today);
+  // 日本時間での今日の日付を取得
+  const today = new Date().toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).replace(/\//g, '-');
+  console.log('[replaceTodayPlans] Today date (JST):', today);
 
   // 各プランをMERGE文でupsert
   for (const [index, plan] of plans.entries()) {
