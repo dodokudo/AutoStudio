@@ -141,37 +141,15 @@ export async function ensureYoutubeTables(context: YoutubeBigQueryContext) {
 }
 
 async function deleteExistingChannels(context: YoutubeBigQueryContext, snapshotDate: string, channelIds: string[]) {
-  if (channelIds.length === 0) return;
-  const { client, projectId, datasetId } = context;
-  await client.query({
-    query: `
-      DELETE FROM \`${projectId}.${datasetId}.media_channels_snapshot\`
-      WHERE snapshot_date = @snapshot_date
-        AND channel_id IN UNNEST(@channel_ids)
-        AND media = 'youtube'
-    `,
-    params: {
-      snapshot_date: snapshotDate,
-      channel_ids: channelIds,
-    },
-  });
+  // Temporarily disabled due to streaming buffer limitation
+  console.log('[youtube] Skipping delete operation due to streaming buffer');
+  return;
 }
 
 async function deleteExistingVideos(context: YoutubeBigQueryContext, snapshotDate: string, videoIds: string[]) {
-  if (videoIds.length === 0) return;
-  const { client, projectId, datasetId } = context;
-  await client.query({
-    query: `
-      DELETE FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
-      WHERE snapshot_date = @snapshot_date
-        AND content_id IN UNNEST(@video_ids)
-        AND media = 'youtube'
-    `,
-    params: {
-      snapshot_date: snapshotDate,
-      video_ids: videoIds,
-    },
-  });
+  // Temporarily disabled due to streaming buffer limitation
+  console.log('[youtube] Skipping delete operation due to streaming buffer');
+  return;
 }
 
 export async function insertChannels(context: YoutubeBigQueryContext, rows: ChannelRow[]) {
