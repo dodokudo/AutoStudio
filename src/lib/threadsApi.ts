@@ -2,8 +2,13 @@ const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 
 const THREADS_TOKEN = process.env.THREADS_TOKEN;
 const THREADS_ACCOUNT_ID = process.env.THREADS_ACCOUNT_ID;
+const THREADS_POSTING_ENABLED = process.env.THREADS_POSTING_ENABLED === 'true';
 
-if (!THREADS_TOKEN || !THREADS_ACCOUNT_ID) {
+if (!THREADS_POSTING_ENABLED) {
+  console.info('[threadsApi] THREADS_POSTING_ENABLED is false. Using dry-run mode.');
+}
+
+if (THREADS_POSTING_ENABLED && (!THREADS_TOKEN || !THREADS_ACCOUNT_ID)) {
   console.warn('[threadsApi] THREADS_TOKEN or THREADS_ACCOUNT_ID is not set. Posting will fail.');
 }
 
@@ -78,9 +83,16 @@ async function publishContainer(containerId: string) {
 }
 
 export async function postThread(text: string, replyToId?: string) {
+  if (!THREADS_POSTING_ENABLED) {
+    const mockId = `dryrun-${Date.now()}`;
+    console.info('[threadsApi] Skipping Threads publish (dry-run). Returning mock id %s', mockId);
+    return mockId;
+  }
+
   if (!THREADS_TOKEN || !THREADS_ACCOUNT_ID) {
     throw new Error('Threads API credentials are not configured');
   }
+
   const containerId = await createContainer(text, replyToId);
   const threadId = await publishContainer(containerId);
   return threadId;

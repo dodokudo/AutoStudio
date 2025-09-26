@@ -51,6 +51,7 @@ AutoStudio/
 | 変数名 | 用途 |
 | --- | --- |
 | `THREADS_TOKEN` / `THREADS_ACCOUNT_ID` | Threads Graph API で投稿するための資格情報 |
+| `THREADS_POSTING_ENABLED` | `true` で実際に Threads 投稿を実行。既定は `false` (ドライラン) |
 | `CLAUDE_API_KEY` | Claude への投稿案生成リクエストに使用 |
 | `CLAUDE_MODEL` (任意) | Claude モデル指定。既定は `claude-3-5-sonnet-20240620` |
 | `BQ_PROJECT_ID` | BigQuery のプロジェクト ID (既定: `mark-454114`) |
