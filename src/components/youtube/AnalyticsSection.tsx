@@ -8,21 +8,12 @@ interface AnalyticsData {
     watchTime: number;
     subscribersGained: number;
     subscribersLost: number;
-    demographics: {
-      gender: Record<string, number>;
-      geography: Record<string, number>;
-    };
-    trafficSources: Record<string, number>;
-    revenue?: {
-      estimatedRevenue: number;
-      cpm: number;
-      rpm: number;
-    };
   };
-  trends: {
-    viewsGrowth: number;
-    subscriberNetGrowth: number;
-    avgWatchTime: number;
+  last7Days: {
+    views: number;
+    watchTime: number;
+    subscribersGained: number;
+    subscribersLost: number;
   };
 }
 
@@ -123,96 +114,75 @@ export function AnalyticsSection() {
     return null;
   }
 
-  const { last30Days, trends } = analyticsData;
+  const { last30Days, last7Days } = analyticsData;
 
   return (
     <section className="space-y-6">
       {/* Analytics概要 */}
       <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-        <h2 className="text-base font-semibold text-white mb-4">YouTube Analytics (直近30日)</h2>
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">総視聴回数</p>
-            <p className="mt-3 text-2xl font-semibold text-white">
-              {last30Days.views.toLocaleString()}
-            </p>
-          </div>
-          <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">総視聴時間</p>
-            <p className="mt-3 text-2xl font-semibold text-white">
-              {Math.round(last30Days.watchTime / 3600).toLocaleString()}h
-            </p>
-          </div>
-          <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">登録者増減</p>
-            <p className="mt-3 text-2xl font-semibold text-white">
-              +{(last30Days.subscribersGained - last30Days.subscribersLost).toLocaleString()}
-            </p>
-          </div>
-          <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">平均視聴時間</p>
-            <p className="mt-3 text-2xl font-semibold text-white">
-              {Math.round(trends.avgWatchTime)}秒
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 視聴者属性 */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-          <h3 className="text-base font-semibold text-white mb-4">視聴者属性</h3>
-          <div className="space-y-3">
-            {Object.entries(last30Days.demographics.gender).map(([gender, percentage]) => (
-              <div key={gender} className="flex justify-between items-center">
-                <span className="text-sm text-slate-300">{gender}</span>
-                <span className="text-sm font-medium text-white">{percentage.toFixed(1)}%</span>
+        <h2 className="text-base font-semibold text-white mb-4">YouTube Analytics</h2>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-medium text-slate-300 mb-3">直近30日</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">視聴回数</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {last30Days.views.toLocaleString()}
+                </p>
               </div>
-            ))}
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">視聴時間</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {Math.round(last30Days.watchTime / 60).toLocaleString()}分
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">登録者増</p>
+                <p className="mt-2 text-lg font-semibold text-green-400">
+                  +{last30Days.subscribersGained.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">登録者減</p>
+                <p className="mt-2 text-lg font-semibold text-red-400">
+                  -{last30Days.subscribersLost.toLocaleString()}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-          <h3 className="text-base font-semibold text-white mb-4">地域別視聴者</h3>
-          <div className="space-y-3">
-            {Object.entries(last30Days.demographics.geography)
-              .slice(0, 5)
-              .map(([country, views]) => (
-                <div key={country} className="flex justify-between items-center">
-                  <span className="text-sm text-slate-300">{country}</span>
-                  <span className="text-sm font-medium text-white">{views.toLocaleString()}</span>
-                </div>
-              ))}
+          <div>
+            <h3 className="text-sm font-medium text-slate-300 mb-3">直近7日</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">視聴回数</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {last7Days.views.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">視聴時間</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {Math.round(last7Days.watchTime / 60).toLocaleString()}分
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">登録者増</p>
+                <p className="mt-2 text-lg font-semibold text-green-400">
+                  +{last7Days.subscribersGained.toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">登録者減</p>
+                <p className="mt-2 text-lg font-semibold text-red-400">
+                  -{last7Days.subscribersLost.toLocaleString()}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* 収益情報（利用可能な場合） */}
-      {last30Days.revenue && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-          <h3 className="text-base font-semibold text-white mb-4">収益情報 (直近30日)</h3>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">推定収益</p>
-              <p className="mt-3 text-2xl font-semibold text-green-400">
-                ${last30Days.revenue.estimatedRevenue.toFixed(2)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">CPM</p>
-              <p className="mt-3 text-2xl font-semibold text-white">
-                ${last30Days.revenue.cpm.toFixed(2)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">RPM</p>
-              <p className="mt-3 text-2xl font-semibold text-white">
-                ${last30Days.revenue.rpm.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
