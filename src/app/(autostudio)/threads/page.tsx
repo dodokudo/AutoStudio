@@ -126,11 +126,12 @@ function toDisplayHighlight(
 export default async function ThreadsHome({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[]>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
-  const rangeParam = typeof searchParams?.range === "string" ? searchParams.range : undefined;
-  const startParam = typeof searchParams?.start === "string" ? searchParams.start : undefined;
-  const endParam = typeof searchParams?.end === "string" ? searchParams.end : undefined;
+  const resolvedSearchParams = await searchParams;
+  const rangeParam = typeof resolvedSearchParams?.range === "string" ? resolvedSearchParams.range : undefined;
+  const startParam = typeof resolvedSearchParams?.start === "string" ? resolvedSearchParams.start : undefined;
+  const endParam = typeof resolvedSearchParams?.end === "string" ? resolvedSearchParams.end : undefined;
   const isValidDateString = (value: string | undefined): value is string =>
     !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
