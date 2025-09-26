@@ -307,20 +307,49 @@ function buildPrompt(payload: ThreadsPromptPayload, index: number): string {
 }
 
 function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): ClaudePlanResponsePost {
+  console.log('[claude] Validating response structure:', {
+    type: typeof raw,
+    isNull: raw === null,
+    isArray: Array.isArray(raw),
+    keys: raw && typeof raw === 'object' ? Object.keys(raw) : []
+  });
+
   if (!raw || typeof raw !== 'object') {
+    console.error('[claude] Invalid response: not an object', raw);
     throw new Error('Claude response is not an object.');
   }
 
-  const record = (raw as { post?: unknown; posts?: unknown[] }).post
-    ?? (Array.isArray((raw as { posts?: unknown[] }).posts) ? (raw as { posts: unknown[] }).posts[0] : undefined);
+  const rawObj = raw as { post?: unknown; posts?: unknown[] };
+  const record = rawObj.post ?? (Array.isArray(rawObj.posts) ? rawObj.posts[0] : undefined);
+
+  console.log('[claude] Extracted record:', {
+    hasPost: !!rawObj.post,
+    hasPosts: !!rawObj.posts,
+    postsLength: Array.isArray(rawObj.posts) ? rawObj.posts.length : 'not array',
+    recordType: typeof record,
+    recordKeys: record && typeof record === 'object' ? Object.keys(record) : []
+  });
 
   if (!record || typeof record !== 'object') {
+    console.error('[claude] Missing post object in response', { raw, record });
     throw new Error('Claude response is missing `post` object.');
   }
 
   const post = record as Record<string, unknown>;
   const mainPost = sanitizeString(post.mainPost ?? post.main);
+
+  console.log('[claude] Post validation:', {
+    hasMainPost: !!post.mainPost,
+    hasMain: !!post.main,
+    mainPostLength: mainPost.length,
+    hasComments: Array.isArray(post.comments),
+    commentsLength: Array.isArray(post.comments) ? post.comments.length : 'not array',
+    planId: sanitizeString(post.planId),
+    theme: sanitizeString(post.theme)
+  });
+
   if (!mainPost) {
+    console.error('[claude] Missing mainPost content', post);
     throw new Error('Claude response is missing mainPost content.');
   }
 
@@ -335,7 +364,7 @@ function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): Cl
     return text;
   });
 
-  return {
+  const result = {
     planId: sanitizeString(post.planId),
     templateId: sanitizeString(post.templateId) || 'auto-generated',
     scheduledTime: sanitizeString(post.scheduledTime),
@@ -343,9 +372,20 @@ function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): Cl
     mainPost,
     comments,
   } satisfies ClaudePlanResponsePost;
+
+  console.log('[claude] Final validated result:', {
+    planId: result.planId,
+    templateId: result.templateId,
+    theme: result.theme,
+    mainPostLength: result.mainPost.length,
+    commentsCount: result.comments.length
+  });
+
+  return result;
 }
 
 async function requestClaude(prompt: string) {
+  console.log('[claude] Sending request to Claude API...');
   const response = await fetch(CLAUDE_API_URL, {
     method: 'POST',
     headers: {
@@ -370,23 +410,45 @@ async function requestClaude(prompt: string) {
 
   if (!response.ok) {
     const text = await response.text();
+    console.error('[claude] API error:', response.status, response.statusText, text);
     throw new Error(`Claude API error: ${response.status} ${response.statusText} ${text}`);
   }
 
   const data = await response.json();
+  console.log('[claude] Raw API response structure:', {
+    hasContent: !!data?.content,
+    contentLength: data?.content?.length,
+    firstContentType: data?.content?.[0]?.type
+  });
+
   const textContent = data?.content?.[0]?.text;
   if (!textContent || typeof textContent !== 'string') {
+    console.error('[claude] Unexpected response format:', data);
     throw new Error('Unexpected Claude response format');
   }
+
+  console.log('[claude] Raw text content length:', textContent.length);
+  console.log('[claude] Raw text content preview:', textContent.slice(0, 300));
 
   const cleanContent = textContent
     .replace(/```json\s*\n?/gi, '')
     .replace(/```\s*$/g, '')
     .trim();
 
+  console.log('[claude] Clean content length:', cleanContent.length);
+  console.log('[claude] Clean content preview:', cleanContent.slice(0, 300));
+
   try {
-    return JSON.parse(cleanContent) as unknown;
-  } catch {
+    const parsed = JSON.parse(cleanContent) as unknown;
+    console.log('[claude] Successfully parsed JSON:', {
+      type: typeof parsed,
+      hasPost: parsed && typeof parsed === 'object' && 'post' in parsed,
+      hasPosts: parsed && typeof parsed === 'object' && 'posts' in parsed,
+      keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : []
+    });
+    return parsed;
+  } catch (firstError) {
+    console.log('[claude] First JSON parse failed, attempting repair...');
     const sanitized = cleanContent
       // remove trailing commas before ] or }
       .replace(/,\s*([\]}])/g, '$1')
@@ -397,12 +459,26 @@ async function requestClaude(prompt: string) {
       .replace(/[\u2018\u2019]/g, '\'')
       // strip zero-width / non-breaking spaces
       .replace(/[\u00A0\u200B\u200C\u200D]/g, '');
+
+    console.log('[claude] Sanitized content length:', sanitized.length);
+    console.log('[claude] Sanitized content preview:', sanitized.slice(0, 300));
+
     try {
-      return JSON.parse(sanitized) as unknown;
+      const parsed = JSON.parse(sanitized) as unknown;
+      console.log('[claude] Successfully parsed sanitized JSON:', {
+        type: typeof parsed,
+        hasPost: parsed && typeof parsed === 'object' && 'post' in parsed,
+        hasPosts: parsed && typeof parsed === 'object' && 'posts' in parsed,
+        keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : []
+      });
+      return parsed;
     } catch (secondError) {
-      console.error('Raw Claude response:', textContent);
-      console.error('Cleaned content:', cleanContent);
-      console.error('Sanitized content:', sanitized);
+      console.error('[claude] Failed to parse JSON after all repairs');
+      console.error('[claude] Raw Claude response:', textContent);
+      console.error('[claude] Cleaned content:', cleanContent);
+      console.error('[claude] Sanitized content:', sanitized);
+      console.error('[claude] First error:', firstError);
+      console.error('[claude] Second error:', secondError);
       const preview = sanitized.slice(0, 200).replace(/\s+/g, ' ');
       throw new Error(`Failed to parse Claude JSON response after repair: ${(secondError as Error).message}. snippet=${preview}`);
     }

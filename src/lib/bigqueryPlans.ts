@@ -76,14 +76,30 @@ function normalizePlan(plan: Record<string, unknown>): ThreadPlan {
 
 export async function listPlans(): Promise<ThreadPlan[]> {
   await ensurePlanTable();
+  const today = new Date().toISOString().slice(0, 10);
   const sql = `
     SELECT *
     FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-    WHERE SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()
+    WHERE generation_date = CURRENT_DATE()
     ORDER BY scheduled_time
   `;
+
+  console.log('[listPlans] Querying with SQL:', sql);
+  console.log('[listPlans] Current date for comparison:', today);
+
   const rows = await query(sql);
-  return rows.map(normalizePlan);
+  console.log('[listPlans] Raw query result:', {
+    rowCount: rows.length,
+    sampleRow: rows[0] || null
+  });
+
+  const plans = rows.map(normalizePlan);
+  console.log('[listPlans] Normalized plans:', {
+    planCount: plans.length,
+    planIds: plans.map(p => p.plan_id)
+  });
+
+  return plans;
 }
 
 export interface GeneratedPlanInput {
@@ -97,16 +113,42 @@ export interface GeneratedPlanInput {
 }
 
 export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSchedule: string[]) {
+  console.log('[replaceTodayPlans] Starting with', {
+    plansCount: plans.length,
+    fallbackScheduleLength: fallbackSchedule.length
+  });
+
   await ensurePlanTable();
 
   if (!plans.length) {
+    console.log('[replaceTodayPlans] No plans provided, returning empty array');
     return [] as ThreadPlan[];
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  console.log('[replaceTodayPlans] Today date:', today);
 
   // 各プランをMERGE文でupsert
   for (const [index, plan] of plans.entries()) {
+    const params = {
+      planId: plan.planId,
+      generationDate: today,
+      scheduledTime: plan.scheduledTime ?? fallbackSchedule[index] ?? '07:00',
+      templateId: plan.templateId ?? 'auto-generated',
+      theme: plan.theme ?? '未分類',
+      status: plan.status ?? 'draft',
+      mainText: plan.mainText ?? '',
+      comments: JSON.stringify(plan.comments ?? []),
+    };
+
+    console.log(`[replaceTodayPlans] Upserting plan ${index + 1}/${plans.length}:`, {
+      planId: params.planId,
+      generationDate: params.generationDate,
+      scheduledTime: params.scheduledTime,
+      mainTextLength: params.mainText.length,
+      commentsLength: params.comments.length
+    });
+
     const sql = `
       MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
       USING (SELECT @planId AS plan_id, DATE(@generationDate) AS generation_date) S
@@ -125,33 +167,45 @@ export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSch
         VALUES (@planId, DATE(@generationDate), @scheduledTime, @templateId, @theme, @status, @mainText, @comments, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
     `;
 
-    await client.query({
-      query: sql,
-      params: {
-        planId: plan.planId,
-        generationDate: today,
-        scheduledTime: plan.scheduledTime ?? fallbackSchedule[index] ?? '07:00',
-        templateId: plan.templateId ?? 'auto-generated',
-        theme: plan.theme ?? '未分類',
-        status: plan.status ?? 'draft',
-        mainText: plan.mainText ?? '',
-        comments: JSON.stringify(plan.comments ?? []),
-      },
-    });
+    try {
+      const [job] = await client.query({ query: sql, params });
+      console.log(`[replaceTodayPlans] Plan ${index + 1} upsert result:`, {
+        jobId: (job as { id?: string }).id,
+        numRowsAffected: (job as { metadata?: { numDmlAffectedRows?: string } }).metadata?.numDmlAffectedRows || 'unknown'
+      });
+    } catch (error) {
+      console.error(`[replaceTodayPlans] Error upserting plan ${index + 1}:`, error);
+      throw error;
+    }
   }
 
-  return listPlans();
+  console.log('[replaceTodayPlans] All plans upserted, retrieving results...');
+  const result = await listPlans();
+  console.log('[replaceTodayPlans] Retrieved plans count:', result.length);
+  return result;
 }
 
 export async function seedPlansIfNeeded() {
+  console.log('[bigqueryPlans] Checking if seeding is needed...');
   const existing = await listPlans();
+  console.log('[bigqueryPlans] Existing plans count:', existing.length);
+
   if (existing.length > 0) {
+    console.log('[bigqueryPlans] Plans already exist, returning existing plans');
     return existing;
   }
 
+  console.log('[bigqueryPlans] No existing plans found, starting seeding process...');
   const insights = await getThreadsInsights(PROJECT_ID);
   const schedule = buildScheduleSlots(insights.meta.targetPostCount);
   const now = new Date().toISOString();
+
+  console.log('[bigqueryPlans] Seeding insights:', {
+    targetPostCount: insights.meta.targetPostCount,
+    curatedPostsCount: insights.curatedSelfPosts.length,
+    topPostsCount: insights.topSelfPosts.length,
+    enforcedTheme: insights.writingChecklist.enforcedTheme
+  });
 
   const sourcePosts = insights.curatedSelfPosts.length
     ? insights.curatedSelfPosts
@@ -183,6 +237,7 @@ export async function seedPlansIfNeeded() {
   }));
 
   if (rows.length === 0) {
+    console.log('[bigqueryPlans] No source posts available, creating fallback plans');
     const fallbackCount = Math.max(1, insights.meta.targetPostCount || 3);
     for (let index = 0; index < fallbackCount; index += 1) {
       rows.push({
@@ -200,7 +255,13 @@ export async function seedPlansIfNeeded() {
     }
   }
 
-  for (const row of rows) {
+  console.log('[bigqueryPlans] Inserting seed plans:', {
+    rowsCount: rows.length,
+    planIds: rows.map(r => r.plan_id)
+  });
+
+  for (const [index, row] of rows.entries()) {
+    console.log(`[bigqueryPlans] Inserting plan ${index + 1}/${rows.length}: ${row.plan_id}`);
     await client.query({
       query: `
         INSERT INTO \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
@@ -222,7 +283,11 @@ export async function seedPlansIfNeeded() {
       },
     });
   }
-  return listPlans();
+
+  console.log('[bigqueryPlans] Seeding completed, retrieving final plans...');
+  const finalPlans = await listPlans();
+  console.log('[bigqueryPlans] Final seeded plans count:', finalPlans.length);
+  return finalPlans;
 }
 
 export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
@@ -231,7 +296,7 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
     WITH plans AS (
       SELECT *
       FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-      WHERE SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()
+      WHERE generation_date = CURRENT_DATE()
     ),
     latest_jobs AS (
       SELECT
@@ -314,11 +379,11 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
     SET status = @status, updated_at = CURRENT_TIMESTAMP()
-    WHERE plan_id = @planId AND SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()
+    WHERE plan_id = @planId AND generation_date = CURRENT_DATE()
   `;
   await client.query({ query: sql, params: { planId, status } });
   const [plan] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
     { planId },
   );
   const normalized = plan ? normalizePlan(plan) : undefined;
@@ -338,7 +403,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
   const sql = `
     MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
     USING (SELECT @planId AS plan_id) S
-    ON T.plan_id = S.plan_id AND SAFE_CAST(T.generation_date AS DATE) = CURRENT_DATE()
+    ON T.plan_id = S.plan_id AND T.generation_date = CURRENT_DATE()
     WHEN MATCHED THEN
       UPDATE SET
         scheduled_time = COALESCE(@scheduledTime, T.scheduled_time),
@@ -367,7 +432,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
   });
 
   const [updated] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
     { planId: plan.plan_id },
   );
   return updated ? normalizePlan(updated) : undefined;
