@@ -1,5 +1,6 @@
 import { getYoutubeDashboardData } from '@/lib/youtube/dashboard';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
+import { AnalyticsSection } from '@/components/youtube/AnalyticsSection';
 
 function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
   return new Intl.NumberFormat('ja-JP', options).format(value);
@@ -173,6 +174,9 @@ export default async function YoutubeDashboardPage() {
             </tbody>
           </table>
         </section>
+
+        {/* YouTube Analytics セクション */}
+        <AnalyticsSection />
       </div>
     );
   } catch (error) {
