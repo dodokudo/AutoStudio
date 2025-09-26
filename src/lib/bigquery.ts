@@ -1,6 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 
-const DATASET_ID = 'autostudio_threads';
+const DEFAULT_DATASET_ID = 'autostudio_threads';
 const DEFAULT_PROJECT_ID = 'mark-454114';
 
 export function resolveProjectId(value?: string): string {
@@ -62,6 +62,7 @@ export function createBigQueryClient(projectId?: string, location?: string) {
   });
 }
 
-export function getDataset(client: BigQuery) {
-  return client.dataset(DATASET_ID);
+export function getDataset(client: BigQuery, datasetId?: string) {
+  const resolvedDataset = datasetId ?? process.env.BQ_DATASET_ID ?? DEFAULT_DATASET_ID;
+  return client.dataset(resolvedDataset);
 }

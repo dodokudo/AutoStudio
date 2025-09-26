@@ -15,11 +15,13 @@
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
-    "lstep:check": "tsx src/scripts/checkLstepSetup.ts"
+    "lstep:check": "tsx src/scripts/checkLstepSetup.ts",
+    "youtube:sync": "tsx src/scripts/runYoutubeSync.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
     "@google-cloud/storage": "^7.12.1",
+    "@notionhq/client": "^2.2.14",
     "csv-parse": "^5.5.6",
     "dotenv": "^17.2.2",
     "googleapis": "^144.0.0",

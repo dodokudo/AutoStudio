@@ -13,6 +13,8 @@ interface BuildPromptOptions {
   projectId: string;
   referenceDate?: string;
   rangeDays?: number;
+  startDate?: string;
+  endDate?: string;
 }
 
 const DATASET = 'autostudio_threads';
@@ -288,11 +290,38 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
   const projectId = resolveProjectId(options.projectId);
   const client = createBigQueryClient(projectId);
 
-  const rangeDays = Math.max(1, options.rangeDays ?? 7);
+  let rangeDays = Math.max(1, options.rangeDays ?? 7);
   const referenceDate = options.referenceDate ? new Date(`${options.referenceDate}T00:00:00Z`) : new Date();
-  const endDate = new Date(referenceDate);
-  const startDate = new Date(endDate);
-  startDate.setUTCDate(startDate.getUTCDate() - (rangeDays - 1));
+
+  let startDate = new Date(referenceDate);
+  let endDate = new Date(referenceDate);
+  let useCustomRange = false;
+
+  if (options.startDate && options.endDate) {
+    const parsedStart = new Date(`${options.startDate}T00:00:00Z`);
+    const parsedEnd = new Date(`${options.endDate}T00:00:00Z`);
+
+    if (!Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime())) {
+      if (parsedStart > parsedEnd) {
+        startDate = parsedEnd;
+        endDate = parsedStart;
+      } else {
+        startDate = parsedStart;
+        endDate = parsedEnd;
+      }
+
+      const diffMs = endDate.getTime() - startDate.getTime();
+      rangeDays = Math.max(1, Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1);
+      useCustomRange = true;
+    }
+  }
+
+  if (!useCustomRange) {
+    rangeDays = Math.max(1, options.rangeDays ?? 7);
+    endDate = new Date(referenceDate);
+    startDate = new Date(endDate);
+    startDate.setUTCDate(startDate.getUTCDate() - (rangeDays - 1));
+  }
 
   const startDateStr = startDate.toISOString().slice(0, 10);
   const endDateStr = endDate.toISOString().slice(0, 10);

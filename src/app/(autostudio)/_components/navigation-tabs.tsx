@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { id: "threads", href: "/threads", label: "Threads" },
   { id: "line", href: "/line", label: "LINE" },
-  { id: "youtube", href: "#", label: "YouTube" },
+  { id: "youtube", href: "/youtube", label: "YouTube" },
   { id: "instagram", href: "#", label: "Instagram" },
 ];
 

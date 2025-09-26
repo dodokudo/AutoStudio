@@ -1,7 +1,7 @@
 import { InsightsCard } from "./_components/insights-card";
 import { CompetitorHighlights } from "./_components/competitor-highlight";
 import { PostQueueContainer } from "./_components/post-queue-container";
-import { getThreadsInsights } from "@/lib/threadsInsights";
+import { getThreadsInsights, type ThreadsInsightsOptions } from "@/lib/threadsInsights";
 import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
 import { getThreadsDashboard } from "@/lib/threadsDashboard";
 import { resolveProjectId } from "@/lib/bigquery";
@@ -19,6 +19,12 @@ const INSIGHTS_RANGE_OPTIONS = [
   { label: "7日間", value: "7d", days: 7 },
   { label: "30日間", value: "30d", days: 30 },
 ] as const;
+const RANGE_SELECT_OPTIONS = [
+  { label: "3日間", value: "3d" },
+  { label: "7日間", value: "7d" },
+  { label: "30日間", value: "30d" },
+  { label: "カスタム", value: "custom" },
+];
 
 export const dynamic = 'force-dynamic';
 
@@ -123,12 +129,41 @@ export default async function ThreadsHome({
   searchParams?: Record<string, string | string[]>;
 }) {
   const rangeParam = typeof searchParams?.range === "string" ? searchParams.range : undefined;
-  const activeRange = INSIGHTS_RANGE_OPTIONS.find((option) => option.value === rangeParam) ?? INSIGHTS_RANGE_OPTIONS[1];
-  const rangeDays = activeRange.days;
+  const startParam = typeof searchParams?.start === "string" ? searchParams.start : undefined;
+  const endParam = typeof searchParams?.end === "string" ? searchParams.end : undefined;
+  const isValidDateString = (value: string | undefined): value is string =>
+    !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+  const defaultRange = INSIGHTS_RANGE_OPTIONS[1];
+  const selectedPreset = INSIGHTS_RANGE_OPTIONS.find((option) => option.value === rangeParam) ?? defaultRange;
+  let selectedRangeValue: string = selectedPreset.value;
+  let noteText = `レポート期間: ${selectedPreset.label}`;
+  let customStart: string | undefined = isValidDateString(startParam) ? startParam : undefined;
+  let customEnd: string | undefined = isValidDateString(endParam) ? endParam : undefined;
+
+  let insightsOptions: ThreadsInsightsOptions = { rangeDays: selectedPreset.days };
+
+  if (rangeParam === "custom" && customStart && customEnd) {
+    const parsedStart = new Date(`${customStart}T00:00:00Z`);
+    const parsedEnd = new Date(`${customEnd}T00:00:00Z`);
+    if (!Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime())) {
+      let normalizedStart = parsedStart;
+      let normalizedEnd = parsedEnd;
+      if (parsedStart > parsedEnd) {
+        normalizedStart = parsedEnd;
+        normalizedEnd = parsedStart;
+      }
+      customStart = normalizedStart.toISOString().slice(0, 10);
+      customEnd = normalizedEnd.toISOString().slice(0, 10);
+      insightsOptions = { startDate: customStart, endDate: customEnd };
+      selectedRangeValue = "custom";
+      noteText = `レポート期間: ${customStart} 〜 ${customEnd}`;
+    }
+  }
 
   try {
     const [insights, planSummaries, dashboard] = await Promise.all([
-      getThreadsInsights(PROJECT_ID, { rangeDays }),
+      getThreadsInsights(PROJECT_ID, insightsOptions),
       (async () => {
         await seedPlansIfNeeded();
         return listPlanSummaries();
@@ -218,7 +253,7 @@ export default async function ThreadsHome({
         ? insights.templateSummaries
         : FALLBACK_TEMPLATES;
 
-    const rangeSelectorOptions = INSIGHTS_RANGE_OPTIONS.map(({ label, value }) => ({ label, value }));
+    const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
 
     return (
       <div className="section-stack">
@@ -252,8 +287,15 @@ export default async function ThreadsHome({
         <InsightsCard
           title="アカウント概況"
           stats={stats}
-          note={`レポート期間: ${activeRange.label}`}
-          actions={<InsightsRangeSelector options={rangeSelectorOptions} value={activeRange.value} />}
+          note={noteText}
+          actions={
+            <InsightsRangeSelector
+              options={rangeSelectorOptions}
+              value={selectedRangeValue}
+              customStart={customStart}
+              customEnd={customEnd}
+            />
+          }
         />
 
         <div className="grid gap-10 lg:grid-cols-[1.85fr,1fr]">

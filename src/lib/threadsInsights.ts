@@ -18,6 +18,8 @@ export interface ThreadsInsightsData {
 export interface ThreadsInsightsOptions {
   rangeDays?: number;
   referenceDate?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export async function getThreadsInsights(
@@ -28,6 +30,8 @@ export async function getThreadsInsights(
     projectId,
     rangeDays: options.rangeDays,
     referenceDate: options.referenceDate,
+    startDate: options.startDate,
+    endDate: options.endDate,
   });
 
   return {
