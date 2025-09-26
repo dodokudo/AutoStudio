@@ -5,7 +5,7 @@ const CLIENT_ID = process.env.YOUTUBE_OAUTH_CLIENT_ID;
 const CLIENT_SECRET = process.env.YOUTUBE_OAUTH_CLIENT_SECRET;
 const REDIRECT_URI = process.env.YOUTUBE_OAUTH_REDIRECT_URI || `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/youtube/callback`;
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     if (!CLIENT_ID || !CLIENT_SECRET) {
       return NextResponse.json(
