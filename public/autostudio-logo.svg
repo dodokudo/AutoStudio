@@ -1,31 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+<svg width="800" height="800" viewBox="180 220 460 540" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="helmetGradient" x1="28" y1="18" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#5AD6FF" />
-      <stop offset="0.45" stop-color="#5B7CFF" />
-      <stop offset="1" stop-color="#7B5BFF" />
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5AD6FF"/>
+      <stop offset="0.5" stop-color="#5B7CFF"/>
+      <stop offset="1" stop-color="#7B5BFF"/>
     </linearGradient>
-    <linearGradient id="visorGradient" x1="48" y1="44" x2="92" y2="60" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#E5F6FF" stop-opacity="0.9" />
-      <stop offset="1" stop-color="#6FD4FF" stop-opacity="0.45" />
-    </linearGradient>
-    <linearGradient id="accentGradient" x1="36" y1="84" x2="88" y2="36" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2B2F55" stop-opacity="0.7" />
-      <stop offset="1" stop-color="#4C3BAF" stop-opacity="0.5" />
-    </linearGradient>
-    <filter id="helmetShadow" x="-40" y="-20" width="200" height="200" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#5B7CFF" flood-opacity="0.28" />
-    </filter>
   </defs>
 
-  <g filter="url(#helmetShadow)">
-    <path d="M64 20c-20.2 0-36.5 15.5-36.5 34.6v9.2c0 2.7 2.2 4.8 4.9 4.8l22.3-0.1c3 0 5.9 1.3 7.8 3.6 6.4 7.6 16.3 12.5 27.4 12.5h7.4c2.2 0 4-1.8 4-4v-11.5C101.3 41.4 85 20 64 20Z" fill="url(#helmetGradient)" />
-    <path d="M92 83H79.4c-9.3 0-18.1-3.7-24.4-10.2-2.6-2.7-6.1-4.2-9.8-4.2h-17c-3.2 0-5.8-2.5-5.8-5.7v-4.6c-0.1 0.9-0.2 1.8-0.2 2.7v11.2c0 20.5 17.6 37.1 39.3 37.1 16.3 0 30.3-9.3 36-22.9h-4.5Z" fill="url(#accentGradient)" opacity="0.55" />
-    <path d="M48.5 66h36.6c2 0 3.7-1.3 4.2-3.2l3.5-12.5c0.8-2.7-0.9-5.5-3.7-5.9-8.2-1.1-24.3-3-36.6-3-5.8 0-10.6 4.5-10.6 10v11.4c0 1.8 1.5 3.2 3.2 3.2Z" fill="url(#visorGradient)" />
-    <path d="M46 60.5c0-1.5 1.2-2.7 2.7-2.7h5.2c1.5 0 2.7 1.2 2.7 2.7s-1.2 2.7-2.7 2.7h-5.2c-1.5 0-2.7-1.2-2.7-2.7Z" fill="#2D3B6F" opacity="0.45" />
-    <path d="M66 33c7 0 13.6 2.2 19.1 6.3l8.4-1.1c-7.7-10-19.4-16.2-32.6-16.2-16 0-29.9 9.2-36.2 22.5 7-6.9 16.8-11.5 27.9-11.5Z" fill="#97E8FF" opacity="0.45" />
+  <g fill="url(#grad)">
+    <!-- ヘルメットと上半身 -->
+    <path d="M676 240a250 250 0 0 0-38-3c-129 0-234 105-234 234 0 23 3 45 9 66-36 2-70 13-98 33-43 31-69 79-71 132-1 31 9 61 29 86h314c13 0 24-10 25-23 3-63-17-122-57-168-37-43-90-75-156-92 52-42 99-111 149-201 27-49 65-85 128-64z"/>
+    <!-- 腕 -->
+    <path d="M205 652c0-45 36-81 81-81h145c45 0 81 36 81 81v22c0 45-36 81-81 81H286c-45 0-81-36-81-81v-22z"/>
+    <!-- 手 -->
+    <circle cx="289" cy="742" r="46"/>
+    <!-- バイザー -->
+    <path d="M537 456H356c-33 0-60 27-60 60v18c0 33 27 60 60 60h179c33 0 66-17 84-45l14-22c14-22-3-71-96-71z" fill="#F5FBFF"/>
+    <!-- スティック -->
+    <rect x="334" y="620" width="56" height="210" rx="22"/>
   </g>
 
-  <circle cx="88" cy="52" r="6" fill="#5EEAD4" opacity="0.8" />
-  <circle cx="36" cy="86" r="4" fill="#5B7CFF" opacity="0.65" />
+  <!-- センサー／目 -->
+  <circle cx="485" cy="528" r="16" fill="#10B981"/>
+
+  <!-- 顎下ハイライト -->
+  <path d="M460 620c40-8 79-5 116 3" fill="none" stroke="#F5FBFF" stroke-width="16" stroke-linecap="round"/>
 </svg>

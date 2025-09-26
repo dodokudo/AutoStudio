@@ -12,7 +12,6 @@ interface TemplateOption {
 
 interface PostQueueContainerProps {
   initialPlans: ThreadPlanSummary[];
-  trendingThemes?: string[];
   templateOptions?: TemplateOption[];
 }
 
@@ -59,7 +58,7 @@ function normalize(plan: ThreadPlanSummary) {
   };
 }
 
-export function PostQueueContainer({ initialPlans, trendingThemes = [], templateOptions = [] }: PostQueueContainerProps) {
+export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQueueContainerProps) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const { data, mutate, isValidating } = useSWR<PlansResponse>('/api/threads/plans', fetcher, {
     fallbackData: { items: initialPlans },
@@ -225,7 +224,6 @@ export function PostQueueContainer({ initialPlans, trendingThemes = [], template
             };
           });
         }}
-        trendingThemes={trendingThemes}
         templateOptions={templateOptions}
       />
     </div>

@@ -266,7 +266,6 @@ export default async function ThreadsHome() {
           <div className="section-stack">
             <PostQueueContainer
               initialPlans={JSON.parse(JSON.stringify(planSummaries))}
-              trendingThemes={insights.trendingTopics.map((topic) => topic.themeTag)}
               templateOptions={
                 insights.templateSummaries?.map((template) => ({
                   value: template.templateId,

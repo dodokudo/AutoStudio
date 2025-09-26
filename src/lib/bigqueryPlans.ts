@@ -79,7 +79,7 @@ export async function listPlans(): Promise<ThreadPlan[]> {
   const sql = `
     SELECT *
     FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-    WHERE generation_date = CURRENT_DATE()
+    WHERE SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()
     ORDER BY scheduled_time
   `;
   const rows = await query(sql);
@@ -99,31 +99,47 @@ export interface GeneratedPlanInput {
 export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSchedule: string[]) {
   await ensurePlanTable();
 
-  const dataset = client.dataset(DATASET);
-  await client.query({
-    query: `DELETE FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE generation_date = CURRENT_DATE()`,
-  });
-
   if (!plans.length) {
     return [] as ThreadPlan[];
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const now = new Date().toISOString();
-  const rows = plans.map((plan, index) => ({
-    plan_id: plan.planId,
-    generation_date: today,
-    scheduled_time: plan.scheduledTime ?? fallbackSchedule[index] ?? '07:00',
-    template_id: plan.templateId ?? 'auto-generated',
-    theme: plan.theme ?? '未分類',
-    status: plan.status ?? 'draft',
-    main_text: plan.mainText ?? '',
-    comments: JSON.stringify(plan.comments ?? []),
-    created_at: now,
-    updated_at: now,
-  }));
 
-  await dataset.table(PLAN_TABLE).insert(rows);
+  // 各プランをMERGE文でupsert
+  for (const [index, plan] of plans.entries()) {
+    const sql = `
+      MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
+      USING (SELECT @planId AS plan_id, DATE(@generationDate) AS generation_date) S
+      ON T.plan_id = S.plan_id AND T.generation_date = S.generation_date
+      WHEN MATCHED THEN
+        UPDATE SET
+          scheduled_time = @scheduledTime,
+          template_id = @templateId,
+          theme = @theme,
+          status = @status,
+          main_text = @mainText,
+          comments = @comments,
+          updated_at = CURRENT_TIMESTAMP()
+      WHEN NOT MATCHED THEN
+        INSERT (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, created_at, updated_at)
+        VALUES (@planId, DATE(@generationDate), @scheduledTime, @templateId, @theme, @status, @mainText, @comments, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+    `;
+
+    await client.query({
+      query: sql,
+      params: {
+        planId: plan.planId,
+        generationDate: today,
+        scheduledTime: plan.scheduledTime ?? fallbackSchedule[index] ?? '07:00',
+        templateId: plan.templateId ?? 'auto-generated',
+        theme: plan.theme ?? '未分類',
+        status: plan.status ?? 'draft',
+        mainText: plan.mainText ?? '',
+        comments: JSON.stringify(plan.comments ?? []),
+      },
+    });
+  }
+
   return listPlans();
 }
 
@@ -150,8 +166,28 @@ export async function seedPlansIfNeeded() {
     updated_at: now,
   }));
 
-  const dataset = client.dataset(DATASET);
-  await dataset.table(PLAN_TABLE).insert(rows);
+  for (const row of rows) {
+    await client.query({
+      query: `
+        INSERT INTO \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+          (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, created_at, updated_at)
+        VALUES
+          (@planId, DATE(@generationDate), @scheduledTime, @templateId, @theme, @status, @mainText, @comments, @createdAt, @updatedAt)
+      `,
+      params: {
+        planId: row.plan_id,
+        generationDate: row.generation_date,
+        scheduledTime: row.scheduled_time,
+        templateId: row.template_id,
+        theme: row.theme,
+        status: row.status,
+        mainText: row.main_text,
+        comments: row.comments,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      },
+    });
+  }
   return listPlans();
 }
 
@@ -161,7 +197,7 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
     WITH plans AS (
       SELECT *
       FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
-      WHERE generation_date = CURRENT_DATE()
+      WHERE SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()
     ),
     latest_jobs AS (
       SELECT
@@ -244,11 +280,11 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
     SET status = @status, updated_at = CURRENT_TIMESTAMP()
-    WHERE plan_id = @planId AND generation_date = CURRENT_DATE()
+    WHERE plan_id = @planId AND SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()
   `;
   await client.query({ query: sql, params: { planId, status } });
   const [plan] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()`,
     { planId },
   );
   const normalized = plan ? normalizePlan(plan) : undefined;
@@ -297,7 +333,7 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
   });
 
   const [updated] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE()`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND SAFE_CAST(generation_date AS DATE) = CURRENT_DATE()`,
     { planId: plan.plan_id },
   );
   return updated ? normalizePlan(updated) : undefined;

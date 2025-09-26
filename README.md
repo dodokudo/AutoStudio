@@ -53,7 +53,7 @@ AutoStudio/
 | `THREADS_TOKEN` / `THREADS_ACCOUNT_ID` | Threads Graph API で投稿するための資格情報 |
 | `THREADS_POSTING_ENABLED` | `false` でドライラン、`true` で実投稿を許可 |
 | `CLAUDE_API_KEY` | Claude への投稿案生成リクエストに使用 |
-| `CLAUDE_MODEL` (任意) | Claude モデル指定。既定は `claude-3-5-sonnet-20240620` |
+| `CLAUDE_MODEL` (任意) | Claude モデル指定。既定は `claude-sonnet-4-20250514` |
 | `BQ_PROJECT_ID` | BigQuery のプロジェクト ID (既定: `mark-454114`) |
 | `ALERT_EMAIL_ENABLED` | `true` で失敗時メール通知を送信 |
 | `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` | 通知メールの宛先／送信元 |

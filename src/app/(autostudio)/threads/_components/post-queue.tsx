@@ -52,7 +52,6 @@ interface PostQueueProps {
     }
   >;
   pendingId?: string | null;
-  trendingThemes?: string[];
   templateOptions?: TemplateOption[];
 }
 
@@ -89,7 +88,6 @@ export function PostQueue({
   onRerun,
   editableValues = {},
   pendingId,
-  trendingThemes = [],
   templateOptions = [],
 }: PostQueueProps) {
   const summary = items.reduce(
@@ -195,24 +193,7 @@ export function PostQueue({
                     onChange={(event) => onDraftChange?.(item.id, { mainText: event.target.value })}
                   />
 
-                  {trendingThemes.length ? (
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      {trendingThemes.map((theme) => (
-                        <button
-                          key={`${item.id}-theme-${theme}`}
-                          type="button"
-                          className="rounded-full border border-indigo-200/70 bg-indigo-50 px-3 py-1 font-medium text-indigo-600 transition hover:bg-indigo-100"
-                          onClick={() =>
-                            onDraftChange?.(item.id, {
-                              theme,
-                            })
-                          }
-                        >
-                          #{theme}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+                  {/* trending theme shortcuts removed */}
 
                   <div className="mt-5 space-y-3 text-sm text-slate-600 dark:text-slate-200">
                     {(draft.comments ?? []).map((comment) => (

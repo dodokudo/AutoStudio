@@ -2,7 +2,7 @@ import { ThreadsPromptPayload } from '@/types/prompt';
 
 const CLAUDE_API_URL = process.env.CLAUDE_API_URL ?? 'https://api.anthropic.com/v1/messages';
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-20240620';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-20250514';
 
 interface ClaudePlanResponse {
   posts: Array<{
@@ -24,7 +24,9 @@ function buildPrompt(payload: ThreadsPromptPayload): string {
     .map((highlight, index) => `${index + 1}. ${highlight.accountName}: ${highlight.contentSnippet}`)
     .join('\n');
 
-  return `あなたはSNSマーケティングプランナーです。以下のインサイトを元にThreads投稿案を作成してください。出力はJSONのみで返してください。
+  return `あなたはSNSマーケティングプランナーです。以下のインサイトを元にThreads投稿案を作成してください。
+
+重要: マークダウンのコードブロック（\`\`\`json）は使わず、純粋なJSONのみで返してください。説明文は不要です。
 
 [アカウントサマリ]\n${summary}
 
@@ -36,13 +38,16 @@ function buildPrompt(payload: ThreadsPromptPayload): string {
 { "posts": [ { "planId": "plan-01", "templateId": "hook_negate_v3", "theme": "AI効率化", "scheduledTime": "07:00", "main": "本文", "comments": ["コメント1", "コメント2"] } ] }
 
 条件:
-- posts は ${payload.meta.targetPostCount} 件。
-- main は日本語200〜400字程度で具体的なHowToとCTAを入れる。
+- posts は必ず ${payload.meta.targetPostCount} 件。これより多くても少なくてもダメです。
+- main は日本語150〜300字程度で具体的なHowToとCTAを入れる。
 - comments は最大2件。詳細やCTA誘導を入れる。
 - theme はプレーンテキスト。
 - scheduledTime はHH:mm。指定が難しければ空文字でよい。
 - templateId は既存テンプレート名（推測可）。不明な場合は "auto-generated"。
-`;
+
+IMPORTANT: 絶対に ${payload.meta.targetPostCount} 件以外の投稿数は作らないこと。
+
+返答は { "posts": [...] } のJSONのみにしてください。`;
 }
 
 export async function generateClaudePlans(payload: ThreadsPromptPayload): Promise<ClaudePlanResponse> {
@@ -61,9 +66,9 @@ export async function generateClaudePlans(payload: ThreadsPromptPayload): Promis
     },
     body: JSON.stringify({
       model: CLAUDE_MODEL,
-      max_tokens: 2000,
+      max_tokens: 4000,
       temperature: 0.7,
-      system: 'You are an expert Japanese social media planner who outputs strict JSON.',
+      system: 'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations.',
       messages: [
         {
           role: 'user',
@@ -84,9 +89,24 @@ export async function generateClaudePlans(payload: ThreadsPromptPayload): Promis
     throw new Error('Unexpected Claude response format');
   }
 
+  // Remove markdown code blocks if present
+  const cleanContent = textContent
+    .replace(/```json\s*\n?/g, '')
+    .replace(/```\s*$/g, '')
+    .trim();
+
   try {
-    return JSON.parse(textContent) as ClaudePlanResponse;
+    return JSON.parse(cleanContent) as ClaudePlanResponse;
   } catch (error) {
+    console.error('Raw Claude response:', textContent);
+    console.error('Cleaned content:', cleanContent);
+    console.error('Content length:', cleanContent.length);
+
+    // Check if response was truncated
+    if (!cleanContent.trim().endsWith('}')) {
+      throw new Error(`Claude response appears to be truncated. Response ended with: "${cleanContent.slice(-100)}"`);
+    }
+
     throw new Error(`Failed to parse Claude JSON response: ${(error as Error).message}`);
   }
 }

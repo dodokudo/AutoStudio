@@ -256,7 +256,7 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
       fetchTemplateSummaries(client, projectId),
     ]);
 
-  const targetCount = 10;
+  const targetCount = 4;
   const generationId = options.referenceDate ?? new Date().toISOString().slice(0, 10);
 
   return {
