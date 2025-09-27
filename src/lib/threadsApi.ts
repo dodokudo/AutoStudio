@@ -94,3 +94,53 @@ export async function postThread(text: string, replyToId?: string) {
   const threadId = await publishContainer(containerId);
   return threadId;
 }
+
+export interface ThreadInsights {
+  impressions?: number;
+  likes?: number;
+  replies?: number;
+  reposts?: number;
+  quotes?: number;
+}
+
+export async function getThreadInsights(threadId: string): Promise<ThreadInsights> {
+  if (!THREADS_TOKEN || !THREADS_BUSINESS_ID) {
+    throw new Error('Threads API credentials are not configured');
+  }
+
+  try {
+    const response = await request(
+      `https://graph.threads.net/v1.0/${threadId}/insights?metric=views,likes,replies,reposts,quotes&access_token=${THREADS_TOKEN}`
+    );
+
+    // Threads APIのレスポンス形式に合わせて解析
+    const insights: ThreadInsights = {};
+    if (response.data && Array.isArray(response.data)) {
+      for (const metric of response.data) {
+        switch (metric.name) {
+          case 'views':
+            insights.impressions = metric.values?.[0]?.value || 0;
+            break;
+          case 'likes':
+            insights.likes = metric.values?.[0]?.value || 0;
+            break;
+          case 'replies':
+            insights.replies = metric.values?.[0]?.value || 0;
+            break;
+          case 'reposts':
+            insights.reposts = metric.values?.[0]?.value || 0;
+            break;
+          case 'quotes':
+            insights.quotes = metric.values?.[0]?.value || 0;
+            break;
+        }
+      }
+    }
+
+    return insights;
+  } catch (error) {
+    console.warn(`[threadsApi] Failed to get insights for thread ${threadId}:`, error);
+    // インサイト取得に失敗してもエラーにしない（投稿が新しすぎる等の理由）
+    return {};
+  }
+}

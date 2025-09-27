@@ -497,11 +497,22 @@ async function generateSingleClaudePost(payload: ThreadsPromptPayload, index: nu
   return validateSingleResponse(payload, parsed);
 }
 
-export async function generateClaudePlans(payload: ThreadsPromptPayload): Promise<ClaudePlanResponse> {
+interface GenerateClaudePlansOptions {
+  onProgress?: (payload: { current: number; total: number }) => void | Promise<void>;
+}
+
+export async function generateClaudePlans(
+  payload: ThreadsPromptPayload,
+  options: GenerateClaudePlansOptions = {},
+): Promise<ClaudePlanResponse> {
   const posts: ClaudePlanResponsePost[] = [];
-  for (let index = 0; index < payload.meta.targetPostCount; index += 1) {
+  const total = Math.max(1, payload.meta.targetPostCount);
+  for (let index = 0; index < total; index += 1) {
     const post = await generateSingleClaudePost(payload, index);
     posts.push(post);
+    if (options.onProgress) {
+      await options.onProgress({ current: index + 1, total });
+    }
   }
   return { posts };
 }

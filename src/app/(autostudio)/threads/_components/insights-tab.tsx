@@ -66,14 +66,22 @@ export function InsightsTab({ insights }: InsightsTabProps) {
                 </p>
               </div>
 
-              {/* Future: Add metrics here */}
+              {/* Metrics */}
               <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
                 <div className="text-center">
-                  <p className="font-medium">-</p>
+                  <p className="font-medium text-lg">
+                    {post.insights.impressions !== undefined
+                      ? post.insights.impressions.toLocaleString()
+                      : '-'}
+                  </p>
                   <p className="text-xs">インプレッション</p>
                 </div>
                 <div className="text-center">
-                  <p className="font-medium">-</p>
+                  <p className="font-medium text-lg">
+                    {post.insights.likes !== undefined
+                      ? post.insights.likes.toLocaleString()
+                      : '-'}
+                  </p>
                   <p className="text-xs">いいね</p>
                 </div>
                 <button
@@ -94,8 +102,10 @@ export function InsightsTab({ insights }: InsightsTabProps) {
                     <h4 className="text-sm font-medium text-slate-900 dark:text-white">
                       メイン投稿
                     </h4>
-                    <div className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      {post.mainText}
+                    <div className="mt-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+                      <div className="whitespace-pre-wrap leading-relaxed">
+                        {post.mainText}
+                      </div>
                     </div>
                   </div>
 
@@ -109,12 +119,14 @@ export function InsightsTab({ insights }: InsightsTabProps) {
                         {post.comments.map((comment, index) => (
                           <div
                             key={index}
-                            className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
+                            className="rounded-lg bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
                           >
-                            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-2">
                               <span>コメント {index + 1}</span>
                             </div>
-                            <div className="mt-1">{comment}</div>
+                            <div className="whitespace-pre-wrap leading-relaxed">
+                              {typeof comment === 'string' ? comment : comment.text || ''}
+                            </div>
                           </div>
                         ))}
                       </div>
