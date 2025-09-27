@@ -13,9 +13,9 @@ export async function POST() {
 
     // 実行予定時刻を過ぎた未実行のコメントを取得
     const getPendingCommentsQuery = `
-      SELECT schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time
+      SELECT schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status
       FROM \`${PROJECT_ID}.${DATASET}.comment_schedules\`
-      WHERE status = 'pending'
+      WHERE (status = 'pending' OR (status = 'failed' AND TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), scheduled_time, MINUTE) >= 1))
         AND scheduled_time <= CURRENT_TIMESTAMP()
       ORDER BY scheduled_time ASC
       LIMIT 10
@@ -50,6 +50,9 @@ export async function POST() {
         }
 
         console.log(`[threads/comments/execute] Posting comment ${comment.comment_order} (replyTo: ${replyToId})...`);
+
+        // Threads APIの安定性のため、短い待機時間を追加
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         const commentThreadId = await postThread(comment.comment_text, replyToId);
 
