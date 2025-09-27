@@ -489,8 +489,11 @@ async function requestClaude(prompt: string) {
 
 async function generateSingleClaudePost(payload: ThreadsPromptPayload, index: number): Promise<ClaudePlanResponsePost> {
   if (!CLAUDE_API_KEY) {
+    console.error('[claude] CLAUDE_API_KEY is not configured. Available env vars:', Object.keys(process.env).filter(k => k.includes('CLAUDE')));
     throw new Error('CLAUDE_API_KEY is not configured');
   }
+
+  console.log('[claude] CLAUDE_API_KEY found, length:', CLAUDE_API_KEY.length);
 
   const prompt = buildPrompt(payload, index);
   const parsed = await requestClaude(prompt);
