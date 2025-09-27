@@ -1,5 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
+import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
 import type {
   PromptAccountSummary,
   PromptSelfPost,
@@ -75,7 +76,7 @@ async function fetchAccountSummary(
     ),
     stats AS (
       SELECT
-        AVG(followers_snapshot) AS avg_followers,
+        MAX(followers_snapshot) AS avg_followers,
         AVG(profile_views) AS avg_profile_views,
         MAX(IF(date = (SELECT MAX(date) FROM recent), followers_snapshot, NULL)) AS latest_followers,
         MAX(IF(date = (SELECT MIN(date) FROM recent), followers_snapshot, NULL)) AS earliest_followers,
@@ -171,20 +172,26 @@ function splitContentIntoMainAndComments(content: string): { mainPost: string; c
     .filter(Boolean);
 
   if (segments.length === 0) {
-    return { mainPost: content.trim(), comments: [] };
+    return { mainPost: sanitizeThreadsMainPost(content.trim()), comments: [] };
   }
 
-  const mainPost = segments[0];
+  const mainPostRaw = segments[0] ?? '';
   const commentCandidates = segments.slice(1);
   const comments: string[] = [];
 
   for (const candidate of commentCandidates) {
     if (!candidate) continue;
     if (comments.length >= 2) break;
-    comments.push(candidate);
+    const sanitizedComment = sanitizeThreadsComment(candidate);
+    if (sanitizedComment) {
+      comments.push(sanitizedComment);
+    }
   }
 
-  return { mainPost, comments };
+  return {
+    mainPost: sanitizeThreadsMainPost(mainPostRaw),
+    comments,
+  };
 }
 
 function isAiFocused(text: string): boolean {
@@ -438,7 +445,7 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
       fetchPostCount(client, projectId, startDateStr, endDateStr),
     ]);
 
-  const targetCount = 4;
+  const targetCount = 10;
   const generationId = options.referenceDate ?? new Date().toISOString().slice(0, 10);
 
   const curatedSelfPosts = curateSelfPosts(topSelfPosts);

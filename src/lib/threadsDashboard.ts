@@ -27,11 +27,8 @@ export async function getThreadsDashboard(): Promise<ThreadsDashboardData> {
   const [countsRows] = await client.query({
     query: `
       SELECT
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-        SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
-        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
-        SUM(CASE WHEN status = 'succeeded' AND DATE(updated_at) = CURRENT_DATE() THEN 1 ELSE 0 END) AS succeeded_today
-      FROM \`${PROJECT_ID}.${DATASET}.thread_post_jobs\`
+        SUM(CASE WHEN status = 'success' AND DATE(posted_at) = CURRENT_DATE() THEN 1 ELSE 0 END) AS succeeded_today
+      FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\`
     `,
   });
 
@@ -54,9 +51,9 @@ export async function getThreadsDashboard(): Promise<ThreadsDashboardData> {
 
   return {
     jobCounts: {
-      pending: Number(jobCountsRow.pending ?? 0),
-      processing: Number(jobCountsRow.processing ?? 0),
-      failed: Number(jobCountsRow.failed ?? 0),
+      pending: 0, // TODO: 将来的にジョブテーブルが必要になったら再実装
+      processing: 0,
+      failed: 0,
       succeededToday: Number(jobCountsRow.succeeded_today ?? 0),
     },
     recentLogs: logsRows.map((row) => ({

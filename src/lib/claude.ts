@@ -1,4 +1,5 @@
 import { ThreadsPromptPayload } from '@/types/prompt';
+import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
 
 const CLAUDE_API_URL = process.env.CLAUDE_API_URL ?? 'https://api.anthropic.com/v1/messages';
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
@@ -336,7 +337,8 @@ function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): Cl
   }
 
   const post = record as Record<string, unknown>;
-  const mainPost = sanitizeString(post.mainPost ?? post.main);
+  const mainPostRaw = sanitizeString(post.mainPost ?? post.main);
+  const mainPost = sanitizeThreadsMainPost(mainPostRaw);
 
   console.log('[claude] Post validation:', {
     hasMainPost: !!post.mainPost,
@@ -355,7 +357,7 @@ function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): Cl
 
   const commentsRaw = Array.isArray(post.comments) ? post.comments : [];
   const comments = commentsRaw.slice(0, 2).map((value, index) => {
-    const text = sanitizeString(value);
+    const text = sanitizeThreadsComment(sanitizeString(value));
     if (!text) {
       return index === 0
         ? '※コメント欄1に入れる補足・体験談をここに記述してください。'

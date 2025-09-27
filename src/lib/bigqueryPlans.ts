@@ -1,6 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
 import { buildScheduleSlots } from './promptBuilder';
+import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
 import { getThreadsInsights } from './threadsInsights';
 import { createJobForPlan, findJobByPlan } from './bigqueryJobs';
 import type { PlanStatus, ThreadPlan, ThreadPlanSummary } from '@/types/threadPlan';
@@ -211,6 +212,7 @@ export async function seedPlansIfNeeded() {
   const insights = await getThreadsInsights(PROJECT_ID);
   const schedule = buildScheduleSlots(insights.meta.targetPostCount);
   const now = new Date().toISOString();
+  const generationDate = now.slice(0, 10);
 
   console.log('[bigqueryPlans] Seeding insights:', {
     targetPostCount: insights.meta.targetPostCount,
@@ -230,36 +232,48 @@ export async function seedPlansIfNeeded() {
         permalink: post.permalink,
       }));
 
-  const rows = sourcePosts.slice(0, insights.meta.targetPostCount).map((post, index) => ({
-    plan_id: post.postId || `seed-${index + 1}`,
-    generation_date: new Date().toISOString().slice(0, 10),
-    scheduled_time: schedule[index] ?? '07:00',
-    template_id: 'auto-generated',
-    theme: insights.writingChecklist.enforcedTheme,
-    status: (index === 0 ? 'draft' : index === 1 ? 'approved' : 'scheduled') as PlanStatus,
-    main_text: (post as { mainPost?: string }).mainPost?.slice(0, 280) ?? (post as { main_text?: string }).main_text ?? '',
-    comments: JSON.stringify(
-      ('comments' in post && Array.isArray(post.comments)
+  const targetCount = Math.max(1, insights.meta.targetPostCount || 1);
+  const rows = sourcePosts.slice(0, targetCount).map((post, index) => {
+    const rawMain = (post as { mainPost?: string }).mainPost ?? (post as { main_text?: string }).main_text ?? '';
+    const mainText = sanitizeThreadsMainPost(rawMain).slice(0, 280);
+    const commentValues =
+      'comments' in post && Array.isArray(post.comments)
         ? post.comments
-        : []
-      ).map((text, commentIndex) => ({ order: commentIndex + 1, text })),
-    ),
-    created_at: now,
-    updated_at: now,
-  }));
+        : [];
+    const comments = commentValues.map((text, commentIndex) => ({
+      order: commentIndex + 1,
+      text: sanitizeThreadsComment(String(text ?? '')).slice(0, 500),
+    }));
 
-  if (rows.length === 0) {
-    console.log('[bigqueryPlans] No source posts available, creating fallback plans');
-    const fallbackCount = Math.max(1, insights.meta.targetPostCount || 3);
-    for (let index = 0; index < fallbackCount; index += 1) {
+    return {
+      plan_id: post.postId || `seed-${index + 1}`,
+      generation_date: generationDate,
+      scheduled_time: schedule[index] ?? '07:00',
+      template_id: 'auto-generated',
+      theme: insights.writingChecklist.enforcedTheme,
+      status: (index === 0 ? 'draft' : index === 1 ? 'approved' : 'scheduled') as PlanStatus,
+      main_text: mainText,
+      comments: JSON.stringify(comments),
+      created_at: now,
+      updated_at: now,
+    };
+  });
+
+  if (rows.length < targetCount) {
+    console.log('[bigqueryPlans] Filling missing seed plans to reach target count', {
+      existingRows: rows.length,
+      targetCount,
+    });
+    const fallbackMessage = 'AI活用の投稿案を準備中です。再作成ボタンで最新データを取得してください。';
+    for (let index = rows.length; index < targetCount; index += 1) {
       rows.push({
         plan_id: `seed-fallback-${index + 1}`,
-        generation_date: new Date().toISOString().slice(0, 10),
+        generation_date: generationDate,
         scheduled_time: schedule[index] ?? '07:00',
         template_id: 'auto-generated',
         theme: insights.writingChecklist.enforcedTheme,
         status: 'draft' as PlanStatus,
-        main_text: 'AI活用の投稿案を準備中です。再作成ボタンで最新データを取得してください。',
+        main_text: fallbackMessage,
         comments: JSON.stringify([]),
         created_at: now,
         updated_at: now,
