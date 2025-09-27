@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { postThread } from '@/lib/threadsApi';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     console.log('[threads/comments/execute] Starting scheduled comment execution...');
 
@@ -37,7 +37,6 @@ export async function POST(request: NextRequest) {
     console.log(`[threads/comments/execute] Found ${pendingComments.length} pending comments`);
 
     let executedCount = 0;
-    let lastThreadId = '';
 
     for (const comment of pendingComments) {
       try {
@@ -72,7 +71,6 @@ export async function POST(request: NextRequest) {
         });
 
         executedCount++;
-        lastThreadId = commentThreadId;
 
         // コメント間に1秒待機
         if (executedCount < pendingComments.length) {

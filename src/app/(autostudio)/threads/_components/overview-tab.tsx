@@ -6,6 +6,8 @@ import { DashboardCards } from "./dashboard-cards";
 import { RegenerateButton } from "./regenerate-button";
 import { InsightsRangeSelector } from "./insights-range-selector";
 import { TrendingTopics } from "./trending-topics";
+import type { ThreadPlanSummary } from "@/types/threadPlan";
+import type { ThreadsDashboardData } from "@/lib/threadsDashboard";
 
 interface OverviewTabProps {
   heroStats: Array<{
@@ -28,18 +30,34 @@ interface OverviewTabProps {
   selectedRangeValue: string;
   customStart?: string;
   customEnd?: string;
-  planSummaries: any[];
+  planSummaries: ThreadPlanSummary[];
   templateOptions: Array<{
     value: string;
     label: string;
   }>;
-  trendingTopics: any[];
-  competitorHighlights: any[];
-  templateSummaries: any[];
-  dashboard: {
-    jobCounts: any;
-    recentLogs: any[];
-  };
+  trendingTopics: Array<{
+    themeTag: string;
+    avgFollowersDelta: number;
+    avgViews: number;
+    sampleAccounts: string[];
+  }>;
+  competitorHighlights: Array<{
+    accountName: string;
+    username?: string;
+    impressions?: string;
+    likes?: string;
+    summary: string;
+    categories: string[];
+  }>;
+  templateSummaries: Array<{
+    templateId: string;
+    version: number;
+    status: string;
+    impressionAvg72h: number;
+    likeAvg72h: number;
+    structureNotes: string;
+  }>;
+  dashboard: ThreadsDashboardData;
   queueMetrics: {
     draft: number;
     approved: number;
