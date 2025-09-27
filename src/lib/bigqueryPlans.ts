@@ -465,6 +465,16 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string; 
       mainText: plan.main_text || null,
       comments: plan.comments || null,
     },
+    types: {
+      planId: 'STRING',
+      generationDate: 'STRING',
+      scheduledTime: 'STRING',
+      templateId: 'STRING',
+      theme: 'STRING',
+      status: 'STRING',
+      mainText: 'STRING',
+      comments: 'STRING',
+    },
   });
 
   const [updated] = await query(
