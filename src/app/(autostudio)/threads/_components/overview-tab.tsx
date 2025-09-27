@@ -8,6 +8,7 @@ import { InsightsRangeSelector } from "./insights-range-selector";
 import { TrendingTopics } from "./trending-topics";
 import type { ThreadPlanSummary } from "@/types/threadPlan";
 import type { ThreadsDashboardData } from "@/lib/threadsDashboard";
+import type { PromptTemplateSummary } from "@/types/prompt";
 
 interface OverviewTabProps {
   heroStats: Array<{
@@ -49,14 +50,7 @@ interface OverviewTabProps {
     summary: string;
     categories: string[];
   }>;
-  templateSummaries: Array<{
-    templateId: string;
-    version: number;
-    status: string;
-    impressionAvg72h: number;
-    likeAvg72h: number;
-    structureNotes: string;
-  }>;
+  templateSummaries: PromptTemplateSummary[];
   dashboard: ThreadsDashboardData;
   queueMetrics: {
     draft: number;
