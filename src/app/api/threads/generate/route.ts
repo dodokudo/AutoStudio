@@ -90,6 +90,7 @@ export async function POST() {
         const persisted = await replaceTodayPlans(generatedPlans, fallbackSchedule);
         summaries = persisted.map((plan) => ({
           plan_id: plan.plan_id,
+          generation_date: plan.generation_date,
           scheduled_time: plan.scheduled_time,
           status: plan.status,
           template_id: plan.template_id,
@@ -114,8 +115,15 @@ export async function POST() {
       }
 
       if (!summaries.length) {
+        const todayJst = new Date().toLocaleDateString('ja-JP', {
+          timeZone: 'Asia/Tokyo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).replace(/\//g, '-');
         const fallbackSummaries = generatedPlans.map((plan, index) => ({
           plan_id: plan.planId,
+          generation_date: todayJst,
           scheduled_time: plan.scheduledTime ?? fallbackSchedule[index] ?? '07:00',
           status: plan.status ?? 'draft',
           template_id: plan.templateId,

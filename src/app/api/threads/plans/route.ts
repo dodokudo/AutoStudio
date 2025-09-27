@@ -35,7 +35,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const payload = await request.json();
-    const { planId, scheduledTime, mainText, templateId, theme, status, comments } = payload ?? {};
+    const { planId, scheduledTime, mainText, templateId, theme, status, comments, generationDate } = payload ?? {};
     if (!planId) {
       return NextResponse.json({ error: 'planId is required' }, { status: 400 });
     }
@@ -48,6 +48,7 @@ export async function PUT(request: NextRequest) {
 
     const updated = await upsertPlan({
       plan_id: planId,
+      generation_date: typeof generationDate === 'string' ? generationDate : undefined,
       scheduled_time: typeof scheduledTime === 'string' ? scheduledTime : undefined,
       main_text: typeof mainText === 'string' ? mainText : undefined,
       template_id: typeof templateId === 'string' ? templateId : undefined,

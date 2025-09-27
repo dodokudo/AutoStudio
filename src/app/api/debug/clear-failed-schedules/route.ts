@@ -19,7 +19,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       message: 'Failed schedules cleared',
-      deletedRows: result.totalBytesProcessed || 'unknown'
+      deletedRows: Array.isArray(result) ? result.length : 'unknown'
     });
   } catch (error) {
     console.error('[debug/clear-failed-schedules] Error:', error);

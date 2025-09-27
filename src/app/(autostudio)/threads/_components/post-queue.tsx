@@ -4,6 +4,7 @@ import type { PlanStatus } from '@/types/threadPlan';
 
 interface QueueItem {
   id: string;
+  generationDate: string;
   scheduledTime: string;
   templateId: string;
   theme: string;

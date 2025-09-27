@@ -15,6 +15,7 @@ export interface ThreadPlan {
 
 export interface ThreadPlanSummary {
   plan_id: string;
+  generation_date: string;
   scheduled_time: string;
   status: PlanStatus;
   template_id: string;

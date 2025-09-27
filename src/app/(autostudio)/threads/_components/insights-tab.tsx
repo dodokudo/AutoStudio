@@ -1,158 +1,86 @@
 'use client';
 
-import { useState } from 'react';
 import type { PostInsight } from '@/lib/threadsInsightsData';
 
 interface InsightsTabProps {
   insights: PostInsight[];
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function InsightsTab({ insights }: InsightsTabProps) {
-  const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
-
-  const toggleExpanded = (planId: string) => {
-    const newExpanded = new Set(expandedPosts);
-    if (newExpanded.has(planId)) {
-      newExpanded.delete(planId);
-    } else {
-      newExpanded.add(planId);
-    }
-    setExpandedPosts(newExpanded);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ja-JP', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   if (insights.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white/60 p-8 text-center shadow-sm dark:border-slate-700 dark:bg-white/5">
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          投稿済みのコンテンツがありません
-        </p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">投稿済みのコンテンツがまだありません。</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {insights.map((post) => {
-        const isExpanded = expandedPosts.has(post.planId);
-
-        return (
-          <div
-            key={post.planId}
-            className="rounded-2xl border border-slate-200 bg-white/60 shadow-sm transition-all hover:shadow-md dark:border-slate-700 dark:bg-white/5"
-          >
-            {/* Post Header */}
-            <div className="flex items-center justify-between p-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                    {post.templateId}
-                  </span>
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    {post.theme}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-500">
-                  投稿日時: {formatDate(post.postedAt)}
-                </p>
-              </div>
-
-              {/* Metrics */}
-              <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-                <div className="text-center">
-                  <p className="font-medium text-lg">
-                    {post.insights.impressions !== undefined
-                      ? post.insights.impressions.toLocaleString()
-                      : '-'}
-                  </p>
-                  <p className="text-xs">インプレッション</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-medium text-lg">
-                    {post.insights.likes !== undefined
-                      ? post.insights.likes.toLocaleString()
-                      : '-'}
-                  </p>
-                  <p className="text-xs">いいね</p>
-                </div>
-                <button
-                  onClick={() => toggleExpanded(post.planId)}
-                  className="ml-4 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
-                >
-                  {isExpanded ? '閉じる' : '詳細'}
-                </button>
-              </div>
-            </div>
-
-            {/* Post Content */}
-            {isExpanded && (
-              <div className="border-t border-slate-200 px-6 py-4 dark:border-slate-700">
-                {/* Main Post */}
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-medium text-slate-900 dark:text-white">
-                      メイン投稿
-                    </h4>
-                    <div className="mt-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
-                      <div className="whitespace-pre-wrap leading-relaxed">
-                        {post.mainText}
-                      </div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/70 shadow-sm dark:border-slate-700 dark:bg-white/5">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+          <thead className="bg-slate-50/80 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:bg-slate-800/60 dark:text-slate-300">
+            <tr>
+              <th className="px-5 py-3">投稿日時</th>
+              <th className="px-5 py-3">インプレッション</th>
+              <th className="px-5 py-3">いいね</th>
+              <th className="px-5 py-3 text-right">Threads</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 text-sm text-slate-700 dark:divide-slate-700 dark:text-slate-200">
+            {insights.map((post) => {
+              const impressions = post.insights.impressions ?? 0;
+              const likes = post.insights.likes ?? 0;
+              return (
+                <tr key={post.postedThreadId} className="odd:bg-white/70 even:bg-white/60 dark:odd:bg-slate-800/40 dark:even:bg-slate-800/20">
+                  <td className="px-5 py-3 align-top">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium text-slate-900 dark:text-white">{formatDateTime(post.postedAt)}</span>
+                      {post.mainText ? (
+                        <span className="line-clamp-2 text-xs text-slate-400 dark:text-slate-500">{post.mainText}</span>
+                      ) : null}
                     </div>
-                  </div>
-
-                  {/* Comments */}
-                  {post.comments.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-900 dark:text-white">
-                        コメント ({post.comments.length}件)
-                      </h4>
-                      <div className="mt-2 space-y-2">
-                        {post.comments.map((comment, index) => (
-                          <div
-                            key={index}
-                            className="rounded-lg bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
-                          >
-                            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-2">
-                              <span>コメント {index + 1}</span>
-                            </div>
-                            <div className="whitespace-pre-wrap leading-relaxed">
-                              {typeof comment === 'string' ? comment : comment.text || ''}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Thread Link */}
-                  <div className="pt-2">
+                  </td>
+                  <td className="px-5 py-3 align-top font-semibold text-slate-900 dark:text-white">
+                    {impressions ? impressions.toLocaleString() : '-'}
+                  </td>
+                  <td className="px-5 py-3 align-top font-semibold text-slate-900 dark:text-white">
+                    {likes ? likes.toLocaleString() : '-'}
+                  </td>
+                  <td className="px-5 py-3 align-top text-right">
                     <a
                       href={`https://www.threads.net/t/${post.postedThreadId}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
                     >
-                      Threadsで見る
+                      詳細
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6h8m0 0v8m0-8L5 21" />
                       </svg>
                     </a>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

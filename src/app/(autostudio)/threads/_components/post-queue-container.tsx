@@ -42,6 +42,7 @@ function normalize(plan: ThreadPlanSummary) {
 
   return {
     id: plan.plan_id,
+    generationDate: plan.generation_date,
     scheduledTime: plan.scheduled_time,
     templateId: plan.template_id,
     theme: plan.theme,
@@ -155,11 +156,13 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
         onSave={async (id, changes) => {
           setPendingId(id);
           try {
+            const target = normalizedPlans.find((plan) => plan.id === id);
             const res = await fetch('/api/threads/plans', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 planId: id,
+                generationDate: target?.generationDate,
                 scheduledTime: changes.scheduledTime,
                 mainText: changes.mainText,
                 templateId: changes.templateId,

@@ -109,9 +109,13 @@ export async function getThreadInsights(threadId: string): Promise<ThreadInsight
   }
 
   try {
-    const response = await request(
-      `https://graph.threads.net/v1.0/${threadId}/insights?metric=views,likes,replies,reposts,quotes&access_token=${THREADS_TOKEN}`
-    );
+    // Use the business account ID instead of thread ID for insights
+    const response = await request(`${THREADS_BUSINESS_ID}/threads_insights`, {
+      params: {
+        metric: 'views,likes,replies,reposts,quotes',
+        media_id: threadId
+      }
+    });
 
     // Threads APIのレスポンス形式に合わせて解析
     const insights: ThreadInsights = {};

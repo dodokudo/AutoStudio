@@ -362,6 +362,7 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
     )
     SELECT
       p.plan_id,
+      p.generation_date,
       p.scheduled_time,
       p.status,
       p.template_id,
@@ -384,6 +385,7 @@ export async function listPlanSummaries(): Promise<ThreadPlanSummary[]> {
   const rows = await query(sql);
   return rows.map((row) => ({
     plan_id: toPlain(row.plan_id),
+    generation_date: toPlain(row.generation_date) || new Date().toISOString().slice(0, 10),
     scheduled_time: toPlain(row.scheduled_time) || '07:00',
     status: (row.status ?? 'draft') as PlanStatus,
     template_id: toPlain(row.template_id) || 'auto-generated',
@@ -424,12 +426,19 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   return normalized;
 }
 
-export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }) {
+export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string; generation_date?: string }) {
   await ensurePlanTable();
+  const generationDateParam = plan.generation_date
+    || new Date().toLocaleDateString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).replace(/\//g, '-');
   const sql = `
     MERGE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` T
-    USING (SELECT @planId AS plan_id) S
-    ON T.plan_id = S.plan_id AND T.generation_date = CURRENT_DATE("Asia/Tokyo")
+    USING (SELECT @planId AS plan_id, DATE(@generationDate) AS generation_date) S
+    ON T.plan_id = S.plan_id AND T.generation_date = S.generation_date
     WHEN MATCHED THEN
       UPDATE SET
         scheduled_time = COALESCE(@scheduledTime, T.scheduled_time),
@@ -441,25 +450,26 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string }
         updated_at = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN
       INSERT (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, created_at, updated_at)
-      VALUES (@planId, CURRENT_DATE("Asia/Tokyo"), COALESCE(@scheduledTime, '07:00'), COALESCE(@templateId, 'auto-generated'), COALESCE(@theme, '未分類'), COALESCE(@status, 'draft'), COALESCE(@mainText, ''), COALESCE(@comments, '[]'), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+      VALUES (@planId, DATE(@generationDate), COALESCE(@scheduledTime, '07:00'), COALESCE(@templateId, 'auto-generated'), COALESCE(@theme, '未分類'), COALESCE(@status, 'draft'), COALESCE(@mainText, ''), COALESCE(@comments, '[]'), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
   `;
 
   await client.query({
     query: sql,
     params: {
       planId: plan.plan_id,
-      scheduledTime: plan.scheduled_time,
-      templateId: plan.template_id,
-      theme: plan.theme,
-      status: plan.status,
-      mainText: plan.main_text,
-      comments: plan.comments,
+      generationDate: generationDateParam,
+      scheduledTime: plan.scheduled_time || null,
+      templateId: plan.template_id || null,
+      theme: plan.theme || null,
+      status: plan.status || null,
+      mainText: plan.main_text || null,
+      comments: plan.comments || null,
     },
   });
 
   const [updated] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE("Asia/Tokyo")`,
-    { planId: plan.plan_id },
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = DATE(@generationDate)`,
+    { planId: plan.plan_id, generationDate: generationDateParam },
   );
   return updated ? normalizePlan(updated) : undefined;
 }
