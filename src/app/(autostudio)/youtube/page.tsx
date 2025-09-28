@@ -139,7 +139,7 @@ export default async function YoutubeDashboardPage() {
           <Card>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">自チャンネル指標</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">自チャンネルのパフォーマンス（直近30日 / 7日）</p>
-            <div className="mt-4 overflow-hidden ui-table">
+            <div className="mt-4 overflow-hidden w-full table-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)] text-sm text-[color:var(--color-text-secondary)]">
               <table className="w-full">
                 <thead>
                   <tr>
@@ -166,11 +166,11 @@ export default async function YoutubeDashboardPage() {
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新スナップショットから伸びているチャンネルを抽出</p>
             <div className="mt-4">
               {competitorRows.length === 0 ? (
-                <div className="ui-empty-state">
+                <div className="flex flex-col items-center gap-3 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-6 py-10 text-center text-sm text-[color:var(--color-text-muted)]">
                   <p>競合チャンネルのデータがありません</p>
                 </div>
               ) : (
-                <div className="overflow-hidden ui-table">
+                <div className="overflow-hidden w-full table-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)] text-sm text-[color:var(--color-text-secondary)]">
                   <table className="w-full">
                     <thead>
                       <tr>
@@ -310,7 +310,7 @@ export default async function YoutubeDashboardPage() {
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">テーマ別詳細</h2>
             <p className="text-sm text-[color:var(--color-text-secondary)]">各テーマを選んで台本生成を開始する準備。</p>
           </div>
-          <div className="mt-4 overflow-hidden ui-table">
+          <div className="mt-4 overflow-hidden w-full table-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)] text-sm text-[color:var(--color-text-secondary)]">
             <table className="w-full">
               <thead>
                 <tr>
@@ -366,11 +366,11 @@ export default async function YoutubeDashboardPage() {
           <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新の台本ドラフトとステータスを一覧表示します。</p>
           <div className="mt-4">
             {scripts.length === 0 ? (
-              <div className="ui-empty-state">
+              <div className="flex flex-col items-center gap-3 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-6 py-10 text-center text-sm text-[color:var(--color-text-muted)]">
                 <p>まだ生成済み台本がありません。</p>
               </div>
             ) : (
-              <div className="overflow-hidden ui-table">
+              <div className="overflow-hidden w-full table-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)] text-sm text-[color:var(--color-text-secondary)]">
                 <table className="w-full">
                   <thead>
                     <tr>
@@ -396,13 +396,14 @@ export default async function YoutubeDashboardPage() {
                           <td>{formatDateTime(script.updatedAt)}</td>
                           <td>
                             {notionUrl ? (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => window.open(notionUrl, '_blank')}
+                              <a
+                                href={notionUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium bg-white border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[#f2f2f2] transition-colors"
                               >
                                 Notionを開く
-                              </Button>
+                              </a>
                             ) : (
                               <span className="text-[color:var(--color-text-muted)]">未連携</span>
                             )}
@@ -426,7 +427,7 @@ export default async function YoutubeDashboardPage() {
         <div className="glass-card text-center">
           <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">YouTube ダッシュボード</h1>
         </div>
-        <div className="ui-banner ui-banner-error">
+        <div className="rounded-[var(--radius-md)] border px-4 py-3 text-sm bg-[#fdeded] border-[#f2b8b5] text-[#a61b1b]">
           <p className="font-semibold">データの取得に失敗しました</p>
           <p className="mt-2">環境変数や BigQuery の設定を確認してください。</p>
           {process.env.NODE_ENV === 'development' && (

@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import type { InstagramDashboardData } from '@/lib/instagram/dashboard';
-import { StatPill } from '@/components/ui/StatPill';
-import { CircleGauge } from '@/components/ui/CircleGauge';
-import { FollowerChart } from '@/components/charts/FollowerChart';
-import { ProfileHeader } from '@/components/ui/ProfileHeader';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ProfileHeader } from '@/components/ui/ProfileHeader';
+import { FollowerChart } from '@/components/charts/FollowerChart';
 
 interface Props {
   data: InstagramDashboardData;
@@ -17,34 +17,23 @@ const TABS = [
   { id: 'scripts', label: '台本' },
 ] as const;
 
-type TabId = (typeof TABS)[number]['id'];
-
 export function InstagramDashboardView({ data }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]['id']>('dashboard');
 
   return (
-    <div className="space-y-8">
-      {/* プロフィールヘッダー */}
+    <div className="section-stack">
       <ProfileHeader userId="demo-user" />
 
-      <div className="flex items-center gap-2">
-        {TABS.map((tab) => {
-          const isActive = tab.id === activeTab;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                isActive
-                  ? 'bg-[color:var(--color-accent)] text-white shadow-[var(--shadow-elevated)]'
-                  : 'bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-hover)]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap gap-2">
+        {TABS.map((tab) => (
+          <Button
+            key={tab.id}
+            variant={activeTab === tab.id ? 'primary' : 'secondary'}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </Button>
+        ))}
       </div>
 
       {activeTab === 'dashboard' ? <DashboardTab data={data} /> : <ScriptsTab data={data} />}
@@ -55,54 +44,67 @@ export function InstagramDashboardView({ data }: Props) {
 function DashboardTab({ data }: Props) {
   const latestFollowers = data.latestFollower?.followers ?? 0;
   const latestReach = data.latestFollower?.reach ?? 0;
-  const engagement = data.latestFollower?.engagement ?? 0;
-  const followerTrend = useMemo(() => data.followerSeries.slice(0, 7), [data.followerSeries]);
-  const hookIdeas = useMemo(() => dedupe(flatten(data.transcriptInsights.map((item) => item.hooks))).slice(0, 6), [
-    data.transcriptInsights,
-  ]);
-  const ctaIdeas = useMemo(() => dedupe(flatten(data.transcriptInsights.map((item) => item.ctaIdeas))).slice(0, 6), [
-    data.transcriptInsights,
-  ]);
-  const userCompetitors = data.userCompetitors.filter((item) => item.active);
+  const latestEngagement = data.latestFollower?.engagement ?? 0;
+
+  const followerTrend = useMemo(() => data.followerSeries.slice(0, 14), [data.followerSeries]);
+  const hookIdeas = useMemo(
+    () => dedupe(flatten(data.transcriptInsights.map((item) => item.hooks))).slice(0, 6),
+    [data.transcriptInsights],
+  );
+  const ctaIdeas = useMemo(
+    () => dedupe(flatten(data.transcriptInsights.map((item) => item.ctaIdeas))).slice(0, 6),
+    [data.transcriptInsights],
+  );
+  const activeCompetitors = data.userCompetitors.filter((item) => item.active);
+
+  const overviewStats = [
+    { label: 'フォロワー', value: latestFollowers.toLocaleString(), caption: '最新スナップショット' },
+    { label: 'リーチ', value: latestReach.toLocaleString(), caption: '最新スナップショット' },
+    { label: 'エンゲージメント', value: latestEngagement.toLocaleString(), caption: '最新スナップショット' },
+  ];
 
   return (
-    <div className="space-y-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard title="フォロワー" value={latestFollowers} subtitle="最新スナップショット" />
-        <StatCard title="リーチ" value={latestReach} subtitle="最新スナップショット" />
-        <StatCard title="エンゲージメント" value={engagement} subtitle="最新スナップショット" />
-      </div>
+    <div className="section-stack">
+      <Card>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {overviewStats.map((stat) => (
+            <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 shadow-[var(--shadow-soft)]">
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-[0.08em]">
+                {stat.label}
+              </p>
+              <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{stat.value}</p>
+              <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{stat.caption}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Card>
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">フォロワー推移とインサイト</h2>
-        {followerTrend.length > 0 ? (
-          <FollowerChart data={data.followerSeries} />
-        ) : (
-          <div className="ui-empty-state">
-            <p>フォロワーデータがまだありません。</p>
-          </div>
-        )}
+        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">フォロワー推移</h2>
+        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">直近のフォロワー／リーチ／エンゲージメント推移です。</p>
+        <div className="mt-6">
+          {followerTrend.length ? <FollowerChart data={data.followerSeries} /> : <EmptyState title="データがありません" description="分析データを取り込み次第表示されます。" />}
+        </div>
       </Card>
 
       <Card>
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">競合ハイライト</h2>
-        {data.competitorHighlights.length > 0 ? (
-          <div className="space-y-3">
-            {data.competitorHighlights.map((item, index) => (
-              <article
-                key={`${item.username}-${index}`}
-                className="space-y-2 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 text-sm text-[color:var(--color-text-primary)]"
-              >
-                <div className="flex items-center justify-between gap-2">
+        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">直近14日でパフォーマンスの高かったリールを抜粋しています。</p>
+        {data.competitorHighlights.length ? (
+          <ul className="mt-4 space-y-3 text-sm text-[color:var(--color-text-secondary)]">
+            {data.competitorHighlights.map((item) => (
+              <li key={`${item.username}-${item.permalink ?? 'na'}`} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="font-semibold text-[color:var(--color-text-primary)]">@{item.username}</p>
+                    <p className="font-medium text-[color:var(--color-text-primary)]">@{item.username}</p>
                     {item.caption ? (
-                      <p className="text-xs text-[color:var(--color-text-secondary)] line-clamp-2">{item.caption}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-[color:var(--color-text-muted)]">{item.caption}</p>
                     ) : null}
                   </div>
-                  <div className="text-right text-xs text-[color:var(--color-text-secondary)]">
-                    <p>Views {formatNumber(item.views)}</p>
-                    <p>Likes {formatNumber(item.likes)} / Comments {formatNumber(item.comments)}</p>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    {item.views !== null ? <span className="mr-2">Views {item.views.toLocaleString()}</span> : null}
+                    {item.likes !== null ? <span className="mr-2">Likes {item.likes.toLocaleString()}</span> : null}
+                    {item.comments !== null ? <span>Comments {item.comments.toLocaleString()}</span> : null}
                   </div>
                 </div>
                 {item.permalink ? (
@@ -110,44 +112,47 @@ function DashboardTab({ data }: Props) {
                     href={item.permalink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)]"
+                    className="mt-2 inline-flex text-xs text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)]"
                   >
-                    リールを開く ↗
+                    リールを開く
                   </a>
                 ) : null}
-              </article>
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
-          <p className="text-sm text-[color:var(--color-text-muted)]">まだ競合リールが取り込まれていません。</p>
+          <div className="mt-4">
+            <EmptyState title="データがありません" description="競合リールが取り込まれるとここに表示されます。" />
+          </div>
         )}
       </Card>
 
       <Card>
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">Hook / CTA アイデア</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <IdeaList title="Hook" items={hookIdeas} emptyText="まだ Hook 情報がありません。" />
-          <IdeaList title="CTA" items={ctaIdeas} emptyText="まだ CTA 情報がありません。" />
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <IdeaList title="Hook" items={hookIdeas} emptyText="Hook 情報がまだありません。" />
+          <IdeaList title="CTA" items={ctaIdeas} emptyText="CTA 情報がまだありません。" />
         </div>
       </Card>
 
       <Card>
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ユーザー追加の競合</h2>
-        {userCompetitors.length > 0 ? (
-          <ul className="space-y-2 text-sm text-[color:var(--color-text-primary)]">
-            {userCompetitors.map((item) => (
-              <li key={item.username} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-2">
-                <p className="font-semibold text-[color:var(--color-text-primary)]">@{item.username}</p>
-                <p className="text-xs text-[color:var(--color-text-secondary)]">
+        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">登録済みの競合アカウント</h2>
+        {activeCompetitors.length ? (
+          <ul className="mt-3 space-y-2 text-sm text-[color:var(--color-text-secondary)]">
+            {activeCompetitors.map((item) => (
+              <li key={item.username} className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2">
+                <p className="font-medium text-[color:var(--color-text-primary)]">@{item.username}</p>
+                <p className="text-xs text-[color:var(--color-text-muted)]">
                   {item.category ? `${item.category} / ` : ''}優先度 {item.priority}
                   {item.driveFolderId ? ` / Drive: ${item.driveFolderId}` : ''}
-                  {item.source === 'private' ? '（デフォルト）' : ''}
                 </p>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-[color:var(--color-text-muted)]">まだユーザー追加の競合がありません。</p>
+          <div className="mt-3">
+            <EmptyState title="競合が登録されていません" description="右下のフォームから競合を追加できます。" />
+          </div>
         )}
       </Card>
     </div>
@@ -158,128 +163,71 @@ function ScriptsTab({ data }: Props) {
   return (
     <Card>
       <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">最新の台本案</h2>
-      {data.scripts.length > 0 ? (
-        <div className="space-y-4">
+      <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">直近生成された台本案を表示します。</p>
+      {data.scripts.length ? (
+        <div className="mt-4 space-y-3 text-sm text-[color:var(--color-text-secondary)]">
           {data.scripts.map((script, index) => (
-            <article key={`${script.title}-${index}`} className="space-y-3 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
-              <header className="flex flex-col gap-1 text-sm text-[color:var(--color-text-primary)]">
-                <span className="text-xs uppercase tracking-wide text-[color:var(--color-accent)]">Script {index + 1}</span>
-                <h3 className="text-lg font-semibold text-[color:var(--color-text-primary)]">{script.title}</h3>
+            <article key={`${script.title}-${index}`} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
+              <header className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-[color:var(--color-text-muted)]">Script {index + 1}</span>
+                <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{script.title}</h3>
               </header>
-              <div className="space-y-3 text-sm text-[color:var(--color-text-primary)]">
+              <div className="mt-3 space-y-3">
                 <RichField label="Hook" value={script.hook} />
                 <RichField label="Body" value={script.body} />
                 <RichField label="CTA" value={script.cta} />
                 <RichField label="Story" value={script.storyText} />
-                {script.inspirationSources.length > 0 ? (
-                  <p className="text-xs text-[color:var(--color-text-secondary)]">Inspiration: {script.inspirationSources.join(', ')}</p>
+                {script.inspirationSources.length ? (
+                  <p className="text-xs text-[color:var(--color-text-muted)]">
+                    Inspiration: {script.inspirationSources.join(', ')}
+                  </p>
                 ) : null}
               </div>
             </article>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-[color:var(--color-text-muted)]">まだ生成済みの台本がありません。`npm run ig:generate` を実行してください。</p>
+        <div className="mt-3">
+          <EmptyState title="台本がまだありません" description="台本生成ジョブを実行するとここに表示されます。" />
+        </div>
       )}
     </Card>
   );
 }
 
-function StatCard({ title, value, subtitle }: { title: string; value: number; subtitle?: string }) {
-  // エンゲージメント率の計算（仮定値）
-  const engagementRate = title === 'エンゲージメント' ? Math.min((value / 1000) * 100, 100) : 0;
-
-  // アイコンマッピング
-  const iconMap: Record<string, string> = {
-    'フォロワー': '👥',
-    'リーチ': '📈',
-    'エンゲージメント': '💝'
-  };
-
-  // カラーマッピング
-  const colorMap: Record<string, 'blue' | 'green' | 'purple' | 'orange' | 'teal'> = {
-    'フォロワー': 'blue',
-    'リーチ': 'green',
-    'エンゲージメント': 'purple'
-  };
-
-  return (
-    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 text-sm text-[color:var(--color-text-primary)]">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">{title}</p>
-          <p className="mt-2 text-2xl font-semibold text-[color:var(--color-text-primary)]">{formatNumber(value)}</p>
-          {subtitle ? <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{subtitle}</p> : null}
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <StatPill
-            icon={iconMap[title] || '📊'}
-            value={formatNumber(value)}
-            color={colorMap[title] || 'blue'}
-          />
-          {title === 'エンゲージメント' && (
-            <CircleGauge
-              value={engagementRate}
-              size="md"
-              color="purple"
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function IdeaList({ title, items, emptyText }: { title: string; items: string[]; emptyText: string }) {
   return (
-    <div className="space-y-3">
+    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
       <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">{title}</h3>
-      {items.length > 0 ? (
-        <ul className="space-y-2 text-xs text-[color:var(--color-text-primary)]">
+      {items.length ? (
+        <ul className="mt-3 space-y-2 text-sm text-[color:var(--color-text-secondary)]">
           {items.map((item, index) => (
-            <li key={`${title}-${index}`} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-2">
+            <li key={`${title}-${index}`} className="rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] px-3 py-2">
               {item}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-[color:var(--color-text-muted)]">{emptyText}</p>
+        <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">{emptyText}</p>
       )}
     </div>
   );
 }
 
 function RichField({ label, value }: { label: string; value: string }) {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-secondary)]">{label}</p>
-      <p className="mt-1 whitespace-pre-line text-sm text-[color:var(--color-text-primary)]">{value}</p>
+      <p className="text-xs font-semibold text-[color:var(--color-text-muted)]">{label}</p>
+      <p className="mt-1 whitespace-pre-line text-sm text-[color:var(--color-text-secondary)]">{value}</p>
     </div>
   );
 }
 
-function formatNumber(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return '-';
-  }
-  return new Intl.NumberFormat('ja-JP').format(value);
-}
-
-function flatten<T>(arrays: T[][]): T[] {
-  return arrays.reduce<T[]>((acc, items) => acc.concat(items), []);
+function flatten<T>(value: T[][]): T[] {
+  return value.flat();
 }
 
 function dedupe(items: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const item of items) {
-    const trimmed = item.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    result.push(trimmed);
-  }
-  return result;
+  return Array.from(new Set(items.filter(Boolean)));
 }

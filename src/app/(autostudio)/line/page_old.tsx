@@ -107,7 +107,7 @@ export default async function LineDashboardPage() {
               <p className="text-sm text-[color:var(--color-text-muted)]">タグデータが見つかりません。</p>
             )}
           </div>
-        </Card>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

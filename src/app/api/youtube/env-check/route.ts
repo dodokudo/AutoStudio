@@ -9,7 +9,7 @@ export async function GET() {
     const youtubeDatasetId = process.env.YOUTUBE_BQ_DATASET_ID;
 
     // Detailed environment variable analysis
-    const envAnalysis = {
+    const envAnalysis: EnvAnalysis = {
       GOOGLE_SERVICE_ACCOUNT_JSON: {
         exists: !!googleServiceAccountJson,
         length: googleServiceAccountJson?.length || 0,
@@ -33,7 +33,7 @@ export async function GET() {
     };
 
     // Try to parse the JSON if it exists
-    let jsonParseResult = null;
+    let jsonParseResult: JsonParseResult = null;
     if (googleServiceAccountJson) {
       try {
         const parsed = JSON.parse(googleServiceAccountJson);
@@ -77,7 +77,46 @@ export async function GET() {
   }
 }
 
-function generateRecommendations(envAnalysis: any, jsonParseResult: any): string[] {
+
+type EnvAnalysis = {
+  GOOGLE_SERVICE_ACCOUNT_JSON: {
+    exists: boolean;
+    length: number;
+    first50chars: string;
+    startsWithBrace: boolean;
+    endsWithBrace: boolean;
+    hasProjectId: boolean;
+    hasPrivateKey: boolean;
+    hasClientEmail: boolean;
+  };
+  BQ_PROJECT_ID: {
+    exists: boolean;
+    value: string;
+    length: number;
+  };
+  YOUTUBE_BQ_DATASET_ID: {
+    exists: boolean;
+    value: string;
+    length: number;
+  };
+};
+
+type JsonParseResult =
+  | null
+  | {
+      success: true;
+      hasRequiredFields: boolean;
+      projectId: string | null;
+      clientEmail: string | null;
+      hasPrivateKey: boolean;
+      type: string | null;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
+function generateRecommendations(envAnalysis: EnvAnalysis, jsonParseResult: JsonParseResult): string[] {
   const recommendations: string[] = [];
 
   if (!envAnalysis.GOOGLE_SERVICE_ACCOUNT_JSON.exists) {

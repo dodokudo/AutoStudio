@@ -257,8 +257,14 @@ export default async function ThreadsHome({
 
     return (
       <div className="section-stack">
+        {/* Header */}
+        <div className="glass-card gradient-bg text-center">
+          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Threads ダッシュボード</h1>
+          <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">{noteText}</p>
+        </div>
+
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-700">
+        <div className="flex border-b border-[color:var(--color-border)]">
           <a
             href={`?${new URLSearchParams({
               ...(rangeParam && { range: rangeParam }),
@@ -268,8 +274,8 @@ export default async function ThreadsHome({
             }).toString()}`}
             className={`px-6 py-3 text-sm font-medium transition-colors ${
               activeTab === 'overview'
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
+                : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
             }`}
           >
             投稿
@@ -283,8 +289,8 @@ export default async function ThreadsHome({
             }).toString()}`}
             className={`px-6 py-3 text-sm font-medium transition-colors ${
               activeTab === 'insights'
-                ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
+                : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
             }`}
           >
             インサイト

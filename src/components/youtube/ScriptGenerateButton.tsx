@@ -56,12 +56,12 @@ export function ScriptGenerateButton({ themeKeyword, representativeVideo }: Scri
       <button
         onClick={handleGenerate}
         disabled={isGenerating}
-        className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-800"
+        className="ui-button-primary text-xs px-3 py-1 h-8"
       >
         {isGenerating ? '台本生成中...' : '台本生成'}
       </button>
       {result && (
-        <p className="text-[11px] text-slate-400">{result}</p>
+        <p className="text-[11px] text-[color:var(--color-text-muted)]">{result}</p>
       )}
     </div>
   );

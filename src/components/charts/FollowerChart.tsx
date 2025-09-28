@@ -44,29 +44,29 @@ export function FollowerChart({ data }: FollowerChartProps) {
             left: 20,
           }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#d0d4dc" opacity={0.5} />
           <XAxis
             dataKey="date"
-            stroke="#9CA3AF"
+            stroke="#6b7280"
             fontSize={12}
           />
           <YAxis
             yAxisId="left"
-            stroke="#9CA3AF"
+            stroke="#6b7280"
             fontSize={12}
           />
           <YAxis
             yAxisId="right"
             orientation="right"
-            stroke="#9CA3AF"
+            stroke="#6b7280"
             fontSize={12}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1F2937',
-              border: '1px solid #374151',
-              borderRadius: '8px',
-              color: '#F9FAFB'
+              backgroundColor: '#ffffff',
+              border: '1px solid #e5e7eb',
+              borderRadius: 8,
+              color: '#0c0c0c'
             }}
             formatter={(value: number, name: string) => [
               value.toLocaleString(),
@@ -80,7 +80,7 @@ export function FollowerChart({ data }: FollowerChartProps) {
             yAxisId="left"
             type="monotone"
             dataKey="フォロワー"
-            stroke="#3B82F6"
+            stroke="#6366f1"
             strokeWidth={3}
             dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
             activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2 }}
@@ -90,14 +90,14 @@ export function FollowerChart({ data }: FollowerChartProps) {
           <Bar
             yAxisId="right"
             dataKey="リーチ"
-            fill="#10B981"
+            fill="#22c55e"
             opacity={0.6}
             barSize={20}
           />
           <Bar
             yAxisId="right"
             dataKey="エンゲージメント"
-            fill="#8B5CF6"
+            fill="#6366f1"
             opacity={0.6}
             barSize={20}
           />

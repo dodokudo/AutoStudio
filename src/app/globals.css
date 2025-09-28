@@ -22,6 +22,8 @@
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
+
+  --spacing: 0.25rem;
 }
 
 @theme inline {
@@ -84,41 +86,42 @@ a:focus-visible {
 }
 
 @layer components {
+
+  /* Core UI Components */
   .ui-card {
-    @apply bg-white border border-[color:var(--color-border)] rounded-[var(--radius-lg)] shadow-[var(--shadow-elevated)] p-6;
+    @apply bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-lg)] shadow-[var(--shadow-elevated)] p-6;
   }
 
   .ui-card-muted {
-    @apply bg-[color:var(--color-surface-muted)] border border-[color:var(--color-border)] rounded-[var(--radius-lg)] shadow-[var(--shadow-soft)] p-6;
+    @apply bg-[color:var(--color-surface-muted)] border border-[color:var(--color-border)] rounded-[var(--radius-lg)] p-6;
   }
 
   .ui-button {
-    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2;
+    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 text-white bg-[color:var(--color-text-primary)] hover:bg-[#0e0f10] focus-visible:outline-[color:var(--color-accent)] disabled:bg-[#bfc2c5] disabled:text-[#f5f5f5];
   }
 
   .ui-button-primary {
-    @apply ui-button text-white bg-[color:var(--color-text-primary)] hover:bg-[#0e0f10] focus-visible:outline-[color:var(--color-accent)] disabled:bg-[#bfc2c5] disabled:text-[#f5f5f5];
+    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 text-white bg-[color:var(--color-text-primary)] hover:bg-[#0e0f10] focus-visible:outline-[color:var(--color-accent)] disabled:bg-[#bfc2c5] disabled:text-[#f5f5f5];
   }
 
   .ui-button-secondary {
-    @apply ui-button bg-white border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[#f2f2f2] focus-visible:outline-[color:var(--color-accent)] disabled:text-[#9da1a8];
+    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[#f2f2f2] focus-visible:outline-[color:var(--color-accent)] disabled:text-[#9da1a8];
   }
 
   .ui-button-link {
-    @apply ui-button h-auto px-0 text-[color:var(--color-accent)] bg-transparent hover:text-[color:var(--color-accent-hover)] focus-visible:outline-[color:var(--color-accent)] disabled:text-[#a3b4d8];
+    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 h-auto px-0 text-[color:var(--color-accent)] bg-transparent hover:text-[color:var(--color-accent-hover)] focus-visible:outline-[color:var(--color-accent)] disabled:text-[#a3b4d8];
   }
 
   .ui-table {
-    @apply w-full table-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)] overflow-hidden text-sm text-[color:var(--color-text-secondary)];
+    @apply w-full border-collapse border border-[color:var(--color-border)] rounded-[var(--radius-md)] overflow-hidden;
   }
 
-  .ui-table thead {
-    @apply bg-[#f2f4f7] text-[color:var(--color-text-secondary)] font-medium;
+  .ui-table th {
+    @apply bg-[color:var(--color-surface-muted)] px-4 py-3 text-left text-sm font-medium text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)];
   }
 
-  .ui-table th,
   .ui-table td {
-    @apply px-4 py-3 border-b border-[color:var(--color-border)];
+    @apply px-4 py-3 text-sm text-[color:var(--color-text-primary)] border-b border-[color:var(--color-border)];
   }
 
   .ui-banner {
@@ -126,15 +129,15 @@ a:focus-visible {
   }
 
   .ui-banner-success {
-    @apply ui-banner bg-[#e6f7ed] border-[#b5eed3] text-[#096c3e];
+    @apply bg-[#e6f7ed] border-[#b5eed3] text-[#096c3e];
   }
 
   .ui-banner-warning {
-    @apply ui-banner bg-[#fff7e6] border-[#ffe0a3] text-[#ad6800];
+    @apply bg-[#fff7e6] border-[#ffe0a3] text-[#ad6800];
   }
 
   .ui-banner-error {
-    @apply ui-banner bg-[#fdeded] border-[#f2b8b5] text-[#a61b1b];
+    @apply bg-[#fdeded] border-[#f2b8b5] text-[#a61b1b];
   }
 
   .ui-empty-state {
@@ -144,20 +147,20 @@ a:focus-visible {
   /* Legacy class aliases */
   .card-strong,
   .card-surface {
-    @apply ui-card;
+    @apply bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-lg)] shadow-[var(--shadow-elevated)] p-6;
   }
 
   .button-primary {
-    @apply ui-button-primary;
+    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 text-white bg-[color:var(--color-text-primary)] hover:bg-[#0e0f10] focus-visible:outline-[color:var(--color-accent)] disabled:bg-[#bfc2c5] disabled:text-[#f5f5f5];
   }
 
   .button-secondary {
-    @apply ui-button-secondary;
+    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:bg-[#f2f2f2] focus-visible:outline-[color:var(--color-accent)] disabled:text-[#9da1a8];
   }
 
   .button-tertiary,
   .button-link {
-    @apply ui-button-link;
+    @apply inline-flex items-center justify-center rounded-[var(--radius-md)] px-4 h-10 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 h-auto px-0 text-[color:var(--color-accent)] bg-transparent hover:text-[color:var(--color-accent-hover)] focus-visible:outline-[color:var(--color-accent)] disabled:text-[#a3b4d8];
   }
 
   .badge-neutral {
@@ -199,64 +202,3 @@ a:focus-visible {
   }
 }
 
-@layer base {
-  /* Only override legacy styles that conflict with new design system */
-  .bg-white\/95:not(.glass-card),
-  .bg-white\/90:not(.glass-card),
-  .bg-white\/85:not(.glass-card),
-  .bg-white\/80:not(.glass-card),
-  .bg-white\/70:not(.glass-card),
-  .bg-white\/60:not(.glass-card),
-  .bg-white\/50:not(.glass-card),
-  .bg-white\/40:not(.glass-card),
-  .bg-white\/10:not(.glass-card),
-  .bg-white\/5:not(.glass-card),
-  .bg-white\/0:not(.glass-card) {
-    background-color: var(--color-surface) !important;
-    background-image: none !important;
-  }
-
-  /* Allow gradients in designated areas */
-  .bg-gradient-to-r:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
-  .bg-gradient-to-l:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
-  .bg-gradient-to-b:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
-  .bg-gradient-to-t:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
-  .bg-gradient-to-br:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
-  .bg-gradient-to-bl:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
-  .bg-gradient-to-tr:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
-  .bg-gradient-to-tl:not(.gradient-bg):not(.accent-gradient):not(.glass-card) {
-    background-image: none !important;
-  }
-
-  /* Allow backdrop blur for glass cards */
-  .backdrop-blur-xl:not(.glass-card),
-  .backdrop-blur-2xl:not(.glass-card),
-  .backdrop-blur-sm:not(.glass-card),
-  .backdrop-blur-md:not(.glass-card),
-  .backdrop-blur-lg:not(.glass-card) {
-    backdrop-filter: none !important;
-  }
-
-  /* Standardize custom shadows to design system values */
-  .shadow-\[0_30px_70px_rgba\(125,145,211,0\.25\)\]:not(.glass-card),
-  .shadow-\[0_24px_60px_rgba\(84,110,192,0\.18\)\]:not(.glass-card),
-  .shadow-\[0_28px_70px_rgba\(82,94,170,0\.25\)\]:not(.glass-card),
-  .shadow-\[0_18px_40px_rgba\(84,110,192,0\.16\)\]:not(.glass-card),
-  .shadow-\[0_18px_38px_rgba\(110,132,206,0\.18\)\]:not(.glass-card),
-  .shadow-\[0_20px_45px_rgba\(125,145,211,0\.25\)\]:not(.glass-card),
-  .shadow-\[0_16px_35px_rgba\(15,23,42,0\.08\)\]:not(.glass-card),
-  .shadow-\[0_24px_48px_rgba\(56,102,179,0\.14\)\]:not(.glass-card),
-  .shadow-\[0_12px_25px_rgba\(15,23,42,0\.08\)\]:not(.glass-card),
-  .shadow-\[0_20px_40px_rgba\(110,132,206,0\.25\)\]:not(.glass-card),
-  .shadow-\[0_10px_20px_rgba\(99,102,241,0\.25\)\]:not(.glass-card),
-  .shadow-\[0_16px_32px_rgba\(12,16,20,0\.08\)\]:not(.glass-card),
-  .shadow-\[0_18px_38px_rgba\(110,132,206,0\.18\)\]:not(.glass-card) {
-    box-shadow: var(--shadow-soft) !important;
-  }
-
-  .rounded-3xl,
-  .rounded-\[36px\],
-  .rounded-\[32px\] {
-    border-radius: var(--radius-lg) !important;
-  }
-}
