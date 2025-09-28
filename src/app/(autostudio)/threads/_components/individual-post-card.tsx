@@ -24,6 +24,7 @@ export function IndividualPostCard() {
     comments: { order: number; text: string }[];
     scheduledTime: string;
   } | null>(null);
+  const [postNow, setPostNow] = useState(false);
 
   const scheduleOptions = Array.from({ length: 48 }).map((_, index) => {
     const baseMinutes = index * 30;
@@ -32,9 +33,13 @@ export function IndividualPostCard() {
     return `${hour}:${minute}`;
   });
 
+  // Add "Post Now" option
+  const scheduleOptionsWithNow = ['いますぐ投稿', ...scheduleOptions];
+
   const resetPostState = () => {
     setGeneratedPost(null);
     setEditableContent(null);
+    setPostNow(false);
   };
 
   const handleGenerate = async () => {
@@ -78,7 +83,8 @@ export function IndividualPostCard() {
       status,
       mainText: editableContent.mainText,
       comments: editableContent.comments,
-      scheduledTime: editableContent.scheduledTime,
+      scheduledTime: editableContent.scheduledTime === 'いますぐ投稿' ? 'now' : editableContent.scheduledTime,
+      postNow: postNow || editableContent.scheduledTime === 'いますぐ投稿',
     };
 
     try {
@@ -96,7 +102,8 @@ export function IndividualPostCard() {
         throw new Error('投稿の更新に失敗しました');
       }
 
-      alert(status === 'approved' ? '投稿を承認しました。スケジュールに沿って配信されます。' : '下書きを保存しました。');
+      const data = await response.json();
+      alert(data.message || (status === 'approved' ? '投稿を承認しました。' : '下書きを保存しました。'));
       if (status === 'approved') {
         resetPostState();
       }
@@ -142,13 +149,15 @@ export function IndividualPostCard() {
                   <select
                     className="mt-2 w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                     value={editableContent.scheduledTime}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setPostNow(value === 'いますぐ投稿');
                       setEditableContent((current) =>
-                        current ? { ...current, scheduledTime: event.target.value } : current,
-                      )
-                    }
+                        current ? { ...current, scheduledTime: value } : current,
+                      );
+                    }}
                   >
-                    {scheduleOptions.map((option) => (
+                    {scheduleOptionsWithNow.map((option) => (
                       <option key={option} value={option}>
                         {option}
                       </option>
