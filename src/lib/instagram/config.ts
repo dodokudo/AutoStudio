@@ -12,7 +12,7 @@ type RequiredEnvKey =
   | 'IG_SMTP_PASS';
 
 function requireEnv(key: RequiredEnvKey): string {
-  const value = process.env[key];
+  const value = process.env[key]?.trim();
   if (!value) {
     throw new Error(`環境変数 ${key} が未設定です`);
   }

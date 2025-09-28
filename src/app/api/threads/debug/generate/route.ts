@@ -24,10 +24,10 @@ export async function GET() {
 
     // Test environment variables
     const envCheck = {
-      ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+      CLAUDE_API_KEY: !!process.env.CLAUDE_API_KEY,
       BQ_PROJECT_ID: !!process.env.BQ_PROJECT_ID,
-      THREADS_ACCESS_TOKEN: !!process.env.THREADS_ACCESS_TOKEN,
-      THREADS_USER_ID: !!process.env.THREADS_USER_ID,
+      THREADS_TOKEN: !!process.env.THREADS_TOKEN,
+      THREADS_BUSINESS_ID: !!process.env.THREADS_BUSINESS_ID,
     };
 
     return NextResponse.json({

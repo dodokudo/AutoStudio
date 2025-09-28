@@ -15,7 +15,7 @@ export function loadEnv(): EnvConfig {
   const config = {} as EnvConfig;
 
   requiredEnvVars.forEach((key) => {
-    const value = process.env[key];
+    const value = process.env[key]?.trim();
     if (!value) {
       throw new Error(`Missing required environment variable: ${key}`);
     }
@@ -29,8 +29,9 @@ export function tryLoadEnv(): Partial<EnvConfig> {
   const config: Partial<EnvConfig> = {};
 
   requiredEnvVars.forEach((key) => {
-    if (process.env[key]) {
-      config[key] = process.env[key] as string;
+    const value = process.env[key]?.trim();
+    if (value) {
+      config[key] = value;
     }
   });
 

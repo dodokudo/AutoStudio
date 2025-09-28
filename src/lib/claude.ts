@@ -1,9 +1,9 @@
 import { ThreadsPromptPayload } from '@/types/prompt';
 import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
 
-const CLAUDE_API_URL = process.env.CLAUDE_API_URL ?? 'https://api.anthropic.com/v1/messages';
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-20250514';
+const CLAUDE_API_URL = process.env.CLAUDE_API_URL?.trim() ?? 'https://api.anthropic.com/v1/messages';
+const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY?.trim();
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL?.trim() ?? 'claude-sonnet-4-20250514';
 
 const AI_THEME_KEYWORDS = ['ai', 'chatgpt', 'claude', 'llm', '生成', '自動化'];
 

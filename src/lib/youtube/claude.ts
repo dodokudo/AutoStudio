@@ -1,6 +1,9 @@
-const CLAUDE_API_URL = process.env.CLAUDE_API_URL ?? 'https://api.anthropic.com/v1/messages';
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
-const CLAUDE_SCRIPT_MODEL = process.env.CLAUDE_SCRIPT_MODEL ?? process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-latest';
+const CLAUDE_API_URL = process.env.CLAUDE_API_URL?.trim() ?? 'https://api.anthropic.com/v1/messages';
+const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY?.trim();
+const CLAUDE_SCRIPT_MODEL =
+  process.env.CLAUDE_SCRIPT_MODEL?.trim()
+  ?? process.env.CLAUDE_MODEL?.trim()
+  ?? 'claude-3-5-sonnet-latest';
 
 export async function requestClaudeYoutubeScript(prompt: string) {
   if (!CLAUDE_API_KEY) {
