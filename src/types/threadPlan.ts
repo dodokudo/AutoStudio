@@ -1,4 +1,4 @@
-export type PlanStatus = 'draft' | 'approved' | 'scheduled' | 'rejected';
+export type PlanStatus = 'draft' | 'approved' | 'scheduled' | 'rejected' | 'posted';
 
 export interface ThreadPlan {
   plan_id: string;
