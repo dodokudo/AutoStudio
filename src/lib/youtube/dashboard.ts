@@ -238,7 +238,11 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
         WHERE v.media = 'youtube'
           AND v.snapshot_date = @snapshot_date
           AND (c.is_self = TRUE OR c.is_self IS NULL)
-        ORDER BY COALESCE(v.view_velocity, v.view_count, 0) DESC
+        ORDER BY CASE
+          WHEN v.view_velocity IS NOT NULL THEN v.view_velocity
+          WHEN v.view_count IS NOT NULL THEN v.view_count
+          ELSE 0
+        END DESC
         LIMIT 60
       `,
       params: { snapshot_date: latestSnapshotDate },
