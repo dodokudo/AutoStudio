@@ -7,6 +7,8 @@ import {
   type StoredContentScript,
 } from '@/lib/youtube/bigquery';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
   return new Intl.NumberFormat('ja-JP', options).format(value);
@@ -111,104 +113,111 @@ export default async function YoutubeDashboardPage() {
     }));
 
     return (
-      <div className="space-y-10">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-xl font-semibold text-white">YouTube ダッシュボード</h1>
+      <div className="section-stack">
+        <div className="glass-card text-center">
+          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">YouTube ダッシュボード</h1>
           {data.overview.latestSnapshotDate ? (
-            <p className="text-xs text-slate-400">最新スナップショット: {String(data.overview.latestSnapshotDate)}</p>
+            <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">最新スナップショット: {String(data.overview.latestSnapshotDate)}</p>
           ) : (
-            <p className="text-xs text-slate-400">まだデータが取り込まれていません。</p>
+            <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">まだデータが取り込まれていません。</p>
           )}
-        </header>
+        </div>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          {overviewCards.map((card) => (
-            <div key={card.label} className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{card.label}</p>
-              <p className="mt-3 text-2xl font-semibold text-white">{card.value}</p>
-            </div>
-          ))}
-        </section>
+        <Card>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">概要</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {overviewCards.map((card) => (
+              <div key={card.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">{card.label}</p>
+                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-            <h2 className="text-base font-semibold text-white">自チャンネル指標</h2>
-            <p className="mt-1 text-xs text-slate-400">自チャンネルのパフォーマンス（直近30日 / 7日）</p>
-            <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
-              <table className="w-full table-auto text-left text-xs text-slate-300">
-                <thead className="bg-slate-900/80 text-slate-400">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">自チャンネル指標</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">自チャンネルのパフォーマンス（直近30日 / 7日）</p>
+            <div className="mt-4 overflow-hidden ui-table">
+              <table className="w-full">
+                <thead>
                   <tr>
-                    <th className="px-3 py-2 font-medium">指標</th>
-                    <th className="px-3 py-2 font-medium">直近30日</th>
-                    <th className="px-3 py-2 font-medium">直近7日</th>
+                    <th>指標</th>
+                    <th>直近30日</th>
+                    <th>直近7日</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ownMetricsRows.map((row) => (
-                    <tr key={row.label} className="border-t border-slate-800 last:border-b">
-                      <td className="px-3 py-2 font-medium text-white">{row.label}</td>
-                      <td className="px-3 py-2">{row.value30}</td>
-                      <td className="px-3 py-2">{row.value7}</td>
+                    <tr key={row.label}>
+                      <td className="font-medium text-[color:var(--color-text-primary)]">{row.label}</td>
+                      <td>{row.value30}</td>
+                      <td>{row.value7}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
 
-          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-            <h2 className="text-base font-semibold text-white">競合チャンネルの動向</h2>
-            <p className="mt-1 text-xs text-slate-400">最新スナップショットから伸びているチャンネルを抽出。</p>
-            <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
+          <Card>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">競合チャンネルの動向</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新スナップショットから伸びているチャンネルを抽出</p>
+            <div className="mt-4">
               {competitorRows.length === 0 ? (
-                <div className="p-6 text-center text-sm text-slate-400">競合チャンネルのデータがありません。</div>
+                <div className="ui-empty-state">
+                  <p>競合チャンネルのデータがありません</p>
+                </div>
               ) : (
-                <table className="w-full table-auto text-left text-xs text-slate-300">
-                  <thead className="bg-slate-900/80 text-slate-400">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">チャンネル</th>
-                      <th className="px-3 py-2 font-medium">登録者</th>
-                      <th className="px-3 py-2 font-medium">平均伸び速度</th>
-                      <th className="px-3 py-2 font-medium">平均ER</th>
-                      <th className="px-3 py-2 font-medium">最新動画</th>
-                      <th className="px-3 py-2 font-medium">投稿日</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {competitorRows.map((row) => (
-                      <tr key={row.channel} className="border-t border-slate-800 last:border-b">
-                        <td className="px-3 py-2 font-medium text-white">{row.channel}</td>
-                        <td className="px-3 py-2">{row.subscribers}</td>
-                        <td className="px-3 py-2">{row.viewVelocity}</td>
-                        <td className="px-3 py-2">{row.engagement}</td>
-                        <td className="px-3 py-2">{row.latestVideo}</td>
-                        <td className="px-3 py-2">{row.latestPublishedAt}</td>
+                <div className="overflow-hidden ui-table">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <th>チャンネル</th>
+                        <th>登録者</th>
+                        <th>平均伸び速度</th>
+                        <th>平均ER</th>
+                        <th>最新動画</th>
+                        <th>投稿日</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {competitorRows.map((row) => (
+                        <tr key={row.channel}>
+                          <td className="font-medium text-[color:var(--color-text-primary)]">{row.channel}</td>
+                          <td>{row.subscribers}</td>
+                          <td>{row.viewVelocity}</td>
+                          <td>{row.engagement}</td>
+                          <td>{row.latestVideo}</td>
+                          <td>{row.latestPublishedAt}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
-          </div>
-        </section>
+          </Card>
+        </div>
 
         {comparison && (
-          <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-            <h2 className="text-base font-semibold text-white">自分 vs 競合</h2>
-            <p className="mt-1 text-xs text-slate-400">最新スナップショットでの平均値比較</p>
+          <Card>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">自分 vs 競合</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新スナップショットでの平均値比較</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">伸び速度 / 日</p>
+              <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">伸び速度 / 日</p>
                 <div className="mt-3 flex items-baseline gap-3 text-sm">
                   <div className="flex-1">
-                    <p className="text-[11px] text-slate-400">自チャンネル</p>
-                    <p className="text-xl font-semibold text-white">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">自チャンネル</p>
+                    <p className="text-xl font-semibold text-[color:var(--color-text-primary)]">
                       {comparison.ownViewVelocity ? formatNumber(Math.round(comparison.ownViewVelocity)) : '–'}
                     </p>
                   </div>
                   <div className="flex-1 text-right">
-                    <p className="text-[11px] text-slate-400">競合平均</p>
-                    <p className="text-xl font-semibold text-indigo-300">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">競合平均</p>
+                    <p className="text-xl font-semibold text-[color:var(--color-accent)]">
                       {comparison.competitorViewVelocity
                         ? formatNumber(Math.round(comparison.competitorViewVelocity))
                         : '–'}
@@ -216,51 +225,51 @@ export default async function YoutubeDashboardPage() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">エンゲージメント率</p>
+              <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">エンゲージメント率</p>
                 <div className="mt-3 flex items-baseline gap-3 text-sm">
                   <div className="flex-1">
-                    <p className="text-[11px] text-slate-400">自チャンネル</p>
-                    <p className="text-xl font-semibold text-white">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">自チャンネル</p>
+                    <p className="text-xl font-semibold text-[color:var(--color-text-primary)]">
                       {formatPercentage(comparison.ownEngagementRate)}
                     </p>
                   </div>
                   <div className="flex-1 text-right">
-                    <p className="text-[11px] text-slate-400">競合平均</p>
-                    <p className="text-xl font-semibold text-indigo-300">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">競合平均</p>
+                    <p className="text-xl font-semibold text-[color:var(--color-accent)]">
                       {formatPercentage(comparison.competitorEngagementRate)}
                     </p>
                   </div>
                 </div>
               </div>
             </div>
-            <p className="mt-3 text-[11px] text-slate-500">競合平均は同日のスナップショットから算出しています。</p>
-          </section>
+            <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">競合平均は同日のスナップショットから算出しています。</p>
+          </Card>
         )}
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-            <h2 className="text-base font-semibold text-white">ホットテーマ候補</h2>
-            <p className="mt-1 text-xs text-slate-400">上位動画のタグとタイトルから抽出したキーワードをスコア順に表示。</p>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ホットテーマ候補</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">上位動画のタグとタイトルから抽出したキーワードをスコア順に表示</p>
             <div className="mt-4 space-y-4">
-              {data.themes.length === 0 && <p className="text-sm text-slate-400">まだ十分な動画データがありません。</p>}
+              {data.themes.length === 0 && <p className="text-sm text-[color:var(--color-text-muted)]">まだ十分な動画データがありません。</p>}
               {data.themes.map((theme) => (
-                <div key={theme.keyword} className="rounded-md border border-slate-800 bg-slate-900/70 p-4">
+                <div key={theme.keyword} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-white">{theme.keyword}</p>
-                      <p className="text-xs text-slate-400">スコア: {formatNumber(Math.round(theme.score))}</p>
+                      <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">{theme.keyword}</p>
+                      <p className="text-xs text-[color:var(--color-text-muted)]">スコア: {formatNumber(Math.round(theme.score))}</p>
                     </div>
                     <ScriptGenerateButton
                       themeKeyword={theme.keyword}
                       representativeVideo={theme.representativeVideos[0]}
                     />
                   </div>
-                  <ul className="mt-3 space-y-2 text-xs text-slate-300">
+                  <ul className="mt-3 space-y-2 text-xs text-[color:var(--color-text-secondary)]">
                     {theme.representativeVideos.slice(0, 3).map((video) => (
                       <li key={video.videoId} className="truncate">
-                        <span className="font-medium text-slate-200">{video.channelTitle ?? video.channelId}</span>
-                        <span className="mx-1 text-slate-500">/</span>
+                        <span className="font-medium text-[color:var(--color-text-primary)]">{video.channelTitle ?? video.channelId}</span>
+                        <span className="mx-1 text-[color:var(--color-text-muted)]">/</span>
                         <span>{video.title}</span>
                       </li>
                     ))}
@@ -268,155 +277,162 @@ export default async function YoutubeDashboardPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
 
-          <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-            <h2 className="text-base font-semibold text-white">トップ動画 (最新スナップショット)</h2>
-            <div className="mt-4 space-y-3 text-xs text-slate-300">
+          <Card>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">トップ動画 (最新スナップショット)</h2>
+            <div className="mt-4 space-y-3 text-sm">
               {data.topVideos.slice(0, 8).map((video) => (
-                <div key={video.videoId} className="rounded-md border border-slate-800 bg-slate-900/70 p-3">
-                  <p className="truncate text-sm font-semibold text-white" title={video.title}>
+                <div key={video.videoId} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+                  <p className="truncate text-sm font-semibold text-[color:var(--color-text-primary)]" title={video.title}>
                     {video.title}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <span className="text-slate-400">{video.channelTitle ?? video.channelId}</span>
-                    <span className="text-slate-400">
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[color:var(--color-text-secondary)]">
+                    <span>{video.channelTitle ?? video.channelId}</span>
+                    <span>
                       再生: {video.viewCount ? formatNumber(video.viewCount) : '–'}
                     </span>
-                    <span className="text-slate-400">
+                    <span>
                       伸び速度: {video.viewVelocity ? formatNumber(Math.round(video.viewVelocity)) : '–'} /日
                     </span>
-                    <span className="text-slate-400">ER: {formatPercentage(video.engagementRate)}
+                    <span>ER: {formatPercentage(video.engagementRate)}
                     </span>
                   </div>
                 </div>
               ))}
-              {data.topVideos.length === 0 && <p className="text-sm text-slate-400">動画データが未取得です。</p>}
+              {data.topVideos.length === 0 && <p className="text-sm text-[color:var(--color-text-muted)]">動画データが未取得です。</p>}
             </div>
-          </div>
-        </section>
+          </Card>
+        </div>
 
-        <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
+        <Card>
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">テーマ別詳細</h2>
-            <p className="text-xs text-slate-400">各テーマを選んで台本生成を開始する準備。</p>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">テーマ別詳細</h2>
+            <p className="text-sm text-[color:var(--color-text-secondary)]">各テーマを選んで台本生成を開始する準備。</p>
           </div>
-          <table className="mt-4 w-full table-auto text-left text-xs text-slate-300">
-            <thead className="text-slate-400">
-              <tr className="border-b border-slate-800">
-                <th className="py-2 pr-3 font-medium">キーワード</th>
-                <th className="py-2 pr-3 font-medium">代表動画</th>
-                <th className="py-2 pr-3 font-medium">再生数</th>
-                <th className="py-2 pr-3 font-medium">伸び速度</th>
-                <th className="py-2 pr-3 font-medium">ER</th>
-                <th className="py-2 pr-3 font-medium">アクション</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.themes.map((theme) => (
-                <tr key={`${theme.keyword}-table`} className="border-b border-slate-800/60 last:border-none">
-                  <td className="py-2 pr-3 font-semibold text-white">{theme.keyword}</td>
-                  <td className="py-2 pr-3">
-                    {theme.representativeVideos.slice(0, 1).map((video) => (
-                      <div key={video.videoId} className="truncate" title={video.title}>
-                        {video.title}
-                      </div>
-                    ))}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {theme.representativeVideos[0]?.viewCount
-                      ? formatNumber(theme.representativeVideos[0].viewCount!)
-                      : '–'}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {theme.representativeVideos[0]?.viewVelocity
-                      ? formatNumber(Math.round(theme.representativeVideos[0].viewVelocity!))
-                      : '–'}
-                  </td>
-                  <td className="py-2 pr-3">{formatPercentage(theme.representativeVideos[0]?.engagementRate)}</td>
-                  <td className="py-2 pr-3">
-                    <ScriptGenerateButton themeKeyword={theme.keyword} representativeVideo={theme.representativeVideos[0]} />
-                  </td>
-                </tr>
-              ))}
-              {data.themes.length === 0 && (
+          <div className="mt-4 overflow-hidden ui-table">
+            <table className="w-full">
+              <thead>
                 <tr>
-                  <td colSpan={6} className="py-4 text-center text-slate-400">
-                    キーワード分析結果がまだありません。
-                  </td>
+                  <th>キーワード</th>
+                  <th>代表動画</th>
+                  <th>再生数</th>
+                  <th>伸び速度</th>
+                  <th>ER</th>
+                  <th>アクション</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-
-        <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-          <h2 className="text-base font-semibold text-white">生成済み台本</h2>
-          <p className="mt-1 text-xs text-slate-400">最新の台本ドラフトとステータスを一覧表示します。</p>
-          <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
-            {scripts.length === 0 ? (
-              <div className="p-6 text-center text-sm text-slate-400">まだ生成済み台本がありません。</div>
-            ) : (
-              <table className="w-full table-auto text-left text-xs text-slate-300">
-                <thead className="bg-slate-900/80 text-slate-400">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">タイトル</th>
-                    <th className="px-3 py-2 font-medium">テーマ</th>
-                    <th className="px-3 py-2 font-medium">ステータス</th>
-                    <th className="px-3 py-2 font-medium">更新日</th>
-                    <th className="px-3 py-2 font-medium">Notion</th>
+              </thead>
+              <tbody>
+                {data.themes.map((theme) => (
+                  <tr key={`${theme.keyword}-table`}>
+                    <td className="font-medium text-[color:var(--color-text-primary)]">{theme.keyword}</td>
+                    <td>
+                      {theme.representativeVideos.slice(0, 1).map((video) => (
+                        <div key={video.videoId} className="truncate" title={video.title}>
+                          {video.title}
+                        </div>
+                      ))}
+                    </td>
+                    <td>
+                      {theme.representativeVideos[0]?.viewCount
+                        ? formatNumber(theme.representativeVideos[0].viewCount!)
+                        : '–'}
+                    </td>
+                    <td>
+                      {theme.representativeVideos[0]?.viewVelocity
+                        ? formatNumber(Math.round(theme.representativeVideos[0].viewVelocity!))
+                        : '–'}
+                    </td>
+                    <td>{formatPercentage(theme.representativeVideos[0]?.engagementRate)}</td>
+                    <td>
+                      <ScriptGenerateButton themeKeyword={theme.keyword} representativeVideo={theme.representativeVideos[0]} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {scripts.map((script) => {
-                    const notionUrl = buildNotionUrl(script.notionPageId);
-                    return (
-                      <tr key={script.contentId} className="border-t border-slate-800 last:border-b">
-                        <td className="px-3 py-2 font-medium text-white">{script.title ?? script.contentId}</td>
-                        <td className="px-3 py-2">{script.themeKeyword ?? '未設定'}</td>
-                        <td className="px-3 py-2">
-                          <span className="inline-flex items-center rounded-full bg-slate-800 px-2 py-1 text-[11px] text-slate-200">
-                            {script.status ?? 'draft'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">{formatDateTime(script.updatedAt)}</td>
-                        <td className="px-3 py-2">
-                          {notionUrl ? (
-                            <a
-                              href={notionUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:border-slate-500 hover:text-white"
-                            >
-                              Notionを開く
-                            </a>
-                          ) : (
-                            <span className="text-slate-500">未連携</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                ))}
+                {data.themes.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-4 text-center text-[color:var(--color-text-muted)]">
+                      キーワード分析結果がまだありません。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">生成済み台本</h2>
+          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新の台本ドラフトとステータスを一覧表示します。</p>
+          <div className="mt-4">
+            {scripts.length === 0 ? (
+              <div className="ui-empty-state">
+                <p>まだ生成済み台本がありません。</p>
+              </div>
+            ) : (
+              <div className="overflow-hidden ui-table">
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th>タイトル</th>
+                      <th>テーマ</th>
+                      <th>ステータス</th>
+                      <th>更新日</th>
+                      <th>Notion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scripts.map((script) => {
+                      const notionUrl = buildNotionUrl(script.notionPageId);
+                      return (
+                        <tr key={script.contentId}>
+                          <td className="font-medium text-[color:var(--color-text-primary)]">{script.title ?? script.contentId}</td>
+                          <td>{script.themeKeyword ?? '未設定'}</td>
+                          <td>
+                            <span className="inline-flex items-center rounded-full bg-[color:var(--color-surface-muted)] px-2 py-1 text-[11px] text-[color:var(--color-text-secondary)]">
+                              {script.status ?? 'draft'}
+                            </span>
+                          </td>
+                          <td>{formatDateTime(script.updatedAt)}</td>
+                          <td>
+                            {notionUrl ? (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => window.open(notionUrl, '_blank')}
+                              >
+                                Notionを開く
+                              </Button>
+                            ) : (
+                              <span className="text-[color:var(--color-text-muted)]">未連携</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
-        </section>
+        </Card>
       </div>
     );
   } catch (error) {
     console.error('[youtube/page] error', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     return (
-      <div className="space-y-6">
-        <h1 className="text-xl font-semibold text-white">YouTube ダッシュボード</h1>
-        <div className="rounded-md border border-red-500/40 bg-red-950/60 p-6">
-          <p className="text-sm font-medium text-red-200">データの取得に失敗しました。</p>
-          <p className="mt-2 text-xs text-red-300">環境変数や BigQuery の設定を確認してください。</p>
+      <div className="section-stack">
+        <div className="glass-card text-center">
+          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">YouTube ダッシュボード</h1>
+        </div>
+        <div className="ui-banner ui-banner-error">
+          <p className="font-semibold">データの取得に失敗しました</p>
+          <p className="mt-2">環境変数や BigQuery の設定を確認してください。</p>
           {process.env.NODE_ENV === 'development' && (
             <details className="mt-4">
-              <summary className="text-xs text-red-400 cursor-pointer">エラー詳細 (開発環境のみ)</summary>
-              <pre className="mt-2 text-xs text-red-300 whitespace-pre-wrap">{errorMessage}</pre>
+              <summary className="text-xs cursor-pointer">エラー詳細 (開発環境のみ)</summary>
+              <pre className="mt-2 text-xs whitespace-pre-wrap">{errorMessage}</pre>
             </details>
           )}
         </div>

@@ -47,13 +47,13 @@ export default async function InstagramDashboardPage() {
     }
 
     return (
-      <div className="space-y-8">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-xl font-semibold text-white">Instagram ダッシュボード</h1>
-          <p className="text-xs text-slate-400">
+      <div className="section-stack">
+        <div className="glass-card text-center">
+          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Instagram ダッシュボード</h1>
+          <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">
             競合リールの動向と自社インサイト、生成された台本案をまとめて確認できます。
           </p>
-        </header>
+        </div>
         <InstagramDashboardView data={data} />
         <CompetitorManager
           competitors={data.userCompetitors}
@@ -65,12 +65,14 @@ export default async function InstagramDashboardPage() {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return (
-      <div className="space-y-6">
-        <h1 className="text-xl font-semibold text-white">Instagram ダッシュボード</h1>
-        <div className="rounded-md border border-amber-400/40 bg-amber-500/10 p-6 text-sm text-amber-200">
-          <p className="font-semibold text-amber-100">環境変数が不足しています</p>
-          <p className="mt-2 text-amber-200/80">{message}</p>
-          <p className="mt-4 text-xs text-amber-200/70">`.env.local` に Instagram ツールの環境変数を設定した後、ページを再読み込みしてください。</p>
+      <div className="section-stack">
+        <div className="glass-card text-center">
+          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Instagram ダッシュボード</h1>
+        </div>
+        <div className="ui-banner ui-banner-warning">
+          <p className="font-semibold">環境変数が不足しています</p>
+          <p className="mt-2">{message}</p>
+          <p className="mt-4 text-xs">`.env.local` に Instagram ツールの環境変数を設定した後、ページを再読み込みしてください。</p>
         </div>
       </div>
     );

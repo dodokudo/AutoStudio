@@ -143,8 +143,7 @@ a:focus-visible {
 
   /* Legacy class aliases */
   .card-strong,
-  .card-surface,
-  .glass-soft {
+  .card-surface {
     @apply ui-card;
   }
 
@@ -164,56 +163,94 @@ a:focus-visible {
   .badge-neutral {
     @apply inline-flex items-center rounded-full bg-[#f2f4f7] px-2.5 py-1 text-[11px] font-medium text-[color:var(--color-text-muted)];
   }
+
+  /* Glass effect cards for special sections */
+  .glass-card {
+    @apply relative overflow-hidden rounded-[var(--radius-xl)] border border-white/60 p-6 shadow-[0_30px_70px_rgba(125,145,211,0.25)];
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+  }
+
+  .glass-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  }
+
+  /* Gradient backgrounds for hero sections */
+  .gradient-bg {
+    background: linear-gradient(135deg,
+      rgba(99, 102, 241, 0.08) 0%,
+      rgba(139, 92, 246, 0.05) 25%,
+      rgba(59, 130, 246, 0.03) 50%,
+      rgba(16, 185, 129, 0.05) 75%,
+      rgba(245, 101, 101, 0.03) 100%
+    );
+  }
+
+  /* Subtle gradient overlays for accent sections */
+  .accent-gradient {
+    background: linear-gradient(135deg,
+      rgba(99, 102, 241, 0.02) 0%,
+      rgba(139, 92, 246, 0.01) 100%
+    );
+  }
 }
 
 @layer base {
-  .bg-white\/95,
-  .bg-white\/90,
-  .bg-white\/85,
-  .bg-white\/80,
-  .bg-white\/70,
-  .bg-white\/60,
-  .bg-white\/50,
-  .bg-white\/40,
-  .bg-white\/10,
-  .bg-white\/5,
-  .bg-white\/0 {
+  /* Only override legacy styles that conflict with new design system */
+  .bg-white\/95:not(.glass-card),
+  .bg-white\/90:not(.glass-card),
+  .bg-white\/85:not(.glass-card),
+  .bg-white\/80:not(.glass-card),
+  .bg-white\/70:not(.glass-card),
+  .bg-white\/60:not(.glass-card),
+  .bg-white\/50:not(.glass-card),
+  .bg-white\/40:not(.glass-card),
+  .bg-white\/10:not(.glass-card),
+  .bg-white\/5:not(.glass-card),
+  .bg-white\/0:not(.glass-card) {
     background-color: var(--color-surface) !important;
     background-image: none !important;
   }
 
-  .bg-gradient-to-r,
-  .bg-gradient-to-l,
-  .bg-gradient-to-b,
-  .bg-gradient-to-t,
-  .bg-gradient-to-br,
-  .bg-gradient-to-bl,
-  .bg-gradient-to-tr,
-  .bg-gradient-to-tl {
+  /* Allow gradients in designated areas */
+  .bg-gradient-to-r:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
+  .bg-gradient-to-l:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
+  .bg-gradient-to-b:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
+  .bg-gradient-to-t:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
+  .bg-gradient-to-br:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
+  .bg-gradient-to-bl:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
+  .bg-gradient-to-tr:not(.gradient-bg):not(.accent-gradient):not(.glass-card),
+  .bg-gradient-to-tl:not(.gradient-bg):not(.accent-gradient):not(.glass-card) {
     background-image: none !important;
   }
 
-  .backdrop-blur-xl,
-  .backdrop-blur-2xl,
-  .backdrop-blur-sm,
-  .backdrop-blur-md,
-  .backdrop-blur-lg {
+  /* Allow backdrop blur for glass cards */
+  .backdrop-blur-xl:not(.glass-card),
+  .backdrop-blur-2xl:not(.glass-card),
+  .backdrop-blur-sm:not(.glass-card),
+  .backdrop-blur-md:not(.glass-card),
+  .backdrop-blur-lg:not(.glass-card) {
     backdrop-filter: none !important;
   }
 
-  .shadow-\[0_30px_70px_rgba\(125,145,211,0\.25\)\],
-  .shadow-\[0_24px_60px_rgba\(84,110,192,0\.18\)\],
-  .shadow-\[0_28px_70px_rgba\(82,94,170,0\.25\)\],
-  .shadow-\[0_18px_40px_rgba\(84,110,192,0\.16\)\],
-  .shadow-\[0_18px_38px_rgba\(110,132,206,0\.18\)\],
-  .shadow-\[0_20px_45px_rgba\(125,145,211,0\.25\)\],
-  .shadow-\[0_16px_35px_rgba\(15,23,42,0\.08\)\],
-  .shadow-\[0_24px_48px_rgba\(56,102,179,0\.14\)\],
-  .shadow-\[0_12px_25px_rgba\(15,23,42,0\.08\)\],
-  .shadow-\[0_20px_40px_rgba\(110,132,206,0\.25\)\],
-  .shadow-\[0_10px_20px_rgba\(99,102,241,0\.25\)\],
-  .shadow-\[0_16px_32px_rgba\(12,16,20,0\.08\)\],
-  .shadow-\[0_18px_38px_rgba\(110,132,206,0\.18\)\] {
+  /* Standardize custom shadows to design system values */
+  .shadow-\[0_30px_70px_rgba\(125,145,211,0\.25\)\]:not(.glass-card),
+  .shadow-\[0_24px_60px_rgba\(84,110,192,0\.18\)\]:not(.glass-card),
+  .shadow-\[0_28px_70px_rgba\(82,94,170,0\.25\)\]:not(.glass-card),
+  .shadow-\[0_18px_40px_rgba\(84,110,192,0\.16\)\]:not(.glass-card),
+  .shadow-\[0_18px_38px_rgba\(110,132,206,0\.18\)\]:not(.glass-card),
+  .shadow-\[0_20px_45px_rgba\(125,145,211,0\.25\)\]:not(.glass-card),
+  .shadow-\[0_16px_35px_rgba\(15,23,42,0\.08\)\]:not(.glass-card),
+  .shadow-\[0_24px_48px_rgba\(56,102,179,0\.14\)\]:not(.glass-card),
+  .shadow-\[0_12px_25px_rgba\(15,23,42,0\.08\)\]:not(.glass-card),
+  .shadow-\[0_20px_40px_rgba\(110,132,206,0\.25\)\]:not(.glass-card),
+  .shadow-\[0_10px_20px_rgba\(99,102,241,0\.25\)\]:not(.glass-card),
+  .shadow-\[0_16px_32px_rgba\(12,16,20,0\.08\)\]:not(.glass-card),
+  .shadow-\[0_18px_38px_rgba\(110,132,206,0\.18\)\]:not(.glass-card) {
     box-shadow: var(--shadow-soft) !important;
   }
 

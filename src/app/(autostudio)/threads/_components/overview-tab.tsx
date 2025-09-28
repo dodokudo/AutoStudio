@@ -1,3 +1,5 @@
+'use client';
+
 import { InsightsCard } from './insights-card';
 import { CompetitorHighlights } from './competitor-highlight';
 import { PostQueueContainer } from './post-queue-container';
@@ -124,7 +126,7 @@ export function OverviewTab(props: OverviewTabProps) {
       <TemplateSummary items={props.templateSummaries} />
       <DashboardCards jobCounts={props.dashboard.jobCounts} recentLogs={props.dashboard.recentLogs} />
       <div className="flex justify-end">
-        <Button>
+        <Button onClick={() => alert('投稿確定機能は未実装です')}>
           今日の投稿を確定
           <span className="ml-2 rounded-full bg-[color:var(--color-surface-muted)] px-2 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)]">
             承認待ち {props.queueMetrics.draft}
