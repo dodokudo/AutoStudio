@@ -1,3 +1,5 @@
+import { Card } from '@/components/ui/card';
+
 interface TopContentCardProps {
   posts: Array<{
     id: string;
@@ -9,90 +11,56 @@ interface TopContentCardProps {
   }>;
 }
 
+function formatTimeAgo(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInMs = now.getTime() - date.getTime();
+  if (Number.isNaN(diffInMs) || diffInMs < 0) {
+    return '日時未取得';
+  }
+  const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+  if (diffInHours < 24) return `${diffInHours}時間前`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays}日前`;
+  return `${Math.floor(diffInDays / 7)}週間前`;
+}
+
+function truncateText(text: string, maxLength = 80) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}…`;
+}
+
 export function TopContentCard({ posts }: TopContentCardProps) {
-  const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    const diffInDays = Math.floor(diffInHours / 24);
-    const diffInWeeks = Math.floor(diffInDays / 7);
-
-    if (Number.isNaN(diffInHours)) {
-      return '日時未取得';
-    }
-
-    if (diffInHours < 24) {
-      return `${diffInHours}時間前`;
-    } else if (diffInDays < 7) {
-      return `${diffInDays}日前`;
-    } else {
-      return `${diffInWeeks}週間前`;
-    }
-  };
-
-  const truncateText = (text: string, maxLength: number = 60) => {
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength) + '...';
-  };
-
   return (
-    <div className="relative overflow-hidden rounded-[36px] border border-white/60 bg-white/90 px-8 py-10 shadow-[0_30px_70px_rgba(125,145,211,0.25)] dark:bg-white/10">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-10 top-[-50px] h-48 w-48 rounded-full bg-gradient-to-br from-indigo-400/50 via-purple-300/40 to-white/0 blur-3xl" />
-        <div className="absolute right-[-40px] top-10 h-40 w-40 rounded-full bg-gradient-to-br from-emerald-300/40 via-sky-200/30 to-white/0 blur-3xl" />
-      </div>
-
-      <div className="relative">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-[0_10px_20px_rgba(99,102,241,0.25)]">
-            🏆
-          </div>
-          <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-            トップコンテンツ
-          </h3>
-        </div>
-
-        <div className="space-y-6">
-          {posts.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-              <div className="rounded-3xl border border-white/40 bg-white/70 p-8 backdrop-blur-sm">
-                コンテンツがありません
-              </div>
-            </div>
-          ) : (
-            posts.slice(0, 5).map((post) => (
-              <div
-                key={post.id}
-                className="rounded-3xl border border-white/40 bg-white/85 p-6 shadow-[0_18px_38px_rgba(110,132,206,0.18)] backdrop-blur-sm hover:shadow-[0_20px_40px_rgba(110,132,206,0.25)] transition-all duration-300 dark:border-white/20 dark:bg-white/10"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-6 text-sm">
-                    <span className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                      <span className="w-5 h-5 flex items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-500/20">👁️</span>
-                      <span className="font-semibold">{post.views.toLocaleString()}</span>
-                    </span>
-                    <span className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                      <span className="w-5 h-5 flex items-center justify-center rounded-full bg-pink-100 dark:bg-pink-500/20">💖</span>
-                      <span className="font-semibold">{post.likes}</span>
-                    </span>
-                    <span className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                      <span className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-500/20">💬</span>
-                      <span className="font-semibold">{post.replies}</span>
-                    </span>
-                  </div>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium px-3 py-1 rounded-full bg-slate-100/60 dark:bg-slate-800/40">
-                    {formatTimeAgo(post.postedAt)}
-                  </span>
+    <Card>
+      <header className="mb-4">
+        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">トップコンテンツ</h2>
+        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">選択期間内で反応が高かった投稿を表示しています。</p>
+      </header>
+      <div className="space-y-3">
+        {posts.length === 0 ? (
+          <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5 text-center text-sm text-[color:var(--color-text-muted)]">
+            データがありません。
+          </p>
+        ) : (
+          posts.map((post) => (
+            <div
+              key={post.id}
+              className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 shadow-[var(--shadow-soft)]"
+            >
+              <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
+                <span>{formatTimeAgo(post.postedAt)}</span>
+                <div className="flex items-center gap-3">
+                  <span>閲覧 {post.views.toLocaleString()}</span>
+                  <span>いいね {post.likes.toLocaleString()}</span>
+                  <span>返信 {post.replies.toLocaleString()}</span>
                 </div>
-
-                <p className="text-slate-900 dark:text-white font-medium leading-relaxed">
-                  {truncateText(post.content)}
-                </p>
               </div>
-            ))
-          )}
-        </div>
+              <p className="mt-2 text-sm text-[color:var(--color-text-primary)]">{truncateText(post.content)}</p>
+            </div>
+          ))
+        )}
       </div>
-    </div>
+    </Card>
   );
 }

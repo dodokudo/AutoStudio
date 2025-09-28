@@ -3,9 +3,10 @@
 import { useMemo, useState } from 'react';
 import type { PostInsight } from '@/lib/threadsInsightsData';
 import type { ThreadInsights } from '@/lib/threadsApi';
+import type { ThreadsInsightsData } from '@/lib/threadsInsights';
+import { Card } from '@/components/ui/card';
 import { AccountInsightsCard } from './account-insights-card';
 import { TopContentCard } from './top-content-card';
-import type { ThreadsInsightsData } from '@/lib/threadsInsights';
 
 interface InsightsTabProps {
   insights: PostInsight[];
@@ -22,13 +23,13 @@ const FALLBACK_INSIGHTS: Array<{
     postedAt: '2024-09-10 07:15',
     impressions: 12400,
     likes: 980,
-    summary: 'AIで月30時間削減。音声入力×自動化ワークフローの実例を解説。',
+    summary: 'AIで月30時間削減。音声入力と自動化ワークフローで成果を最大化した事例。',
   },
   {
     postedAt: '2024-09-08 21:00',
     impressions: 8900,
     likes: 640,
-    summary: 'Threads運用でまずやる3ステップ。23日でフォロワー+460を取った型。',
+    summary: 'Threads運用でフォロワーを伸ばした構成例。導入・本題・CTAの組み立てを解説。',
   },
 ];
 
@@ -93,35 +94,33 @@ export function InsightsTab({ insights, accountSummary }: InsightsTabProps) {
 
   if (insights.length === 0) {
     return (
-      <div className="space-y-6 rounded-2xl border border-slate-200 bg-white/60 p-8 shadow-sm dark:border-slate-700 dark:bg-white/5">
-        <div className="text-sm text-slate-600 dark:text-slate-400">
-          <p className="font-semibold text-slate-700 dark:text-slate-200">投稿実績を読み込めませんでした。</p>
-          <p className="mt-2 leading-relaxed">
-            BigQuery に投稿ログが未登録か、Threads API からの実績同期が未完了の可能性があります。投稿後に同期スクリプトを実行し、数分待ってから再読み込みしてください。
-          </p>
-        </div>
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-5 text-left text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800/40 dark:text-slate-300">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">参考: 直近の好調パターン</p>
-          <ul className="mt-3 space-y-3">
+      <Card>
+        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">投稿実績を取得できませんでした</h2>
+        <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">
+          BigQuery に投稿ログが未登録、もしくは Threads API の同期が未完了の可能性があります。投稿後に同期処理を実行し、数分待ってから再読み込みしてください。
+        </p>
+        <div className="mt-5 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 text-sm text-[color:var(--color-text-secondary)]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">参考</p>
+          <ul className="mt-3 space-y-2">
             {FALLBACK_INSIGHTS.map((item) => (
-              <li key={item.postedAt} className="rounded-lg bg-slate-50/80 p-3 dark:bg-slate-800/60">
-                <p className="text-xs text-slate-500 dark:text-slate-400">{item.postedAt}</p>
-                <p className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-100">{item.summary}</p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <li key={item.postedAt} className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-xs">
+                <p className="text-[color:var(--color-text-muted)]">{item.postedAt}</p>
+                <p className="mt-1 text-sm font-medium text-[color:var(--color-text-primary)]">{item.summary}</p>
+                <p className="mt-1 text-[color:var(--color-text-muted)]">
                   インプレッション {item.impressions.toLocaleString()} / いいね {item.likes.toLocaleString()}
                 </p>
               </li>
             ))}
           </ul>
         </div>
-      </div>
+      </Card>
     );
   }
 
   return (
     <div className="section-stack">
       {isUsingFallbackRange ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+        <div className="rounded-[var(--radius-md)] border border-[#ffe0a3] bg-[#fff7e6] px-4 py-3 text-xs text-[#ad6800]">
           選択した期間内に投稿が見つからなかったため、最新の投稿実績で集計しています。
         </div>
       ) : null}

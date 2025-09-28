@@ -1,15 +1,17 @@
-import { InsightsCard } from "./insights-card";
-import { CompetitorHighlights } from "./competitor-highlight";
-import { PostQueueContainer } from "./post-queue-container";
-import { TemplateSummary } from "./template-summary";
-import { DashboardCards } from "./dashboard-cards";
-import { RegenerateButton } from "./regenerate-button";
-import { InsightsRangeSelector } from "./insights-range-selector";
-import { TrendingTopics } from "./trending-topics";
-import { IndividualPostCard } from "./individual-post-card";
-import type { ThreadPlanSummary } from "@/types/threadPlan";
-import type { ThreadsDashboardData } from "@/lib/threadsDashboard";
-import type { PromptTemplateSummary } from "@/types/prompt";
+import { InsightsCard } from './insights-card';
+import { CompetitorHighlights } from './competitor-highlight';
+import { PostQueueContainer } from './post-queue-container';
+import { TemplateSummary } from './template-summary';
+import { DashboardCards } from './dashboard-cards';
+import { RegenerateButton } from './regenerate-button';
+import { InsightsRangeSelector } from './insights-range-selector';
+import { TrendingTopics } from './trending-topics';
+import { IndividualPostCard } from './individual-post-card';
+import type { ThreadPlanSummary } from '@/types/threadPlan';
+import type { ThreadsDashboardData } from '@/lib/threadsDashboard';
+import type { PromptTemplateSummary } from '@/types/prompt';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 interface OverviewTabProps {
   heroStats: Array<{
@@ -80,34 +82,35 @@ export function OverviewTab(props: OverviewTabProps) {
 
       <IndividualPostCard />
 
-      <section className="relative overflow-hidden rounded-[36px] border border-white/60 bg-white/90 px-8 py-10 shadow-[0_30px_70px_rgba(125,145,211,0.25)] dark:bg-white/10">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-10 top-[-50px] h-48 w-48 rounded-full bg-gradient-to-br from-indigo-400/50 via-purple-300/40 to-white/0 blur-3xl" />
-          <div className="absolute right-[-40px] top-10 h-40 w-40 rounded-full bg-gradient-to-br from-emerald-300/40 via-sky-200/30 to-white/0 blur-3xl" />
-        </div>
-        <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center justify-center xl:justify-start">
-            <RegenerateButton />
+      <Card>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">本日の投稿案</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+              最新のスケジュールを確認し、必要に応じて再生成してください。
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <RegenerateButton />
+              <Button variant="secondary" onClick={() => window?.scrollTo({ top: 0, behavior: 'smooth' })}>
+                ページ更新
+              </Button>
+            </div>
           </div>
-          <div className="grid w-full gap-4 sm:grid-cols-3 xl:flex-1 xl:grid-cols-3">
+          <div className="grid w-full gap-4 sm:grid-cols-3 lg:w-auto">
             {props.heroStats.map((stat) => (
-              <div key={stat.label} className="rounded-3xl bg-white/85 p-4 text-center shadow-[0_18px_38px_rgba(110,132,206,0.18)] dark:bg-white/10">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+              <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5">
+                <p className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-[0.08em]">
                   {stat.label}
                 </p>
-                <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
-                  {stat.value.toLocaleString()}
-                </p>
-                <p className={`mt-2 rounded-full px-2.5 py-1 text-[11px] font-medium ${stat.tone}`}>
-                  {stat.caption}
-                </p>
+                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{stat.value}</p>
+                <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{stat.caption}</p>
               </div>
             ))}
           </div>
         </div>
-      </section>
+      </Card>
 
-      <div className="grid gap-10 lg:grid-cols-[1.85fr,1fr]">
+      <div className="grid gap-10 lg:grid-cols-[1.8fr,1fr]">
         <div className="section-stack">
           <PostQueueContainer
             initialPlans={JSON.parse(JSON.stringify(props.planSummaries))}
@@ -120,11 +123,13 @@ export function OverviewTab(props: OverviewTabProps) {
 
       <TemplateSummary items={props.templateSummaries} />
       <DashboardCards jobCounts={props.dashboard.jobCounts} recentLogs={props.dashboard.recentLogs} />
-      <div className="sticky bottom-10 mt-6 flex justify-end">
-        <button type="button" className="button-primary pointer-events-auto gap-3">
+      <div className="flex justify-end">
+        <Button>
           今日の投稿を確定
-          <span className="rounded-full bg-white/25 px-2 py-0.5 text-[11px]">承認待ち {props.queueMetrics.draft}</span>
-        </button>
+          <span className="ml-2 rounded-full bg-[color:var(--color-surface-muted)] px-2 py-1 text-[11px] font-medium text-[color:var(--color-text-secondary)]">
+            承認待ち {props.queueMetrics.draft}
+          </span>
+        </Button>
       </div>
     </div>
   );

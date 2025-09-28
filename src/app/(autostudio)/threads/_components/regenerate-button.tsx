@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 type ModalState = 'hidden' | 'progress' | 'success' | 'error';
 
@@ -31,10 +33,7 @@ function formatEta(seconds: number) {
   }
   const minutes = Math.floor(rounded / 60);
   const secs = rounded % 60;
-  if (secs === 0) {
-    return `残り約${minutes}分`;
-  }
-  return `残り約${minutes}分${secs}秒`;
+  return secs === 0 ? `残り約${minutes}分` : `残り約${minutes}分${secs}秒`;
 }
 
 export function RegenerateButton() {
@@ -114,10 +113,7 @@ export function RegenerateButton() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/threads/generate', {
-        method: 'POST',
-      });
-
+      const res = await fetch('/api/threads/generate', { method: 'POST' });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || '生成APIが失敗しました');
@@ -178,121 +174,80 @@ export function RegenerateButton() {
     resetState();
   };
 
-  const disabled = loading || isPending;
   const { current, total } = progressState;
   const percentage = clampPercentage(total ? (current / total) * 100 : 0);
   const progressLabel = total ? `${current} / ${total} 投稿生成済み` : current ? `${current} 件処理済み` : '準備中';
   const formattedEta = etaSeconds ? formatEta(etaSeconds) : null;
 
   return (
-    <>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleClick}
-          disabled={disabled}
-          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-200/50 transition hover:opacity-90 disabled:opacity-60 dark:from-primary dark:to-secondary"
-        >
-          {disabled ? '生成中…' : '投稿案を自動生成'}
-        </button>
-
-        <Link
-          href="/threads/logs"
-          className="inline-flex items-center gap-2 rounded-full bg-white/90 border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-white hover:shadow-md dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          投稿ログ
-        </Link>
-      </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <Button onClick={handleClick} disabled={loading || isPending}>
+        {loading || isPending ? '生成中…' : '投稿案を再生成'}
+      </Button>
+      <Link href="/threads/logs" className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]">
+        <Button variant="secondary">生成ログ</Button>
+      </Link>
 
       {modalState === 'progress' ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30">
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">生成中…</h3>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300">{stageMessage}</p>
-            <div className="mt-5">
-              <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-md">
+            <h3 className="text-lg font-semibold text-[color:var(--color-text-primary)]">投稿を生成しています</h3>
+            <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">{stageMessage}</p>
+            <div className="mt-5 space-y-2">
+              <div className="h-2 rounded-full bg-[#e1e3e6]">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-full bg-indigo-500 transition-all duration-300 ease-out dark:bg-indigo-400"
+                  className="h-full rounded-full bg-[color:var(--color-accent)] transition-all duration-300"
                   style={{ width: `${percentage}%` }}
                 />
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
                 <span>{progressLabel}</span>
                 <span>{Math.round(percentage)}%</span>
               </div>
-              {formattedEta ? <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{formattedEta}</p> : null}
+              {formattedEta ? <p className="text-xs text-[color:var(--color-text-muted)]">{formattedEta}</p> : null}
             </div>
-          </div>
+          </Card>
         </div>
       ) : null}
 
       {modalState === 'success' ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <svg className="h-5 w-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">生成完了</h3>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-md space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-[color:var(--color-text-primary)]">生成が完了しました</h3>
+              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                {itemsCount}件の投稿案が作成されました。ページを更新して内容をご確認ください。
+              </p>
             </div>
-            <p className="text-slate-600 dark:text-slate-300">
-              投稿案の生成が完了しました（{itemsCount}件）。<br />
-              ページを更新して最新の投稿案をご確認ください。
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={resetState}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-              >
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={resetState}>
                 閉じる
-              </button>
-              <button
-                onClick={handleRefresh}
-                disabled={isPending}
-                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-              >
+              </Button>
+              <Button onClick={handleRefresh} disabled={isPending}>
                 {isPending ? '更新中…' : 'ページを更新'}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       ) : null}
 
       {modalState === 'error' ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30">
-                <svg className="h-5 w-5 text-rose-600 dark:text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M4.93 4.93l14.14 14.14" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">生成に失敗しました</h3>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <Card className="w-full max-w-md space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-[color:var(--color-text-primary)]">生成に失敗しました</h3>
+              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                {errorMessage ?? '不明なエラーが発生しました。時間を置いて再度お試しください。'}
+              </p>
             </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              {errorMessage ?? '不明なエラーが発生しました。時間を置いて再度お試しください。'}
-            </p>
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={resetState}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
-              >
+            <div className="flex justify-end">
+              <Button variant="secondary" onClick={resetState}>
                 閉じる
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

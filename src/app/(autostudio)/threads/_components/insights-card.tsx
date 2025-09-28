@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
+import { Card } from '@/components/ui/card';
+import { classNames } from '@/lib/classNames';
 
 interface InsightStat {
   label: string;
@@ -14,70 +16,61 @@ interface InsightsCardProps {
   actions?: ReactNode;
 }
 
-const toneClassMap: Record<NonNullable<InsightStat['deltaTone']>, string> = {
-  up: 'text-emerald-500',
-  down: 'text-rose-500',
-  neutral: 'text-slate-400',
+const toneTextClass: Record<NonNullable<InsightStat['deltaTone']>, string> = {
+  up: 'text-[#137a4c]',
+  down: 'text-[#b42318]',
+  neutral: 'text-[color:var(--color-text-muted)]',
 };
 
-const indicatorBackground: Record<NonNullable<InsightStat['deltaTone']>, string> = {
-  up: 'bg-emerald-100/80 text-emerald-600',
-  down: 'bg-rose-100/80 text-rose-600',
-  neutral: 'bg-slate-100/80 text-slate-500',
+const toneBadgeClass: Record<NonNullable<InsightStat['deltaTone']>, string> = {
+  up: 'bg-[#e6f7ed] text-[#096c3e]',
+  down: 'bg-[#fdeded] text-[#a61b1b]',
+  neutral: 'bg-[#f2f4f7] text-[color:var(--color-text-muted)]',
 };
 
 export function InsightsCard({ title, stats, note, actions }: InsightsCardProps) {
   return (
-    <section className="card-strong rounded-[32px] p-8 backdrop-blur-xl">
-      <header className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-indigo-400">Threads Pulse</p>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-          {note ? <span className="text-xs text-slate-500 dark:text-slate-300">{note}</span> : null}
+    <Card>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">{title}</h2>
+          {note ? <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{note}</p> : null}
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
-          {actions ?? null}
-          <span className="hidden items-center gap-1 rounded-full border border-slate-200/70 bg-white/70 px-3 py-1 shadow-sm dark:border-white/10 dark:bg-white/10 lg:inline-flex">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            リアルタイム更新
-          </span>
-        </div>
+        {actions ? <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-secondary)]">{actions}</div> : null}
       </header>
-      <dl className="grid gap-4 md:grid-cols-3">
+
+      <dl className="mt-6 grid gap-4 md:grid-cols-3">
         {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="group relative overflow-hidden rounded-3xl bg-white/90 p-6 shadow-[0_22px_45px_rgba(84,110,192,0.16)] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_28px_55px_rgba(82,94,170,0.22)] dark:bg-white/10"
-          >
-            <div
-              className="pointer-events-none absolute inset-x-4 top-2 h-[6px] rounded-full"
-              style={{
-                background:
-                  'linear-gradient(120deg, rgba(79,140,255,0.3), rgba(111,126,252,0.35), rgba(16,185,129,0.25))',
-              }}
-            />
-            <div className="flex items-center justify-between">
-              <dt className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
-                {stat.label}
-              </dt>
-              {stat.deltaTone ? (
-                <span className={`mt-4 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${indicatorBackground[stat.deltaTone]}`}>
-                  {stat.deltaTone === 'up' ? '↗' : stat.deltaTone === 'down' ? '↘' : '→'} trend
-                </span>
-              ) : null}
-            </div>
-            <dd className="mt-5 text-[2.1rem] font-semibold leading-none text-slate-900 dark:text-white">{stat.value}</dd>
+          <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5">
+            <dt className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-[0.08em]">
+              {stat.label}
+            </dt>
+            <dd className="mt-4 text-[2rem] font-semibold leading-none text-[color:var(--color-text-primary)]">
+              {stat.value}
+            </dd>
             {stat.delta ? (
-              <p className={`mt-2 text-xs font-medium ${stat.deltaTone ? toneClassMap[stat.deltaTone] : 'text-slate-400'}`}>
+              <p
+                className={classNames(
+                  'mt-3 text-xs font-medium',
+                  stat.deltaTone ? toneTextClass[stat.deltaTone] : 'text-[color:var(--color-text-muted)]',
+                )}
+              >
                 {stat.delta}
               </p>
             ) : null}
-            <div className="mt-4 h-10 w-full overflow-hidden rounded-full bg-gradient-to-r from-indigo-100/40 via-white to-indigo-50/40">
-              <div className="h-full w-full bg-[length:160%_100%] bg-[position:0%_0%] bg-[image:radial-gradient(circle_at_8%_50%,rgba(91,124,255,0.35),transparent_45%),radial-gradient(circle_at_35%_35%,rgba(108,221,222,0.25),transparent_40%),radial-gradient(circle_at_70%_60%,rgba(16,185,129,0.32),transparent_45%)] transition-[background-position] duration-700 group-hover:bg-[position:100%_0%]" />
-            </div>
+            {stat.deltaTone ? (
+              <span
+                className={classNames(
+                  'mt-3 inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium',
+                  toneBadgeClass[stat.deltaTone],
+                )}
+              >
+                {stat.deltaTone === 'up' ? '増加傾向' : stat.deltaTone === 'down' ? '減少傾向' : '横ばい'}
+              </span>
+            ) : null}
           </div>
         ))}
       </dl>
-    </section>
+    </Card>
   );
 }

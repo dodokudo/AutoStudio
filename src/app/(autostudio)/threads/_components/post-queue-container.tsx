@@ -95,17 +95,15 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setPendingId(id);
     try {
-      const res = await fetch(`/api/threads/plans/${id}/${action}`, {
-        method: 'POST',
-      });
+      const res = await fetch(`/api/threads/plans/${id}/${action}`, { method: 'POST' });
       if (!res.ok) {
         throw new Error(await res.text());
       }
       await mutate();
-      setDrafts((curr) => {
-        const rest = { ...curr };
-        delete rest[id];
-        return rest;
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
       });
     } catch (error) {
       console.error('Plan action failed', error);
@@ -117,9 +115,12 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="rounded-3xl p-6 skeleton" />
+          <div
+            key={index}
+            className="h-24 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] animate-pulse"
+          />
         ))}
       </div>
     );
@@ -127,11 +128,7 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
 
   return (
     <div className="relative">
-      {isValidating ? (
-        <div className="pointer-events-none absolute inset-0 rounded-[32px] border border-white/60 bg-white/70 backdrop-blur-sm dark:bg-white/10">
-          <div className="absolute inset-4 rounded-3xl skeleton" />
-        </div>
-      ) : null}
+      {isValidating ? <div className="pointer-events-none absolute inset-0 rounded-[var(--radius-lg)] bg-white/70" /> : null}
       <PostQueue
         items={normalizedPlans}
         pendingId={pendingId}
@@ -174,13 +171,13 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
               throw new Error(await res.text());
             }
             await mutate();
-            setDrafts((curr) => {
-              const rest = { ...curr };
-              delete rest[id];
-              return rest;
+            setDrafts((current) => {
+              const next = { ...current };
+              delete next[id];
+              return next;
             });
-            setDrafts((curr) => ({
-              ...curr,
+            setDrafts((current) => ({
+              ...current,
               [id]: {
                 scheduledTime: changes.scheduledTime,
                 mainText: changes.mainText,
@@ -200,33 +197,27 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
         onRerun={async (id) => {
           setPendingId(id);
           try {
-            const res = await fetch(`/api/threads/plans/${id}/rerun`, {
-              method: 'POST',
-            });
+            const res = await fetch(`/api/threads/plans/${id}/rerun`, { method: 'POST' });
             if (!res.ok) {
               throw new Error(await res.text());
             }
             await mutate();
           } catch (error) {
             console.error('Plan rerun failed', error);
-            alert('再実行に失敗しました');
+            alert('再生成に失敗しました');
           } finally {
             setPendingId(null);
           }
         }}
         editableValues={drafts}
         onCommentChange={(id, comments) => {
-          setDrafts((current) => {
-            const base = current[id] ?? normalizedPlans.find((plan) => plan.id === id);
-            if (!base) return current;
-            return {
-              ...current,
-              [id]: {
-                ...base,
-                comments,
-              },
-            };
-          });
+          setDrafts((current) => ({
+            ...current,
+            [id]: {
+              ...(current[id] ?? normalizedPlans.find((plan) => plan.id === id)),
+              comments,
+            },
+          }));
         }}
         templateOptions={templateOptions}
       />
