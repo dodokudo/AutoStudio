@@ -8,7 +8,7 @@ import {
 } from '@/lib/youtube/bigquery';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Banner } from '@/components/ui/banner';
@@ -78,7 +78,7 @@ export default async function YoutubeDashboardPage() {
 
     const own30 = data.analytics.own.last30Days;
     const own7 = data.analytics.own.last7Days;
-    const comparison = data.analytics.comparison;
+    // const comparison = data.analytics.comparison;
 
     const ownMetricsRows = [
       {
@@ -254,7 +254,7 @@ export default async function YoutubeDashboardPage() {
   }
 }
 
-function ComparisonBlock({
+/* function ComparisonBlock({
   title,
   own,
   competitors,
@@ -282,5 +282,5 @@ function ComparisonBlock({
       </div>
     </Card>
   );
-}
+} */
 

@@ -32,7 +32,7 @@ async function request(path: string, options: RequestInit & { params?: Record<st
 }
 
 async function createContainer(text: string, replyToId?: string) {
-  const body: any = {
+  const body: Record<string, unknown> = {
     text,
     media_type: 'TEXT',
   };
