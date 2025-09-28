@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
 
     const client: BigQuery = createBigQueryClient(PROJECT_ID);
 
-    let whereConditions = [];
-    let params: Record<string, unknown> = {};
+    const whereConditions = [];
+    const params: Record<string, unknown> = {};
 
     if (searchTerm) {
       whereConditions.push('(main_text LIKE @searchTerm OR plan_id LIKE @searchTerm)');
