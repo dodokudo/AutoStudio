@@ -12,11 +12,22 @@ interface UpdatePlanRequest {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[plans/update] POST request received');
   try {
     const body = await request.json() as UpdatePlanRequest;
     const { planId, status, mainText, comments, scheduledTime, postNow } = body;
 
+    console.log('[plans/update] Request body:', {
+      planId,
+      status,
+      mainTextLength: mainText?.length,
+      commentsCount: comments?.length,
+      scheduledTime,
+      postNow
+    });
+
     if (!planId || !status || !mainText) {
+      console.error('[plans/update] Missing required parameters:', { planId: !!planId, status: !!status, mainText: !!mainText });
       return NextResponse.json({ error: '必須パラメータが不足しています' }, { status: 400 });
     }
 
@@ -36,6 +47,11 @@ export async function POST(request: NextRequest) {
     if (postNow && status === 'approved') {
       try {
         console.log('[plans/update] Posting immediately to Threads...');
+        console.log('[plans/update] Environment check:', {
+          THREADS_POSTING_ENABLED: process.env.THREADS_POSTING_ENABLED,
+          hasThreadsToken: !!process.env.THREADS_TOKEN,
+          hasBusinessId: !!process.env.THREADS_BUSINESS_ID
+        });
 
         // Post main thread
         const mainThreadId = await postThread(mainText);
@@ -76,9 +92,24 @@ export async function POST(request: NextRequest) {
         });
       } catch (threadsError) {
         console.error('[plans/update] Threads posting error:', threadsError);
+        console.error('[plans/update] Error details:', {
+          name: threadsError instanceof Error ? threadsError.name : 'unknown',
+          message: threadsError instanceof Error ? threadsError.message : String(threadsError),
+          stack: threadsError instanceof Error ? threadsError.stack : 'no stack',
+          env: {
+            THREADS_POSTING_ENABLED: process.env.THREADS_POSTING_ENABLED,
+            hasToken: !!process.env.THREADS_TOKEN,
+            hasBusinessId: !!process.env.THREADS_BUSINESS_ID
+          }
+        });
         return NextResponse.json({
           error: 'プランの保存は成功しましたが、Threads投稿に失敗しました',
-          details: threadsError instanceof Error ? threadsError.message : 'unknown'
+          details: threadsError instanceof Error ? threadsError.message : 'unknown',
+          debugInfo: {
+            environment: process.env.NODE_ENV,
+            postingEnabled: process.env.THREADS_POSTING_ENABLED,
+            hasCredentials: !!(process.env.THREADS_TOKEN && process.env.THREADS_BUSINESS_ID)
+          }
         }, { status: 500 });
       }
     }

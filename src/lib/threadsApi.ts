@@ -90,17 +90,32 @@ export async function postThread(text: string, replyToId?: string) {
     textLength: text.length,
     hasReplyToId: !!replyToId,
     replyToId,
-    postingEnabled: THREADS_POSTING_ENABLED
+    postingEnabled: THREADS_POSTING_ENABLED,
+    environment: process.env.NODE_ENV,
+    hasToken: !!THREADS_TOKEN,
+    hasBusinessId: !!THREADS_BUSINESS_ID
   });
 
   if (!THREADS_POSTING_ENABLED) {
     const mockId = `dryrun-${Date.now()}`;
     console.info('[threadsApi] Skipping Threads publish (dry-run). Returning mock id %s', mockId);
+    console.info('[threadsApi] Dry-run mode active. Environment:', {
+      NODE_ENV: process.env.NODE_ENV,
+      THREADS_POSTING_ENABLED: process.env.THREADS_POSTING_ENABLED
+    });
     return mockId;
   }
 
   if (!THREADS_TOKEN || !THREADS_BUSINESS_ID) {
-    throw new Error('Threads API credentials are not configured');
+    const credentialError = new Error('Threads API credentials are not configured');
+    console.error('[threadsApi] Credential check failed:', {
+      hasToken: !!THREADS_TOKEN,
+      hasBusinessId: !!THREADS_BUSINESS_ID,
+      tokenLength: THREADS_TOKEN ? THREADS_TOKEN.length : 0,
+      businessIdLength: THREADS_BUSINESS_ID ? THREADS_BUSINESS_ID.length : 0,
+      environment: process.env.NODE_ENV
+    });
+    throw credentialError;
   }
 
   console.log('[threadsApi] Creating container...');
