@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { ThreadPlanSummary } from '@/types/threadPlan';
-import { classNames } from '@/lib/classNames';
 
 interface PostedContentProps {
   initialPostedPlans?: ThreadPlanSummary[];

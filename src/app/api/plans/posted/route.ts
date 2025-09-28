@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { listPlanSummaries } from '@/lib/bigqueryPlans';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('[api/plans/posted] Fetching posted plans...');
 

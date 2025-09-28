@@ -77,13 +77,15 @@ function normalizePlan(plan: Record<string, unknown>): ThreadPlan {
 
 export async function listPlans(): Promise<ThreadPlan[]> {
   await ensurePlanTable();
-  // 日本時間での今日の日付を取得
+  // 日本時間での今日の日付を取得（デバッグ用）
   const today = new Date().toLocaleDateString('ja-JP', {
     timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
   }).replace(/\//g, '-');
+
+  // BigQueryのCURRENT_DATE関数を使用して一貫性を保つ
   const sql = `
     SELECT *
     FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
@@ -92,12 +94,13 @@ export async function listPlans(): Promise<ThreadPlan[]> {
   `;
 
   console.log('[listPlans] Querying with SQL:', sql);
-  console.log('[listPlans] Current date for comparison:', today);
+  console.log('[listPlans] Client date for comparison:', today);
 
   const rows = await query(sql);
   console.log('[listPlans] Raw query result:', {
     rowCount: rows.length,
-    sampleRow: rows[0] || null
+    sampleRow: rows[0] || null,
+    currentJSTTime: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
   });
 
   const plans = rows.map(normalizePlan);

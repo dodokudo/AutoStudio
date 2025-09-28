@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { resolveProjectId } from '@/lib/bigquery';
 import { BigQuery } from '@google-cloud/bigquery';
 
 const PROJECT_ID = resolveProjectId();
 const bigquery = new BigQuery({ projectId: PROJECT_ID });
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     console.log('[debug/reset-failed-jobs] Starting failed job reset...');
 

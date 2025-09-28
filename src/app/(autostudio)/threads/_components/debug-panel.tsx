@@ -48,7 +48,7 @@ export function DebugPanel() {
         <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
           <h3 className="text-sm font-medium text-[color:var(--color-text-primary)]">失敗したジョブのリセット</h3>
           <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
-            "Plan not found for job" エラーで失敗したジョブをリセットして再実行可能にします。
+            &quot;Plan not found for job&quot; エラーで失敗したジョブをリセットして再実行可能にします。
           </p>
           <div className="mt-3 flex items-center gap-3">
             <Button

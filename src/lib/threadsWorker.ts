@@ -65,7 +65,12 @@ export async function processNextJob() {
   } catch (error) {
     const message = (error as Error).message ?? 'unknown error';
     await markJobResult(job.job_id, 'failed', { errorMessage: message });
-    await notifyJobFailure(job.plan_id, message);
+    try {
+      await notifyJobFailure(job.plan_id, message);
+    } catch (notifyError) {
+      console.error('[threadsWorker] Failed to send notification:', notifyError);
+    }
+    console.error('[threadsWorker] Job failed for plan', job.plan_id, 'Error:', message);
     return { status: 'failed' as const, jobId: job.job_id, error: message };
   }
 }
