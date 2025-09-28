@@ -16,12 +16,30 @@ export async function POST(request: NextRequest) {
     }
 
     // 既存の生成パイプラインを1件用に流用
-    const payload = await buildThreadsPromptPayload({ projectId: PROJECT_ID });
+    let payload;
+    try {
+      payload = await buildThreadsPromptPayload({ projectId: PROJECT_ID });
+    } catch (buildError) {
+      console.error('[generate-individual] buildThreadsPromptPayload error:', buildError);
+      throw new Error(`プロンプト構築エラー: ${buildError instanceof Error ? buildError.message : 'unknown'}`);
+    }
+
     payload.meta.targetPostCount = 1;
     payload.meta.recommendedSchedule = payload.meta.recommendedSchedule.slice(0, 1);
     payload.writingChecklist.enforcedTheme = theme;
 
-    const claudeResult = await generateClaudePlans(payload);
+    let claudeResult;
+    try {
+      claudeResult = await generateClaudePlans(payload);
+    } catch (claudeError) {
+      console.error('[generate-individual] generateClaudePlans error:', claudeError);
+      throw new Error(`Claude生成エラー: ${claudeError instanceof Error ? claudeError.message : 'unknown'}`);
+    }
+
+    if (!claudeResult.posts || claudeResult.posts.length === 0) {
+      throw new Error('Claudeから投稿が生成されませんでした');
+    }
+
     const post = claudeResult.posts[0];
 
     const planId = post.planId?.trim() || `gen-${Date.now()}`;
@@ -43,6 +61,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ planId, result: post }, { status: 200 });
   } catch (error) {
     console.error('[generate-individual] Error:', error);
-    return NextResponse.json({ error: '投稿生成中にエラーが発生しました' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    return NextResponse.json({
+      error: '投稿生成中にエラーが発生しました',
+      details: errorMessage,
+      stack: errorStack
+    }, { status: 500 });
   }
 }
