@@ -207,7 +207,7 @@ export default async function YoutubeDashboardPage() {
               <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">Notion 台本管理</h2>
               <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">Notion に保存された動画台本を一覧で確認できます。</p>
             </div>
-            <ScriptGenerateButton />
+            <ScriptGenerateButton themeKeyword="YouTube動画" />
           </div>
 
           {scripts.length ? (
@@ -215,26 +215,19 @@ export default async function YoutubeDashboardPage() {
               {scripts.map((script) => (
                 <Card key={script.notionPageId} className="accent-gradient">
                   <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{script.title || 'Untitled Script'}</h3>
-                  <dl className="mt-3 space-y-2 text-sm text-[color:var(--color-text-secondary)]">
-                    <div>
-                      <dt className="text-xs font-medium text-[color:var(--color-text-muted)]">Hook</dt>
-                      <dd className="mt-1 whitespace-pre-line">{script.hook || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-medium text-[color:var(--color-text-muted)]">Body</dt>
-                      <dd className="mt-1 whitespace-pre-line">{script.body || '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-medium text-[color:var(--color-text-muted)]">CTA</dt>
-                      <dd className="mt-1 whitespace-pre-line">{script.cta || '—'}</dd>
-                    </div>
-                  </dl>
+                  <div className="mt-3 text-sm text-[color:var(--color-text-secondary)]">
+                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">Summary</p>
+                    <p className="mt-1">{script.summary || '—'}</p>
+                  </div>
                   {script.notionPageId ? (
-                    <Button variant="link" asChild className="mt-3">
-                      <a href={buildNotionUrl(script.notionPageId)} target="_blank" rel="noopener noreferrer">
-                        Notionで開く
-                      </a>
-                    </Button>
+                    <a
+                      href={buildNotionUrl(script.notionPageId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-block text-xs text-[color:var(--color-accent)] hover:underline"
+                    >
+                      Notionで開く
+                    </a>
                   ) : null}
                 </Card>
               ))}
