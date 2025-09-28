@@ -167,45 +167,51 @@ function toTimestamp(value: unknown): string | undefined {
 }
 
 export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
-  const projectId = resolveProjectId();
-  const datasetId = process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media';
-  const client = createBigQueryClient(projectId);
+  try {
+    const projectId = resolveProjectId();
+    const datasetId = process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media';
+    const client = createBigQueryClient(projectId);
 
-  const [latestRowsRaw] = await client.query({
-    query: `
-      SELECT MAX(snapshot_date) AS snapshot_date
-      FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
-      WHERE media = 'youtube'
-    `,
-  });
+    console.log('[youtube/dashboard] Fetching latest snapshot date...');
+    const [latestRowsRaw] = await client.query({
+      query: `
+        SELECT MAX(snapshot_date) AS snapshot_date
+        FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
+        WHERE media = 'youtube'
+      `,
+    });
 
-  const latestRows = latestRowsRaw as Array<{ snapshot_date: string | null }>;
-  const latestSnapshotDate = latestRows[0]?.snapshot_date ?? null;
+    const latestRows = latestRowsRaw as Array<{ snapshot_date: string | null }>;
+    const latestSnapshotDate = latestRows[0]?.snapshot_date ?? null;
+    console.log('[youtube/dashboard] Latest snapshot date:', latestSnapshotDate);
 
-  const [overviewRowsRaw] = await client.query({
-    query: `
-      SELECT
-        SUM(CASE WHEN metric_type = 'views' THEN value ELSE 0 END) AS total_views_30d,
-        SUM(CASE WHEN metric_type = 'estimatedMinutesWatched' THEN value ELSE 0 END) AS total_watch_minutes_30d,
-        SUM(CASE WHEN metric_type = 'subscribersGained' THEN value ELSE 0 END)
-          - SUM(CASE WHEN metric_type = 'subscribersLost' THEN value ELSE 0 END) AS subscriber_delta_30d
-      FROM \`${projectId}.${datasetId}.media_metrics_daily\`
-      WHERE media = 'youtube'
-        AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
-    `,
-  });
+    console.log('[youtube/dashboard] Fetching overview metrics...');
+    const [overviewRowsRaw] = await client.query({
+      query: `
+        SELECT
+          COALESCE(SUM(CASE WHEN metric_type = 'views' THEN value ELSE 0 END), 0) AS total_views_30d,
+          COALESCE(SUM(CASE WHEN metric_type = 'estimatedMinutesWatched' THEN value ELSE 0 END), 0) AS total_watch_minutes_30d,
+          COALESCE(SUM(CASE WHEN metric_type = 'subscribersGained' THEN value ELSE 0 END)
+            - SUM(CASE WHEN metric_type = 'subscribersLost' THEN value ELSE 0 END), 0) AS subscriber_delta_30d
+        FROM \`${projectId}.${datasetId}.media_metrics_daily\`
+        WHERE media = 'youtube'
+          AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+      `,
+    });
 
-  const overviewRows = overviewRowsRaw as Array<{
-    total_views_30d: number | null;
-    total_watch_minutes_30d: number | null;
-    subscriber_delta_30d: number | null;
-  }>;
+    const overviewRows = overviewRowsRaw as Array<{
+      total_views_30d: number | null;
+      total_watch_minutes_30d: number | null;
+      subscriber_delta_30d: number | null;
+    }>;
 
-  const overviewRow = overviewRows[0] ?? {
-    total_views_30d: 0,
-    total_watch_minutes_30d: 0,
-    subscriber_delta_30d: 0,
-  };
+    const overviewRow = overviewRows[0] ?? {
+      total_views_30d: 0,
+      total_watch_minutes_30d: 0,
+      subscriber_delta_30d: 0,
+    };
+
+    console.log('[youtube/dashboard] Overview metrics:', overviewRow);
 
   let topVideos: YoutubeVideoSummary[] = [];
   if (latestSnapshotDate) {
@@ -276,26 +282,35 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
   }
 
   const themes = deriveThemes(topVideos);
+
+  console.log('[youtube/dashboard] Building analytics summary...');
   const analytics = await buildAnalyticsSummary(client, projectId, datasetId, latestSnapshotDate ?? undefined);
+
+  console.log('[youtube/dashboard] Building competitor summary...');
   const competitors = latestSnapshotDate
     ? await buildCompetitorSummary(client, projectId, datasetId, latestSnapshotDate)
     : [];
 
+  console.log('[youtube/dashboard] Dashboard data fetching completed successfully');
   return {
-    overview: {
-      totalViews30d: overviewRow.total_views_30d ?? 0,
-      avgViewDuration:
-        overviewRow.total_views_30d && overviewRow.total_views_30d > 0
-          ? (overviewRow.total_watch_minutes_30d ?? 0) * 60 / overviewRow.total_views_30d
-          : 0,
-      subscriberDelta30d: overviewRow.subscriber_delta_30d ?? 0,
-      latestSnapshotDate,
-    },
-    topVideos,
-    themes,
-    analytics,
-    competitors,
-  };
+      overview: {
+        totalViews30d: Number(overviewRow.total_views_30d) || 0,
+        avgViewDuration:
+          overviewRow.total_views_30d && overviewRow.total_views_30d > 0
+            ? ((Number(overviewRow.total_watch_minutes_30d) || 0) * 60) / Number(overviewRow.total_views_30d)
+            : 0,
+        subscriberDelta30d: Number(overviewRow.subscriber_delta_30d) || 0,
+        latestSnapshotDate,
+      },
+      topVideos,
+      themes,
+      analytics,
+      competitors,
+    };
+  } catch (error) {
+    console.error('[youtube/dashboard] Error fetching dashboard data:', error);
+    throw new Error(`Failed to fetch YouTube dashboard data: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function buildAnalyticsSummary(
