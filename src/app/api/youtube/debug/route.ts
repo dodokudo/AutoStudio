@@ -1,59 +1,112 @@
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
-
-const CLIENT_ID = process.env.YOUTUBE_OAUTH_CLIENT_ID;
-const CLIENT_SECRET = process.env.YOUTUBE_OAUTH_CLIENT_SECRET;
-const REFRESH_TOKEN = process.env.YOUTUBE_OAUTH_REFRESH_TOKEN;
+import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 
 export async function GET() {
   try {
-    if (!CLIENT_ID || !CLIENT_SECRET) {
-      return NextResponse.json(
-        { error: 'YouTube OAuth credentials not configured' },
-        { status: 500 }
-      );
-    }
+    console.log('[youtube/debug] Starting BigQuery connection test...');
 
-    if (!REFRESH_TOKEN) {
+    const projectId = resolveProjectId();
+    const datasetId = process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media';
+
+    console.log('[youtube/debug] Project ID:', projectId);
+    console.log('[youtube/debug] Dataset ID:', datasetId);
+    console.log('[youtube/debug] Environment variables check:');
+    console.log('[youtube/debug] - BQ_PROJECT_ID:', !!process.env.BQ_PROJECT_ID);
+    console.log('[youtube/debug] - YOUTUBE_BQ_DATASET_ID:', !!process.env.YOUTUBE_BQ_DATASET_ID);
+    console.log('[youtube/debug] - GOOGLE_SERVICE_ACCOUNT_JSON:', !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    console.log('[youtube/debug] - GOOGLE_APPLICATION_CREDENTIALS:', !!process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
+    const client = createBigQueryClient(projectId);
+
+    // Test basic BigQuery connection
+    console.log('[youtube/debug] Testing basic BigQuery connection...');
+    const [datasets] = await client.getDatasets();
+    console.log('[youtube/debug] Available datasets:', datasets.map(d => d.id));
+
+    // Test dataset access
+    console.log('[youtube/debug] Testing dataset access...');
+    const dataset = client.dataset(datasetId);
+    const [exists] = await dataset.exists();
+
+    if (!exists) {
       return NextResponse.json({
-        message: 'YOUTUBE_OAUTH_REFRESH_TOKEN not set. Please complete OAuth flow first.',
-        authUrl: '/api/youtube/auth'
+        success: false,
+        error: `Dataset ${datasetId} does not exist`,
+        projectId,
+        datasetId,
+        availableDatasets: datasets.map(d => d.id)
       });
     }
 
-    const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET);
-    oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
+    // Test tables in dataset
+    console.log('[youtube/debug] Testing tables in dataset...');
+    const [tables] = await dataset.getTables();
+    const tableNames = tables.map(t => t.id);
+    console.log('[youtube/debug] Available tables:', tableNames);
 
-    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-    const channelResponse = await youtube.channels.list({
-      part: ['snippet', 'statistics'],
-      mine: true
+    // Test specific YouTube tables
+    const requiredTables = [
+      'media_videos_snapshot',
+      'media_metrics_daily',
+      'media_channels_snapshot'
+    ];
+
+    const missingTables = requiredTables.filter(table => !tableNames.includes(table));
+
+    if (missingTables.length > 0) {
+      return NextResponse.json({
+        success: false,
+        error: `Missing required tables: ${missingTables.join(', ')}`,
+        projectId,
+        datasetId,
+        availableTables: tableNames,
+        missingTables
+      });
+    }
+
+    // Test query execution
+    console.log('[youtube/debug] Testing query execution...');
+    const [rows] = await client.query({
+      query: `
+        SELECT COUNT(*) as total_rows
+        FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
+        WHERE media = 'youtube'
+      `
     });
 
-    const channel = channelResponse.data.items?.[0];
+    const videoCount = rows[0]?.total_rows || 0;
+    console.log('[youtube/debug] YouTube video rows:', videoCount);
+
+    const [metricsRows] = await client.query({
+      query: `
+        SELECT COUNT(*) as total_rows
+        FROM \`${projectId}.${datasetId}.media_metrics_daily\`
+        WHERE media = 'youtube'
+      `
+    });
+
+    const metricsCount = metricsRows[0]?.total_rows || 0;
+    console.log('[youtube/debug] YouTube metrics rows:', metricsCount);
 
     return NextResponse.json({
-      channelInfo: {
-        channelId: channel?.id,
-        channelTitle: channel?.snippet?.title,
-        customUrl: channel?.snippet?.customUrl,
-        subscriberCount: channel?.statistics?.subscriberCount,
-        videoCount: channel?.statistics?.videoCount
-      },
-      environmentVars: {
-        YOUTUBE_CHANNEL_ID: channel?.id || 'NOT_SET',
-        YOUTUBE_OAUTH_REFRESH_TOKEN: REFRESH_TOKEN ? 'SET' : 'NOT_SET'
-      }
+      success: true,
+      projectId,
+      datasetId,
+      availableDatasets: datasets.map(d => d.id),
+      availableTables: tableNames,
+      youtubeVideoRows: Number(videoCount),
+      youtubeMetricsRows: Number(metricsCount),
+      timestamp: new Date().toISOString()
     });
+
   } catch (error) {
     console.error('[youtube/debug] Error:', error);
-    return NextResponse.json(
-      {
-        error: (error as Error).message,
-        message: 'OAuth token may have expired. Try re-authenticating.',
-        authUrl: '/api/youtube/auth'
-      },
-      { status: 500 }
-    );
+
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
   }
 }
