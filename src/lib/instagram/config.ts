@@ -35,6 +35,7 @@ export interface InstagramConfig {
   location: string;
   threadsAccountId?: string;
   threadsToken?: string;
+  defaultUserId: string;
 }
 
 function parseList(value: string): string[] {
@@ -65,6 +66,6 @@ export function loadInstagramConfig(): InstagramConfig {
     location,
     threadsAccountId: process.env.IG_THREADS_ACCOUNT_ID,
     threadsToken: process.env.IG_THREADS_TOKEN,
+    defaultUserId: process.env.IG_DEFAULT_USER_ID ?? 'kudo',
   };
 }
-

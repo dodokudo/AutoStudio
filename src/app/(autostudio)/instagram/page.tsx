@@ -1,5 +1,10 @@
 import { ensureInstagramTables } from '@/lib/instagram/bigquery';
 import { createInstagramBigQuery, loadInstagramConfig } from '@/lib/instagram';
+import { getInstagramDashboardData } from '@/lib/instagram/dashboard';
+import { upsertUserCompetitor, deactivateUserCompetitor } from '@/lib/instagram/competitors';
+import { InstagramDashboardView } from './_components/dashboard-view';
+import { CompetitorManager } from './_components/competitor-manager';
+import { revalidatePath } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,38 +13,53 @@ export default async function InstagramDashboardPage() {
     const config = loadInstagramConfig();
     const bigquery = createInstagramBigQuery();
     await ensureInstagramTables(bigquery);
+    const data = await getInstagramDashboardData(config.projectId);
+
+    async function addCompetitor(formData: FormData) {
+      'use server';
+      const username = String(formData.get('username') ?? '').trim();
+      if (!username) {
+        throw new Error('username is required');
+      }
+
+      const driveFolderId = String(formData.get('driveFolderId') ?? '').trim() || undefined;
+      const category = String(formData.get('category') ?? '').trim() || undefined;
+      const priorityValue = formData.get('priority');
+      const priority = priorityValue ? Number(priorityValue) : undefined;
+
+      await upsertUserCompetitor(config.defaultUserId, {
+        username,
+        driveFolderId,
+        category,
+        priority: Number.isFinite(priority) ? (priority as number) : undefined,
+      });
+      revalidatePath('/instagram');
+    }
+
+    async function removeCompetitor(formData: FormData) {
+      'use server';
+      const username = String(formData.get('username') ?? '').trim();
+      if (!username) {
+        return;
+      }
+      await deactivateUserCompetitor(config.defaultUserId, username);
+      revalidatePath('/instagram');
+    }
 
     return (
-      <div className="space-y-10">
+      <div className="space-y-8">
         <header className="flex flex-col gap-2">
           <h1 className="text-xl font-semibold text-white">Instagram ダッシュボード</h1>
           <p className="text-xs text-slate-400">
-            競合リールの自動リサーチと台本生成の結果を確認できます。現在は基盤のセットアップ直後のため、まずは日次バッチを実行してください。
+            競合リールの動向と自社インサイト、生成された台本案をまとめて確認できます。
           </p>
         </header>
-
-        <section className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-          <h2 className="text-base font-semibold text-white">進捗チェックリスト</h2>
-          <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-200">
-            <li>Google Drive に競合リールが保存されていることを確認</li>
-            <li>`npm run ig:fetch` で BigQuery にメタ情報を投入</li>
-            <li>`npm run ig:transcribe` で Gemini 文字起こしを実行</li>
-            <li>`npm run ig:generate` で Claude 台本生成を実行</li>
-            <li>`npm run ig:notify` でメール通知を送信</li>
-          </ol>
-          <p className="text-xs text-slate-500">
-            すべてのステップが完了すると、このページに競合トレンドと今日の台本が表示されます。
-          </p>
-        </section>
-
-        <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
-          <h2 className="text-base font-semibold text-white">環境情報</h2>
-          <div className="mt-3 space-y-1 text-xs text-slate-300">
-            <p>BigQuery: <span className="text-slate-100">{`${config.projectId}.${config.dataset}`}</span></p>
-            <p>Drive フォルダ: <span className="text-slate-100">{config.driveFolderIds.join(', ')}</span></p>
-            <p>Claude モデル: <span className="text-slate-100">{config.claudeModel}</span></p>
-          </div>
-        </section>
+        <InstagramDashboardView data={data} />
+        <CompetitorManager
+          competitors={data.userCompetitors}
+          addAction={addCompetitor}
+          removeAction={removeCompetitor}
+        />
       </div>
     );
   } catch (error) {

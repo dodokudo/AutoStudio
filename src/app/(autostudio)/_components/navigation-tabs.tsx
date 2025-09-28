@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
+  { id: "home", href: "/home", label: "Home" },
   { id: "threads", href: "/threads", label: "Threads" },
-  { id: "line", href: "/line", label: "LINE" },
-  { id: "youtube", href: "/youtube", label: "YouTube" },
   { id: "instagram", href: "/instagram", label: "Instagram" },
+  { id: "youtube", href: "/youtube", label: "YouTube" },
+  { id: "line", href: "/line", label: "LINE" },
 ];
 
 export function NavigationTabs() {
