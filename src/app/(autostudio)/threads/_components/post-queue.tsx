@@ -65,6 +65,7 @@ const statusLabel: Record<PlanStatus, string> = {
   approved: '承認済み',
   scheduled: '予約済み',
   rejected: '差戻し済み',
+  posted: '投稿済み',
 };
 
 const statusBadgeClass: Record<PlanStatus, string> = {
@@ -72,6 +73,7 @@ const statusBadgeClass: Record<PlanStatus, string> = {
   approved: 'bg-[#e6f7ed] text-[#096c3e]',
   scheduled: 'bg-[#e6f4ff] text-[#0a5dc2]',
   rejected: 'bg-[#fdeded] text-[#a61b1b]',
+  posted: 'bg-[#f0f0f0] text-[#4a5568]',
 };
 
 const scheduleOptions = Array.from({ length: 48 }).map((_, index) => {
