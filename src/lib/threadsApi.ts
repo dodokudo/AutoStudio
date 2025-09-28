@@ -32,17 +32,23 @@ async function request(path: string, options: RequestInit & { params?: Record<st
 }
 
 async function createContainer(text: string, replyToId?: string) {
-  const body = {
+  const body: any = {
     text,
     media_type: 'TEXT',
-    reply_to_id: replyToId,
   };
+
+  if (replyToId) {
+    body.reply_to_id = replyToId;
+  }
+
+  console.log('[threadsApi] createContainer body:', body);
 
   const response = await request(`${THREADS_BUSINESS_ID}/threads`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
 
+  console.log('[threadsApi] createContainer response:', response);
   return response.id as string;
 }
 
@@ -80,6 +86,13 @@ async function publishContainer(containerId: string) {
 }
 
 export async function postThread(text: string, replyToId?: string) {
+  console.log('[threadsApi] postThread called:', {
+    textLength: text.length,
+    hasReplyToId: !!replyToId,
+    replyToId,
+    postingEnabled: THREADS_POSTING_ENABLED
+  });
+
   if (!THREADS_POSTING_ENABLED) {
     const mockId = `dryrun-${Date.now()}`;
     console.info('[threadsApi] Skipping Threads publish (dry-run). Returning mock id %s', mockId);
@@ -90,8 +103,14 @@ export async function postThread(text: string, replyToId?: string) {
     throw new Error('Threads API credentials are not configured');
   }
 
+  console.log('[threadsApi] Creating container...');
   const containerId = await createContainer(text, replyToId);
+  console.log('[threadsApi] Container created:', containerId);
+
+  console.log('[threadsApi] Publishing container...');
   const threadId = await publishContainer(containerId);
+  console.log('[threadsApi] Thread published successfully:', threadId);
+
   return threadId;
 }
 

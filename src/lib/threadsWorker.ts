@@ -31,12 +31,32 @@ export async function processNextJob() {
       throw new Error('Plan not found for job');
     }
 
+    console.log('[threadsWorker] Posting main thread:', plan.main_text.substring(0, 100) + '...');
     const mainThreadId = await postThread(plan.main_text);
+    console.log('[threadsWorker] Main thread posted successfully, ID:', mainThreadId);
+
+    const comments = parseComments(plan.comments ?? '[]');
+    console.log('[threadsWorker] Parsed comments:', comments.length, 'comments found');
+
     let replyToId = mainThreadId;
-    for (const comment of parseComments(plan.comments ?? '[]')) {
+    for (let i = 0; i < comments.length; i++) {
+      const comment = comments[i];
+      console.log(`[threadsWorker] Posting comment ${i + 1}/${comments.length}:`, comment.text.substring(0, 50) + '...');
+      console.log(`[threadsWorker] Replying to thread ID:`, replyToId);
+
+      // Add delay between posts to avoid rate limiting and ensure proper thread ordering
+      if (i > 0) {
+        console.log(`[threadsWorker] Waiting 3 seconds before posting comment ${i + 1}...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+
       const commentThreadId = await postThread(comment.text, replyToId);
+      console.log(`[threadsWorker] Comment ${i + 1} posted successfully, ID:`, commentThreadId);
+
       replyToId = commentThreadId;
     }
+
+    console.log('[threadsWorker] All posts completed successfully');
 
     await markJobResult(job.job_id, 'succeeded', { postedThreadId: mainThreadId });
     await updatePlanStatus(plan.plan_id, 'scheduled');
