@@ -5,7 +5,6 @@ import { upsertUserCompetitor, deactivateUserCompetitor } from '@/lib/instagram/
 import { InstagramDashboardView } from './_components/dashboard-view';
 import { CompetitorManager } from './_components/competitor-manager';
 import { revalidatePath } from 'next/cache';
-import { Card } from '@/components/ui/card';
 import { Banner } from '@/components/ui/banner';
 
 export const dynamic = 'force-dynamic';
@@ -50,10 +49,6 @@ export default async function InstagramDashboardPage() {
 
     return (
       <div className="section-stack">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Instagram ダッシュボード</h1>
-          <p className="text-sm text-[color:var(--color-text-secondary)]">競合リールの動向と自社インサイト、生成された台本案をまとめて確認できます。</p>
-        </header>
         <InstagramDashboardView data={data} />
         <CompetitorManager competitors={data.userCompetitors} addAction={addCompetitor} removeAction={removeCompetitor} />
       </div>
@@ -62,14 +57,11 @@ export default async function InstagramDashboardPage() {
     const message = error instanceof Error ? error.message : String(error);
     return (
       <div className="section-stack">
-        <Card>
-          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Instagram ダッシュボード</h1>
-          <Banner variant="error" className="mt-4">
-            <p className="font-semibold">環境変数が不足しています</p>
-            <p className="mt-1 text-sm">{message}</p>
-            <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">`.env.local` に Instagram 関連の環境変数を設定した後、ページを再読み込みしてください。</p>
-          </Banner>
-        </Card>
+        <Banner variant="error">
+          <p className="font-semibold">環境変数が不足しています</p>
+          <p className="mt-1 text-sm">{message}</p>
+          <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">`.env.local` に Instagram 関連の環境変数を設定した後、ページを再読み込みしてください。</p>
+        </Banner>
       </div>
     );
   }

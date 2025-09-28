@@ -257,11 +257,6 @@ export default async function ThreadsHome({
 
     return (
       <div className="section-stack">
-        {/* Header */}
-        <div className="glass-card gradient-bg text-center">
-          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Threads ダッシュボード</h1>
-          <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">{noteText}</p>
-        </div>
 
         {/* Tab Navigation */}
         <div className="flex border-b border-[color:var(--color-border)]">

@@ -68,22 +68,6 @@ interface OverviewTabProps {
 export function OverviewTab(props: OverviewTabProps) {
   return (
     <div className="section-stack">
-      <div className="glass-card gradient-bg">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Threads ダッシュボード</h1>
-            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">レポート期間: {props.noteText}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <InsightsRangeSelector
-              options={props.rangeSelectorOptions}
-              value={props.selectedRangeValue}
-              customStart={props.customStart}
-              customEnd={props.customEnd}
-            />
-          </div>
-        </div>
-      </div>
       <InsightsCard title="アカウント概況" stats={props.stats} />
 
       <IndividualPostCard />
@@ -118,22 +102,6 @@ export function OverviewTab(props: OverviewTabProps) {
 
       <div className="grid gap-10 lg:grid-cols-[1.8fr,1fr]">
         <div className="section-stack">
-      <div className="glass-card gradient-bg">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">Threads ダッシュボード</h1>
-            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">レポート期間: {props.noteText}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <InsightsRangeSelector
-              options={props.rangeSelectorOptions}
-              value={props.selectedRangeValue}
-              customStart={props.customStart}
-              customEnd={props.customEnd}
-            />
-          </div>
-        </div>
-      </div>
           <PostQueueContainer
             initialPlans={JSON.parse(JSON.stringify(props.planSummaries))}
             templateOptions={props.templateOptions}

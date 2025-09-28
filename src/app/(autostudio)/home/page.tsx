@@ -11,13 +11,6 @@ const destinations = [
 export default function HomePage() {
   return (
     <div className="section-stack">
-      {/* Hero section with glass effect */}
-      <div className="glass-card gradient-bg text-center">
-        <h1 className="text-3xl font-semibold text-[color:var(--color-text-primary)]">AutoStudio</h1>
-        <p className="mt-3 text-base text-[color:var(--color-text-secondary)]">
-          自動投稿システムへようこそ。管理したいプラットフォームを選び、各タブから機能を利用してください。
-        </p>
-      </div>
 
       {/* Platform cards with subtle accent gradient */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

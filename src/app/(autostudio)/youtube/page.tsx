@@ -117,14 +117,6 @@ export default async function YoutubeDashboardPage() {
 
     return (
       <div className="section-stack">
-        <div className="glass-card gradient-bg">
-          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">YouTube ダッシュボード</h1>
-          {data.overview.latestSnapshotDate ? (
-            <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">最新スナップショット: {String(data.overview.latestSnapshotDate)}</p>
-          ) : (
-            <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">まだスナップショットが取り込まれていません。</p>
-          )}
-        </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {overviewCards.map((card) => (
@@ -298,10 +290,3 @@ function ComparisonBlock({
   );
 }
 
-function flatten<T>(arrays: T[][]): T[] {
-  return arrays.flat();
-}
-
-function dedupe(items: string[]): string[] {
-  return Array.from(new Set(items.filter(Boolean)));
-}

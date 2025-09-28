@@ -1,6 +1,8 @@
 import { getLineDashboardData } from '@/lib/lstep/dashboard';
 import { resolveProjectId } from '@/lib/bigquery';
 import { Card } from '@/components/ui/card';
+import { Banner } from '@/components/ui/banner';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const PROJECT_ID = (() => {
   const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
@@ -25,13 +27,10 @@ export default async function LineDashboardPage() {
   if (!PROJECT_ID) {
     return (
       <div className="section-stack">
-        <div className="glass-card text-center">
-          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">LINE ダッシュボード</h1>
-        </div>
-        <div className="ui-banner ui-banner-warning">
+        <Banner variant="warning">
           <p className="font-semibold">BigQuery プロジェクト ID が未設定です</p>
           <p className="mt-2">`LSTEP_BQ_PROJECT_ID` もしくは `BQ_PROJECT_ID` を環境変数に設定してください。</p>
-        </div>
+        </Banner>
       </div>
     );
   }
@@ -42,13 +41,10 @@ export default async function LineDashboardPage() {
   if (!dashboard.latestSnapshotDate) {
     return (
       <div className="section-stack">
-        <div className="glass-card text-center">
-          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">LINE ダッシュボード</h1>
-        </div>
-        <div className="ui-empty-state">
-          <p>まだ BigQuery にデータが存在しません</p>
-          <p className="mt-2 text-xs">Cloud Run / Scheduler のバッチが実行された後に再度確認してください。</p>
-        </div>
+        <EmptyState
+          title="まだ BigQuery にデータが存在しません"
+          description="Cloud Run / Scheduler のバッチが実行された後に再度確認してください。"
+        />
       </div>
     );
   }
@@ -77,7 +73,7 @@ export default async function LineDashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="ui-card">
+        <Card className="accent-gradient">
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日次新規友だち数（直近14日）</h2>
           <dl className="mt-4 space-y-3">
             {dashboard.dailyNewFriends.map((item) => (
@@ -90,7 +86,7 @@ export default async function LineDashboardPage() {
               <p className="text-sm text-[color:var(--color-text-muted)]">データが見つかりません。</p>
             )}
           </dl>
-        </div>
+        </Card>
 
         <Card>
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">タグ別ユーザー数 TOP10</h2>
@@ -111,7 +107,7 @@ export default async function LineDashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="ui-card">
+        <Card className="accent-gradient">
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">流入経路別ユーザー数</h2>
           <div className="mt-4 space-y-3 text-sm">
             {dashboard.topSources.map((item) => (
@@ -126,9 +122,9 @@ export default async function LineDashboardPage() {
               <p className="text-sm text-[color:var(--color-text-muted)]">流入経路データが見つかりません。</p>
             )}
           </div>
-        </div>
+        </Card>
 
-        <div className="ui-card">
+        <Card className="accent-gradient">
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル（流入 → 詳細F済 → 成約）</h2>
           <div className="mt-4 space-y-3 text-sm">
             {funnelRows.map((row) => (
@@ -156,7 +152,7 @@ export default async function LineDashboardPage() {
           <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">
             使用タグは環境変数 `LSTEP_FUNNEL_TAGS`（`|` 区切り）で変更できます。
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -164,10 +160,7 @@ export default async function LineDashboardPage() {
     console.error('[line/page] Error:', error);
     return (
       <div className="section-stack">
-        <div className="glass-card text-center">
-          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">LINE ダッシュボード</h1>
-        </div>
-        <div className="ui-banner ui-banner-error">
+        <Banner variant="error">
           <p className="font-semibold">エラーが発生しました</p>
           <p className="mt-2">ページの読み込み中にエラーが発生しました。しばらく待ってから再度お試しください。</p>
           <details className="mt-2">
@@ -176,7 +169,7 @@ export default async function LineDashboardPage() {
               {error instanceof Error ? error.message : String(error)}
             </pre>
           </details>
-        </div>
+        </Banner>
       </div>
     );
   }
