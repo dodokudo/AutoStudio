@@ -406,12 +406,19 @@ export default async function YoutubeDashboardPage() {
     );
   } catch (error) {
     console.error('[youtube/page] error', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return (
       <div className="space-y-6">
         <h1 className="text-xl font-semibold text-white">YouTube ダッシュボード</h1>
         <div className="rounded-md border border-red-500/40 bg-red-950/60 p-6">
           <p className="text-sm font-medium text-red-200">データの取得に失敗しました。</p>
           <p className="mt-2 text-xs text-red-300">環境変数や BigQuery の設定を確認してください。</p>
+          {process.env.NODE_ENV === 'development' && (
+            <details className="mt-4">
+              <summary className="text-xs text-red-400 cursor-pointer">エラー詳細 (開発環境のみ)</summary>
+              <pre className="mt-2 text-xs text-red-300 whitespace-pre-wrap">{errorMessage}</pre>
+            </details>
+          )}
         </div>
       </div>
     );
