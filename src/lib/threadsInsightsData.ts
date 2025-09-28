@@ -1,6 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
-import { getThreadInsights, type ThreadInsights } from './threadsApi';
+import type { ThreadInsights } from './threadsApi';
 
 const DATASET = 'autostudio_threads';
 const PROJECT_ID = resolveProjectId();
@@ -14,6 +14,16 @@ export interface PostInsight {
   mainText: string;
   comments: string[];
   insights: ThreadInsights;
+}
+
+export interface DailyFollowerMetric {
+  date: string;
+  followers: number;
+}
+
+export interface ThreadsInsightsActivity {
+  posts: PostInsight[];
+  dailyMetrics: DailyFollowerMetric[];
 }
 
 const client: BigQuery = createBigQueryClient(PROJECT_ID);
@@ -66,144 +76,102 @@ function parseComments(value: unknown): string[] {
   return [];
 }
 
-async function appendThreadInsights(
-  target: PostInsight[],
-  row: Record<string, unknown>,
-  source: 'logs' | 'fallback',
-  seen: Map<string, { impressions?: number; likes?: number }>,
-) {
-  const postedThreadId = toPlain(row.posted_thread_id ?? row.post_id ?? '');
-  if (!postedThreadId) return;
-
-  const existing = seen.get(postedThreadId);
-  const impressions = Number(row.impressions_total ?? row.views ?? row.impressions ?? existing?.impressions ?? 0) || 0;
-  const likes = Number(row.likes_total ?? row.likes ?? existing?.likes ?? 0) || 0;
-
-  if (existing) {
-    existing.impressions = Math.max(existing.impressions ?? 0, impressions);
-    existing.likes = Math.max(existing.likes ?? 0, likes);
-    return;
-  }
-
-  const postedAtIso = normalizeTimestamp(row.posted_at ?? row.created_at ?? '');
-  const postedAt = postedAtIso || new Date().toISOString();
-
-  const insightRecord: PostInsight = {
-    planId: toPlain(row.plan_id) || `post-${postedThreadId}`,
-    postedThreadId,
-    postedAt,
-    templateId: toPlain(row.template_id) || 'auto-generated',
-    theme: toPlain(row.theme) || '未分類',
-    mainText: toPlain(row.main_text ?? row.content ?? ''),
-    comments: parseComments(row.comments),
-    insights: { impressions, likes },
-  };
-
-  if (!insightRecord.insights.impressions || !insightRecord.insights.likes) {
-    try {
-      const api = await getThreadInsights(postedThreadId);
-      insightRecord.insights = {
-        impressions: api.impressions ?? insightRecord.insights.impressions,
-        likes: api.likes ?? insightRecord.insights.likes,
-        replies: api.replies,
-        reposts: api.reposts,
-        quotes: api.quotes,
-      };
-    } catch (error) {
-      console.warn(`[threadsInsightsData] Failed to get API insights for ${postedThreadId} (${source})`, error);
-    }
-  }
-
-  seen.set(postedThreadId, {
-    impressions: insightRecord.insights.impressions,
-    likes: insightRecord.insights.likes,
-  });
-
-  target.push(insightRecord);
+function toDateOnly(value: string): string {
+  return value.slice(0, 10);
 }
 
-export async function getThreadsInsightsData(): Promise<PostInsight[]> {
-  console.log('[threadsInsightsData] Fetching insights data from BigQuery...');
+export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity> {
+  console.log('[threadsInsightsData] Fetching insights data from BigQuery (threads_posts + daily metrics)...');
 
-  const results: PostInsight[] = [];
-  const seenThreads = new Map<string, { impressions?: number; likes?: number }>();
-
+  let posts: PostInsight[] = [];
   try {
     const [rows] = await client.query({
       query: `
         SELECT
-          l.plan_id,
-          l.posted_thread_id,
-          l.posted_at,
-          p.template_id,
-          p.theme,
-          p.main_text,
-          p.comments,
-          tp.impressions_total,
-          tp.likes_total
-        FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\` l
-        JOIN \`${PROJECT_ID}.${DATASET}.thread_post_plans\` p
-          ON l.plan_id = p.plan_id
-        LEFT JOIN \`${PROJECT_ID}.${DATASET}.threads_posts\` tp
-          ON tp.post_id = l.posted_thread_id
-        WHERE l.posted_thread_id IS NOT NULL
-          AND l.posted_thread_id != ''
-          AND l.posted_thread_id NOT LIKE 'dryrun-%'
-        ORDER BY l.posted_at DESC
-        LIMIT 200
+          post_id,
+          posted_at,
+          updated_at,
+          content,
+          impressions_total,
+          likes_total,
+          template_id,
+          theme,
+          comments
+        FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
+        WHERE post_id IS NOT NULL AND post_id != ''
+        ORDER BY posted_at DESC NULLS LAST, updated_at DESC NULLS LAST
+        LIMIT 300
       `,
     });
 
-    console.log('[threadsInsightsData] Logs query row count:', rows.length);
-    for (const row of rows) {
-      await appendThreadInsights(results, row, 'logs', seenThreads);
-    }
+    posts = rows
+      .map((row: Record<string, unknown>): PostInsight | null => {
+        const postedThreadId = toPlain(row.post_id);
+        if (!postedThreadId) {
+          return null;
+        }
+
+        const postedAtRaw = row.posted_at ?? row.updated_at ?? new Date().toISOString();
+        const postedAt = normalizeTimestamp(postedAtRaw) || new Date().toISOString();
+
+        const impressions = Number(row.impressions_total ?? 0) || 0;
+        const likes = Number(row.likes_total ?? 0) || 0;
+
+        return {
+          planId: postedThreadId,
+          postedThreadId,
+          postedAt,
+          templateId: toPlain(row.template_id) || 'unknown',
+          theme: toPlain(row.theme) || '未分類',
+          mainText: toPlain(row.content ?? ''),
+          comments: parseComments(row.comments),
+          insights: {
+            impressions,
+            likes,
+          },
+        } satisfies PostInsight;
+      })
+      .filter((item): item is PostInsight => item !== null)
+      .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
   } catch (error) {
-    console.error('[threadsInsightsData] Failed to read posting logs', error);
+    console.error('[threadsInsightsData] Failed to read threads_posts', error);
   }
 
-  if (!results.length) {
-    console.log('[threadsInsightsData] Falling back to threads_posts only dataset');
-    try {
-      const [fallbackRows] = await client.query({
-        query: `
-          SELECT
-            post_id,
-            posted_at,
-            content,
-            impressions_total,
-            likes_total
-          FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
-          WHERE post_id IS NOT NULL AND post_id != ''
-          ORDER BY posted_at DESC
-          LIMIT 200
-        `,
-      });
+  let dailyMetrics: DailyFollowerMetric[] = [];
+  try {
+    const [rows] = await client.query({
+      query: `
+        SELECT
+          date,
+          followers_snapshot
+        FROM \`${PROJECT_ID}.${DATASET}.threads_daily_metrics\`
+        WHERE date IS NOT NULL
+        ORDER BY date DESC
+        LIMIT 90
+      `,
+    });
 
-      for (const row of fallbackRows) {
-        await appendThreadInsights(results, row, 'fallback', seenThreads);
-      }
-    } catch (error) {
-      console.error('[threadsInsightsData] Fallback threads_posts query failed', error);
-    }
+    dailyMetrics = rows
+      .map((row: Record<string, unknown>) => {
+        const dateString = toPlain(row.date);
+        if (!dateString) return null;
+        const followers = Number(row.followers_snapshot ?? 0) || 0;
+        return {
+          date: toDateOnly(dateString),
+          followers,
+        } satisfies DailyFollowerMetric;
+      })
+      .filter((item): item is DailyFollowerMetric => item !== null)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  } catch (error) {
+    console.error('[threadsInsightsData] Failed to read threads_daily_metrics', error);
   }
 
-  results.sort((a, b) => {
-    const aTime = new Date(a.postedAt).getTime();
-    const bTime = new Date(b.postedAt).getTime();
-    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
-    if (Number.isNaN(aTime)) return 1;
-    if (Number.isNaN(bTime)) return -1;
-    return bTime - aTime;
-  });
+  console.log('[threadsInsightsData] Loaded posts:', posts.length);
+  console.log('[threadsInsightsData] Loaded daily metrics:', dailyMetrics.length);
 
-  console.log('[threadsInsightsData] Final insights count:', results.length);
-  console.log('[threadsInsightsData] Sample:', results.slice(0, 5).map((item) => ({
-    planId: item.planId,
-    postedThreadId: item.postedThreadId,
-    postedAt: item.postedAt,
-    impressions: item.insights.impressions,
-    likes: item.insights.likes,
-  })));
-  return results;
+  return {
+    posts,
+    dailyMetrics,
+  };
 }
