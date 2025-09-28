@@ -9,6 +9,8 @@ import { RegenerateButton } from './regenerate-button';
 // import { InsightsRangeSelector } from './insights-range-selector';
 import { TrendingTopics } from './trending-topics';
 import { IndividualPostCard } from './individual-post-card';
+import { PostedContent } from './posted-content';
+import { DebugPanel } from './debug-panel';
 import type { ThreadPlanSummary } from '@/types/threadPlan';
 import type { ThreadsDashboardData } from '@/lib/threadsDashboard';
 import type { PromptTemplateSummary } from '@/types/prompt';
@@ -111,6 +113,8 @@ export function OverviewTab(props: OverviewTabProps) {
         <CompetitorHighlights items={props.competitorHighlights} />
       </div>
 
+      <PostedContent initialPostedPlans={props.planSummaries.filter(plan => plan.status === 'posted')} />
+      <DebugPanel />
       <TemplateSummary items={props.templateSummaries} />
       <DashboardCards jobCounts={props.dashboard.jobCounts} recentLogs={props.dashboard.recentLogs} />
       <div className="flex justify-end">
