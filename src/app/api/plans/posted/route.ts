@@ -11,8 +11,8 @@ export async function GET() {
 
     // Sort by most recent first
     postedPlans.sort((a, b) => {
-      const aDate = a.log_posted_at || a.updated_at;
-      const bDate = b.log_posted_at || b.updated_at;
+      const aDate = a.log_posted_at || a.generation_date;
+      const bDate = b.log_posted_at || b.generation_date;
       return new Date(bDate).getTime() - new Date(aDate).getTime();
     });
 
