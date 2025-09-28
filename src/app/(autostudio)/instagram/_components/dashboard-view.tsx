@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import type { InstagramDashboardData } from '@/lib/instagram/dashboard';
+import { StatPill } from '@/components/ui/StatPill';
+import { CircleGauge } from '@/components/ui/CircleGauge';
+import { FollowerChart } from '@/components/charts/FollowerChart';
+import { ProfileHeader } from '@/components/ui/ProfileHeader';
 
 const SECTION_CLASS = 'space-y-4 rounded-lg border border-slate-800 bg-slate-900/60 p-6';
 const TITLE_CLASS = 'text-base font-semibold text-white';
@@ -22,6 +26,9 @@ export function InstagramDashboardView({ data }: Props) {
 
   return (
     <div className="space-y-8">
+      {/* プロフィールヘッダー */}
+      <ProfileHeader userId="demo-user" />
+
       <div className="flex items-center gap-2">
         {TABS.map((tab) => {
           const isActive = tab.id === activeTab;
@@ -62,28 +69,26 @@ function DashboardTab({ data }: Props) {
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-4 md:grid-cols-3">
-        <StatCard title="フォロワー" value={latestFollowers} subtitle="最新スナップショット" />
-        <StatCard title="リーチ" value={latestReach} subtitle="最新スナップショット" />
-        <StatCard title="エンゲージメント" value={engagement} subtitle="最新スナップショット" />
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="animate-fadeInUp delay-100">
+          <StatCard title="フォロワー" value={latestFollowers} subtitle="最新スナップショット" />
+        </div>
+        <div className="animate-fadeInUp delay-200">
+          <StatCard title="リーチ" value={latestReach} subtitle="最新スナップショット" />
+        </div>
+        <div className="animate-fadeInUp delay-300">
+          <StatCard title="エンゲージメント" value={engagement} subtitle="最新スナップショット" />
+        </div>
       </section>
 
       <section className={SECTION_CLASS}>
-        <h2 className={TITLE_CLASS}>フォロワー推移（直近7件）</h2>
+        <h2 className={TITLE_CLASS}>フォロワー推移とインサイト</h2>
         {followerTrend.length > 0 ? (
-          <ul className="grid gap-2 text-sm text-slate-200 md:grid-cols-2">
-            {followerTrend.map((point) => (
-              <li key={point.date} className="flex items-center justify-between rounded-md border border-slate-800/60 bg-slate-900/70 px-3 py-2">
-                <span className="text-slate-300">{point.date}</span>
-                <div className="text-right">
-                  <p className="font-semibold text-white">{formatNumber(point.followers)} followers</p>
-                  <p className="text-xs text-slate-400">reach {formatNumber(point.reach)} / engagement {formatNumber(point.engagement)}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <FollowerChart data={data.followerSeries} />
         ) : (
-          <p className="text-sm text-slate-400">フォロワーデータがまだありません。</p>
+          <div className="flex h-80 items-center justify-center rounded-lg border border-slate-800/60 bg-slate-900/70">
+            <p className="text-sm text-slate-400">フォロワーデータがまだありません。</p>
+          </div>
         )}
       </section>
 
@@ -189,11 +194,46 @@ function ScriptsTab({ data }: Props) {
 }
 
 function StatCard({ title, value, subtitle }: { title: string; value: number; subtitle?: string }) {
+  // エンゲージメント率の計算（仮定値）
+  const engagementRate = title === 'エンゲージメント' ? Math.min((value / 1000) * 100, 100) : 0;
+
+  // アイコンマッピング
+  const iconMap: Record<string, string> = {
+    'フォロワー': '👥',
+    'リーチ': '📈',
+    'エンゲージメント': '💝'
+  };
+
+  // カラーマッピング
+  const colorMap: Record<string, 'blue' | 'green' | 'purple' | 'orange' | 'teal'> = {
+    'フォロワー': 'blue',
+    'リーチ': 'green',
+    'エンゲージメント': 'purple'
+  };
+
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4 text-sm text-slate-300">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold text-white">{formatNumber(value)}</p>
-      {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <p className="text-xs uppercase tracking-wide text-slate-400">{title}</p>
+          <p className="mt-2 text-2xl font-semibold text-white">{formatNumber(value)}</p>
+          {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <StatPill
+            icon={iconMap[title] || '📊'}
+            value={formatNumber(value)}
+            color={colorMap[title] || 'blue'}
+          />
+          {title === 'エンゲージメント' && (
+            <CircleGauge
+              value={engagementRate}
+              size="md"
+              color="purple"
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
