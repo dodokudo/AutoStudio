@@ -6,7 +6,7 @@ import { PostQueueContainer } from './post-queue-container';
 import { TemplateSummary } from './template-summary';
 import { DashboardCards } from './dashboard-cards';
 import { RegenerateButton } from './regenerate-button';
-import { InsightsRangeSelector } from './insights-range-selector';
+// import { InsightsRangeSelector } from './insights-range-selector';
 import { TrendingTopics } from './trending-topics';
 import { IndividualPostCard } from './individual-post-card';
 import type { ThreadPlanSummary } from '@/types/threadPlan';

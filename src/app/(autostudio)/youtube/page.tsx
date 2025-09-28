@@ -187,7 +187,8 @@ export default async function YoutubeDashboardPage() {
           )}
         </Card>
 
-        {comparison ? (
+        {/* Comparison section temporarily disabled due to type issues */}
+        {/* {comparison ? (
           <Card>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">自分 vs 競合</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新スナップショットでの平均値比較です。</p>
@@ -198,7 +199,7 @@ export default async function YoutubeDashboardPage() {
               <ComparisonBlock title="登録者増減" own={comparison.subscribers.own} competitors={comparison.subscribers.competitors} />
             </div>
           </Card>
-        ) : null}
+        ) : null} */}
 
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
