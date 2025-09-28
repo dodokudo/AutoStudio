@@ -40,7 +40,7 @@ async function fetchTemplateMetrics(): Promise<TemplateMetricRow[]> {
         l.plan_id,
         l.posted_thread_id,
         l.posted_at,
-        p.template_id
+        p.template_id AS plan_template_id
       FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\` l
       JOIN \`${PROJECT_ID}.${DATASET}.thread_post_plans\` p
         ON l.plan_id = p.plan_id
@@ -51,15 +51,15 @@ async function fetchTemplateMetrics(): Promise<TemplateMetricRow[]> {
     ),
     metrics AS (
       SELECT
-        template_id,
+        logs.plan_template_id AS template_id,
         AVG(tp.impressions_total) AS avg_impressions,
         AVG(tp.likes_total) AS avg_likes,
         COUNT(*) AS post_count
       FROM logs
       JOIN \`${PROJECT_ID}.${DATASET}.threads_posts\` tp
         ON tp.post_id = logs.posted_thread_id
-      WHERE template_id IS NOT NULL
-      GROUP BY template_id
+      WHERE logs.plan_template_id IS NOT NULL
+      GROUP BY logs.plan_template_id
     )
     SELECT * FROM metrics
   `;
