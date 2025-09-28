@@ -215,6 +215,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
 
   let topVideos: YoutubeVideoSummary[] = [];
   if (latestSnapshotDate) {
+    console.log('[youtube/dashboard] Fetching top videos...');
     const [videoRowsRaw] = await client.query({
       query: `
         SELECT
@@ -236,8 +237,8 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
           AND c.media = 'youtube'
         WHERE v.media = 'youtube'
           AND v.snapshot_date = @snapshot_date
-          AND c.is_self = TRUE
-        ORDER BY v.view_velocity DESC
+          AND (c.is_self = TRUE OR c.is_self IS NULL)
+        ORDER BY COALESCE(v.view_velocity, v.view_count, 0) DESC
         LIMIT 60
       `,
       params: { snapshot_date: latestSnapshotDate },
@@ -284,12 +285,30 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
   const themes = deriveThemes(topVideos);
 
   console.log('[youtube/dashboard] Building analytics summary...');
-  const analytics = await buildAnalyticsSummary(client, projectId, datasetId, latestSnapshotDate ?? undefined);
+  let analytics;
+  try {
+    analytics = await buildAnalyticsSummary(client, projectId, datasetId, latestSnapshotDate ?? undefined);
+  } catch (error) {
+    console.warn('[youtube/dashboard] Failed to build analytics summary, using defaults:', error);
+    analytics = {
+      own: {
+        last30Days: { views: 0, watchTimeMinutes: 0, averageViewDurationSeconds: 0, subscriberNet: 0 },
+        last7Days: { views: 0, watchTimeMinutes: 0, averageViewDurationSeconds: 0, subscriberNet: 0 },
+      },
+      comparison: null,
+    };
+  }
 
   console.log('[youtube/dashboard] Building competitor summary...');
-  const competitors = latestSnapshotDate
-    ? await buildCompetitorSummary(client, projectId, datasetId, latestSnapshotDate)
-    : [];
+  let competitors: YoutubeCompetitorSummary[] = [];
+  if (latestSnapshotDate) {
+    try {
+      competitors = await buildCompetitorSummary(client, projectId, datasetId, latestSnapshotDate);
+    } catch (error) {
+      console.warn('[youtube/dashboard] Failed to build competitor summary, using empty array:', error);
+      competitors = [];
+    }
+  }
 
   console.log('[youtube/dashboard] Dashboard data fetching completed successfully');
   return {
@@ -319,17 +338,20 @@ async function buildAnalyticsSummary(
   datasetId: string,
   latestSnapshotDate?: string,
 ) {
-  const [ownRows] = await client.query({
-    query: `
-      SELECT
-        metric_type,
-        SUM(IF(date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), value, 0)) AS total_30,
-        SUM(IF(date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY), value, 0)) AS total_7
-      FROM \`${projectId}.${datasetId}.media_metrics_daily\`
-      WHERE media = 'youtube'
-      GROUP BY metric_type
-    `,
-  });
+  try {
+    console.log('[youtube/dashboard] Querying analytics metrics...');
+    const [ownRows] = await client.query({
+      query: `
+        SELECT
+          metric_type,
+          SUM(IF(date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY), value, 0)) AS total_30,
+          SUM(IF(date >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY), value, 0)) AS total_7
+        FROM \`${projectId}.${datasetId}.media_metrics_daily\`
+        WHERE media = 'youtube'
+        GROUP BY metric_type
+      `,
+    });
+    console.log('[youtube/dashboard] Analytics query returned', ownRows.length, 'rows');
 
   const metrics = new Map<string, { total_30: number; total_7: number }>();
   for (const row of ownRows as Array<{ metric_type: string; total_30: number | null; total_7: number | null }>) {
@@ -372,11 +394,11 @@ async function buildAnalyticsSummary(
             AVG(view_velocity) AS own_view_velocity,
             AVG(engagement_rate) AS own_engagement_rate
           FROM \`${projectId}.${datasetId}.media_videos_snapshot\` v
-          JOIN \`${projectId}.${datasetId}.media_channels_snapshot\` c
+          LEFT JOIN \`${projectId}.${datasetId}.media_channels_snapshot\` c
             ON v.channel_id = c.channel_id AND v.snapshot_date = c.snapshot_date
           WHERE v.media = 'youtube'
             AND v.snapshot_date = @snapshot_date
-            AND c.is_self = TRUE
+            AND (c.is_self = TRUE OR c.is_self IS NULL)
         ),
         latest_competitors AS (
           SELECT
@@ -423,6 +445,10 @@ async function buildAnalyticsSummary(
     },
     comparison,
   };
+  } catch (error) {
+    console.error('[youtube/dashboard] Error in buildAnalyticsSummary:', error);
+    throw error;
+  }
 }
 
 async function buildCompetitorSummary(
@@ -431,7 +457,9 @@ async function buildCompetitorSummary(
   datasetId: string,
   snapshotDate: string,
 ): Promise<YoutubeCompetitorSummary[]> {
-  const [rows] = await client.query({
+  try {
+    console.log('[youtube/dashboard] Querying competitor data...');
+    const [rows] = await client.query({
     query: `
       WITH ranked_channels AS (
         SELECT
@@ -524,4 +552,8 @@ async function buildCompetitorSummary(
       return ts ? new Date(ts).toISOString() : undefined;
     })(),
   }));
+  } catch (error) {
+    console.error('[youtube/dashboard] Error in buildCompetitorSummary:', error);
+    throw error;
+  }
 }
