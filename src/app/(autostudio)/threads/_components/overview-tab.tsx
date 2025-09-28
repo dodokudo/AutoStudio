@@ -6,6 +6,7 @@ import { DashboardCards } from "./dashboard-cards";
 import { RegenerateButton } from "./regenerate-button";
 import { InsightsRangeSelector } from "./insights-range-selector";
 import { TrendingTopics } from "./trending-topics";
+import { IndividualPostCard } from "./individual-post-card";
 import type { ThreadPlanSummary } from "@/types/threadPlan";
 import type { ThreadsDashboardData } from "@/lib/threadsDashboard";
 import type { PromptTemplateSummary } from "@/types/prompt";
@@ -63,6 +64,22 @@ interface OverviewTabProps {
 export function OverviewTab(props: OverviewTabProps) {
   return (
     <div className="section-stack">
+      <InsightsCard
+        title="アカウント概況"
+        stats={props.stats}
+        note={props.noteText}
+        actions={
+          <InsightsRangeSelector
+            options={props.rangeSelectorOptions}
+            value={props.selectedRangeValue}
+            customStart={props.customStart}
+            customEnd={props.customEnd}
+          />
+        }
+      />
+
+      <IndividualPostCard />
+
       <section className="relative overflow-hidden rounded-[36px] border border-white/60 bg-white/90 px-8 py-10 shadow-[0_30px_70px_rgba(125,145,211,0.25)] dark:bg-white/10">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -left-10 top-[-50px] h-48 w-48 rounded-full bg-gradient-to-br from-indigo-400/50 via-purple-300/40 to-white/0 blur-3xl" />
@@ -89,20 +106,6 @@ export function OverviewTab(props: OverviewTabProps) {
           </div>
         </div>
       </section>
-
-      <InsightsCard
-        title="アカウント概況"
-        stats={props.stats}
-        note={props.noteText}
-        actions={
-          <InsightsRangeSelector
-            options={props.rangeSelectorOptions}
-            value={props.selectedRangeValue}
-            customStart={props.customStart}
-            customEnd={props.customEnd}
-          />
-        }
-      />
 
       <div className="grid gap-10 lg:grid-cols-[1.85fr,1fr]">
         <div className="section-stack">

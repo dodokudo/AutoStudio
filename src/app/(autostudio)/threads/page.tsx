@@ -272,7 +272,7 @@ export default async function ThreadsHome({
                 : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
-            概要
+            投稿
           </a>
           <a
             href={`?${new URLSearchParams({
@@ -315,7 +315,7 @@ export default async function ThreadsHome({
             queueMetrics={queueMetrics}
           />
         ) : (
-          <InsightsTab insights={insightsData} />
+          <InsightsTab insights={insightsData} accountSummary={insights.accountSummary} />
         )}
       </div>
     );
