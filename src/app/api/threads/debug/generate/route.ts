@@ -28,6 +28,7 @@ export async function GET() {
       BQ_PROJECT_ID: !!process.env.BQ_PROJECT_ID,
       THREADS_TOKEN: !!process.env.THREADS_TOKEN,
       THREADS_BUSINESS_ID: !!process.env.THREADS_BUSINESS_ID,
+      THREADS_POSTING_ENABLED: process.env.THREADS_POSTING_ENABLED,
     };
 
     return NextResponse.json({
