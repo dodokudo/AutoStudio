@@ -63,10 +63,11 @@ export async function POST(request: NextRequest) {
           const comment = comments[i];
           console.log(`[plans/update] Posting comment ${i + 1}/${comments.length}...`);
 
-          if (i > 0) {
-            // Add delay between comments
-            await new Promise(resolve => setTimeout(resolve, 3000));
-          }
+          // ランダムな待機時間（30秒〜90秒）でbot感を軽減
+          const randomDelayMs = Math.floor(Math.random() * 60000) + 30000; // 30000ms〜90000ms (30秒〜1分30秒)
+          const delaySeconds = (randomDelayMs / 1000).toFixed(1);
+          console.log(`[plans/update] Waiting ${delaySeconds} seconds before posting comment ${i + 1}...`);
+          await new Promise(resolve => setTimeout(resolve, randomDelayMs));
 
           const commentThreadId = await postThread(comment.text, replyToId);
           console.log(`[plans/update] Comment ${i + 1} posted:`, commentThreadId);

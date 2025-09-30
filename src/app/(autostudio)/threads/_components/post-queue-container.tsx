@@ -150,7 +150,7 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
   }
 
   return (
-    <div className="relative">
+    <div className="relative w-full max-w-full overflow-hidden">
       {isValidating ? <div className="pointer-events-none absolute inset-0 rounded-[var(--radius-lg)] bg-white/70" /> : null}
       <PostQueue
         items={normalizedPlans}
