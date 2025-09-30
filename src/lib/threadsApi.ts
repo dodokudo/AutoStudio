@@ -94,6 +94,10 @@ async function publishContainer(containerId: string) {
 }
 
 export async function postThread(text: string, replyToId?: string) {
+  const rawEnv = process.env.THREADS_POSTING_ENABLED;
+  const trimmedEnv = rawEnv?.trim();
+  const isEnabled = trimmedEnv === 'true';
+
   console.log('[threadsApi] postThread called:', {
     textLength: text.length,
     hasReplyToId: !!replyToId,
@@ -101,7 +105,12 @@ export async function postThread(text: string, replyToId?: string) {
     postingEnabled: THREADS_POSTING_ENABLED,
     environment: process.env.NODE_ENV,
     hasToken: !!THREADS_TOKEN,
-    hasBusinessId: !!THREADS_BUSINESS_ID
+    hasBusinessId: !!THREADS_BUSINESS_ID,
+    rawEnvValue: rawEnv,
+    rawEnvLength: rawEnv?.length,
+    trimmedEnvValue: trimmedEnv,
+    trimmedEnvLength: trimmedEnv?.length,
+    isEnabled
   });
 
   if (!THREADS_POSTING_ENABLED) {
@@ -109,7 +118,9 @@ export async function postThread(text: string, replyToId?: string) {
     console.info('[threadsApi] Skipping Threads publish (dry-run). Returning mock id %s', mockId);
     console.info('[threadsApi] Dry-run mode active. Environment:', {
       NODE_ENV: process.env.NODE_ENV,
-      THREADS_POSTING_ENABLED: process.env.THREADS_POSTING_ENABLED
+      THREADS_POSTING_ENABLED: process.env.THREADS_POSTING_ENABLED,
+      rawValue: rawEnv,
+      comparison: `'${trimmedEnv}' === 'true' = ${isEnabled}`
     });
     return mockId;
   }
