@@ -95,10 +95,32 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setPendingId(id);
     try {
+      console.log(`[PostQueue] Starting ${action} for plan ${id}`);
       const res = await fetch(`/api/threads/plans/${id}/${action}`, { method: 'POST' });
+      const responseData = await res.json();
+      console.log(`[PostQueue] Response:`, responseData);
+
       if (!res.ok) {
-        throw new Error(await res.text());
+        const errorMsg = responseData.error || 'Unknown error';
+        console.error(`[PostQueue] ${action} failed:`, errorMsg);
+        throw new Error(errorMsg);
       }
+
+      // 成功時の詳細ログ
+      if (action === 'approve') {
+        console.log(`[PostQueue] Approve result:`, {
+          published: responseData.published,
+          status: responseData.plan?.status,
+          error: responseData.publish_error
+        });
+
+        if (responseData.publish_error) {
+          alert(`承認はされましたが、投稿に失敗しました: ${responseData.publish_error}`);
+        } else if (responseData.published) {
+          alert('投稿が完了しました！');
+        }
+      }
+
       await mutate();
       setDrafts((current) => {
         const next = { ...current };
@@ -106,8 +128,9 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
         return next;
       });
     } catch (error) {
-      console.error('Plan action failed', error);
-      alert('処理に失敗しました');
+      console.error(`[PostQueue] ${action} failed`, error);
+      const errorMsg = error instanceof Error ? error.message : '不明なエラー';
+      alert(`処理に失敗しました: ${errorMsg}`);
     } finally {
       setPendingId(null);
     }

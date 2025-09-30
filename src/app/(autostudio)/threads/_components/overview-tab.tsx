@@ -69,13 +69,13 @@ interface OverviewTabProps {
 
 export function OverviewTab(props: OverviewTabProps) {
   return (
-    <div className="section-stack">
+    <div className="section-stack max-w-full overflow-hidden">
       <InsightsCard title="アカウント概況" stats={props.stats} />
 
       <IndividualPostCard />
 
-      <Card className="accent-gradient">
-        <div className="flex flex-col gap-4 md:gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <Card className="accent-gradient max-w-full overflow-hidden">
+        <div className="flex flex-col gap-4 md:gap-6 lg:flex-row lg:items-center lg:justify-between min-w-0">
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">本日の投稿案</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
@@ -88,9 +88,9 @@ export function OverviewTab(props: OverviewTabProps) {
               </Button>
             </div>
           </div>
-          <div className="grid w-full gap-3 grid-cols-1 sm:grid-cols-3 lg:w-auto lg:gap-4">
+          <div className="grid w-full gap-3 grid-cols-1 sm:grid-cols-3 lg:w-auto lg:gap-4 min-w-0">
             {props.heroStats.map((stat) => (
-              <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 md:p-5">
+              <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 md:p-5 min-w-0">
                 <p className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-[0.08em]">
                   {stat.label}
                 </p>

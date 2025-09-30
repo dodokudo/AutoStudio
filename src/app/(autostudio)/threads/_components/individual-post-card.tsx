@@ -116,7 +116,7 @@ export function IndividualPostCard() {
   };
 
   return (
-    <Card className="accent-gradient">
+    <Card className="accent-gradient max-w-full overflow-hidden">
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">個別投稿生成</h2>
         <p className="text-sm text-[color:var(--color-text-secondary)]">
@@ -124,15 +124,15 @@ export function IndividualPostCard() {
         </p>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
+      <div className="mt-6 grid gap-6 lg:grid-cols-2 min-w-0">
+        <div className="space-y-4 min-w-0">
           <label className="block text-sm font-medium text-[color:var(--color-text-primary)]">テーマ・内容</label>
           <textarea
             value={theme}
             onChange={(event) => setTheme(event.target.value)}
             rows={6}
             placeholder="例: AI音声入力で資料作成を時短する具体的な手順"
-            className="w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+            className="w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
             disabled={isGenerating}
           />
           <Button onClick={handleGenerate} disabled={!theme.trim() || isGenerating}>
@@ -140,14 +140,14 @@ export function IndividualPostCard() {
           </Button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           {generatedPost && editableContent ? (
             <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-[color:var(--color-text-primary)]">
+              <div className="grid gap-4 md:grid-cols-2 min-w-0">
+                <label className="text-sm font-medium text-[color:var(--color-text-primary)] min-w-0">
                   配信時間
                   <select
-                    className="mt-2 w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                    className="mt-2 w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                     value={editableContent.scheduledTime}
                     onChange={(event) => {
                       const value = event.target.value;
@@ -170,11 +170,11 @@ export function IndividualPostCard() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-[color:var(--color-text-primary)]">
+              <div className="space-y-3 min-w-0">
+                <label className="text-sm font-medium text-[color:var(--color-text-primary)] min-w-0 block">
                   本文
                   <textarea
-                    className="mt-2 w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                    className="mt-2 w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                     rows={6}
                     value={editableContent.mainText}
                     onChange={(event) =>
@@ -185,10 +185,10 @@ export function IndividualPostCard() {
                   />
                 </label>
                 {editableContent.comments.map((comment) => (
-                  <label key={comment.order} className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                  <label key={comment.order} className="text-sm font-medium text-[color:var(--color-text-primary)] min-w-0 block">
                     コメント {comment.order}
                     <textarea
-                      className="mt-2 w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                      className="mt-2 w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                       rows={4}
                       value={comment.text}
                       onChange={(event) =>

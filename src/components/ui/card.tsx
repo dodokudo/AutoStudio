@@ -9,5 +9,5 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
 
 export function Card({ variant = 'default', className, ...props }: CardProps) {
   const baseClass = variant === 'muted' ? 'ui-card-muted' : 'ui-card';
-  return <div className={classNames(baseClass, className)} {...props} />;
+  return <div className={classNames(baseClass, 'max-w-full', className)} {...props} />;
 }
