@@ -293,7 +293,7 @@ export function PostQueue({
                         <span className="font-medium text-[color:var(--color-text-primary)]">ジョブ状態</span>: {item.jobStatus}
                         {item.jobUpdatedAt ? ` (${new Date(item.jobUpdatedAt).toLocaleString()})` : ''}
                         {item.jobErrorMessage ? (
-                          <span className="ml-2 text-[#a61b1b]">{item.jobErrorMessage}</span>
+                        <span className="ml-2 break-all text-[#a61b1b]">{item.jobErrorMessage}</span>
                         ) : null}
                       </p>
                     ) : null}
@@ -302,10 +302,10 @@ export function PostQueue({
                         <span className="font-medium text-[color:var(--color-text-primary)]">最終結果</span>: {item.logStatus}
                         {item.logPostedAt ? ` (${new Date(item.logPostedAt).toLocaleString()})` : ''}
                         {item.logPostedThreadId ? (
-                          <span className="ml-2 text-[color:var(--color-accent)]">Thread ID: {item.logPostedThreadId}</span>
+                          <span className="ml-2 break-all text-[color:var(--color-accent)]">Thread ID: {item.logPostedThreadId}</span>
                         ) : null}
                         {item.logErrorMessage ? (
-                          <span className="ml-2 text-[#a61b1b]">{item.logErrorMessage}</span>
+                          <span className="ml-2 break-all text-[#a61b1b]">{item.logErrorMessage}</span>
                         ) : null}
                       </p>
                     ) : null}

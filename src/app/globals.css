@@ -37,7 +37,10 @@
   --ring-color: color-mix(in srgb, var(--color-accent) 40%, transparent 60%);
 }
 
-* {
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
   border-color: var(--color-border);
 }
 
@@ -96,6 +99,15 @@ a:focus-visible {
 }
 
 @layer components {
+
+  .break-words {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .break-all {
+    word-break: break-all;
+  }
 
   /* Core UI Components */
   .ui-card {
@@ -261,4 +273,3 @@ a:focus-visible {
     scrollbar-width: none;  /* Firefox */
   }
 }
-

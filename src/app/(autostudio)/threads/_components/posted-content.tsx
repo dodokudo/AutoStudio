@@ -106,8 +106,8 @@ export function PostedContent({ initialPostedPlans = [] }: PostedContentProps) {
                 </div>
 
                 <div className="mt-4 flex-1">
-                  <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-3 text-sm">
-                    <div className="whitespace-pre-wrap text-[color:var(--color-text-primary)]">
+                  <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-3 text-sm break-words">
+                    <div className="whitespace-pre-wrap break-words text-[color:var(--color-text-primary)]">
                       {plan.main_text}
                     </div>
                   </div>
@@ -117,12 +117,12 @@ export function PostedContent({ initialPostedPlans = [] }: PostedContentProps) {
                       {comments.map((comment: { order: number; text: string }, index: number) => (
                         <div
                           key={index}
-                          className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3"
+                          className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 break-words"
                         >
                           <div className="mb-1 text-xs font-medium text-[color:var(--color-text-primary)]">
                             コメント {comment.order}
                           </div>
-                          <div className="text-sm text-[color:var(--color-text-secondary)] whitespace-pre-wrap">
+                          <div className="text-sm text-[color:var(--color-text-secondary)] whitespace-pre-wrap break-words">
                             {comment.text}
                           </div>
                         </div>
@@ -132,7 +132,7 @@ export function PostedContent({ initialPostedPlans = [] }: PostedContentProps) {
                 </div>
 
                 {(plan.log_posted_thread_id || plan.log_posted_at) && (
-                  <div className="mt-4 rounded-[var(--radius-md)] bg-[color:var(--color-surface-muted)] p-3 text-xs text-[color:var(--color-text-secondary)]">
+                  <div className="mt-4 rounded-[var(--radius-md)] bg-[color:var(--color-surface-muted)] p-3 text-xs text-[color:var(--color-text-secondary)] break-words">
                     {plan.log_posted_thread_id && (
                       <p>
                         <span className="font-medium text-[color:var(--color-text-primary)]">Thread ID</span>: {plan.log_posted_thread_id}
