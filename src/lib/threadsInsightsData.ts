@@ -57,25 +57,6 @@ function normalizeTimestamp(value: unknown): string {
   return plain;
 }
 
-function parseComments(value: unknown): string[] {
-  if (!value) return [];
-  try {
-    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-    if (Array.isArray(parsed)) {
-      return parsed.map((item) => {
-        if (typeof item === 'string') return item;
-        if (item && typeof item === 'object' && 'text' in item) {
-          return String((item as { text?: unknown }).text ?? '');
-        }
-        return String(item ?? '');
-      });
-    }
-  } catch (error) {
-    console.warn('[threadsInsightsData] Failed to parse comments', value, error);
-  }
-  return [];
-}
-
 function toDateOnly(value: string): string {
   return value.slice(0, 10);
 }
@@ -93,10 +74,7 @@ export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity>
           updated_at,
           content,
           impressions_total,
-          likes_total,
-          template_id,
-          theme,
-          comments
+          likes_total
         FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
         WHERE post_id IS NOT NULL AND post_id != ''
         ORDER BY posted_at DESC NULLS LAST, updated_at DESC NULLS LAST
@@ -121,10 +99,10 @@ export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity>
           planId: postedThreadId,
           postedThreadId,
           postedAt,
-          templateId: toPlain(row.template_id) || 'unknown',
-          theme: toPlain(row.theme) || '未分類',
+          templateId: 'unknown',
+          theme: 'Threads投稿',
           mainText: toPlain(row.content ?? ''),
-          comments: parseComments(row.comments),
+          comments: [],
           insights: {
             impressions,
             likes,

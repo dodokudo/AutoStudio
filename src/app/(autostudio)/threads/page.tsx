@@ -161,7 +161,7 @@ export default async function ThreadsHome({
   const activeTab = ["overview", "insights"].includes(tabParam) ? tabParam : "overview";
 
   try {
-    const [insights, planSummaries, dashboard, insightsData] = await Promise.all([
+    const [insights, planSummaries, dashboard, insightsActivity] = await Promise.all([
       getThreadsInsights(PROJECT_ID, insightsOptions),
       (async () => {
         await seedPlansIfNeeded();
@@ -316,7 +316,7 @@ export default async function ThreadsHome({
             queueMetrics={queueMetrics}
           />
         ) : (
-          <InsightsTab insights={insightsData} accountSummary={insights.accountSummary} />
+          <InsightsTab posts={insightsActivity.posts} dailyMetrics={insightsActivity.dailyMetrics} />
         )}
       </div>
     );

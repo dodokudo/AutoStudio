@@ -8,13 +8,11 @@ interface AccountInsightsCardProps {
   data: {
     posts: number;
     views: number;
-    replies: number;
-    interactions: number;
+    likes: number;
     newFollowers: number;
     previousPosts?: number;
     previousViews?: number;
-    previousReplies?: number;
-    previousInteractions?: number;
+    previousLikes?: number;
     previousNewFollowers?: number;
   };
   onPeriodChange?: (period: string) => void;
@@ -24,6 +22,9 @@ const PERIOD_OPTIONS = [
   { label: '3日間', value: '3d' },
   { label: '7日間', value: '7d' },
   { label: '30日間', value: '30d' },
+  { label: '60日間', value: '60d' },
+  { label: '90日間', value: '90d' },
+  { label: '180日間', value: '180d' },
 ];
 
 export function AccountInsightsCard({ data, onPeriodChange }: AccountInsightsCardProps) {
@@ -60,15 +61,9 @@ export function AccountInsightsCard({ data, onPeriodChange }: AccountInsightsCar
       suffix: '',
     },
     {
-      label: '返信',
-      value: data.replies,
-      previous: data.previousReplies,
-      suffix: '',
-    },
-    {
-      label: 'インタラクション',
-      value: data.interactions,
-      previous: data.previousInteractions,
+      label: 'いいね',
+      value: data.likes,
+      previous: data.previousLikes,
       suffix: '',
     },
     {
@@ -89,7 +84,7 @@ export function AccountInsightsCard({ data, onPeriodChange }: AccountInsightsCar
         <select
           value={selectedPeriod}
           onChange={(event) => handlePeriodChange(event.target.value)}
-          className="h-9 w-32 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+          className="h-9 w-40 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
         >
           {PERIOD_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -99,7 +94,7 @@ export function AccountInsightsCard({ data, onPeriodChange }: AccountInsightsCar
         </select>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => {
           const delta = formatDelta(metric.value, metric.previous);
           return (
