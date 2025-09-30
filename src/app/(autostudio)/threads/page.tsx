@@ -179,7 +179,7 @@ export default async function ThreadsHome({
 
     const stats = [
       {
-        label: '平均フォロワー',
+        label: '現在のフォロワー数',
         value: insights.accountSummary.averageFollowers.toLocaleString(),
         delta:
           insights.accountSummary.followersChange === 0
@@ -259,7 +259,7 @@ export default async function ThreadsHome({
       <div className="section-stack">
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-[color:var(--color-border)]">
+        <div className="flex border-b border-[color:var(--color-border)] overflow-x-auto scrollbar-hide">
           <a
             href={`?${new URLSearchParams({
               ...(rangeParam && { range: rangeParam }),
@@ -267,7 +267,7 @@ export default async function ThreadsHome({
               ...(customEnd && { end: customEnd }),
               tab: 'overview',
             }).toString()}`}
-            className={`px-6 py-3 text-sm font-medium transition-colors ${
+            className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'overview'
                 ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
                 : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
@@ -282,7 +282,7 @@ export default async function ThreadsHome({
               ...(customEnd && { end: customEnd }),
               tab: 'insights',
             }).toString()}`}
-            className={`px-6 py-3 text-sm font-medium transition-colors ${
+            className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
               activeTab === 'insights'
                 ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
                 : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'

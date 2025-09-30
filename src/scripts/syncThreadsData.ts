@@ -321,6 +321,7 @@ function parseCompetitorPosts(
   accountMeta: Map<string, CompetitorAccountMeta>,
 ): CompetitorPostRow[] {
   if (!values.length) return [];
+
   const header = values[0];
   const accountIdx = header.indexOf('投稿者');
   const dateIdx = header.indexOf('投稿日');
@@ -333,12 +334,14 @@ function parseCompetitorPosts(
 
   const rows: CompetitorPostRow[] = [];
   for (const row of values.slice(1)) {
-    const accountName = row[accountIdx];
-    if (!accountName) continue;
+    // 投稿者列がない場合は、データがある最初の列を投稿者として使用
+    const accountName = row[0] || 'Unknown';
+    if (!accountName || accountName.trim() === '') continue;
+
     const meta = accountMeta.get(accountName.trim());
     rows.push({
       source_sheet: COMPETITOR_ALL_POSTS_SHEET,
-      account_name: accountName,
+      account_name: accountName.trim(),
       username: meta?.username ?? null,
       follower_count: null,
       post_date: parseDate(row[dateIdx]),
@@ -348,6 +351,7 @@ function parseCompetitorPosts(
       collected_at: nowIso,
     });
   }
+
   return rows;
 }
 
@@ -371,6 +375,18 @@ async function main() {
   const competitorDailyMetrics = parseCompetitorDailyMetrics(competitorTargetsValues, competitorAccountMap);
 
   const bigQueryClient = createBigQueryClient(PROJECT_ID);
+
+  await ensureTable(bigQueryClient, 'competitor_posts_raw', [
+    { name: 'source_sheet', type: 'STRING' },
+    { name: 'account_name', type: 'STRING' },
+    { name: 'username', type: 'STRING' },
+    { name: 'follower_count', type: 'INT64' },
+    { name: 'post_date', type: 'TIMESTAMP' },
+    { name: 'content', type: 'STRING' },
+    { name: 'impressions', type: 'INT64' },
+    { name: 'likes', type: 'INT64' },
+    { name: 'collected_at', type: 'TIMESTAMP' },
+  ]);
 
   await ensureTable(bigQueryClient, 'competitor_account_daily', [
     { name: 'account_name', type: 'STRING' },

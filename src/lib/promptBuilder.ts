@@ -78,7 +78,7 @@ async function fetchAccountSummary(
     ),
     stats AS (
       SELECT
-        MAX(followers_snapshot) AS avg_followers,
+        MAX(followers_snapshot) AS max_followers,
         AVG(profile_views) AS avg_profile_views,
         MAX(IF(date = (SELECT MAX(date) FROM recent), followers_snapshot, NULL)) AS latest_followers,
         MAX(IF(date = (SELECT MIN(date) FROM recent), followers_snapshot, NULL)) AS earliest_followers,
@@ -87,7 +87,7 @@ async function fetchAccountSummary(
       FROM recent
     )
     SELECT
-      avg_followers,
+      max_followers,
       avg_profile_views,
       latest_followers - earliest_followers AS followers_change,
       latest_views - earliest_views AS profile_views_change,
@@ -96,7 +96,7 @@ async function fetchAccountSummary(
   `;
 
   type Row = {
-    avg_followers: number | null;
+    max_followers: number | null;
     avg_profile_views: number | null;
     followers_change: number | null;
     profile_views_change: number | null;
@@ -119,7 +119,7 @@ async function fetchAccountSummary(
 
   const row = rows[0];
   return {
-    averageFollowers: Math.round(row.avg_followers ?? 0),
+    averageFollowers: Math.round(row.max_followers ?? 0),
     averageProfileViews: Math.round(row.avg_profile_views ?? 0),
     followersChange: Math.round(row.followers_change ?? 0),
     profileViewsChange: Math.round(row.profile_views_change ?? 0),

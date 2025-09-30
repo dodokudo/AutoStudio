@@ -75,7 +75,7 @@ export function OverviewTab(props: OverviewTabProps) {
       <IndividualPostCard />
 
       <Card className="accent-gradient">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 md:gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">本日の投稿案</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
@@ -88,9 +88,9 @@ export function OverviewTab(props: OverviewTabProps) {
               </Button>
             </div>
           </div>
-          <div className="grid w-full gap-4 sm:grid-cols-3 lg:w-auto">
+          <div className="grid w-full gap-3 grid-cols-1 sm:grid-cols-3 lg:w-auto lg:gap-4">
             {props.heroStats.map((stat) => (
-              <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5">
+              <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 md:p-5">
                 <p className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-[0.08em]">
                   {stat.label}
                 </p>
@@ -102,18 +102,16 @@ export function OverviewTab(props: OverviewTabProps) {
         </div>
       </Card>
 
-      <div className="grid gap-10 lg:grid-cols-[1.8fr,1fr]">
-        <div className="section-stack">
-          <PostQueueContainer
-            initialPlans={JSON.parse(JSON.stringify(props.planSummaries))}
-            templateOptions={props.templateOptions}
-          />
-          <TrendingTopics items={props.trendingTopics} />
-        </div>
-        <CompetitorHighlights items={props.competitorHighlights} />
-      </div>
+      <PostQueueContainer
+        initialPlans={JSON.parse(JSON.stringify(props.planSummaries))}
+        templateOptions={props.templateOptions}
+      />
 
       <PostedContent initialPostedPlans={props.planSummaries.filter(plan => plan.status === 'posted')} />
+
+      <CompetitorHighlights items={props.competitorHighlights} />
+
+      <TrendingTopics items={props.trendingTopics} />
       <DebugPanel />
       <TemplateSummary items={props.templateSummaries} />
       <DashboardCards jobCounts={props.dashboard.jobCounts} recentLogs={props.dashboard.recentLogs} />
