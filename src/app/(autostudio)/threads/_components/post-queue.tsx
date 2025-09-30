@@ -112,14 +112,14 @@ export function PostQueue({
 
   return (
     <Card>
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">本日の投稿キュー</h2>
-          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+      <header className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center sm:justify-between gap-4 max-w-full overflow-hidden">
+        <div className="max-w-full">
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] break-words">本日の投稿キュー</h2>
+          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)] break-words">
             承認後は指定した時間に自動で配信されます。内容を確認のうえ、必要に応じて編集してください。
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-text-secondary)]">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-text-secondary)] max-w-full">
           <span className="rounded-full bg-[#f2f4f7] px-3 py-1">計 {summary.total} 件</span>
           <span className="rounded-full bg-[#e6f7ed] px-3 py-1 text-[#096c3e]">承認済 {summary.approved}</span>
           <span className="rounded-full bg-[#fff4e5] px-3 py-1 text-[#ad6800]">承認待ち {summary.draft}</span>
@@ -130,7 +130,7 @@ export function PostQueue({
       {items.length === 0 ? (
         <EmptyState title="投稿案はまだありません" description="上部の「投稿案を再生成」から案を作成してください。" />
       ) : (
-        <div className="mt-6 grid gap-5 xl:grid-cols-2">
+        <div className="mt-6 grid gap-5 grid-cols-1 xl:grid-cols-2">
           {items.map((item) => {
             const templateListId = `template-options-${item.id}`;
             const draft = editableValues[item.id] ?? item;
@@ -138,7 +138,7 @@ export function PostQueue({
             const hasTextError = isTextTooLong(draft.mainText, draft.comments);
 
             return (
-              <div key={item.id} className="flex h-full flex-col rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <div key={item.id} className="flex h-full flex-col rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-white p-5 shadow-[var(--shadow-soft)] max-w-full overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-secondary)]">
                   <span className="rounded-full bg-[#f2f4f7] px-2.5 py-1 text-[11px] font-medium">
                     配信日 {item.generationDate}
@@ -148,12 +148,12 @@ export function PostQueue({
                   </span>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[color:var(--color-text-secondary)]">
-                  <label className="flex items-center gap-2">
-                    <span className="font-medium">時間</span>
+                <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 text-xs text-[color:var(--color-text-secondary)]">
+                  <label className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="font-medium whitespace-nowrap">時間</span>
                     <input
                       type="time"
-                      className="h-8 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                      className="h-8 flex-1 sm:flex-initial rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                       value={draft.scheduledTime}
                       onChange={(event) => onDraftChange?.(item.id, { scheduledTime: event.target.value })}
                       list={`time-options-${item.id}`}
@@ -164,10 +164,10 @@ export function PostQueue({
                       ))}
                     </datalist>
                   </label>
-                  <label className="flex items-center gap-2">
-                    <span className="font-medium">テンプレート</span>
+                  <label className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="font-medium whitespace-nowrap">テンプレート</span>
                     <input
-                      className="h-8 w-32 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                      className="h-8 flex-1 sm:w-32 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                       list={templateOptions.length ? templateListId : undefined}
                       value={draft.templateId}
                       onChange={(event) =>
@@ -190,7 +190,7 @@ export function PostQueue({
 
                 <textarea
                   className={classNames(
-                    'mt-4 w-full rounded-[var(--radius-md)] border px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]',
+                    'mt-4 w-full max-w-full rounded-[var(--radius-md)] border px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] break-words',
                     hasTextError ? 'border-[#ffb4b4]' : 'border-[color:var(--color-border)]',
                   )}
                   rows={6}
@@ -200,9 +200,9 @@ export function PostQueue({
                 />
                 <p className="mt-1 text-right text-[11px] text-[color:var(--color-text-muted)]">{draft.mainText.length}/500</p>
 
-                <div className="mt-4 space-y-3 text-sm text-[color:var(--color-text-secondary)]">
+                <div className="mt-4 space-y-3 text-sm text-[color:var(--color-text-secondary)] max-w-full overflow-hidden">
                   {draft.comments.map((comment) => (
-                    <div key={comment.order} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+                    <div key={comment.order} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 max-w-full overflow-hidden">
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-xs font-medium text-[color:var(--color-text-primary)]">コメント {comment.order}</span>
                         <button
@@ -217,7 +217,7 @@ export function PostQueue({
                         </button>
                       </div>
                       <textarea
-                        className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                        className="w-full max-w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] break-words"
                         rows={4}
                         value={comment.text}
                         onChange={(event) => {
@@ -245,7 +245,7 @@ export function PostQueue({
                   </button>
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center gap-2">
+                <div className="mt-5 flex flex-wrap items-center gap-2 max-w-full">
                   {onRerun ? (
                     <Button variant="secondary" onClick={() => onRerun(item.id)} disabled={isPending}>
                       {isPending ? '再作成中…' : '再作成'}

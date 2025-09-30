@@ -77,11 +77,11 @@ export function OverviewTab(props: OverviewTabProps) {
       <Card className="accent-gradient max-w-full overflow-hidden">
         <div className="flex flex-col gap-4 md:gap-6 lg:flex-row lg:items-center lg:justify-between min-w-0">
           <div>
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">本日の投稿案</h2>
-            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] break-words">本日の投稿案</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)] break-words">
               最新のスケジュールを確認し、必要に応じて再生成してください。
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 w-full max-w-full">
               <RegenerateButton />
               <Button variant="secondary" onClick={() => window?.scrollTo({ top: 0, behavior: 'smooth' })}>
                 ページ更新

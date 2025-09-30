@@ -135,7 +135,7 @@ export function IndividualPostCard() {
             className="w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
             disabled={isGenerating}
           />
-          <Button onClick={handleGenerate} disabled={!theme.trim() || isGenerating}>
+          <Button onClick={handleGenerate} disabled={!theme.trim() || isGenerating} className="w-full sm:w-auto">
             {isGenerating ? '生成中…' : '投稿案を生成'}
           </Button>
         </div>
@@ -210,11 +210,11 @@ export function IndividualPostCard() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap gap-3 pt-2">
-                <Button variant="secondary" onClick={() => handleSaveOrApprove('draft')} disabled={isPosting}>
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 pt-2 w-full max-w-full">
+                <Button variant="secondary" onClick={() => handleSaveOrApprove('draft')} disabled={isPosting} className="w-full sm:w-auto">
                   下書きを保存
                 </Button>
-                <Button onClick={() => handleSaveOrApprove('approved')} disabled={isPosting}>
+                <Button onClick={() => handleSaveOrApprove('approved')} disabled={isPosting} className="w-full sm:w-auto">
                   {isPosting ? '承認処理中…' : '承認して配信'}
                 </Button>
               </div>
