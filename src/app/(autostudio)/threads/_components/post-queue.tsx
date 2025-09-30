@@ -293,7 +293,7 @@ export function PostQueue({
                         <span className="font-medium text-[color:var(--color-text-primary)]">ジョブ状態</span>: {item.jobStatus}
                         {item.jobUpdatedAt ? ` (${new Date(item.jobUpdatedAt).toLocaleString()})` : ''}
                         {item.jobErrorMessage ? (
-                          <span className="ml-2 break-all text-[#a61b1b]">{item.jobErrorMessage}</span>
+                        <span className="ml-2 break-all text-[#a61b1b]">{item.jobErrorMessage}</span>
                         ) : null}
                       </p>
                     ) : null}

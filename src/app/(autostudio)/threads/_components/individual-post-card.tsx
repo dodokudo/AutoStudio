@@ -24,6 +24,7 @@ export function IndividualPostCard() {
     comments: { order: number; text: string }[];
     scheduledTime: string;
   } | null>(null);
+  const [postNow, setPostNow] = useState(false);
 
   const scheduleOptions = Array.from({ length: 48 }).map((_, index) => {
     const baseMinutes = index * 30;
@@ -38,6 +39,7 @@ export function IndividualPostCard() {
   const resetPostState = () => {
     setGeneratedPost(null);
     setEditableContent(null);
+    setPostNow(false);
   };
 
   const handleGenerate = async () => {
@@ -76,16 +78,13 @@ export function IndividualPostCard() {
   const handleSaveOrApprove = async (status: 'draft' | 'approved') => {
     if (!generatedPost || !editableContent) return;
 
-    // Only post immediately if "いますぐ投稿" is selected
-    const shouldPostNow = editableContent.scheduledTime === 'いますぐ投稿';
-
     const payload = {
       planId: generatedPost.planId,
       status,
       mainText: editableContent.mainText,
       comments: editableContent.comments,
-      scheduledTime: shouldPostNow ? 'now' : editableContent.scheduledTime,
-      postNow: shouldPostNow,
+      scheduledTime: editableContent.scheduledTime === 'いますぐ投稿' ? 'now' : editableContent.scheduledTime,
+      postNow: postNow || editableContent.scheduledTime === 'いますぐ投稿',
     };
 
     try {
@@ -152,6 +151,7 @@ export function IndividualPostCard() {
                     value={editableContent.scheduledTime}
                     onChange={(event) => {
                       const value = event.target.value;
+                      setPostNow(value === 'いますぐ投稿');
                       setEditableContent((current) =>
                         current ? { ...current, scheduledTime: value } : current,
                       );
