@@ -44,11 +44,11 @@ export async function processNextJob() {
       console.log(`[threadsWorker] Posting comment ${i + 1}/${comments.length}:`, comment.text.substring(0, 50) + '...');
       console.log(`[threadsWorker] Replying to thread ID:`, replyToId);
 
-      // Add delay between posts to avoid rate limiting and ensure proper thread ordering
-      if (i > 0) {
-        console.log(`[threadsWorker] Waiting 3 seconds before posting comment ${i + 1}...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
+      // ランダムな待機時間（30秒〜90秒）でbot感を軽減
+      const randomDelayMs = Math.floor(Math.random() * 60000) + 30000; // 30000ms〜90000ms (30秒〜1分30秒)
+      const delaySeconds = (randomDelayMs / 1000).toFixed(1);
+      console.log(`[threadsWorker] Waiting ${delaySeconds} seconds before posting comment ${i + 1}...`);
+      await new Promise(resolve => setTimeout(resolve, randomDelayMs));
 
       const commentThreadId = await postThread(comment.text, replyToId);
       console.log(`[threadsWorker] Comment ${i + 1} posted successfully, ID:`, commentThreadId);

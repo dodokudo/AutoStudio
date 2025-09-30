@@ -70,18 +70,26 @@ async function waitForContainer(containerId: string) {
 }
 
 async function publishContainer(containerId: string) {
+  // まずコンテナの準備が完了するまで待つ
+  await waitForContainer(containerId);
+
+  // 準備完了後に公開
   const res = await request(`${THREADS_BUSINESS_ID}/threads_publish`, {
     method: 'POST',
     params: { creation_id: containerId },
   });
+
   if (res.id) {
+    console.log('[threadsApi] Publish response ID:', res.id);
     return res.id as string;
   }
-  await waitForContainer(containerId);
+
+  // IDが返ってこない場合は再度取得
   const statusRes = await request(containerId, {
     method: 'GET',
     params: { fields: 'id' },
   });
+  console.log('[threadsApi] Status response ID:', statusRes.id);
   return statusRes.id as string;
 }
 

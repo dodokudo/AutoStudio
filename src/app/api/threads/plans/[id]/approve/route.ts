@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { updatePlanStatus, listPlans } from '@/lib/bigqueryPlans';
+import { createJobForPlan } from '@/lib/bigqueryJobs';
+import { processNextJob } from '@/lib/threadsWorker';
 
 function validateTextLength(mainText?: string, comments?: { text: string }[]): string | null {
   if (mainText && mainText.length > 500) {
@@ -47,43 +49,52 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
-    console.log(`[threads/plans/approve] Plan approved, triggering immediate publish...`);
+    console.log(`[threads/plans/approve] Plan approved, creating job and executing immediately...`);
 
-    // Trigger immediate publishing
+    // ジョブを作成（scheduled_timeは現在時刻で即時実行）
     try {
-      const publishUrl = new URL('/api/threads/publish', request.url);
-      const publishResponse = await fetch(publishUrl.toString(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ plan_id: id }),
+      const job = await createJobForPlan({
+        ...plan,
+        scheduled_time: new Date().toTimeString().slice(0, 5), // HH:mm形式
       });
 
-      if (publishResponse.ok) {
-        const publishResult = await publishResponse.json();
-        console.log(`[threads/plans/approve] Successfully published plan ${id}:`, publishResult);
+      if (!job) {
+        throw new Error('Failed to create job');
+      }
 
-        // Update plan status to scheduled since it's now published
-        await updatePlanStatus(id, 'scheduled');
+      console.log(`[threads/plans/approve] Job created: ${job.job_id}, executing...`);
+
+      // 即座にジョブを実行
+      const result = await processNextJob();
+
+      if (result.status === 'succeeded') {
+        console.log(`[threads/plans/approve] Successfully posted plan ${id}:`, result);
 
         return NextResponse.json({
           plan: { ...updated, status: 'scheduled' },
           published: true,
-          publish_result: publishResult
+          job_result: result
         });
-      } else {
-        const publishError = await publishResponse.text();
-        console.error(`[threads/plans/approve] Failed to publish plan ${id}:`, publishError);
+      } else if (result.status === 'failed') {
+        console.error(`[threads/plans/approve] Failed to post plan ${id}:`, result.error);
 
         return NextResponse.json({
           plan: updated,
           published: false,
-          publish_error: publishError
+          publish_error: result.error
+        });
+      } else {
+        // status === 'idle' (no job found)
+        console.warn(`[threads/plans/approve] No job found to execute`);
+
+        return NextResponse.json({
+          plan: updated,
+          published: false,
+          publish_error: 'No job found to execute'
         });
       }
     } catch (publishError) {
-      console.error(`[threads/plans/approve] Error calling publish endpoint:`, publishError);
+      console.error(`[threads/plans/approve] Error creating job or executing:`, publishError);
 
       return NextResponse.json({
         plan: updated,
