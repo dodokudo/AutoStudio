@@ -1,8 +1,8 @@
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 
-const THREADS_TOKEN = process.env.THREADS_TOKEN;
-const THREADS_BUSINESS_ID = process.env.THREADS_BUSINESS_ID;
-const THREADS_POSTING_ENABLED = process.env.THREADS_POSTING_ENABLED === 'true';
+const THREADS_TOKEN = process.env.THREADS_TOKEN?.trim();
+const THREADS_BUSINESS_ID = process.env.THREADS_BUSINESS_ID?.trim();
+const THREADS_POSTING_ENABLED = process.env.THREADS_POSTING_ENABLED?.trim() === 'true';
 
 if (!THREADS_POSTING_ENABLED) {
   console.info('[threadsApi] THREADS_POSTING_ENABLED is false. Using dry-run mode.');
