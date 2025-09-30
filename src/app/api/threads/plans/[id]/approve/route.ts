@@ -53,9 +53,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // ジョブを作成（scheduled_timeは現在時刻で即時実行）
     try {
+      // 現在のJST時刻を取得
+      const now = new Date();
+      const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+      const jstDate = jstNow.toISOString().split('T')[0].replace(/-/g, '-'); // YYYY-MM-DD
+      const jstTime = jstNow.toTimeString().slice(0, 5); // HH:mm
+
       const job = await createJobForPlan({
         ...plan,
-        scheduled_time: new Date().toTimeString().slice(0, 5), // HH:mm形式
+        generation_date: jstDate,
+        scheduled_time: jstTime,
       });
 
       if (!job) {
