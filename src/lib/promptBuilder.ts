@@ -11,6 +11,8 @@ import type {
   PromptSelfPostBreakdown,
   PromptCompetitorStructure,
   PromptWritingChecklist,
+  CompetitorPost,
+  OwnPost,
 } from '../types/prompt';
 
 interface BuildPromptOptions {
@@ -384,6 +386,222 @@ async function fetchTemplateSummaries(client: BigQuery, projectId: string): Prom
   return summaries.slice(0, 10);
 }
 
+async function fetchCompetitorSelected(
+  client: BigQuery,
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<CompetitorPost[]> {
+  const sql = `
+WITH max_post AS (
+  SELECT MAX(DATE(post_date)) AS latest_date
+  FROM \`${projectId}.${DATASET}.competitor_posts_raw\`
+),
+latest_genre AS (
+  SELECT
+    username,
+    ARRAY_AGG(STRUCT(date, genre) ORDER BY date DESC LIMIT 1)[OFFSET(0)].genre AS genre
+  FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+  GROUP BY username
+),
+daily AS (
+  SELECT
+    username,
+    date AS daily_date,
+    followers,
+    followers - LAG(followers) OVER (PARTITION BY username ORDER BY date) AS followers_delta
+  FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+),
+joined AS (
+  SELECT
+    p.account_name,
+    p.username,
+    DATE(p.post_date) AS post_date,
+    p.content,
+    p.impressions,
+    p.likes,
+    g.genre,
+    d.followers,
+    COALESCE(d.followers_delta, 0) AS followers_delta,
+    CASE
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_win"
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) BETWEEN 15 AND 39 THEN "pattern_niche_hit"
+      WHEN p.impressions BETWEEN 10000 AND 29999 AND COALESCE(d.followers_delta,0) >= 15 THEN "pattern_niche_hit"
+      WHEN p.impressions < 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_hidden_gem"
+      WHEN p.impressions >= 10000 AND COALESCE(d.followers_delta,0) < 15 THEN "pattern_buzz_only"
+      ELSE "pattern_fail"
+    END AS evaluation,
+    CASE
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 100 THEN "tier_S"
+      WHEN (p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 50)
+           OR (p.impressions < 20000 AND COALESCE(d.followers_delta,0) >= 80) THEN "tier_A"
+      WHEN p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 30 THEN "tier_B"
+      ELSE "tier_C"
+    END AS tier,
+    (COALESCE(d.followers_delta,0) * 12.0) + (p.impressions / 2000.0) AS score
+  FROM \`${projectId}.${DATASET}.competitor_posts_raw\` p
+  CROSS JOIN max_post m
+  LEFT JOIN latest_genre g ON p.username = g.username
+  LEFT JOIN daily d ON p.username = d.username AND DATE(p.post_date) = d.daily_date
+  WHERE DATE(p.post_date) BETWEEN DATE_SUB(m.latest_date, INTERVAL 30 DAY) AND m.latest_date
+),
+ranked AS (
+  SELECT *,
+    ROW_NUMBER() OVER (PARTITION BY tier, username ORDER BY score DESC) AS rn
+  FROM joined
+  WHERE evaluation IN ("pattern_win","pattern_niche_hit","pattern_hidden_gem")
+),
+filtered AS (
+  SELECT * FROM ranked WHERE rn <= 2
+),
+s_pool AS (
+  SELECT * FROM filtered WHERE tier = 'tier_S' ORDER BY score DESC
+),
+a_pool AS (
+  SELECT * FROM filtered WHERE tier = 'tier_A' ORDER BY score DESC
+),
+b_pool AS (
+  SELECT * FROM filtered WHERE tier = 'tier_B' ORDER BY score DESC
+),
+c_pool AS (
+  SELECT * FROM filtered WHERE tier = 'tier_C' ORDER BY score DESC
+),
+s_selected AS (SELECT * FROM s_pool LIMIT 3),
+a_selected AS (SELECT * FROM a_pool LIMIT 4),
+b_selected AS (SELECT * FROM b_pool LIMIT 2),
+c_selected AS (SELECT * FROM c_pool LIMIT 1)
+
+SELECT * FROM s_selected
+UNION ALL SELECT * FROM a_selected
+UNION ALL SELECT * FROM b_selected
+UNION ALL SELECT * FROM c_selected
+ORDER BY
+  CASE tier
+    WHEN 'tier_S' THEN 1
+    WHEN 'tier_A' THEN 2
+    WHEN 'tier_B' THEN 3
+    ELSE 4
+  END,
+  score DESC
+  `;
+
+  type Row = {
+    account_name?: string;
+    username?: string;
+    post_date?: string;
+    content?: string;
+    impressions?: number;
+    likes?: number;
+    genre?: string;
+    followers?: number;
+    followers_delta?: number;
+    evaluation?: string;
+    tier?: string;
+    score?: number;
+  };
+
+  const rows = await runQuery<Row>(client, sql);
+  return rows.map((row) => ({
+    account_name: row.account_name ?? '',
+    username: row.username ?? '',
+    post_date: toPlainString(row.post_date) ?? '',
+    content: row.content ?? '',
+    impressions: Number(row.impressions ?? 0),
+    likes: Number(row.likes ?? 0),
+    genre: row.genre ?? '',
+    followers: Number(row.followers ?? 0),
+    followers_delta: Number(row.followers_delta ?? 0),
+    evaluation: (row.evaluation ?? 'pattern_win') as 'pattern_win' | 'pattern_niche_hit' | 'pattern_hidden_gem',
+    tier: (row.tier ?? 'tier_C') as 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C',
+    score: Number(row.score ?? 0),
+  }));
+}
+
+async function fetchOwnWinningPosts(
+  client: BigQuery,
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<OwnPost[]> {
+  const sql = `
+WITH daily AS (
+  SELECT
+    date AS daily_date,
+    followers_snapshot,
+    followers_snapshot - LAG(followers_snapshot) OVER (ORDER BY date) AS followers_delta
+  FROM \`${projectId}.${DATASET}.threads_daily_metrics\`
+),
+posts AS (
+  SELECT
+    post_id,
+    DATE(posted_at) AS post_date,
+    content,
+    impressions_total,
+    likes_total
+  FROM \`${projectId}.${DATASET}.threads_posts\`
+  WHERE posted_at IS NOT NULL
+),
+joined AS (
+  SELECT
+    p.*,
+    COALESCE(d1.followers_delta,0) + COALESCE(d2.followers_delta,0) AS followers_delta_2d
+  FROM posts p
+  LEFT JOIN daily d1
+    ON p.post_date = d1.daily_date
+  LEFT JOIN daily d2
+    ON DATE_ADD(p.post_date, INTERVAL 1 DAY) = d2.daily_date
+),
+evaluated AS (
+  SELECT
+    post_id,
+    post_date,
+    content,
+    impressions_total,
+    likes_total,
+    followers_delta_2d,
+    CASE
+      WHEN impressions_total >= 10000 AND followers_delta_2d >= 30 THEN "pattern_win"
+      WHEN impressions_total >= 10000 AND followers_delta_2d BETWEEN 10 AND 29 THEN "pattern_niche_hit"
+      WHEN impressions_total >= 10000 AND followers_delta_2d < 10 THEN "pattern_buzz_only"
+      WHEN impressions_total BETWEEN 3000 AND 9999 AND followers_delta_2d >= 30 THEN "pattern_hidden_gem"
+      WHEN impressions_total BETWEEN 3000 AND 9999 AND followers_delta_2d BETWEEN 10 AND 29 THEN "pattern_niche_hit"
+      ELSE "pattern_fail"
+    END AS evaluation,
+    (COALESCE(followers_delta_2d, 0) * 12.0) + (COALESCE(impressions_total, 0) / 2000.0) AS score
+  FROM joined
+  WHERE post_date BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
+)
+SELECT *
+FROM evaluated
+WHERE evaluation IN ("pattern_win", "pattern_niche_hit", "pattern_hidden_gem")
+ORDER BY score DESC
+LIMIT 50
+  `;
+
+  type Row = {
+    post_id?: string;
+    post_date?: string;
+    content?: string;
+    impressions_total?: number;
+    likes_total?: number;
+    followers_delta_2d?: number;
+    evaluation?: string;
+    score?: number;
+  };
+
+  const rows = await runQuery<Row>(client, sql);
+  return rows.map((row) => ({
+    post_id: row.post_id ?? '',
+    post_date: toPlainString(row.post_date) ?? '',
+    content: row.content ?? '',
+    impressions_total: Number(row.impressions_total ?? 0),
+    likes_total: Number(row.likes_total ?? 0),
+    followers_delta_2d: Number(row.followers_delta_2d ?? 0),
+    evaluation: (row.evaluation ?? 'pattern_win') as 'pattern_win' | 'pattern_niche_hit' | 'pattern_hidden_gem',
+    score: Number(row.score ?? 0),
+  }));
+}
+
 export function buildScheduleSlots(count: number, startHour = 7, intervalMinutes = 90): string[] {
   const slots: string[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -435,7 +653,7 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
   const startDateStr = startDate.toISOString().slice(0, 10);
   const endDateStr = endDate.toISOString().slice(0, 10);
 
-  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries, postCount] =
+  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries, postCount, competitorSelected, ownWinningPosts] =
     await Promise.all([
       fetchAccountSummary(client, projectId, rangeDays, startDateStr, endDateStr),
       fetchTopSelfPosts(client, projectId, startDateStr, endDateStr),
@@ -443,6 +661,8 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
       fetchTrendingTopics(client, projectId, startDateStr, endDateStr),
       fetchTemplateSummaries(client, projectId),
       fetchPostCount(client, projectId, startDateStr, endDateStr),
+      fetchCompetitorSelected(client, projectId, startDateStr, endDateStr),
+      fetchOwnWinningPosts(client, projectId, startDateStr, endDateStr),
     ]);
 
   const targetCount = 10;
@@ -469,5 +689,7 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
     curatedSelfPosts,
     competitorStructures,
     writingChecklist: WRITING_CHECKLIST,
+    competitorSelected,
+    ownWinningPosts,
   };
 }

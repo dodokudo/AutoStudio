@@ -38,6 +38,19 @@ export async function GET() {
         templateCount: payload.templateSummaries?.length || 0,
         competitorHighlightsCount: payload.competitorHighlights?.length || 0,
         trendingTopicsCount: payload.trendingTopics?.length || 0,
+        competitorSelectedCount: payload.competitorSelected?.length || 0,
+        ownWinningPostsCount: payload.ownWinningPosts?.length || 0,
+        competitorSelectedTiers: payload.competitorSelected ? {
+          tier_S: payload.competitorSelected.filter(p => p.tier === 'tier_S').length,
+          tier_A: payload.competitorSelected.filter(p => p.tier === 'tier_A').length,
+          tier_B: payload.competitorSelected.filter(p => p.tier === 'tier_B').length,
+          tier_C: payload.competitorSelected.filter(p => p.tier === 'tier_C').length,
+        } : {},
+        ownWinningPostsPatterns: payload.ownWinningPosts ? {
+          pattern_win: payload.ownWinningPosts.filter(p => p.evaluation === 'pattern_win').length,
+          pattern_niche_hit: payload.ownWinningPosts.filter(p => p.evaluation === 'pattern_niche_hit').length,
+          pattern_hidden_gem: payload.ownWinningPosts.filter(p => p.evaluation === 'pattern_hidden_gem').length,
+        } : {},
       },
       environment: envCheck,
       timestamp: new Date().toISOString()

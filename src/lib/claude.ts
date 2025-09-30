@@ -272,6 +272,92 @@ function formatLightTemplates(payload: ThreadsPromptPayload): string {
     .join('\n');
 }
 
+function formatCompetitorSelected(payload: ThreadsPromptPayload): string {
+  if (!payload.competitorSelected || !payload.competitorSelected.length) {
+    return '- 競合選抜データなし';
+  }
+
+  const tierGroups = {
+    tier_S: payload.competitorSelected.filter(p => p.tier === 'tier_S'),
+    tier_A: payload.competitorSelected.filter(p => p.tier === 'tier_A'),
+    tier_B: payload.competitorSelected.filter(p => p.tier === 'tier_B'),
+    tier_C: payload.competitorSelected.filter(p => p.tier === 'tier_C'),
+  };
+
+  const sections: string[] = [];
+
+  if (tierGroups.tier_S.length) {
+    sections.push('### Sティア（最高勝ちパターン）- 3本');
+    tierGroups.tier_S.forEach((post, idx) => {
+      sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
+      sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
+      sections.push(`   - 評価: ${post.evaluation}`);
+      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
+    });
+  }
+
+  if (tierGroups.tier_A.length) {
+    sections.push('### Aティア（安定パターン）- 4本');
+    tierGroups.tier_A.forEach((post, idx) => {
+      sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
+      sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
+      sections.push(`   - 評価: ${post.evaluation}`);
+      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
+    });
+  }
+
+  if (tierGroups.tier_B.length) {
+    sections.push('### Bティア（実験枠）- 2本');
+    tierGroups.tier_B.forEach((post, idx) => {
+      sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
+      sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
+      sections.push(`   - 評価: ${post.evaluation}`);
+      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
+    });
+  }
+
+  if (tierGroups.tier_C.length) {
+    sections.push('### Cティア（多様性枠）- 1本');
+    tierGroups.tier_C.forEach((post, idx) => {
+      sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
+      sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
+      sections.push(`   - 評価: ${post.evaluation}`);
+      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
+    });
+  }
+
+  return sections.join('\n');
+}
+
+function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
+  if (!payload.ownWinningPosts || !payload.ownWinningPosts.length) {
+    return '- 自社勝ち投稿データなし';
+  }
+
+  const topPosts = payload.ownWinningPosts.slice(0, 10);
+  const sections: string[] = [];
+
+  sections.push('### 自社過去勝ち投稿トップ10（全50本から抽出）');
+  topPosts.forEach((post, idx) => {
+    sections.push(`${idx + 1}. スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions_total.toLocaleString()} / フォロワー増(2日): +${post.followers_delta_2d}`);
+    sections.push(`   - 評価: ${post.evaluation}`);
+    sections.push(`   - 本文: ${post.content.slice(0, 200)}...`);
+  });
+
+  const evalCounts = payload.ownWinningPosts.reduce((acc, post) => {
+    acc[post.evaluation] = (acc[post.evaluation] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  sections.push('');
+  sections.push(`### 勝ちパターン分布（全50本）`);
+  sections.push(`- pattern_win: ${evalCounts.pattern_win || 0}本`);
+  sections.push(`- pattern_niche_hit: ${evalCounts.pattern_niche_hit || 0}本`);
+  sections.push(`- pattern_hidden_gem: ${evalCounts.pattern_hidden_gem || 0}本`);
+
+  return sections.join('\n');
+}
+
 function buildLightweightContext(payload: ThreadsPromptPayload, index: number): string {
   const schedule = payload.meta.recommendedSchedule[index] ?? '任意の最適時間';
   const accountLine = `平均フォロワー: ${payload.accountSummary.averageFollowers.toLocaleString()} / 平均プロフ閲覧: ${payload.accountSummary.averageProfileViews.toLocaleString()} / 最新増減 フォロワー ${payload.accountSummary.followersChange >= 0 ? '+' : ''}${payload.accountSummary.followersChange}・プロフ閲覧 ${payload.accountSummary.profileViewsChange >= 0 ? '+' : ''}${payload.accountSummary.profileViewsChange}`;
@@ -286,6 +372,16 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '## 今回作成する投稿',
     `- 投稿番号: ${index + 1} / 合計 ${payload.meta.targetPostCount} 本`,
     `- 推奨投稿時刻: ${schedule}`,
+    '',
+    '## 【重要】競合勝ち構成パターン（S3/A4/B2/C1 = 10本）',
+    '以下の競合投稿から構成パターンを学習してください。',
+    '**注意**: テーマやジャンルは真似せず、構成・フック・展開方法のみを参考にすること。',
+    formatCompetitorSelected(payload),
+    '',
+    '## 【重要】自社過去勝ち投稿（50本から学習）',
+    '以下の自社投稿から、勝ちパターン・トーン・文体DNAを把握してください。',
+    formatOwnWinningPosts(payload),
+    '',
     '## 参考にする自社投稿（構造とトーン）',
     formatLightSelfPost(payload, index),
     '## 参考にする競合構文（テーマは絶対に真似しない）',
@@ -294,6 +390,14 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     formatLightTemplates(payload),
     '## ライティングリマインダー',
     payload.writingChecklist.reminders.map((item) => `- ${item}`).join('\n'),
+    '',
+    '## 生成指示',
+    '1. 競合10本（S3/A4/B2/C1）の構成パターンを分析し、最も効果的なフック・展開・締め方を特定',
+    '2. 自社50本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
+    '3. 上記を統合し、以下の配分を意識して1本生成：',
+    `   - 投稿${index + 1}/10: ${index < 3 ? 'S級構成ベース（最高勝ちパターン）' : index < 7 ? 'A級構成ベース（安定パターン）' : index < 9 ? 'B級構成ベース（実験枠）' : 'C級構成ベース（多様性確保）'}`,
+    '4. 各投稿は必ずAIテーマに限定し、競合のジャンルは絶対に真似しない',
+    '',
     '## JSON出力仕様',
     `- 返答は ${JSON_SCHEMA_EXAMPLE} 形式のみ。追加テキスト禁止。
 - mainPost は「メイン投稿」、comments[0] は「コメント欄1」、comments[1] は「コメント欄2」。

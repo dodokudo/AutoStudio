@@ -71,6 +71,32 @@ export interface PromptWritingChecklist {
   reminders: string[];
 }
 
+export interface CompetitorPost {
+  account_name: string;
+  username: string;
+  post_date: string;
+  content: string;
+  impressions: number;
+  likes: number;
+  genre: string;
+  followers: number;
+  followers_delta: number;
+  evaluation: 'pattern_win' | 'pattern_niche_hit' | 'pattern_hidden_gem';
+  tier: 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C';
+  score: number;
+}
+
+export interface OwnPost {
+  post_id: string;
+  post_date: string;
+  content: string;
+  impressions_total: number;
+  likes_total: number;
+  followers_delta_2d: number;
+  evaluation: 'pattern_win' | 'pattern_niche_hit' | 'pattern_hidden_gem';
+  score: number;
+}
+
 export interface ThreadsPromptPayload {
   meta: PromptMeta;
   accountSummary: PromptAccountSummary;
@@ -82,4 +108,6 @@ export interface ThreadsPromptPayload {
   curatedSelfPosts: PromptSelfPostBreakdown[];
   competitorStructures: PromptCompetitorStructure[];
   writingChecklist: PromptWritingChecklist;
+  competitorSelected: CompetitorPost[];
+  ownWinningPosts: OwnPost[];
 }
