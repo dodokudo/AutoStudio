@@ -167,7 +167,7 @@ export function PostQueue({
                   <label className="flex items-center gap-2 w-full sm:w-auto">
                     <span className="font-medium whitespace-nowrap">テンプレート</span>
                     <input
-                      className="h-8 flex-1 sm:w-32 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                      className="h-8 flex-1 sm:flex-initial rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                       list={templateOptions.length ? templateListId : undefined}
                       value={draft.templateId}
                       onChange={(event) =>
