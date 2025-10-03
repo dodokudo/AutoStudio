@@ -130,7 +130,7 @@ export function PostQueue({
       {items.length === 0 ? (
         <EmptyState title="投稿案はまだありません" description="上部の「投稿案を再生成」から案を作成してください。" />
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
           {items.map((item) => {
             const templateListId = `template-options-${item.id}`;
             const draft = editableValues[item.id] ?? item;
