@@ -6,6 +6,7 @@ import { resolveProjectId } from "@/lib/bigquery";
 import { OverviewTab } from "./_components/overview-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { countLineSourceRegistrations } from "@/lib/lstep/dashboard";
+import { getThreadsLinkClicks } from "@/lib/links/analytics";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
 
 const PROJECT_ID = resolveProjectId();
@@ -181,7 +182,7 @@ export default async function ThreadsHome({
   const activeTab = ["overview", "insights"].includes(tabParam) ? tabParam : "overview";
 
   try {
-    const [insights, planSummaries, dashboard, insightsActivity] = await Promise.all([
+    const [insights, planSummaries, dashboard, insightsActivity, threadsLinkClicks] = await Promise.all([
       getThreadsInsights(PROJECT_ID, insightsOptions),
       (async () => {
         await seedPlansIfNeeded();
@@ -189,6 +190,7 @@ export default async function ThreadsHome({
       })(),
       getThreadsDashboard(),
       getThreadsInsightsData(),
+      getThreadsLinkClicks(),
     ]);
 
     let lineRegistrationCount: number | null = null;
@@ -257,6 +259,9 @@ export default async function ThreadsHome({
         ? undefined
         : resolveDeltaTone(profileViewsDeltaValue);
 
+    // リンククリック数を日付順にソートして計算
+    const totalLinkClicks = threadsLinkClicks.reduce((sum, item) => sum + item.clicks, 0);
+
     const stats = [
       {
         label: '現在のフォロワー数',
@@ -283,7 +288,7 @@ export default async function ThreadsHome({
       },
       {
         label: 'リンククリック数',
-        value: 'N/A',
+        value: formatNumber(totalLinkClicks),
       },
       {
         label: 'LINE登録数',
