@@ -45,6 +45,14 @@ export async function createShortLink(req: CreateShortLinkRequest): Promise<Shor
 
 export async function getShortLinkByCode(shortCode: string): Promise<ShortLink | null> {
   const query = `
+    WITH latest_records AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY _PARTITIONTIME DESC, created_at DESC) as rn
+      FROM \`${projectId}.${dataset}.short_links\`
+      WHERE short_code = @shortCode
+      AND is_active = true
+    )
     SELECT
       id,
       short_code as shortCode,
@@ -57,9 +65,8 @@ export async function getShortLinkByCode(shortCode: string): Promise<ShortLink |
       CAST(created_at AS STRING) as createdAt,
       created_by as createdBy,
       is_active as isActive
-    FROM \`${projectId}.${dataset}.short_links\`
-    WHERE short_code = @shortCode
-    AND is_active = true
+    FROM latest_records
+    WHERE rn = 1
     LIMIT 1
   `;
 
@@ -73,6 +80,13 @@ export async function getShortLinkByCode(shortCode: string): Promise<ShortLink |
 
 export async function getAllShortLinks(): Promise<ShortLink[]> {
   const query = `
+    WITH latest_records AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY _PARTITIONTIME DESC, created_at DESC) as rn
+      FROM \`${projectId}.${dataset}.short_links\`
+      WHERE is_active = true
+    )
     SELECT
       id,
       short_code as shortCode,
@@ -85,8 +99,8 @@ export async function getAllShortLinks(): Promise<ShortLink[]> {
       CAST(created_at AS STRING) as createdAt,
       created_by as createdBy,
       is_active as isActive
-    FROM \`${projectId}.${dataset}.short_links\`
-    WHERE is_active = true
+    FROM latest_records
+    WHERE rn = 1
     ORDER BY created_at DESC
   `;
 
@@ -245,34 +259,46 @@ export async function checkShortCodeExists(shortCode: string): Promise<boolean> 
 }
 
 export async function updateShortLink(id: string, req: UpdateShortLinkRequest): Promise<void> {
-  // streaming buffer問題を回避するため、テーブルを再作成して更新を反映
-  const query = `
-    CREATE OR REPLACE TABLE \`${projectId}.${dataset}.short_links\` AS
-    SELECT
-      id,
-      short_code,
-      CASE WHEN id = @id THEN @destinationUrl ELSE destination_url END as destination_url,
-      CASE WHEN id = @id THEN @title ELSE title END as title,
-      CASE WHEN id = @id THEN @description ELSE description END as description,
-      CASE WHEN id = @id THEN @ogpImageUrl ELSE ogp_image_url END as ogp_image_url,
-      CASE WHEN id = @id THEN @managementName ELSE management_name END as management_name,
-      CASE WHEN id = @id THEN @category ELSE category END as category,
-      created_at,
-      created_by,
-      is_active
-    FROM \`${projectId}.${dataset}.short_links\`
-  `;
-
-  await bigquery.query({
-    query,
-    params: {
-      id,
-      destinationUrl: req.destinationUrl,
-      title: req.title || null,
-      description: req.description || null,
-      ogpImageUrl: req.ogpImageUrl || null,
-      managementName: req.managementName || null,
-      category: req.category || null,
-    },
+  // streaming buffer問題を回避するため、古いレコードを無効化して新しいレコードを挿入
+  // 1. 既存のレコードを取得
+  const [existingRows] = await bigquery.query({
+    query: `SELECT * FROM \`${projectId}.${dataset}.short_links\` WHERE id = @id LIMIT 1`,
+    params: { id },
   });
+
+  if (existingRows.length === 0) {
+    throw new Error('Short link not found');
+  }
+
+  const existing = existingRows[0] as Record<string, unknown>;
+
+  //2. 古いレコードを無効化（is_active = falseの新レコードとして挿入）
+  await bigquery.dataset(dataset).table('short_links').insert([{
+    id: existing.id,
+    short_code: existing.short_code,
+    destination_url: existing.destination_url,
+    title: existing.title,
+    description: existing.description,
+    ogp_image_url: existing.ogp_image_url,
+    management_name: existing.management_name,
+    category: existing.category,
+    created_at: existing.created_at,
+    created_by: existing.created_by,
+    is_active: false,
+  }]);
+
+  // 3. 更新された新しいレコードを挿入
+  await bigquery.dataset(dataset).table('short_links').insert([{
+    id: existing.id,
+    short_code: existing.short_code,
+    destination_url: req.destinationUrl,
+    title: req.title || null,
+    description: req.description || null,
+    ogp_image_url: req.ogpImageUrl || null,
+    management_name: req.managementName || null,
+    category: req.category || null,
+    created_at: existing.created_at,
+    created_by: existing.created_by,
+    is_active: true,
+  }]);
 }
