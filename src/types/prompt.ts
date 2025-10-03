@@ -85,6 +85,20 @@ export interface CompetitorPost {
   evaluation: 'pattern_win' | 'pattern_niche_hit' | 'pattern_hidden_gem';
   tier: 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C';
   score: number;
+  is_ai_focused?: boolean;
+}
+
+export interface MonguchiPost {
+  account_name: string;
+  username: string;
+  post_date: string;
+  content: string;
+  impressions: number;
+  likes: number;
+  followers: number;
+  followers_delta: number;
+  tier: 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C';
+  score: number;
 }
 
 export interface OwnPost {
@@ -111,4 +125,5 @@ export interface ThreadsPromptPayload {
   writingChecklist: PromptWritingChecklist;
   competitorSelected: CompetitorPost[];
   ownWinningPosts: OwnPost[];
+  monguchiPosts: MonguchiPost[];
 }

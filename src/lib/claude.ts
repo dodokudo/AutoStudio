@@ -277,52 +277,29 @@ function formatCompetitorSelected(payload: ThreadsPromptPayload): string {
     return '- 競合選抜データなし';
   }
 
-  const tierGroups = {
-    tier_S: payload.competitorSelected.filter(p => p.tier === 'tier_S'),
-    tier_A: payload.competitorSelected.filter(p => p.tier === 'tier_A'),
-    tier_B: payload.competitorSelected.filter(p => p.tier === 'tier_B'),
-    tier_C: payload.competitorSelected.filter(p => p.tier === 'tier_C'),
-  };
+  const aiPosts = payload.competitorSelected.filter(p => p.is_ai_focused);
+  const nonAiPosts = payload.competitorSelected.filter(p => !p.is_ai_focused);
 
   const sections: string[] = [];
 
-  if (tierGroups.tier_S.length) {
-    sections.push('### Sティア（最高勝ちパターン）- 3本');
-    tierGroups.tier_S.forEach((post, idx) => {
+  if (aiPosts.length) {
+    sections.push(`### AI系発信者（${aiPosts.length}本）- テーマ・構成・トーン すべて学習`);
+    aiPosts.forEach((post, idx) => {
       sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
       sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
-      sections.push(`   - 評価: ${post.evaluation}`);
-      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
+      sections.push(`   - 評価: ${post.evaluation} / ティア: ${post.tier}`);
+      sections.push(`   - 本文: ${post.content.slice(0, 500)}`);
     });
   }
 
-  if (tierGroups.tier_A.length) {
-    sections.push('### Aティア（安定パターン）- 4本');
-    tierGroups.tier_A.forEach((post, idx) => {
+  if (nonAiPosts.length) {
+    sections.push('');
+    sections.push(`### 非AI系発信者（${nonAiPosts.length}本）- 構成のみ学習（テーマは真似しない）`);
+    nonAiPosts.forEach((post, idx) => {
       sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
       sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
-      sections.push(`   - 評価: ${post.evaluation}`);
-      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
-    });
-  }
-
-  if (tierGroups.tier_B.length) {
-    sections.push('### Bティア（実験枠）- 2本');
-    tierGroups.tier_B.forEach((post, idx) => {
-      sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
-      sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
-      sections.push(`   - 評価: ${post.evaluation}`);
-      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
-    });
-  }
-
-  if (tierGroups.tier_C.length) {
-    sections.push('### Cティア（多様性枠）- 1本');
-    tierGroups.tier_C.forEach((post, idx) => {
-      sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
-      sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
-      sections.push(`   - 評価: ${post.evaluation}`);
-      sections.push(`   - 本文: ${post.content.slice(0, 150)}...`);
+      sections.push(`   - 評価: ${post.evaluation} / ティア: ${post.tier}`);
+      sections.push(`   - 本文: ${post.content.slice(0, 500)}`);
     });
   }
 
@@ -341,7 +318,7 @@ function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
   topPosts.forEach((post, idx) => {
     sections.push(`${idx + 1}. スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions_total.toLocaleString()} / フォロワー増(2日): +${post.followers_delta_2d}`);
     sections.push(`   - 評価: ${post.evaluation}`);
-    sections.push(`   - 本文: ${post.content.slice(0, 200)}...`);
+    sections.push(`   - 本文: ${post.content.slice(0, 500)}`);
   });
 
   const evalCounts = payload.ownWinningPosts.reduce((acc, post) => {
@@ -354,6 +331,27 @@ function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
   sections.push(`- pattern_win: ${evalCounts.pattern_win || 0}本`);
   sections.push(`- pattern_niche_hit: ${evalCounts.pattern_niche_hit || 0}本`);
   sections.push(`- pattern_hidden_gem: ${evalCounts.pattern_hidden_gem || 0}本`);
+
+  return sections.join('\n');
+}
+
+function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
+  if (!payload.monguchiPosts || !payload.monguchiPosts.length) {
+    return '- 門口さんの投稿データなし';
+  }
+
+  const sections: string[] = [];
+  sections.push('### 🌟 門口さん（@mon_guchi）- LINE誘導の達人');
+  sections.push(`ティアS/Aから上位${payload.monguchiPosts.length}本を特別抽出。LINE誘導手法を特に注目して学習。`);
+  sections.push('');
+
+  payload.monguchiPosts.forEach((post, idx) => {
+    sections.push(`${idx + 1}. スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
+    sections.push(`   - ティア: ${post.tier}`);
+    sections.push(`   - 投稿日: ${post.post_date}`);
+    sections.push(`   - 全文: ${post.content}`);
+    sections.push('');
+  });
 
   return sections.join('\n');
 }
@@ -373,9 +371,13 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     `- 投稿番号: ${index + 1} / 合計 ${payload.meta.targetPostCount} 本`,
     `- 推奨投稿時刻: ${schedule}`,
     '',
-    '## 【重要】競合勝ち構成パターン（S3/A4/B2/C1 = 10本）',
+    '## 【最重要】門口さん特別枠',
+    formatMonguchiPosts(payload),
+    '',
+    '## 【重要】競合勝ち構成パターン（AI系15本 + 非AI系35本 = 50本）',
     '以下の競合投稿から構成パターンを学習してください。',
-    '**注意**: テーマやジャンルは真似せず、構成・フック・展開方法のみを参考にすること。',
+    '**AI系発信者**: テーマ・構成・トーン すべて参考にする',
+    '**非AI系発信者**: 構成・フック・展開方法のみ参考（テーマは絶対に真似しない）',
     formatCompetitorSelected(payload),
     '',
     '## 【重要】自社過去勝ち投稿（50本から学習）',
@@ -392,11 +394,13 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     payload.writingChecklist.reminders.map((item) => `- ${item}`).join('\n'),
     '',
     '## 生成指示',
-    '1. 競合10本（S3/A4/B2/C1）の構成パターンを分析し、最も効果的なフック・展開・締め方を特定',
-    '2. 自社50本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
-    '3. 上記を統合し、以下の配分を意識して1本生成：',
-    `   - 投稿${index + 1}/10: ${index < 3 ? 'S級構成ベース（最高勝ちパターン）' : index < 7 ? 'A級構成ベース（安定パターン）' : index < 9 ? 'B級構成ベース（実験枠）' : 'C級構成ベース（多様性確保）'}`,
-    '4. 各投稿は必ずAIテーマに限定し、競合のジャンルは絶対に真似しない',
+    '1. 🌟 門口さんの投稿からLINE誘導の手法を最優先で学習',
+    '2. 競合50本（AI系15本 + 非AI系35本）の構成パターンを分析：',
+    '   - AI系15本: テーマ・構成・トーン すべて学習',
+    '   - 非AI系35本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
+    '3. 自社50本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
+    '4. 上記を統合し、多様性を確保して1本生成',
+    '5. 各投稿は必ずAIテーマに限定',
     '',
     '## JSON出力仕様',
     `- 返答は ${JSON_SCHEMA_EXAMPLE} 形式のみ。追加テキスト禁止。

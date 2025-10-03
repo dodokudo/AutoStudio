@@ -13,6 +13,7 @@ import type {
   PromptWritingChecklist,
   CompetitorPost,
   OwnPost,
+  MonguchiPost,
 } from '../types/prompt';
 
 interface BuildPromptOptions {
@@ -414,7 +415,10 @@ daily AS (
     username,
     date AS daily_date,
     followers,
-    followers - LAG(followers) OVER (PARTITION BY username ORDER BY date) AS followers_delta
+    CASE
+      WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) IS NULL THEN 0
+      ELSE followers - LAG(followers) OVER (PARTITION BY username ORDER BY date)
+    END AS followers_delta
   FROM \`${projectId}.${DATASET}.competitor_account_daily\`
 ),
 joined AS (
@@ -471,23 +475,34 @@ b_pool AS (
 c_pool AS (
   SELECT * FROM filtered WHERE tier = 'tier_C' ORDER BY score DESC
 ),
-s_selected AS (SELECT * FROM s_pool LIMIT 3),
-a_selected AS (SELECT * FROM a_pool LIMIT 4),
-b_selected AS (SELECT * FROM b_pool LIMIT 2),
-c_selected AS (SELECT * FROM c_pool LIMIT 1)
+-- AI系と非AI系を分類
+ai_focused AS (
+  SELECT * FROM filtered
+  WHERE genre IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI')
+),
+non_ai_focused AS (
+  SELECT * FROM filtered
+  WHERE genre NOT IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI')
+),
+-- AI系から15本取得
+ai_selected AS (
+  SELECT *, TRUE AS is_ai_focused
+  FROM ai_focused
+  ORDER BY score DESC
+  LIMIT 15
+),
+-- 非AI系から35本取得
+non_ai_selected AS (
+  SELECT *, FALSE AS is_ai_focused
+  FROM non_ai_focused
+  ORDER BY score DESC
+  LIMIT 35
+)
 
-SELECT * FROM s_selected
-UNION ALL SELECT * FROM a_selected
-UNION ALL SELECT * FROM b_selected
-UNION ALL SELECT * FROM c_selected
-ORDER BY
-  CASE tier
-    WHEN 'tier_S' THEN 1
-    WHEN 'tier_A' THEN 2
-    WHEN 'tier_B' THEN 3
-    ELSE 4
-  END,
-  score DESC
+SELECT * FROM ai_selected
+UNION ALL
+SELECT * FROM non_ai_selected
+ORDER BY score DESC
   `;
 
   type Row = {
@@ -503,6 +518,7 @@ ORDER BY
     evaluation?: string;
     tier?: string;
     score?: number;
+    is_ai_focused?: boolean;
   };
 
   const rows = await runQuery<Row>(client, sql);
@@ -519,6 +535,7 @@ ORDER BY
     evaluation: (row.evaluation ?? 'pattern_win') as 'pattern_win' | 'pattern_niche_hit' | 'pattern_hidden_gem',
     tier: (row.tier ?? 'tier_C') as 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C',
     score: Number(row.score ?? 0),
+    is_ai_focused: row.is_ai_focused ?? false,
   }));
 }
 
@@ -607,6 +624,104 @@ LIMIT 50
   }));
 }
 
+async function fetchMonguchiPosts(
+  client: BigQuery,
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<MonguchiPost[]> {
+  const sql = `
+WITH max_post AS (
+  SELECT MAX(DATE(post_date)) AS latest_date
+  FROM \`${projectId}.${DATASET}.competitor_posts_raw\`
+),
+latest_genre AS (
+  SELECT
+    username,
+    ARRAY_AGG(STRUCT(date, genre) ORDER BY date DESC LIMIT 1)[OFFSET(0)].genre AS genre
+  FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+  GROUP BY username
+),
+daily AS (
+  SELECT
+    username,
+    date AS daily_date,
+    followers,
+    CASE
+      WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) IS NULL THEN 0
+      ELSE followers - LAG(followers) OVER (PARTITION BY username ORDER BY date)
+    END AS followers_delta
+  FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+),
+joined AS (
+  SELECT
+    p.account_name,
+    p.username,
+    DATE(p.post_date) AS post_date,
+    p.content,
+    p.impressions,
+    p.likes,
+    g.genre,
+    d.followers,
+    COALESCE(d.followers_delta, 0) AS followers_delta,
+    CASE
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_win"
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) BETWEEN 15 AND 39 THEN "pattern_niche_hit"
+      WHEN p.impressions BETWEEN 10000 AND 29999 AND COALESCE(d.followers_delta,0) >= 15 THEN "pattern_niche_hit"
+      WHEN p.impressions < 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_hidden_gem"
+      ELSE "pattern_other"
+    END AS evaluation,
+    CASE
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 100 THEN "tier_S"
+      WHEN (p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 50)
+           OR (p.impressions < 20000 AND COALESCE(d.followers_delta,0) >= 80) THEN "tier_A"
+      WHEN p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 30 THEN "tier_B"
+      ELSE "tier_C"
+    END AS tier,
+    (COALESCE(d.followers_delta,0) * 12.0) + (p.impressions / 2000.0) AS score
+  FROM \`${projectId}.${DATASET}.competitor_posts_raw\` p
+  CROSS JOIN max_post m
+  LEFT JOIN latest_genre g ON p.username = g.username
+  LEFT JOIN daily d ON p.username = d.username AND DATE(p.post_date) = d.daily_date
+  WHERE DATE(p.post_date) BETWEEN DATE_SUB(m.latest_date, INTERVAL 30 DAY) AND m.latest_date
+    AND p.username = 'mon_guchi'
+)
+SELECT *
+FROM joined
+WHERE evaluation IN ("pattern_win","pattern_niche_hit","pattern_hidden_gem")
+  AND tier IN ('tier_S', 'tier_A')
+ORDER BY score DESC
+LIMIT 5
+  `;
+
+  type Row = {
+    account_name?: string;
+    username?: string;
+    post_date?: string;
+    content?: string;
+    impressions?: number;
+    likes?: number;
+    followers?: number;
+    followers_delta?: number;
+    tier?: string;
+    score?: number;
+  };
+
+  const rows = await runQuery<Row>(client, sql);
+  return rows.map((row) => ({
+    account_name: row.account_name ?? '',
+    username: row.username ?? '',
+    post_date: toPlainString(row.post_date) ?? '',
+    content: row.content ?? '',
+    impressions: Number(row.impressions ?? 0),
+    likes: Number(row.likes ?? 0),
+    followers: Number(row.followers ?? 0),
+    followers_delta: Number(row.followers_delta ?? 0),
+    tier: (row.tier ?? 'tier_C') as 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C',
+    score: Number(row.score ?? 0),
+  }));
+}
+
 export function buildScheduleSlots(count: number, startHour = 7, intervalMinutes = 90): string[] {
   const slots: string[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -658,7 +773,7 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
   const startDateStr = startDate.toISOString().slice(0, 10);
   const endDateStr = endDate.toISOString().slice(0, 10);
 
-  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries, postCount, competitorSelected, ownWinningPosts] =
+  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries, postCount, competitorSelected, ownWinningPosts, monguchiPosts] =
     await Promise.all([
       fetchAccountSummary(client, projectId, rangeDays, startDateStr, endDateStr),
       fetchTopSelfPosts(client, projectId, startDateStr, endDateStr),
@@ -668,6 +783,7 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
       fetchPostCount(client, projectId, startDateStr, endDateStr),
       fetchCompetitorSelected(client, projectId, startDateStr, endDateStr),
       fetchOwnWinningPosts(client, projectId, startDateStr, endDateStr),
+      fetchMonguchiPosts(client, projectId, startDateStr, endDateStr),
     ]);
 
   const targetCount = 10;
@@ -696,5 +812,6 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
     writingChecklist: WRITING_CHECKLIST,
     competitorSelected,
     ownWinningPosts,
+    monguchiPosts,
   };
 }
