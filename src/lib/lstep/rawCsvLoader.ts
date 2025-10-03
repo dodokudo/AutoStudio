@@ -110,7 +110,7 @@ function parseCSVLine(line: string): string[] {
 function normalizeColumnName(name: string): string {
   // 日本語と特殊文字を英数字とアンダースコアに変換
   // 特殊なパターンを先に処理（長い→短い順）
-  let normalized = name
+  const normalized = name
     .replace(/流入経路：Threads　固定/g, 'source_threads_fixed')
     .replace(/流入経路：Threads　ポスト/g, 'source_threads_post')
     .replace(/流入経路：Threads　プロフ/g, 'source_threads_profile')

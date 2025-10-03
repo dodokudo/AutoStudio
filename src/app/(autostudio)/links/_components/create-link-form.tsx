@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export function CreateLinkForm() {
@@ -92,7 +92,7 @@ export function CreateLinkForm() {
             </label>
             <select
               value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value as '' | 'threads' | 'instagram' | 'youtube' | 'ad' })}
               className="w-full rounded-md border border-[color:var(--color-border)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
@@ -196,6 +196,7 @@ export function CreateLinkForm() {
             <div className="rounded-md border border-[color:var(--color-border)] bg-white overflow-hidden">
               {formData.ogpImageUrl && (
                 <div className="w-full aspect-[1.91/1] bg-gray-100 relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={formData.ogpImageUrl}
                     alt="OGP Preview"

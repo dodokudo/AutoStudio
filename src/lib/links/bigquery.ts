@@ -214,17 +214,17 @@ export async function getLinkStats(shortLinkId: string): Promise<LinkStats> {
     clicksToday,
     clicksThisWeek,
     clicksThisMonth,
-    clicksByDate: clicksByDateResult.map((row: any) => ({
-      date: row.date,
-      clicks: parseInt(row.clicks),
+    clicksByDate: clicksByDateResult.map((row: Record<string, unknown>) => ({
+      date: String(row.date),
+      clicks: parseInt(String(row.clicks)),
     })),
-    clicksByReferrer: clicksByReferrerResult.map((row: any) => ({
-      referrer: row.referrer,
-      clicks: parseInt(row.clicks),
+    clicksByReferrer: clicksByReferrerResult.map((row: Record<string, unknown>) => ({
+      referrer: String(row.referrer),
+      clicks: parseInt(String(row.clicks)),
     })),
-    clicksByDevice: clicksByDeviceResult.map((row: any) => ({
-      deviceType: row.deviceType,
-      clicks: parseInt(row.clicks),
+    clicksByDevice: clicksByDeviceResult.map((row: Record<string, unknown>) => ({
+      deviceType: String(row.deviceType),
+      clicks: parseInt(String(row.clicks)),
     })),
   };
 }

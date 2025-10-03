@@ -14,6 +14,7 @@ export function LinkStatsView({ linkId }: LinkStatsViewProps) {
 
   useEffect(() => {
     loadStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkId]);
 
   const loadStats = async () => {
