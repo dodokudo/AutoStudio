@@ -254,7 +254,7 @@ export async function seedPlansIfNeeded() {
       scheduled_time: schedule[index] ?? '07:00',
       template_id: 'auto-generated',
       theme: insights.writingChecklist.enforcedTheme,
-      status: (index === 0 ? 'draft' : index === 1 ? 'approved' : 'scheduled') as PlanStatus,
+      status: 'draft' as PlanStatus,
       main_text: mainText,
       comments: JSON.stringify(comments),
       created_at: now,
