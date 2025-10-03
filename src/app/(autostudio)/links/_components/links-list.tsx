@@ -131,12 +131,20 @@ export function LinksList() {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <Link
-                    href={`/links/${link.id}`}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    統計を見る
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/links/${link.id}`}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      統計を見る
+                    </Link>
+                    <Link
+                      href={`/links/${link.id}/edit`}
+                      className="text-sm text-gray-600 hover:underline"
+                    >
+                      編集
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

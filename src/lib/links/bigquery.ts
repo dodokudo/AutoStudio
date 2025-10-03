@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
-import type { ShortLink, ClickLog, LinkStats, CreateShortLinkRequest } from './types';
+import type { ShortLink, ClickLog, LinkStats, CreateShortLinkRequest, UpdateShortLinkRequest } from './types';
 
 const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
@@ -242,4 +242,31 @@ export async function checkShortCodeExists(shortCode: string): Promise<boolean> 
   });
 
   return parseInt(rows[0]?.count || '0') > 0;
+}
+
+export async function updateShortLink(id: string, req: UpdateShortLinkRequest): Promise<void> {
+  const query = `
+    UPDATE \`${projectId}.${dataset}.short_links\`
+    SET
+      destination_url = @destinationUrl,
+      title = @title,
+      description = @description,
+      ogp_image_url = @ogpImageUrl,
+      management_name = @managementName,
+      category = @category
+    WHERE id = @id
+  `;
+
+  await bigquery.query({
+    query,
+    params: {
+      id,
+      destinationUrl: req.destinationUrl,
+      title: req.title || null,
+      description: req.description || null,
+      ogpImageUrl: req.ogpImageUrl || null,
+      managementName: req.managementName || null,
+      category: req.category || null,
+    },
+  });
 }

@@ -42,3 +42,12 @@ export interface CreateShortLinkRequest {
   managementName?: string;
   category?: 'threads' | 'instagram' | 'youtube' | 'ad';
 }
+
+export interface UpdateShortLinkRequest {
+  destinationUrl: string;
+  title?: string;
+  description?: string;
+  ogpImageUrl?: string;
+  managementName?: string;
+  category?: 'threads' | 'instagram' | 'youtube' | 'ad';
+}
