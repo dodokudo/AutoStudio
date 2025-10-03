@@ -419,7 +419,9 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
 
 function buildPrompt(payload: ThreadsPromptPayload, index: number): string {
   const context = buildLightweightContext(payload, index);
-  return [context, '', KUDO_MASTER_PROMPT].join('\n\n');
+  // KUDO_MASTER_PROMPTを先に配置し、その後にcontextで上書きする
+  // これにより、競合データ・自社データが優先される
+  return [KUDO_MASTER_PROMPT, '', context].join('\n\n');
 }
 
 function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): ClaudePlanResponsePost {
