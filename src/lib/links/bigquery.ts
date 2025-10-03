@@ -245,16 +245,29 @@ export async function checkShortCodeExists(shortCode: string): Promise<boolean> 
 }
 
 export async function updateShortLink(id: string, req: UpdateShortLinkRequest): Promise<void> {
+  // streaming bufferの問題を回避するため、MERGE文を使用
+  const now = new Date().toISOString();
+
   const query = `
-    UPDATE \`${projectId}.${dataset}.short_links\`
-    SET
-      destination_url = @destinationUrl,
-      title = @title,
-      description = @description,
-      ogp_image_url = @ogpImageUrl,
-      management_name = @managementName,
-      category = @category
-    WHERE id = @id
+    MERGE \`${projectId}.${dataset}.short_links\` T
+    USING (SELECT
+      @id as id,
+      @destinationUrl as destination_url,
+      @title as title,
+      @description as description,
+      @ogpImageUrl as ogp_image_url,
+      @managementName as management_name,
+      @category as category
+    ) S
+    ON T.id = S.id
+    WHEN MATCHED THEN
+      UPDATE SET
+        destination_url = S.destination_url,
+        title = S.title,
+        description = S.description,
+        ogp_image_url = S.ogp_image_url,
+        management_name = S.management_name,
+        category = S.category
   `;
 
   await bigquery.query({
