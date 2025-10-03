@@ -45,14 +45,6 @@ export async function createShortLink(req: CreateShortLinkRequest): Promise<Shor
 
 export async function getShortLinkByCode(shortCode: string): Promise<ShortLink | null> {
   const query = `
-    WITH latest_records AS (
-      SELECT
-        *,
-        ROW_NUMBER() OVER (PARTITION BY id ORDER BY _PARTITIONTIME DESC, created_at DESC) as rn
-      FROM \`${projectId}.${dataset}.short_links\`
-      WHERE short_code = @shortCode
-      AND is_active = true
-    )
     SELECT
       id,
       short_code as shortCode,
@@ -65,8 +57,10 @@ export async function getShortLinkByCode(shortCode: string): Promise<ShortLink |
       CAST(created_at AS STRING) as createdAt,
       created_by as createdBy,
       is_active as isActive
-    FROM latest_records
-    WHERE rn = 1
+    FROM \`${projectId}.${dataset}.short_links\`
+    WHERE short_code = @shortCode
+    AND is_active = true
+    ORDER BY created_at DESC
     LIMIT 1
   `;
 
@@ -80,10 +74,10 @@ export async function getShortLinkByCode(shortCode: string): Promise<ShortLink |
 
 export async function getAllShortLinks(): Promise<ShortLink[]> {
   const query = `
-    WITH latest_records AS (
+    WITH ranked_links AS (
       SELECT
         *,
-        ROW_NUMBER() OVER (PARTITION BY id ORDER BY _PARTITIONTIME DESC, created_at DESC) as rn
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) as rn
       FROM \`${projectId}.${dataset}.short_links\`
       WHERE is_active = true
     )
@@ -99,7 +93,7 @@ export async function getAllShortLinks(): Promise<ShortLink[]> {
       CAST(created_at AS STRING) as createdAt,
       created_by as createdBy,
       is_active as isActive
-    FROM latest_records
+    FROM ranked_links
     WHERE rn = 1
     ORDER BY created_at DESC
   `;
