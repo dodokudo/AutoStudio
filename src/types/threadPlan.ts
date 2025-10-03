@@ -9,6 +9,8 @@ export interface ThreadPlan {
   status: PlanStatus;
   main_text: string;
   comments: string;
+  original_main_text?: string;
+  original_comments?: string;
   created_at: string;
   updated_at: string;
 }

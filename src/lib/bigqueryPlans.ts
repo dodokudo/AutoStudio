@@ -21,6 +21,8 @@ const PLAN_TABLE_SCHEMA = [
   { name: 'status', type: 'STRING' },
   { name: 'main_text', type: 'STRING' },
   { name: 'comments', type: 'STRING' },
+  { name: 'original_main_text', type: 'STRING' },
+  { name: 'original_comments', type: 'STRING' },
   { name: 'created_at', type: 'TIMESTAMP' },
   { name: 'updated_at', type: 'TIMESTAMP' },
 ];
@@ -45,6 +47,29 @@ async function ensurePlanTable() {
         console.error('Failed to create thread_post_plans table', error);
         throw error;
       }
+    }
+  } else {
+    // テーブルが存在する場合、original_main_text と original_comments カラムが存在するか確認
+    try {
+      const [metadata] = await table.getMetadata();
+      const existingFields = metadata.schema?.fields?.map((f: { name: string }) => f.name) || [];
+
+      if (!existingFields.includes('original_main_text') || !existingFields.includes('original_comments')) {
+        console.log('[ensurePlanTable] Adding original_main_text and original_comments columns...');
+
+        // ALTER TABLE で新しいカラムを追加
+        const alterSql = `
+          ALTER TABLE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+          ADD COLUMN IF NOT EXISTS original_main_text STRING,
+          ADD COLUMN IF NOT EXISTS original_comments STRING
+        `;
+
+        await client.query({ query: alterSql });
+        console.log('[ensurePlanTable] Columns added successfully');
+      }
+    } catch (error) {
+      console.error('[ensurePlanTable] Error checking/adding columns:', error);
+      // カラム追加エラーは警告のみ（既存データには影響しない）
     }
   }
 }
@@ -179,8 +204,8 @@ export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSch
           comments = @comments,
           updated_at = CURRENT_TIMESTAMP()
       WHEN NOT MATCHED THEN
-        INSERT (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, created_at, updated_at)
-        VALUES (@planId, DATE(@generationDate), @scheduledTime, @templateId, @theme, @status, @mainText, @comments, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+        INSERT (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, original_main_text, original_comments, created_at, updated_at)
+        VALUES (@planId, DATE(@generationDate), @scheduledTime, @templateId, @theme, @status, @mainText, @comments, @mainText, @comments, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
     `;
 
     try {
@@ -452,8 +477,8 @@ export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string; 
         comments = COALESCE(@comments, T.comments),
         updated_at = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN
-      INSERT (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, created_at, updated_at)
-      VALUES (@planId, DATE(@generationDate), COALESCE(@scheduledTime, '07:00'), COALESCE(@templateId, 'auto-generated'), COALESCE(@theme, '未分類'), COALESCE(@status, 'draft'), COALESCE(@mainText, ''), COALESCE(@comments, '[]'), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+      INSERT (plan_id, generation_date, scheduled_time, template_id, theme, status, main_text, comments, original_main_text, original_comments, created_at, updated_at)
+      VALUES (@planId, DATE(@generationDate), COALESCE(@scheduledTime, '07:00'), COALESCE(@templateId, 'auto-generated'), COALESCE(@theme, '未分類'), COALESCE(@status, 'draft'), COALESCE(@mainText, ''), COALESCE(@comments, '[]'), COALESCE(@mainText, ''), COALESCE(@comments, '[]'), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
   `;
 
   await client.query({
