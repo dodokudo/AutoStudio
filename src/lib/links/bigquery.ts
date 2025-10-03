@@ -256,7 +256,14 @@ export async function updateShortLink(id: string, req: UpdateShortLinkRequest): 
   // streaming buffer問題を回避するため、古いレコードを無効化して新しいレコードを挿入
   // 1. 既存のレコードを取得
   const [existingRows] = await bigquery.query({
-    query: `SELECT * FROM \`${projectId}.${dataset}.short_links\` WHERE id = @id LIMIT 1`,
+    query: `
+      SELECT *
+      FROM \`${projectId}.${dataset}.short_links\`
+      WHERE id = @id
+      AND is_active = true
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
     params: { id },
   });
 
@@ -266,33 +273,39 @@ export async function updateShortLink(id: string, req: UpdateShortLinkRequest): 
 
   const existing = existingRows[0] as Record<string, unknown>;
 
-  //2. 古いレコードを無効化（is_active = falseの新レコードとして挿入）
-  await bigquery.dataset(dataset).table('short_links').insert([{
-    id: existing.id,
-    short_code: existing.short_code,
-    destination_url: existing.destination_url,
-    title: existing.title,
-    description: existing.description,
-    ogp_image_url: existing.ogp_image_url,
-    management_name: existing.management_name,
-    category: existing.category,
-    created_at: existing.created_at,
-    created_by: existing.created_by,
-    is_active: false,
-  }]);
+  // 2. 作成から90分経過しているかチェック（streaming bufferの保持期間）
+  const createdAt = new Date(String(existing.created_at));
+  const now = new Date();
+  const minutesSinceCreation = (now.getTime() - createdAt.getTime()) / 1000 / 60;
 
-  // 3. 更新された新しいレコードを挿入
-  await bigquery.dataset(dataset).table('short_links').insert([{
-    id: existing.id,
-    short_code: existing.short_code,
-    destination_url: req.destinationUrl,
-    title: req.title || null,
-    description: req.description || null,
-    ogp_image_url: req.ogpImageUrl || null,
-    management_name: req.managementName || null,
-    category: req.category || null,
-    created_at: existing.created_at,
-    created_by: existing.created_by,
-    is_active: true,
-  }]);
+  if (minutesSinceCreation < 90) {
+    throw new Error(
+      `リンクは作成後90分経過するまで編集できません。あと${Math.ceil(90 - minutesSinceCreation)}分お待ちください。`,
+    );
+  }
+
+  // 3. 古いレコードを無効化（UPDATE使用 - 90分経過後はstreaming bufferから出ている）
+  await bigquery.query({
+    query: `
+      UPDATE \`${projectId}.${dataset}.short_links\`
+      SET
+        destination_url = @destinationUrl,
+        title = @title,
+        description = @description,
+        ogp_image_url = @ogpImageUrl,
+        management_name = @managementName,
+        category = @category
+      WHERE id = @id
+      AND is_active = true
+    `,
+    params: {
+      id,
+      destinationUrl: req.destinationUrl,
+      title: req.title || null,
+      description: req.description || null,
+      ogpImageUrl: req.ogpImageUrl || null,
+      managementName: req.managementName || null,
+      category: req.category || null,
+    },
+  });
 }
