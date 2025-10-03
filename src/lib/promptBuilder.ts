@@ -417,9 +417,12 @@ daily AS (
     followers,
     CASE
       WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) IS NULL THEN 0
+      WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) = 0 THEN 0
       ELSE followers - LAG(followers) OVER (PARTITION BY username ORDER BY date)
     END AS followers_delta
   FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+  WHERE followers > 0
+    AND username != 'akagami0124'
 ),
 joined AS (
   SELECT
@@ -431,28 +434,38 @@ joined AS (
     p.likes,
     g.genre,
     d.followers,
-    COALESCE(d.followers_delta, 0) AS followers_delta,
+    d.followers_delta,
     CASE
-      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_win"
-      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) BETWEEN 15 AND 39 THEN "pattern_niche_hit"
-      WHEN p.impressions BETWEEN 10000 AND 29999 AND COALESCE(d.followers_delta,0) >= 15 THEN "pattern_niche_hit"
-      WHEN p.impressions < 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_hidden_gem"
-      WHEN p.impressions >= 10000 AND COALESCE(d.followers_delta,0) < 15 THEN "pattern_buzz_only"
+      WHEN g.genre IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI') AND p.impressions >= 10000 THEN "pattern_win"
+      WHEN g.genre IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI') AND p.impressions >= 5000 THEN "pattern_niche_hit"
+      WHEN p.impressions >= 30000 AND d.followers_delta >= 40 THEN "pattern_win"
+      WHEN p.impressions >= 30000 AND d.followers_delta BETWEEN 15 AND 39 THEN "pattern_niche_hit"
+      WHEN p.impressions BETWEEN 10000 AND 29999 AND d.followers_delta >= 15 THEN "pattern_niche_hit"
+      WHEN p.impressions < 30000 AND d.followers_delta >= 40 THEN "pattern_hidden_gem"
+      WHEN p.impressions >= 10000 AND d.followers_delta < 15 THEN "pattern_buzz_only"
       ELSE "pattern_fail"
     END AS evaluation,
     CASE
-      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 100 THEN "tier_S"
-      WHEN (p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 50)
-           OR (p.impressions < 20000 AND COALESCE(d.followers_delta,0) >= 80) THEN "tier_A"
-      WHEN p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 30 THEN "tier_B"
+      WHEN g.genre IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI') AND p.impressions >= 30000 THEN "tier_S"
+      WHEN g.genre IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI') AND p.impressions >= 15000 THEN "tier_A"
+      WHEN g.genre IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI') AND p.impressions >= 5000 THEN "tier_B"
+      WHEN p.impressions >= 30000 AND d.followers_delta >= 100 THEN "tier_S"
+      WHEN (p.impressions >= 20000 AND d.followers_delta >= 50)
+           OR (p.impressions < 20000 AND d.followers_delta >= 80) THEN "tier_A"
+      WHEN p.impressions >= 20000 AND d.followers_delta >= 30 THEN "tier_B"
       ELSE "tier_C"
     END AS tier,
-    (COALESCE(d.followers_delta,0) * 12.0) + (p.impressions / 2000.0) AS score
+    CASE
+      WHEN g.genre IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI')
+        THEN (p.impressions / 100.0)
+      ELSE (d.followers_delta * 12.0) + (p.impressions / 2000.0)
+    END AS score
   FROM \`${projectId}.${DATASET}.competitor_posts_raw\` p
   CROSS JOIN max_post m
   LEFT JOIN latest_genre g ON p.username = g.username
   LEFT JOIN daily d ON p.username = d.username AND DATE(p.post_date) = d.daily_date
   WHERE DATE(p.post_date) BETWEEN DATE_SUB(m.latest_date, INTERVAL 30 DAY) AND m.latest_date
+    AND p.username != 'akagami0124'
 ),
 ranked AS (
   SELECT *,
@@ -649,9 +662,11 @@ daily AS (
     followers,
     CASE
       WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) IS NULL THEN 0
+      WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) = 0 THEN 0
       ELSE followers - LAG(followers) OVER (PARTITION BY username ORDER BY date)
     END AS followers_delta
   FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+  WHERE followers > 0
 ),
 joined AS (
   SELECT
@@ -685,6 +700,7 @@ joined AS (
   LEFT JOIN daily d ON p.username = d.username AND DATE(p.post_date) = d.daily_date
   WHERE DATE(p.post_date) BETWEEN DATE_SUB(m.latest_date, INTERVAL 30 DAY) AND m.latest_date
     AND p.username = 'mon_guchi'
+    AND LENGTH(p.content) > 500
 )
 SELECT *
 FROM joined
