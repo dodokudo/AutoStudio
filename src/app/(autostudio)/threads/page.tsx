@@ -306,6 +306,8 @@ export default async function ThreadsHome({
       { draft: 0, approved: 0, scheduled: 0, rejected: 0 },
     );
 
+    const totalPlans = planSummaries.length;
+
     const heroStats = [
       {
         label: '承認待ち',

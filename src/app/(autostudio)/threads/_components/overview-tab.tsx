@@ -87,38 +87,42 @@ export function OverviewTab(props: OverviewTabProps) {
 
       <IndividualPostCard />
 
-      <Card className="accent-gradient max-w-full overflow-hidden">
-        <div className="flex flex-col gap-4 md:gap-6 lg:flex-row lg:items-center lg:justify-between min-w-0">
-          <div>
+      <Card className="w-full">
+        <div className="flex flex-col gap-6">
+          <div className="space-y-4">
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] break-words">本日の投稿案</h2>
-            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)] break-words">
-              最新のスケジュールを確認し、必要に応じて再生成してください。
-            </p>
-            <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 w-full max-w-full">
+            <div className="flex flex-wrap items-center gap-3">
               <RegenerateButton />
               <Button variant="secondary" onClick={() => window?.scrollTo({ top: 0, behavior: 'smooth' })}>
                 ページ更新
               </Button>
             </div>
           </div>
-          <div className="grid w-full gap-3 grid-cols-1 sm:grid-cols-3 lg:w-auto lg:gap-4 min-w-0">
+
+          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-3">
             {props.heroStats.map((stat) => (
-              <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 md:p-5 min-w-0">
+              <div
+                key={stat.label}
+                className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4"
+              >
                 <p className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-[0.08em]">
                   {stat.label}
                 </p>
-                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{stat.value}</p>
+                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
+                  {stat.value.toLocaleString()}
+                </p>
                 <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{stat.caption}</p>
               </div>
             ))}
           </div>
+
+          <PostQueueContainer
+            initialPlans={JSON.parse(JSON.stringify(props.planSummaries))}
+            templateOptions={props.templateOptions}
+            variant="embedded"
+          />
         </div>
       </Card>
-
-      <PostQueueContainer
-        initialPlans={JSON.parse(JSON.stringify(props.planSummaries))}
-        templateOptions={props.templateOptions}
-      />
 
       <PostedContent initialPostedPlans={props.planSummaries.filter(plan => plan.status === 'posted')} />
 

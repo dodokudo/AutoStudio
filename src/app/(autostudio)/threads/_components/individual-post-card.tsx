@@ -116,7 +116,7 @@ export function IndividualPostCard() {
   };
 
   return (
-    <Card className="accent-gradient max-w-full overflow-hidden">
+    <Card className="w-full">
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">個別投稿生成</h2>
         <p className="text-sm text-[color:var(--color-text-secondary)]">

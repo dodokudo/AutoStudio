@@ -13,6 +13,7 @@ interface TemplateOption {
 interface PostQueueContainerProps {
   initialPlans: ThreadPlanSummary[];
   templateOptions?: TemplateOption[];
+  variant?: 'standalone' | 'embedded';
 }
 
 interface PlansResponse {
@@ -59,7 +60,7 @@ function normalize(plan: ThreadPlanSummary) {
   };
 }
 
-export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQueueContainerProps) {
+export function PostQueueContainer({ initialPlans, templateOptions = [], variant = 'embedded' }: PostQueueContainerProps) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const { data, mutate, isValidating } = useSWR<PlansResponse>('/api/threads/plans', fetcher, {
     fallbackData: { items: initialPlans },
@@ -155,6 +156,7 @@ export function PostQueueContainer({ initialPlans, templateOptions = [] }: PostQ
       <PostQueue
         items={normalizedPlans}
         pendingId={pendingId}
+        variant={variant}
         onApprove={(id) => handleAction(id, 'approve')}
         onReject={(id) => handleAction(id, 'reject')}
         onDraftChange={(id, change) => {
