@@ -79,6 +79,7 @@ async function fetchAccountSummary(
     stats AS (
       SELECT
         MAX(followers_snapshot) AS max_followers,
+        SUM(profile_views) AS total_profile_views,
         AVG(profile_views) AS avg_profile_views,
         MAX(IF(date = (SELECT MAX(date) FROM recent), followers_snapshot, NULL)) AS latest_followers,
         MAX(IF(date = (SELECT MIN(date) FROM recent), followers_snapshot, NULL)) AS earliest_followers,
@@ -88,6 +89,7 @@ async function fetchAccountSummary(
     )
     SELECT
       max_followers,
+      total_profile_views,
       avg_profile_views,
       latest_followers - earliest_followers AS followers_change,
       latest_views - earliest_views AS profile_views_change,
@@ -97,6 +99,7 @@ async function fetchAccountSummary(
 
   type Row = {
     max_followers: number | null;
+    total_profile_views: number | null;
     avg_profile_views: number | null;
     followers_change: number | null;
     profile_views_change: number | null;
@@ -111,6 +114,7 @@ async function fetchAccountSummary(
     return {
       averageFollowers: 0,
       averageProfileViews: 0,
+      totalProfileViews: 0,
       followersChange: 0,
       profileViewsChange: 0,
       recentDates: [],
@@ -121,6 +125,7 @@ async function fetchAccountSummary(
   return {
     averageFollowers: Math.round(row.max_followers ?? 0),
     averageProfileViews: Math.round(row.avg_profile_views ?? 0),
+    totalProfileViews: Math.round(row.total_profile_views ?? 0),
     followersChange: Math.round(row.followers_change ?? 0),
     profileViewsChange: Math.round(row.profile_views_change ?? 0),
     recentDates: (row.dates ?? []).map((d: unknown) => toPlainString(d) ?? '').filter(Boolean),

@@ -16,6 +16,7 @@ import type { ThreadsDashboardData } from '@/lib/threadsDashboard';
 import type { PromptTemplateSummary } from '@/types/prompt';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { InsightsRangeSelector } from './insights-range-selector';
 
 interface OverviewTabProps {
   heroStats: Array<{
@@ -70,7 +71,19 @@ interface OverviewTabProps {
 export function OverviewTab(props: OverviewTabProps) {
   return (
     <div className="section-stack max-w-full overflow-hidden">
-      <InsightsCard title="アカウント概況" stats={props.stats} />
+      <InsightsCard
+        title="アカウント概況"
+        stats={props.stats}
+        note={props.noteText}
+        actions={
+          <InsightsRangeSelector
+            options={props.rangeSelectorOptions}
+            value={props.selectedRangeValue}
+            customStart={props.customStart}
+            customEnd={props.customEnd}
+          />
+        }
+      />
 
       <IndividualPostCard />
 

@@ -10,6 +10,7 @@ export interface PromptMeta {
 export interface PromptAccountSummary {
   averageFollowers: number;
   averageProfileViews: number;
+  totalProfileViews: number;
   followersChange: number;
   profileViewsChange: number;
   recentDates: string[];

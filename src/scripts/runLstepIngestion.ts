@@ -19,6 +19,7 @@ import {
   ProcessingFailedError,
 } from '@/lib/lstep/errors';
 import { NormalizedLstepData } from '@/lib/lstep/types';
+import { loadRawCsvToBigQuery } from '@/lib/lstep/rawCsvLoader';
 
 async function main(): Promise<void> {
   const config = loadLstepConfig();
@@ -72,11 +73,23 @@ async function main(): Promise<void> {
       timestamp,
     );
 
+    console.log('✅ CSVダウンロードとGCSアップロードが完了しました');
+    console.log('処理されたファイル:');
+    console.log('  - user_core:', processedObjects.userCore);
+    console.log('  - user_tags:', processedObjects.userTags);
+    console.log('  - user_sources:', processedObjects.userSources);
+    console.log('  - user_surveys:', processedObjects.userSurveys);
+
     await ensureDatasetAndTables(bigquery, config.dataset, config.location);
 
+    console.log('BigQueryにロード中...');
     await loadIntoBigQuery(bigquery, config, processedObjects);
 
-    console.log('Lstep CSV 取得とBigQueryロードが完了しました');
+    // Raw CSVもそのままBigQueryにロード
+    console.log('Raw CSVをBigQueryにロード中...');
+    await loadRawCsvToBigQuery(storage, bigquery, config, downloadOutcome.csvPath, snapshotDate);
+
+    console.log('✅ Lstep CSV 取得とBigQueryロードが完了しました');
   } catch (error) {
     await handleFailure(error, config);
     throw error;
@@ -195,15 +208,30 @@ async function loadIntoBigQuery(
   ];
 
   for (const jobDef of jobs) {
-    const table = dataset.table(jobDef.table);
     const uri = `gs://${config.gcsBucket}/${jobDef.objectName}`;
+    console.log(`  - ${jobDef.table} をロード中... (${uri})`);
     try {
-      const [job] = await table.load(uri, {
-        sourceFormat: 'NEWLINE_DELIMITED_JSON',
-        writeDisposition: 'WRITE_APPEND',
+      console.log('    BigQuery ロードジョブを作成中...');
+      const [job] = await bigquery.createJob({
+        configuration: {
+          load: {
+            sourceUris: [uri],
+            destinationTable: {
+              projectId: config.projectId,
+              datasetId: config.dataset,
+              tableId: jobDef.table,
+            },
+            sourceFormat: 'NEWLINE_DELIMITED_JSON',
+            writeDisposition: 'WRITE_APPEND',
+            autodetect: false,
+          },
+        },
       });
+      console.log('    ジョブ作成完了、待機中...');
       await waitForLoadJob(job as Job);
+      console.log(`  ✅ ${jobDef.table} のロード完了`);
     } catch (error) {
+      console.error(`  ❌ ${jobDef.table} のロード失敗:`, error);
       throw new BigQueryLoadError(`${jobDef.table} テーブルへのロードに失敗しました`, { cause: error });
     }
   }
@@ -307,9 +335,9 @@ const USER_CORE_SCHEMA: SchemaField[] = [
   { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },
   { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
   { name: 'display_name', type: 'STRING' },
-  { name: 'friend_added_at', type: 'DATETIME' },
+  { name: 'friend_added_at', type: 'STRING' }, // STRING型で保存、後でBigQueryでTIMESTAMPに変換
   { name: 'blocked', type: 'BOOL' },
-  { name: 'last_msg_at', type: 'DATETIME' },
+  { name: 'last_msg_at', type: 'STRING' }, // STRING型で保存、後でBigQueryでTIMESTAMPに変換
   { name: 'scenario_name', type: 'STRING' },
   { name: 'scenario_days', type: 'INT64' },
 ];

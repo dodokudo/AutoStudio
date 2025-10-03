@@ -21,7 +21,8 @@
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
     "lstep:check": "tsx src/scripts/checkLstepSetup.ts",
     "youtube:sync": "tsx src/scripts/runYoutubeSync.ts",
-    "notion:test": "tsx src/scripts/testNotionSync.ts"
+    "notion:test": "tsx src/scripts/testNotionSync.ts",
+    "links:init": "tsx src/scripts/initLinkManagement.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { classNames } from '@/lib/classNames';
 
@@ -15,25 +15,11 @@ interface AccountInsightsCardProps {
     previousLikes?: number;
     previousNewFollowers?: number;
   };
-  onPeriodChange?: (period: string) => void;
+  note?: string;
+  filterControl?: ReactNode;
 }
 
-const PERIOD_OPTIONS = [
-  { label: '3日間', value: '3d' },
-  { label: '7日間', value: '7d' },
-  { label: '30日間', value: '30d' },
-  { label: '60日間', value: '60d' },
-  { label: '90日間', value: '90d' },
-  { label: '180日間', value: '180d' },
-];
-
-export function AccountInsightsCard({ data, onPeriodChange }: AccountInsightsCardProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState('7d');
-
-  const handlePeriodChange = (period: string) => {
-    setSelectedPeriod(period);
-    onPeriodChange?.(period);
-  };
+export function AccountInsightsCard({ data, note, filterControl }: AccountInsightsCardProps) {
 
   const formatDelta = (current: number, previous?: number) => {
     if (previous === undefined) return null;
@@ -79,19 +65,15 @@ export function AccountInsightsCard({ data, onPeriodChange }: AccountInsightsCar
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">アカウントインサイト</h2>
-          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">選択した期間の主要指標を確認できます。</p>
+          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+            {note ?? '選択した期間の主要指標を確認できます。'}
+          </p>
         </div>
-        <select
-          value={selectedPeriod}
-          onChange={(event) => handlePeriodChange(event.target.value)}
-          className="h-9 w-40 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-        >
-          {PERIOD_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        {filterControl ? (
+          <div className="flex items-center gap-3 text-xs text-[color:var(--color-text-secondary)]">
+            {filterControl}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

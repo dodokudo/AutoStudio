@@ -46,7 +46,7 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
 
   const [latestSnapshot] = await runQuery<{ snapshot_date: string | null }>(client, projectId, datasetId, {
-    query: `SELECT MAX(snapshot_date) AS snapshot_date FROM user_core`,
+    query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM user_core`,
   });
 
   const latestSnapshotDate = latestSnapshot?.snapshot_date ?? null;
@@ -58,7 +58,7 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
     {
       query: `
         SELECT
-          snapshot_date,
+          CAST(snapshot_date AS STRING) AS snapshot_date,
           COUNT(DISTINCT user_id) AS new_friends
         FROM user_core
         GROUP BY snapshot_date
@@ -76,9 +76,9 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
       )
       SELECT
         tag_name,
-        SUM(CASE WHEN has_tag THEN 1 ELSE 0 END) AS user_count
+        SUM(CASE WHEN tag_flag = 1 THEN 1 ELSE 0 END) AS user_count
       FROM user_tags
-      WHERE has_tag = true
+      WHERE tag_flag = 1
         AND snapshot_date = (SELECT snapshot_date FROM latest)
       GROUP BY tag_name
       ORDER BY user_count DESC
@@ -97,9 +97,9 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
         )
         SELECT
           tag_name,
-          SUM(CASE WHEN has_tag THEN 1 ELSE 0 END) AS user_count
+          SUM(CASE WHEN tag_flag = 1 THEN 1 ELSE 0 END) AS user_count
         FROM user_tags
-        WHERE has_tag = true
+        WHERE tag_flag = 1
           AND snapshot_date = (SELECT snapshot_date FROM latest)
           AND (tag_name LIKE '%流入経路%' OR tag_name LIKE '%Instagram%' OR tag_name LIKE '%Threads%')
         GROUP BY tag_name
@@ -136,7 +136,7 @@ async function buildFunnel(client: BigQuery, projectId: string, datasetId: strin
   const selectExpressions = stages
     .map(
       (_, index) =>
-        `MAX(IF(tag_name = @stage${index + 1}, IF(has_tag, 1, 0), 0)) AS stage${index + 1}_flag`,
+        `MAX(IF(tag_name = @stage${index + 1}, IF(tag_flag = 1, 1, 0), 0)) AS stage${index + 1}_flag`,
     )
     .join(',\n        ');
 

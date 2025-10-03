@@ -42,6 +42,7 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     });
 
     const page = await context.newPage();
+    page.setDefaultTimeout(180000); // 3分
 
     // まずログイン後のダッシュボードに移動
     await page.goto('https://manager.linestep.net/', { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -53,13 +54,15 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     // サイドバーから友だちリストに移動
     try {
       await page.click('text=友だちリスト', { timeout: 10000 });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
     } catch {
       // 別の方法で友だちリストに移動を試行
       await page.click('text=1対1トーク', { timeout: 5000 });
       await page.waitForTimeout(1000);
       await page.click('text=友だちリスト', { timeout: 5000 });
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
     }
 
     const download = await performDownloadFlow(page, config);
@@ -100,56 +103,73 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
 
-  // 2. 複数回スクロールして確実に最下部に到達
-  for (let i = 0; i < 3; i++) {
+  // 2. 「CSV操作」タブが表示されるまでスクロール
+  let csvButtonVisible = false;
+  for (let i = 0; i < 10; i++) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(500);
+
+    const csvButton = page.locator('text=CSV操作');
+    const count = await csvButton.count();
+    if (count > 0) {
+      try {
+        await csvButton.first().waitFor({ state: 'visible', timeout: 1000 });
+        csvButtonVisible = true;
+        break;
+      } catch {
+        // まだ見えていない
+      }
+    }
   }
 
-  // 3. デバッグ: ページの内容を確認
-  console.log('Current URL:', page.url());
-  console.log('Page title:', await page.title());
-
-  // ページに存在するテキストを確認
-  const bodyText = await page.locator('body').textContent();
-  if (bodyText?.includes('CSV')) {
-    console.log('CSV text found in page');
-  } else {
-    console.log('CSV text NOT found in page');
-    console.log('Body contains:', bodyText?.substring(0, 500));
+  if (!csvButtonVisible) {
+    throw new Error('CSV操作タブが見つかりませんでした');
   }
 
-  // より柔軟な方法で「CSV操作」を探す
-  await clickByMultipleSelectors(page, [
-    'text=CSV操作',
-    'text=CSV操作',  // 全角・半角の違い
-    'text="CSV操作"',
-    ':text("CSV")',
-    'button:has-text("CSV")',
-    'a:has-text("CSV")',
-    '[href*="csv"], [onclick*="csv"], [class*="csv"]'
-  ], config.downloadTimeoutMs);
+  // 3. CSV操作タブをクリック
+  console.log('CSV操作タブをクリック...');
+  await page.getByRole('tab', { name: 'CSV操作' }).click();
+  await page.waitForTimeout(2000);
 
-  // 4. 「CVSエクスポート」をクリック
-  await clickByText(page, 'CVSエクスポート', config.downloadTimeoutMs);
+  // 4. CSVエクスポートボタンをクリック（ID: csv_export_mover）
+  console.log('CSVエクスポートボタンをクリック...');
+  await page.locator('#csv_export_mover').click();
 
-  // 5. 「履歴・お気に入りから表示条件入力」をクリック
-  await clickByText(page, '履歴・お気に入りから表示条件入力', config.downloadTimeoutMs);
+  // ページ遷移を待つ（/line/exporter/.../register に遷移）
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(2000);
+  console.log('CSVエクスポートページに遷移しました:', page.url());
 
-  // 6. お気に入りの1番上の「表示項目をコピーして利用」をタップ
-  await clickByText(page, '表示項目をコピーして利用', config.downloadTimeoutMs);
+  // 5. 「履歴・お気に入りから表示条件入力」タブをクリック
+  console.log('履歴・お気に入りから表示条件入力をクリック...');
+  await page.getByRole('link', { name: '履歴・お気に入りから表示条件入力' }).click();
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(2000);
+  console.log('エクスポートリストページに遷移しました:', page.url());
+
+  // 6. お気に入りの1番上（「表示項目をコピーして利用」リンク）をクリック
+  console.log('お気に入りの1番上（表示項目をコピーして利用）をクリック...');
+  await page.getByRole('link', { name: '表示項目をコピーして利用' }).first().click();
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(2000);
+  console.log('CSVエクスポート設定ページに戻りました:', page.url());
 
   // 7. 「この条件でダウンロード」をクリック
-  await clickByText(page, 'この条件でダウンロード', config.downloadTimeoutMs);
+  console.log('この条件でダウンロードをクリック...');
+  await page.getByRole('button', { name: 'この条件でダウンロード' }).click();
 
-  // 8. 画面をリロード
-  await page.waitForLoadState('networkidle');
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000); // リロード後の待機時間を増加
+  // 8. 画面をリロード（エクスポート履歴を更新）
+  console.log('ページをリロードしています...');
+  await page.waitForLoadState('domcontentloaded');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  console.log('リロード完了');
 
-  // 9. エクスポート履歴の1番上のダウンロードボタンをタップ
+  // 9. エクスポート履歴の1番上のダウンロードボタンをクリック
+  console.log('ダウンロードボタンをクリック...');
   const downloadPromise = page.waitForEvent('download', { timeout: config.downloadTimeoutMs });
-  await clickByText(page, 'ダウンロード', config.downloadTimeoutMs);
+  await page.getByRole('link', { name: 'ダウンロード' }).first().click();
+  console.log('ダウンロード開始...');
   return downloadPromise;
 }
 
@@ -166,9 +186,12 @@ async function clickByMultipleSelectors(page: Page, selectors: string[], _timeou
   for (const selector of selectors) {
     try {
       const locator = page.locator(selector);
-      await locator.first().waitFor({ state: 'visible', timeout: 5000 });
-      await locator.first().click();
-      return; // 成功したら終了
+      const count = await locator.count();
+      if (count > 0) {
+        await locator.first().waitFor({ state: 'visible', timeout: 5000 });
+        await locator.first().click();
+        return; // 成功したら終了
+      }
     } catch (error) {
       lastError = error as Error;
       continue; // 次のセレクタを試す

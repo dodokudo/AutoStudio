@@ -177,30 +177,45 @@ export default async function ThreadsHome({
       return value > 0 ? 'up' : 'down';
     };
 
+    const formatNumber = (value?: number | null) =>
+      typeof value === 'number' && !Number.isNaN(value) ? value.toLocaleString() : 'N/A';
+
     const stats = [
       {
         label: '現在のフォロワー数',
-        value: insights.accountSummary.averageFollowers.toLocaleString(),
+        value: formatNumber(insights.accountSummary.averageFollowers),
         delta:
           insights.accountSummary.followersChange === 0
             ? undefined
-            : `${insights.accountSummary.followersChange > 0 ? '+' : ''}${insights.accountSummary.followersChange.toLocaleString()}`,
+            : `${insights.accountSummary.followersChange > 0 ? '+' : ''}${formatNumber(
+                insights.accountSummary.followersChange,
+              )}`,
         deltaTone: resolveDeltaTone(insights.accountSummary.followersChange),
       },
       {
-        label: '平均プロフ閲覧',
-        value: insights.accountSummary.averageProfileViews.toLocaleString(),
+        label: 'プロフィール閲覧（合計）',
+        value: formatNumber(insights.accountSummary.totalProfileViews),
         delta:
           insights.accountSummary.profileViewsChange === 0
             ? undefined
-            : `${insights.accountSummary.profileViewsChange > 0 ? '+' : ''}${insights.accountSummary.profileViewsChange.toLocaleString()}`,
+            : `${insights.accountSummary.profileViewsChange > 0 ? '+' : ''}${formatNumber(
+                insights.accountSummary.profileViewsChange,
+              )}`,
         deltaTone: resolveDeltaTone(insights.accountSummary.profileViewsChange),
       },
       {
         label: '期間内投稿数',
-        value: insights.postCount.toLocaleString(),
-        delta: `推奨 ${insights.meta.targetPostCount} 投稿`,
+        value: formatNumber(insights.postCount),
+        delta: `推奨 ${formatNumber(insights.meta.targetPostCount)} 投稿`,
         deltaTone: 'neutral' as const,
+      },
+      {
+        label: 'リンククリック数',
+        value: 'N/A',
+      },
+      {
+        label: 'LINE登録数',
+        value: 'N/A',
       },
     ];
 
@@ -316,7 +331,16 @@ export default async function ThreadsHome({
             queueMetrics={queueMetrics}
           />
         ) : (
-          <InsightsTab posts={insightsActivity.posts} dailyMetrics={insightsActivity.dailyMetrics} />
+          <InsightsTab
+            posts={insightsActivity.posts}
+            dailyMetrics={insightsActivity.dailyMetrics}
+            rangeSelectorOptions={rangeSelectorOptions}
+            rangePresets={INSIGHTS_RANGE_OPTIONS.map(({ value, days }) => ({ value, days }))}
+            selectedRangeValue={selectedRangeValue}
+            customStart={customStart}
+            customEnd={customEnd}
+            noteText={noteText}
+          />
         )}
       </div>
     );

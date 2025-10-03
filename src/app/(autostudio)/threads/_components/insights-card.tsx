@@ -39,7 +39,7 @@ export function InsightsCard({ title, stats, note, actions }: InsightsCardProps)
         {actions ? <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-secondary)]">{actions}</div> : null}
       </header>
 
-      <dl className="mt-6 grid gap-4 md:grid-cols-3">
+      <dl className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
           <div key={stat.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5">
             <dt className="text-xs font-medium text-[color:var(--color-text-secondary)] uppercase tracking-[0.08em]">

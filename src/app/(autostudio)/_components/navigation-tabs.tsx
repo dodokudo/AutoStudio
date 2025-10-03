@@ -9,6 +9,7 @@ const navItems = [
   { id: 'instagram', href: '/instagram', label: 'Instagram' },
   { id: 'youtube', href: '/youtube', label: 'YouTube' },
   { id: 'line', href: '/line', label: 'LINE' },
+  { id: 'links', href: '/links', label: 'Links' },
 ];
 
 export function NavigationTabs() {

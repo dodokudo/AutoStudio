@@ -5,10 +5,22 @@ import type { DailyFollowerMetric, PostInsight } from '@/lib/threadsInsightsData
 import { Card } from '@/components/ui/card';
 import { AccountInsightsCard } from './account-insights-card';
 import { TopContentCard } from './top-content-card';
+import { InsightsRangeSelector } from './insights-range-selector';
+
+interface RangePreset {
+  value: string;
+  days: number;
+}
 
 interface InsightsTabProps {
   posts: PostInsight[];
   dailyMetrics: DailyFollowerMetric[];
+  rangeSelectorOptions: Array<{ label: string; value: string }>;
+  rangePresets: RangePreset[];
+  selectedRangeValue: string;
+  customStart?: string;
+  customEnd?: string;
+  noteText: string;
 }
 
 const FALLBACK_INSIGHTS: Array<{
@@ -33,37 +45,82 @@ const FALLBACK_INSIGHTS: Array<{
 
 type TopContentSort = 'postedAt' | 'views' | 'likes';
 
-export function InsightsTab({ posts, dailyMetrics }: InsightsTabProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState('7d');
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function InsightsTab({
+  posts,
+  dailyMetrics,
+  rangeSelectorOptions,
+  rangePresets,
+  selectedRangeValue,
+  customStart,
+  customEnd,
+  noteText,
+}: InsightsTabProps) {
   const [topContentSort, setTopContentSort] = useState<TopContentSort>('views');
 
-  const filteredInsights = useMemo(() => {
+  const resolveRange = useMemo(() => {
+    if (selectedRangeValue === 'custom' && customStart && customEnd) {
+      const start = new Date(`${customStart}T00:00:00Z`);
+      const end = new Date(`${customEnd}T23:59:59Z`);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+        const orderedStart = start <= end ? start : end;
+        const orderedEnd = start <= end ? end : start;
+        return {
+          start: orderedStart,
+          end: orderedEnd,
+        } as const;
+      }
+    }
+
+    const preset = rangePresets.find((item) => item.value === selectedRangeValue) ?? rangePresets[0];
     const now = new Date();
-    const daysMap = { '3d': 3, '7d': 7, '30d': 30, '60d': 60, '90d': 90, '180d': 180 } as const;
-    const days = daysMap[selectedPeriod as keyof typeof daysMap] ?? 7;
-    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    return posts.filter((post) => new Date(post.postedAt) >= cutoff);
-  }, [posts, selectedPeriod]);
+    const start = new Date(now.getTime() - preset.days * DAY_MS);
+    return {
+      start,
+      end: now,
+    } as const;
+  }, [selectedRangeValue, customStart, customEnd, rangePresets]);
+
+  const currentRange = useMemo(() => {
+    const { start, end } = resolveRange;
+    const normalizedStart = new Date(start.getTime());
+    const normalizedEnd = new Date(end.getTime());
+    const duration = Math.max(normalizedEnd.getTime() - normalizedStart.getTime(), DAY_MS);
+    const previousEnd = new Date(normalizedStart.getTime());
+    const previousStart = new Date(previousEnd.getTime() - duration);
+
+    return {
+      start: normalizedStart,
+      end: normalizedEnd,
+      previousStart,
+      previousEnd,
+    } as const;
+  }, [resolveRange]);
+
+  const withinRange = (date: Date, start: Date, end: Date) =>
+    date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
+
+  const filteredInsights = useMemo(() => {
+    return posts.filter((post) => {
+      const postedAt = new Date(post.postedAt);
+      if (Number.isNaN(postedAt.getTime())) return false;
+      return withinRange(postedAt, currentRange.start, currentRange.end);
+    });
+  }, [posts, currentRange]);
 
   const effectiveInsights = filteredInsights.length > 0 ? filteredInsights : posts;
   const isUsingFallbackRange = filteredInsights.length === 0 && posts.length > 0;
 
   const accountInsightsData = useMemo(() => {
-    const now = new Date();
-    const daysMap = { '3d': 3, '7d': 7, '30d': 30, '60d': 60, '90d': 90, '180d': 180 } as const;
-    const days = daysMap[selectedPeriod as keyof typeof daysMap] ?? 7;
-    const periodMs = days * 24 * 60 * 60 * 1000;
-
-    const currentStart = new Date(now.getTime() - periodMs);
-    const previousStart = new Date(now.getTime() - periodMs * 2);
-
     const inRange = (post: PostInsight, start: Date, end: Date) => {
       const postedAt = new Date(post.postedAt);
-      return postedAt >= start && postedAt < end;
+      if (Number.isNaN(postedAt.getTime())) return false;
+      return withinRange(postedAt, start, end);
     };
 
-    const currentPosts = posts.filter((post) => inRange(post, currentStart, now));
-    const previousPosts = posts.filter((post) => inRange(post, previousStart, currentStart));
+    const currentPosts = posts.filter((post) => inRange(post, currentRange.start, currentRange.end));
+    const previousPosts = posts.filter((post) => inRange(post, currentRange.previousStart, currentRange.previousEnd));
 
     const sumImpressions = (items: PostInsight[]) =>
       items.reduce((total, post) => total + (post.insights.impressions ?? 0), 0);
@@ -72,15 +129,15 @@ export function InsightsTab({ posts, dailyMetrics }: InsightsTabProps) {
     const calcFollowerDelta = (series: DailyFollowerMetric[], start: Date, end: Date) => {
       const points = series.filter((point) => {
         const pointDate = new Date(`${point.date}T00:00:00Z`);
-        return pointDate >= start && pointDate <= end;
+        return withinRange(pointDate, start, end);
       });
       if (!points.length) return 0;
       const followers = points.map((point) => point.followers);
       return Math.max(...followers) - Math.min(...followers);
     };
 
-    const currentFollowers = calcFollowerDelta(dailyMetrics, currentStart, now);
-    const previousFollowers = calcFollowerDelta(dailyMetrics, previousStart, currentStart);
+    const currentFollowers = calcFollowerDelta(dailyMetrics, currentRange.start, currentRange.end);
+    const previousFollowers = calcFollowerDelta(dailyMetrics, currentRange.previousStart, currentRange.previousEnd);
 
     const currentLikes = sumLikes(currentPosts);
     const previousLikes = sumLikes(previousPosts);
@@ -95,7 +152,7 @@ export function InsightsTab({ posts, dailyMetrics }: InsightsTabProps) {
       previousLikes,
       previousNewFollowers: previousFollowers,
     };
-  }, [posts, dailyMetrics, selectedPeriod]);
+  }, [posts, dailyMetrics, currentRange]);
 
   const topContentData = useMemo(() => {
     const entries = effectiveInsights.map((post) => ({
@@ -153,7 +210,18 @@ export function InsightsTab({ posts, dailyMetrics }: InsightsTabProps) {
         </div>
       ) : null}
 
-      <AccountInsightsCard data={accountInsightsData} onPeriodChange={setSelectedPeriod} />
+      <AccountInsightsCard
+        data={accountInsightsData}
+        note={noteText}
+        filterControl={
+          <InsightsRangeSelector
+            options={rangeSelectorOptions}
+            value={selectedRangeValue}
+            customStart={customStart}
+            customEnd={customEnd}
+          />
+        }
+      />
       <TopContentCard posts={topContentData} sortOption={topContentSort} onSortChange={setTopContentSort} />
     </div>
   );
