@@ -26,6 +26,13 @@ export interface LineDashboardData {
   latestSnapshotDate: string | null;
 }
 
+interface LineSourceCountOptions {
+  startDate: string;
+  endDate: string;
+  sourceName?: string;
+  datasetId?: string;
+}
+
 function parseFunnelStages(): string[] {
   const raw = process.env.LSTEP_FUNNEL_TAGS;
   if (!raw) {
@@ -120,6 +127,48 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
     topSources: topSources.map((row) => ({ name: row.tag_name ?? '不明', count: Number(row.user_count ?? 0) })),
     funnel,
   };
+}
+
+export async function countLineSourceRegistrations(
+  projectId: string,
+  { startDate, endDate, sourceName = 'Threads', datasetId = DEFAULT_DATASET }: LineSourceCountOptions,
+): Promise<number> {
+  if (!startDate || !endDate) {
+    return 0;
+  }
+
+  const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
+
+  const normalizedStart = startDate <= endDate ? startDate : endDate;
+  const normalizedEnd = startDate <= endDate ? endDate : startDate;
+
+  const [row] = await runQuery<{ total: bigint | number | string | null }>(client, projectId, datasetId, {
+    query: `
+      WITH matched_users AS (
+        SELECT DISTINCT core.user_id
+        FROM \`${projectId}.${datasetId}.user_core\` core
+        INNER JOIN \`${projectId}.${datasetId}.user_sources\` sources
+          ON core.user_id = sources.user_id
+          AND core.snapshot_date = sources.snapshot_date
+        WHERE DATE(core.friend_added_at) BETWEEN @startDate AND @endDate
+          AND sources.source_name = @sourceName
+          AND sources.source_flag = 1
+      )
+      SELECT COUNT(*) AS total
+      FROM matched_users
+    `,
+    params: {
+      sourceName,
+      startDate: normalizedStart,
+      endDate: normalizedEnd,
+    },
+  });
+
+  const value = row?.total;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string') return Number(value) || 0;
+  return 0;
 }
 
 async function buildFunnel(client: BigQuery, projectId: string, datasetId: string): Promise<FunnelStage[]> {

@@ -5,6 +5,7 @@ import { getThreadsInsightsData } from "@/lib/threadsInsightsData";
 import { resolveProjectId } from "@/lib/bigquery";
 import { OverviewTab } from "./_components/overview-tab";
 import { InsightsTab } from "./_components/insights-tab";
+import { countLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
 
 const PROJECT_ID = resolveProjectId();
@@ -22,6 +23,8 @@ const RANGE_SELECT_OPTIONS = [
 ];
 
 export const dynamic = 'force-dynamic';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type QueueMetrics = {
   draft: number;
@@ -157,6 +160,23 @@ export default async function ThreadsHome({
     }
   }
 
+  const selectedRangeWindow = (() => {
+    if (selectedRangeValue === 'custom' && customStart && customEnd) {
+      const startDate = new Date(`${customStart}T00:00:00Z`);
+      const endDate = new Date(`${customEnd}T23:59:59Z`);
+      if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+        const start = startDate <= endDate ? startDate : endDate;
+        const end = startDate <= endDate ? endDate : startDate;
+        return { start, end } as const;
+      }
+    }
+
+    const days = selectedPreset.days;
+    const now = new Date();
+    const start = new Date(now.getTime() - days * DAY_MS);
+    return { start, end: now } as const;
+  })();
+
   const tabParam = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : "overview";
   const activeTab = ["overview", "insights"].includes(tabParam) ? tabParam : "overview";
 
@@ -171,6 +191,45 @@ export default async function ThreadsHome({
       getThreadsInsightsData(),
     ]);
 
+    let lineRegistrationCount: number | null = null;
+    if (selectedRangeWindow) {
+      try {
+        lineRegistrationCount = await countLineSourceRegistrations(PROJECT_ID, {
+          startDate: selectedRangeWindow.start.toISOString().slice(0, 10),
+          endDate: selectedRangeWindow.end.toISOString().slice(0, 10),
+          sourceName: 'Threads',
+        });
+      } catch (lineError) {
+        console.error('[threads/page] Failed to load LINE registrations:', lineError);
+      }
+    }
+
+    let profileViewsForRange: number | null = null;
+    let previousProfileViews: number | null = null;
+    if (selectedRangeWindow) {
+      const { start: rangeStartDate, end: rangeEndDate } = selectedRangeWindow;
+
+      const durationMs = Math.max(rangeEndDate.getTime() - rangeStartDate.getTime(), DAY_MS);
+      const previousRangeEnd = new Date(rangeStartDate.getTime());
+      const previousRangeStart = new Date(previousRangeEnd.getTime() - durationMs);
+
+      const sumImpressionsWithin = (windowStart: Date, windowEnd: Date) =>
+        insightsActivity.posts.reduce((total, post) => {
+          const postedAt = new Date(post.postedAt);
+          if (Number.isNaN(postedAt.getTime())) {
+            return total;
+          }
+          if (postedAt.getTime() >= windowStart.getTime() && postedAt.getTime() <= windowEnd.getTime()) {
+            const impressions = Number(post.insights?.impressions ?? 0);
+            return total + (Number.isNaN(impressions) ? 0 : impressions);
+          }
+          return total;
+        }, 0);
+
+      profileViewsForRange = sumImpressionsWithin(rangeStartDate, rangeEndDate);
+      previousProfileViews = sumImpressionsWithin(previousRangeStart, previousRangeEnd);
+    }
+
     const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
       if (value === undefined) return undefined;
       if (value === 0) return 'neutral';
@@ -179,6 +238,24 @@ export default async function ThreadsHome({
 
     const formatNumber = (value?: number | null) =>
       typeof value === 'number' && !Number.isNaN(value) ? value.toLocaleString() : 'N/A';
+
+    const profileViewsDisplayValue =
+      profileViewsForRange !== null ? profileViewsForRange : insights.accountSummary.totalProfileViews;
+
+    const profileViewsDeltaValue =
+      profileViewsForRange !== null && previousProfileViews !== null
+        ? profileViewsForRange - previousProfileViews
+        : insights.accountSummary.profileViewsChange;
+
+    const profileViewsDelta =
+      profileViewsDeltaValue === undefined || profileViewsDeltaValue === null || profileViewsDeltaValue === 0
+        ? undefined
+        : `${profileViewsDeltaValue > 0 ? '+' : ''}${formatNumber(profileViewsDeltaValue)}`;
+
+    const profileViewsDeltaTone =
+      profileViewsDeltaValue === undefined || profileViewsDeltaValue === null
+        ? undefined
+        : resolveDeltaTone(profileViewsDeltaValue);
 
     const stats = [
       {
@@ -193,21 +270,16 @@ export default async function ThreadsHome({
         deltaTone: resolveDeltaTone(insights.accountSummary.followersChange),
       },
       {
-        label: 'プロフィール閲覧（合計）',
-        value: formatNumber(insights.accountSummary.totalProfileViews),
-        delta:
-          insights.accountSummary.profileViewsChange === 0
-            ? undefined
-            : `${insights.accountSummary.profileViewsChange > 0 ? '+' : ''}${formatNumber(
-                insights.accountSummary.profileViewsChange,
-              )}`,
-        deltaTone: resolveDeltaTone(insights.accountSummary.profileViewsChange),
-      },
-      {
         label: '期間内投稿数',
         value: formatNumber(insights.postCount),
         delta: `推奨 ${formatNumber(insights.meta.targetPostCount)} 投稿`,
         deltaTone: 'neutral' as const,
+      },
+      {
+        label: '閲覧数',
+        value: formatNumber(profileViewsDisplayValue),
+        delta: profileViewsDelta,
+        deltaTone: profileViewsDeltaTone,
       },
       {
         label: 'リンククリック数',
@@ -215,7 +287,7 @@ export default async function ThreadsHome({
       },
       {
         label: 'LINE登録数',
-        value: 'N/A',
+        value: formatNumber(lineRegistrationCount),
       },
     ];
 

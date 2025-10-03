@@ -1,11 +1,11 @@
-import { BigQuery } from '@google-cloud/bigquery';
 import { v4 as uuidv4 } from 'uuid';
+import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import type { ShortLink, ClickLog, LinkStats, CreateShortLinkRequest } from './types';
 
-const projectId = process.env.NEXT_PUBLIC_GCP_PROJECT_ID || 'mark-454114';
+const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
 
-const bigquery = new BigQuery({ projectId });
+const bigquery = createBigQueryClient(projectId);
 
 export async function createShortLink(req: CreateShortLinkRequest): Promise<ShortLink> {
   const id = uuidv4();
