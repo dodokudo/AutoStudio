@@ -245,29 +245,22 @@ export async function checkShortCodeExists(shortCode: string): Promise<boolean> 
 }
 
 export async function updateShortLink(id: string, req: UpdateShortLinkRequest): Promise<void> {
-  // streaming bufferの問題を回避するため、MERGE文を使用
-  const now = new Date().toISOString();
-
+  // streaming buffer問題を回避するため、テーブルを再作成して更新を反映
   const query = `
-    MERGE \`${projectId}.${dataset}.short_links\` T
-    USING (SELECT
-      @id as id,
-      @destinationUrl as destination_url,
-      @title as title,
-      @description as description,
-      @ogpImageUrl as ogp_image_url,
-      @managementName as management_name,
-      @category as category
-    ) S
-    ON T.id = S.id
-    WHEN MATCHED THEN
-      UPDATE SET
-        destination_url = S.destination_url,
-        title = S.title,
-        description = S.description,
-        ogp_image_url = S.ogp_image_url,
-        management_name = S.management_name,
-        category = S.category
+    CREATE OR REPLACE TABLE \`${projectId}.${dataset}.short_links\` AS
+    SELECT
+      id,
+      short_code,
+      CASE WHEN id = @id THEN @destinationUrl ELSE destination_url END as destination_url,
+      CASE WHEN id = @id THEN @title ELSE title END as title,
+      CASE WHEN id = @id THEN @description ELSE description END as description,
+      CASE WHEN id = @id THEN @ogpImageUrl ELSE ogp_image_url END as ogp_image_url,
+      CASE WHEN id = @id THEN @managementName ELSE management_name END as management_name,
+      CASE WHEN id = @id THEN @category ELSE category END as category,
+      created_at,
+      created_by,
+      is_active
+    FROM \`${projectId}.${dataset}.short_links\`
   `;
 
   await bigquery.query({
