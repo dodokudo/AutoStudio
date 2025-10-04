@@ -30,6 +30,7 @@ interface OverviewTabProps {
     value: string;
     delta?: string;
     deltaTone?: 'up' | 'down' | 'neutral';
+    deltaHighlight?: boolean;
   }>;
   noteText: string;
   rangeSelectorOptions: Array<{

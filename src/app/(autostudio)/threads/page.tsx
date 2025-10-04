@@ -239,7 +239,27 @@ export default async function ThreadsHome({
     };
 
     const formatNumber = (value?: number | null) =>
-      typeof value === 'number' && !Number.isNaN(value) ? value.toLocaleString() : 'N/A';
+      typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : 'N/A';
+
+    const safeDivide = (numerator?: number | null, denominator?: number | null) => {
+      const numeratorValue = typeof numerator === 'number' && Number.isFinite(numerator) ? numerator : null;
+      const denominatorValue = typeof denominator === 'number' && Number.isFinite(denominator) ? denominator : null;
+      if (!denominatorValue || denominatorValue === 0) {
+        return null;
+      }
+      return (numeratorValue ?? 0) / denominatorValue;
+    };
+
+    const formatPercent = (value: number | null, fractionDigits = 1) => {
+      if (value === null) {
+        return 'N/A';
+      }
+      return new Intl.NumberFormat('ja-JP', {
+        style: 'percent',
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+      }).format(value);
+    };
 
     const profileViewsDisplayValue =
       profileViewsForRange !== null ? profileViewsForRange : insights.accountSummary.totalProfileViews;
@@ -259,8 +279,22 @@ export default async function ThreadsHome({
         ? undefined
         : resolveDeltaTone(profileViewsDeltaValue);
 
-    // リンククリック数を日付順にソートして計算
     const totalLinkClicks = threadsLinkClicks.reduce((sum, item) => sum + item.clicks, 0);
+
+    const profileViewsNumeric =
+      typeof profileViewsForRange === 'number'
+        ? profileViewsForRange
+        : typeof insights.accountSummary.totalProfileViews === 'number'
+          ? insights.accountSummary.totalProfileViews
+          : null;
+
+    const lineRegistrationsNumeric =
+      typeof lineRegistrationCount === 'number' && Number.isFinite(lineRegistrationCount)
+        ? lineRegistrationCount
+        : null;
+
+    const linkClickConversionRate = safeDivide(totalLinkClicks, profileViewsNumeric);
+    const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, totalLinkClicks);
 
     const stats = [
       {
@@ -289,10 +323,20 @@ export default async function ThreadsHome({
       {
         label: 'リンククリック数',
         value: formatNumber(totalLinkClicks),
+        delta:
+          linkClickConversionRate !== null
+            ? `遷移率: ${formatPercent(linkClickConversionRate, 2)}`
+            : undefined,
+        deltaHighlight: linkClickConversionRate !== null,
       },
       {
         label: 'LINE登録数',
         value: formatNumber(lineRegistrationCount),
+        delta:
+          lineRegistrationConversionRate !== null
+            ? `遷移率: ${formatPercent(lineRegistrationConversionRate, 2)}`
+            : undefined,
+        deltaHighlight: lineRegistrationConversionRate !== null,
       },
     ];
 
