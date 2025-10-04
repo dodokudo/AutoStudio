@@ -341,8 +341,8 @@ function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
   }
 
   const sections: string[] = [];
-  sections.push('### 🌟 門口さん（@mon_guchi）- LINE誘導の達人');
-  sections.push(`ティアS/Aから上位5本を特別抽出。LINE誘導手法を特に注目して学習。`);
+  sections.push('### 🌟 門口さん（@mon_guchi）- 固定ポスト誘導の達人');
+  sections.push(`ティアS/Aから上位5本を特別抽出。固定ポスト・プロフィール誘導手法を特に注目して学習。`);
   sections.push('');
 
   payload.monguchiPosts.forEach((post, idx) => {
@@ -374,7 +374,7 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '## 【最重要】門口さん特別枠',
     formatMonguchiPosts(payload),
     '',
-    '## 【重要】競合勝ち構成パターン（AI系15本 + 非AI系35本 = 50本）',
+    '## 【重要】競合勝ち構成パターン（AI系10本 + 非AI系30本 = 40本）',
     '以下の競合投稿から構成パターンを学習してください。',
     '**AI系発信者**: テーマ・構成・トーン すべて参考にする',
     '**非AI系発信者**: 構成・フック・展開方法のみ参考（テーマは絶対に真似しない）',
@@ -394,10 +394,12 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     payload.writingChecklist.reminders.map((item) => `- ${item}`).join('\n'),
     '',
     '## 生成指示',
-    '1. 🌟 門口さんの投稿からLINE誘導の手法を最優先で学習',
-    '2. 競合50本（AI系15本 + 非AI系35本）の構成パターンを分析：',
-    '   - AI系15本: テーマ・構成・トーン すべて学習',
-    '   - 非AI系35本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
+    '1. 🌟 門口さんの投稿から固定ポスト誘導の手法を最優先で学習',
+    '   - 「固定の特典でも解説してるんですが」のような自然な誘導文',
+    '   - プロフィールや固定投稿への導線設計',
+    '2. 競合40本（AI系10本 + 非AI系30本）の構成パターンを分析：',
+    '   - AI系10本: テーマ・構成・トーン すべて学習',
+    '   - 非AI系30本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
     '3. 自社25本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
     '4. 上記を統合し、多様性を確保して1本生成',
     '5. 各投稿は必ずAIテーマに限定',

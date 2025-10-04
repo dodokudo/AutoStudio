@@ -497,19 +497,19 @@ non_ai_focused AS (
   SELECT * FROM filtered
   WHERE genre NOT IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI')
 ),
--- AI系から5本取得
+-- AI系から10本取得
 ai_selected AS (
   SELECT *, TRUE AS is_ai_focused
   FROM ai_focused
   ORDER BY score DESC
-  LIMIT 5
+  LIMIT 10
 ),
--- 非AI系から5本取得
+-- 非AI系から30本取得
 non_ai_selected AS (
   SELECT *, FALSE AS is_ai_focused
   FROM non_ai_focused
   ORDER BY score DESC
-  LIMIT 5
+  LIMIT 30
 )
 
 SELECT * FROM ai_selected
