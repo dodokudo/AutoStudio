@@ -374,16 +374,14 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '## 【最重要】門口さん特別枠',
     formatMonguchiPosts(payload),
     '',
-    '## 【重要】競合勝ち構成パターン（厳選20本）',
-    '以下の競合投稿から**構成の多様性**を学習してください。',
+    '## 【重要】競合勝ち構成パターン（AI系15本 + 非AI系35本 = 50本）',
+    '以下の競合投稿から構成パターンを学習してください。',
     '**AI系発信者**: テーマ・構成・トーン すべて参考にする',
     '**非AI系発信者**: 構成・フック・展開方法のみ参考（テーマは絶対に真似しない）',
-    '**重要**: 各競合投稿は異なる構成・フック・展開を持っています。同じパターンを繰り返さず、多様な投稿を生成すること。',
     formatCompetitorSelected(payload),
     '',
-    '## 【重要】自社過去勝ち投稿（厳選20本）',
+    '## 【重要】自社過去勝ち投稿（50本から学習）',
     '以下の自社投稿から、勝ちパターン・トーン・文体DNAを把握してください。',
-    '**注意**: 各投稿は異なるテーマ・フック・展開を持っています。同じ表現を繰り返さず、バリエーションを意識すること。',
     formatOwnWinningPosts(payload),
     '',
     '## 参考にする自社投稿（構造とトーン）',
@@ -397,16 +395,11 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '',
     '## 生成指示',
     '1. 🌟 門口さんの投稿からLINE誘導の手法を最優先で学習',
-    '2. 競合20本（AI系8本 + 非AI系12本）の構成パターンを分析：',
-    '   - AI系8本: テーマ・構成・トーン すべて学習',
-    '   - 非AI系12本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
-    '   - **重要**: 各投稿の構成は異なります。同じフック・展開を繰り返さないこと',
-    '3. 自社20本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
-    '   - **重要**: 各投稿のテーマは異なります。「月30時間削減」などの同じ数字を繰り返さないこと',
-    '4. 上記を統合し、**多様性を最優先**して1本生成',
-    '   - 同じフレーズ（「まだ〜してる人、やばいです」など）を連続使用しない',
-    '   - テーマのバリエーション（自動化、効率化、時短、品質向上、コスト削減など）を意識',
-    '   - 数字のバリエーション（30時間、90%、10倍など）を意識',
+    '2. 競合50本（AI系15本 + 非AI系35本）の構成パターンを分析：',
+    '   - AI系15本: テーマ・構成・トーン すべて学習',
+    '   - 非AI系35本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
+    '3. 自社50本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
+    '4. 上記を統合し、多様性を確保して1本生成',
     '5. 各投稿は必ずAIテーマに限定',
     '',
     '## JSON出力仕様',
@@ -419,9 +412,7 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
 
 function buildPrompt(payload: ThreadsPromptPayload, index: number): string {
   const context = buildLightweightContext(payload, index);
-  // KUDO_MASTER_PROMPTを先に配置し、その後にcontextで上書きする
-  // これにより、競合データ・自社データが優先される
-  return [KUDO_MASTER_PROMPT, '', context].join('\n\n');
+  return [context, '', KUDO_MASTER_PROMPT].join('\n\n');
 }
 
 function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): ClaudePlanResponsePost {
