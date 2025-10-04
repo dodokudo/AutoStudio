@@ -400,8 +400,15 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '2. 競合40本（AI系10本 + 非AI系30本）の構成パターンを分析：',
     '   - AI系10本: テーマ・構成・トーン すべて学習',
     '   - 非AI系30本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
+    '   - **重要**: 各投稿は異なる構成パターンを持っています。同じフック・展開を繰り返さないこと',
     '3. 自社25本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
-    '4. 上記を統合し、多様性を確保して1本生成',
+    '   - **重要**: 各投稿のテーマは異なります。同じ数字・フレーズを繰り返さないこと',
+    '4. 上記を統合し、**多様性を最優先**して1本生成',
+    '   - 投稿番号 ${index + 1} / ${payload.meta.targetPostCount} 本目: 他の投稿と差別化すること',
+    '   - 同じフレーズ（「まだ〜してる人」など）の連続使用を避ける',
+    '   - テーマのバリエーション（自動化、効率化、時短、品質向上、コスト削減、ミス防止など）を意識',
+    '   - 数字のバリエーション（30時間、90%、10倍、5分、3ステップなど）を意識',
+    '   - フックのバリエーション（疑問形、否定形、驚き、体験談など）を意識',
     '5. 各投稿は必ずAIテーマに限定',
     '',
     '## JSON出力仕様',
@@ -508,7 +515,7 @@ async function requestClaude(prompt: string) {
     body: JSON.stringify({
       model: CLAUDE_MODEL,
       max_tokens: 3500,
-      temperature: 0.7,
+      temperature: 0.9,
       system:
         'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt.',
       messages: [
