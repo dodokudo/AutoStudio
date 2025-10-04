@@ -601,10 +601,11 @@ async function requestClaude(prompt: string) {
   console.log('[claude] Raw text content length:', textContent.length);
   console.log('[claude] Raw text content preview:', textContent.slice(0, 300));
 
-  const cleanContent = textContent
-    .replace(/```json\s*\n?/gi, '')
-    .replace(/```\s*$/g, '')
-    .trim();
+  // Remove markdown code blocks
+  let cleanContent = textContent;
+  cleanContent = cleanContent.replace(/```json\s*\n?/gi, '');
+  cleanContent = cleanContent.replace(/```\s*$/g, '');
+  cleanContent = cleanContent.trim();
 
   console.log('[claude] Clean content length:', cleanContent.length);
   console.log('[claude] Clean content preview:', cleanContent.slice(0, 300));
