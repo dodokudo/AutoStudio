@@ -707,7 +707,7 @@ FROM joined
 WHERE evaluation IN ("pattern_win","pattern_niche_hit","pattern_hidden_gem")
   AND tier IN ('tier_S', 'tier_A')
 ORDER BY score DESC
-LIMIT 2
+LIMIT 5
   `;
 
   type Row = {

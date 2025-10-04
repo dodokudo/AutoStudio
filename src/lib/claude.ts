@@ -342,7 +342,7 @@ function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
 
   const sections: string[] = [];
   sections.push('### 🌟 門口さん（@mon_guchi）- LINE誘導の達人');
-  sections.push(`ティアS/Aから上位${payload.monguchiPosts.length}本を特別抽出。LINE誘導手法を特に注目して学習。`);
+  sections.push(`ティアS/Aから上位5本を特別抽出。LINE誘導手法を特に注目して学習。`);
   sections.push('');
 
   payload.monguchiPosts.forEach((post, idx) => {
