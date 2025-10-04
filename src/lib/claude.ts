@@ -430,7 +430,7 @@ function buildBatchContext(payload: ThreadsPromptPayload): string {
     '      "planId": "[plan-02など]",',
     '      ...',
     '    }',
-    `    // 合計${payload.meta.targetPostCount}本を生成`,
+    '    // 合計' + payload.meta.targetPostCount + '本を生成',
     '  ]',
     '}',
     '',
