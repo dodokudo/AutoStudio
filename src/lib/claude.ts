@@ -314,7 +314,7 @@ function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
   const topPosts = payload.ownWinningPosts.slice(0, 10);
   const sections: string[] = [];
 
-  sections.push('### 自社過去勝ち投稿トップ10（全25本から抽出）');
+  sections.push('### 自社過去勝ち投稿トップ10（全15本から抽出）');
   topPosts.forEach((post, idx) => {
     sections.push(`${idx + 1}. スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions_total.toLocaleString()} / フォロワー増(2日): +${post.followers_delta_2d}`);
     sections.push(`   - 評価: ${post.evaluation}`);
@@ -327,7 +327,7 @@ function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
   }, {} as Record<string, number>);
 
   sections.push('');
-  sections.push(`### 勝ちパターン分布（全25本）`);
+  sections.push(`### 勝ちパターン分布（全15本）`);
   sections.push(`- pattern_win: ${evalCounts.pattern_win || 0}本`);
   sections.push(`- pattern_niche_hit: ${evalCounts.pattern_niche_hit || 0}本`);
   sections.push(`- pattern_hidden_gem: ${evalCounts.pattern_hidden_gem || 0}本`);
@@ -374,13 +374,14 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '## 【最重要】門口さん特別枠',
     formatMonguchiPosts(payload),
     '',
-    '## 【重要】競合勝ち構成パターン（AI系10本 + 非AI系30本 = 40本）',
+    '## 【重要】競合勝ち構成パターン（AI系15本 + 非AI系20本 = 35本）',
     '以下の競合投稿から構成パターンを学習してください。',
     '**AI系発信者**: テーマ・構成・トーン すべて参考にする',
     '**非AI系発信者**: 構成・フック・展開方法のみ参考（テーマは絶対に真似しない）',
+    '**注意**: 門口さん投稿は上記の特別枠で全文抽出済みのため、ここには含まれません',
     formatCompetitorSelected(payload),
     '',
-    '## 【重要】自社過去勝ち投稿（25本から学習）',
+    '## 【重要】自社過去勝ち投稿（15本から学習）',
     '以下の自社投稿から、勝ちパターン・トーン・文体DNAを把握してください。',
     formatOwnWinningPosts(payload),
     '',
@@ -391,11 +392,11 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '1. 🌟 門口さんの投稿から固定ポスト誘導の手法を最優先で学習',
     '   - 「固定の特典でも解説してるんですが」のような自然な誘導文',
     '   - プロフィールや固定投稿への導線設計',
-    '2. 競合40本（AI系10本 + 非AI系30本）の構成パターンを分析：',
-    '   - AI系10本: テーマ・構成・トーン すべて学習',
-    '   - 非AI系30本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
+    '2. 競合35本（AI系15本 + 非AI系20本）の構成パターンを分析：',
+    '   - AI系15本: テーマ・構成・トーン すべて学習',
+    '   - 非AI系20本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
     '   - **重要**: 各投稿は異なる構成パターンを持っています。同じフック・展開を繰り返さないこと',
-    '3. 自社25本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
+    '3. 自社15本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
     '   - **重要**: 各投稿のテーマは異なります。同じ数字・フレーズを繰り返さないこと',
     '4. 上記を統合し、**多様性を最優先**して1本生成',
     '   - 投稿番号 ${index + 1} / ${payload.meta.targetPostCount} 本目: 他の投稿と差別化すること',
