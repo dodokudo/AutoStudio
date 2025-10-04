@@ -415,24 +415,24 @@ function buildBatchContext(payload: ThreadsPromptPayload): string {
     '5. 各投稿は必ずAIテーマに限定',
     '',
     '## JSON出力仕様',
-    `- 返答は以下の形式のみ。追加テキスト禁止:
-{
-  "posts": [
-    {
-      "planId": "plan-01",
-      "templateId": "hook_negate_v3",
-      "theme": "AI活用で月30時間削減",
-      "scheduledTime": "07:00",
-      "mainPost": "...150-200文字...",
-      "comments": ["...400-600文字...", "...400-600文字..."]
-    },
-    ... ${payload.meta.targetPostCount}本分
-  ]
-}
-- mainPost は「メイン投稿」、comments[0] は「コメント欄1」、comments[1] は「コメント欄2」
-- コメントは0〜2件。文字数目安: mainPost 150-200文字、comments 400-600文字
-- theme にはAI関連ワードを必ず含める
-- scheduledTime は推奨時刻から選択`,
+    '- 返答は以下の形式のみ。追加テキスト禁止:',
+    '{',
+    '  "posts": [',
+    '    {',
+    '      "planId": "plan-01",',
+    '      "templateId": "hook_negate_v3",',
+    '      "theme": "AI活用で月30時間削減",',
+    '      "scheduledTime": "07:00",',
+    '      "mainPost": "...150-200文字...",',
+    '      "comments": ["...400-600文字...", "...400-600文字..."]',
+    '    },',
+    `    ... ${payload.meta.targetPostCount}本分`,
+    '  ]',
+    '}',
+    '- mainPost は「メイン投稿」、comments[0] は「コメント欄1」、comments[1] は「コメント欄2」',
+    '- コメントは0〜2件。文字数目安: mainPost 150-200文字、comments 400-600文字',
+    '- theme にはAI関連ワードを必ず含める',
+    '- scheduledTime は推奨時刻から選択',
   ].join('\n');
 }
 
