@@ -168,7 +168,62 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
   // 9. エクスポート履歴の1番上のダウンロードボタンをクリック
   console.log('ダウンロードボタンをクリック...');
   const downloadPromise = page.waitForEvent('download', { timeout: config.downloadTimeoutMs });
-  await page.getByRole('link', { name: 'ダウンロード' }).first().click();
+
+  // エクスポート履歴テーブルの中から最初のダウンロードボタンを探す
+  // 複数のセレクターを試す
+  let clicked = false;
+
+  // 方法1: エクスポート履歴セクション内のダウンロードリンク
+  try {
+    const historyTable = page.locator('h3:has-text("エクスポート履歴")').locator('..').locator('table');
+    const downloadLink = historyTable.getByRole('link', { name: 'ダウンロード' }).first();
+    await downloadLink.waitFor({ state: 'visible', timeout: 5000 });
+    await downloadLink.click();
+    clicked = true;
+    console.log('方法1成功: エクスポート履歴テーブルからダウンロードボタンをクリック');
+  } catch (error) {
+    console.warn('方法1失敗:', error);
+  }
+
+  // 方法2: テーブルの最初の行のダウンロードボタン
+  if (!clicked) {
+    try {
+      const downloadLink = page.locator('table tbody tr').first().getByRole('link', { name: 'ダウンロード' });
+      await downloadLink.waitFor({ state: 'visible', timeout: 5000 });
+      await downloadLink.click();
+      clicked = true;
+      console.log('方法2成功: テーブルの最初の行からダウンロードボタンをクリック');
+    } catch (error) {
+      console.warn('方法2失敗:', error);
+    }
+  }
+
+  // 方法3: フォールバック（元の方法）
+  if (!clicked) {
+    const allDownloadLinks = page.getByRole('link', { name: 'ダウンロード' });
+    const count = await allDownloadLinks.count();
+    console.log(`ダウンロードリンクが${count}個見つかりました`);
+
+    // お気に入りセクションのリンクをスキップして、エクスポート履歴のリンクを探す
+    for (let i = 0; i < count; i++) {
+      const link = allDownloadLinks.nth(i);
+      const text = await link.textContent();
+      const isVisible = await link.isVisible();
+      console.log(`リンク${i}: text="${text}", visible=${isVisible}`);
+
+      if (isVisible && text?.includes('ダウンロード')) {
+        await link.click();
+        clicked = true;
+        console.log(`方法3成功: ${i}番目のダウンロードリンクをクリック`);
+        break;
+      }
+    }
+  }
+
+  if (!clicked) {
+    throw new Error('ダウンロードボタンが見つかりませんでした');
+  }
+
   console.log('ダウンロード開始...');
   return downloadPromise;
 }
