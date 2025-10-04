@@ -444,12 +444,8 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   );
   const normalized = plan ? normalizePlan(plan) : undefined;
 
-  if (normalized && status === 'approved') {
-    const existingJob = await findJobByPlan(normalized.plan_id);
-    if (!existingJob) {
-      await createJobForPlan(normalized);
-    }
-  }
+  // ジョブ作成は /api/threads/plans/[id]/approve で明示的に行う
+  // （承認時の即時投稿のみで、スケジュール投稿は不要）
 
   return normalized;
 }

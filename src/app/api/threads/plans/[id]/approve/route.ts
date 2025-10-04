@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { updatePlanStatus, listPlans } from '@/lib/bigqueryPlans';
+import { processNextJob } from '@/lib/threadsWorker';
+import { createJobForPlan } from '@/lib/bigqueryJobs';
 
 function validateTextLength(mainText?: string, comments?: { text: string }[]): string | null {
   if (mainText && mainText.length > 500) {
@@ -47,15 +49,66 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
     }
 
-    console.log(`[threads/plans/approve] Plan approved successfully`);
+    console.log(`[threads/plans/approve] Plan approved, creating job and executing immediately...`);
 
-    // ジョブ作成は不要 - スケジュール時間に自動実行される
-    // cronが scheduled_time になったら自動的に投稿する
+    // 承認時に即座に投稿（スケジュール時間は無視）
+    try {
+      // 現在のJST時刻を取得
+      const now = new Date();
+      const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+      const jstDate = jstNow.toISOString().split('T')[0].replace(/-/g, '-'); // YYYY-MM-DD
+      const jstTime = jstNow.toTimeString().slice(0, 5); // HH:mm
 
-    return NextResponse.json({
-      plan: updated,
-      message: 'Plan approved. Will be posted at scheduled time by cron job.'
-    });
+      const job = await createJobForPlan({
+        ...plan,
+        generation_date: jstDate,
+        scheduled_time: jstTime, // 現在時刻で即時実行
+      });
+
+      if (!job) {
+        throw new Error('Failed to create job');
+      }
+
+      console.log(`[threads/plans/approve] Job created: ${job.job_id}, executing immediately...`);
+
+      // 即座にジョブを実行
+      const result = await processNextJob();
+
+      if (result.status === 'succeeded') {
+        console.log(`[threads/plans/approve] Successfully posted plan ${id}:`, result);
+
+        return NextResponse.json({
+          plan: { ...updated, status: 'scheduled' },
+          published: true,
+          job_result: result
+        });
+      } else if (result.status === 'failed') {
+        console.error(`[threads/plans/approve] Failed to post plan ${id}:`, result.error);
+
+        return NextResponse.json({
+          plan: updated,
+          published: false,
+          publish_error: result.error
+        });
+      } else {
+        // status === 'idle' (no job found)
+        console.warn(`[threads/plans/approve] No job found to execute`);
+
+        return NextResponse.json({
+          plan: updated,
+          published: false,
+          publish_error: 'No job found to execute'
+        });
+      }
+    } catch (publishError) {
+      console.error(`[threads/plans/approve] Error creating job or executing:`, publishError);
+
+      return NextResponse.json({
+        plan: updated,
+        published: false,
+        publish_error: (publishError as Error).message
+      });
+    }
   } catch (error) {
     console.error('[threads/plans/approve] failed', error);
     return NextResponse.json({ error: 'Approval failed' }, { status: 500 });
