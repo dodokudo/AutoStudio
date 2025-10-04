@@ -502,7 +502,7 @@ function validateSinglePost(payload: ThreadsPromptPayload, raw: unknown, index: 
 
   if (!record || typeof record !== 'object') {
     console.error('[claude] Missing post object in response', { raw, record });
-    throw new Error('Claude response is missing `post` object.');
+    throw new Error('Claude response is missing post object.');
   }
 
   const post = record as Record<string, unknown>;
@@ -582,7 +582,7 @@ async function requestClaude(prompt: string) {
   if (!response.ok) {
     const text = await response.text();
     console.error('[claude] API error:', response.status, response.statusText, text);
-    throw new Error(`Claude API error: ${response.status} ${response.statusText} ${text}`);
+    throw new Error('Claude API error: ' + response.status + ' ' + response.statusText + ' ' + text);
   }
 
   const data = await response.json();
@@ -651,7 +651,7 @@ async function requestClaude(prompt: string) {
       console.error('[claude] First error:', firstError);
       console.error('[claude] Second error:', secondError);
       const preview = sanitized.slice(0, 200).replace(/\s+/g, ' ');
-      throw new Error(`Failed to parse Claude JSON response after repair: ${(secondError as Error).message}. snippet=${preview}`);
+      throw new Error('Failed to parse Claude JSON response after repair: ' + (secondError as Error).message + '. snippet=' + preview);
     }
   }
 }
