@@ -463,7 +463,7 @@ function validateBatchResponse(payload: ThreadsPromptPayload, raw: unknown): Cla
 
   if (!Array.isArray(rawObj.posts)) {
     console.error('[claude] Missing posts array in response', { raw, hasPosts: !!rawObj.posts });
-    throw new Error('Claude response is missing `posts` array.');
+    throw new Error('Claude response is missing posts array.');
   }
 
   console.log('[claude] Found posts array, length:', rawObj.posts.length);
