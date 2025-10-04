@@ -356,20 +356,24 @@ function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
   return sections.join('\n');
 }
 
-function buildLightweightContext(payload: ThreadsPromptPayload, index: number): string {
-  const schedule = payload.meta.recommendedSchedule[index] ?? '任意の最適時間';
+function buildBatchContext(payload: ThreadsPromptPayload): string {
   const accountLine = `平均フォロワー: ${payload.accountSummary.averageFollowers.toLocaleString()} / 平均プロフ閲覧: ${payload.accountSummary.averageProfileViews.toLocaleString()} / 最新増減 フォロワー ${payload.accountSummary.followersChange >= 0 ? '+' : ''}${payload.accountSummary.followersChange}・プロフ閲覧 ${payload.accountSummary.profileViewsChange >= 0 ? '+' : ''}${payload.accountSummary.profileViewsChange}`;
 
+  const schedules = payload.meta.recommendedSchedule
+    .map((time, idx) => `  ${idx + 1}本目: ${time}`)
+    .join('\n');
+
   return [
-    '# CONTEXT (lightweight)',
+    '# CONTEXT (batch generation)',
     '## アカウントの現状',
     `- ${accountLine}`,
     '## 強制テーマ',
     `- ${payload.writingChecklist.enforcedTheme}`,
     `- 優先キーワード: ${payload.writingChecklist.aiKeywords.join(', ')}`,
     '## 今回作成する投稿',
-    `- 投稿番号: ${index + 1} / 合計 ${payload.meta.targetPostCount} 本`,
-    `- 推奨投稿時刻: ${schedule}`,
+    `- 合計: ${payload.meta.targetPostCount} 本を一度に生成`,
+    '- 推奨投稿時刻:',
+    schedules,
     '',
     '## 【最重要】門口さん特別枠',
     formatMonguchiPosts(payload),
@@ -392,34 +396,82 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '1. 🌟 門口さんの投稿から固定ポスト誘導の手法を最優先で学習',
     '   - 「固定の特典でも解説してるんですが」のような自然な誘導文',
     '   - プロフィールや固定投稿への導線設計',
+    '',
     '2. 競合30本（AI系10本 + 非AI系20本）の構成パターンを分析：',
     '   - AI系10本: テーマ・構成・トーン すべて学習',
     '   - 非AI系20本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
-    '   - **重要**: 各投稿は異なる構成パターンを持っています。同じフック・展開を繰り返さないこと',
+    '',
     '3. 自社10本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
-    '   - **重要**: 各投稿のテーマは異なります。同じ数字・フレーズを繰り返さないこと',
-    '4. 上記を統合し、**多様性を最優先**して1本生成',
-    '   - 投稿番号 ${index + 1} / ${payload.meta.targetPostCount} 本目: 他の投稿と差別化すること',
-    '   - 同じフレーズ（「まだ〜してる人」など）の連続使用を避ける',
-    '   - テーマのバリエーション（自動化、効率化、時短、品質向上、コスト削減、ミス防止など）を意識',
-    '   - 数字のバリエーション（30時間、90%、10倍、5分、3ステップなど）を意識',
-    '   - フックのバリエーション（疑問形、否定形、驚き、体験談など）を意識',
+    '',
+    `4. 上記を統合し、**多様性を最優先**して${payload.meta.targetPostCount}本まとめて生成`,
+    '   **【超重要】多様性の確保:**',
+    '   - 各投稿は完全に異なるテーマ・フック・構成にすること',
+    '   - 同じフレーズ（「まだ〜してる人」「マジで」など）を複数投稿で使わない',
+    '   - テーマのバリエーション例: 自動化、効率化、時短、品質向上、コスト削減、ミス防止、学習支援、クリエイティブ、分析など',
+    '   - 数字のバリエーション例: 30時間、90%、10倍、5分、3ステップ、50%削減など',
+    '   - フックのバリエーション例: 疑問形、否定形、驚き、体験談、逆説、比較など',
+    `   - ${payload.meta.targetPostCount}本全体を俯瞰し、意図的にバランスを取ること',
+    '',
     '5. 各投稿は必ずAIテーマに限定',
     '',
     '## JSON出力仕様',
-    `- 返答は ${JSON_SCHEMA_EXAMPLE} 形式のみ。追加テキスト禁止。
-- mainPost は「メイン投稿」、comments[0] は「コメント欄1」、comments[1] は「コメント欄2」。
-- コメントは0〜2件。文字数目安: mainPost 150-200文字、comments 400-600文字。
-- theme にはAI関連ワードを必ず含める。`,
+    `- 返答は以下の形式のみ。追加テキスト禁止:
+{
+  "posts": [
+    {
+      "planId": "plan-01",
+      "templateId": "hook_negate_v3",
+      "theme": "AI活用で月30時間削減",
+      "scheduledTime": "07:00",
+      "mainPost": "...150-200文字...",
+      "comments": ["...400-600文字...", "...400-600文字..."]
+    },
+    ... ${payload.meta.targetPostCount}本分
+  ]
+}
+- mainPost は「メイン投稿」、comments[0] は「コメント欄1」、comments[1] は「コメント欄2」
+- コメントは0〜2件。文字数目安: mainPost 150-200文字、comments 400-600文字
+- theme にはAI関連ワードを必ず含める
+- scheduledTime は推奨時刻から選択`,
   ].join('\n');
 }
 
-function buildPrompt(payload: ThreadsPromptPayload, index: number): string {
-  const context = buildLightweightContext(payload, index);
+function buildBatchPrompt(payload: ThreadsPromptPayload): string {
+  const context = buildBatchContext(payload);
   return [context, '', KUDO_MASTER_PROMPT].join('\n\n');
 }
 
-function validateSingleResponse(payload: ThreadsPromptPayload, raw: unknown): ClaudePlanResponsePost {
+function validateBatchResponse(payload: ThreadsPromptPayload, raw: unknown): ClaudePlanResponsePost[] {
+  console.log('[claude] Validating batch response structure:', {
+    type: typeof raw,
+    isNull: raw === null,
+    isArray: Array.isArray(raw),
+    keys: raw && typeof raw === 'object' ? Object.keys(raw) : []
+  });
+
+  if (!raw || typeof raw !== 'object') {
+    console.error('[claude] Invalid response: not an object', raw);
+    throw new Error('Claude response is not an object.');
+  }
+
+  const rawObj = raw as { posts?: unknown[] };
+
+  if (!Array.isArray(rawObj.posts)) {
+    console.error('[claude] Missing posts array in response', { raw, hasPosts: !!rawObj.posts });
+    throw new Error('Claude response is missing `posts` array.');
+  }
+
+  console.log('[claude] Found posts array, length:', rawObj.posts.length);
+
+  const validatedPosts = rawObj.posts.map((post, idx) => {
+    console.log(`[claude] Validating post ${idx + 1}/${rawObj.posts!.length}`);
+    return validateSinglePost(payload, post, idx);
+  });
+
+  return validatedPosts;
+}
+
+function validateSinglePost(payload: ThreadsPromptPayload, raw: unknown, index: number): ClaudePlanResponsePost {
   console.log('[claude] Validating response structure:', {
     type: typeof raw,
     isNull: raw === null,
@@ -509,7 +561,7 @@ async function requestClaude(prompt: string) {
     },
     body: JSON.stringify({
       model: CLAUDE_MODEL,
-      max_tokens: 3500,
+      max_tokens: 16000,
       temperature: 0.9,
       system:
         'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt.',
@@ -599,17 +651,20 @@ async function requestClaude(prompt: string) {
   }
 }
 
-async function generateSingleClaudePost(payload: ThreadsPromptPayload, index: number): Promise<ClaudePlanResponsePost> {
+async function generateBatchClaudePosts(payload: ThreadsPromptPayload): Promise<ClaudePlanResponsePost[]> {
   if (!CLAUDE_API_KEY) {
     console.error('[claude] CLAUDE_API_KEY is not configured. Available env vars:', Object.keys(process.env).filter(k => k.includes('CLAUDE')));
     throw new Error('CLAUDE_API_KEY is not configured');
   }
 
   console.log('[claude] CLAUDE_API_KEY found, length:', CLAUDE_API_KEY.length);
+  console.log(`[claude] Generating ${payload.meta.targetPostCount} posts in batch mode`);
 
-  const prompt = buildPrompt(payload, index);
+  const prompt = buildBatchPrompt(payload);
+  console.log('[claude] Batch prompt length:', prompt.length, 'characters');
+
   const parsed = await requestClaude(prompt);
-  return validateSingleResponse(payload, parsed);
+  return validateBatchResponse(payload, parsed);
 }
 
 interface GenerateClaudePlansOptions {
@@ -620,14 +675,17 @@ export async function generateClaudePlans(
   payload: ThreadsPromptPayload,
   options: GenerateClaudePlansOptions = {},
 ): Promise<ClaudePlanResponse> {
-  const posts: ClaudePlanResponsePost[] = [];
-  const total = Math.max(1, payload.meta.targetPostCount);
-  for (let index = 0; index < total; index += 1) {
-    const post = await generateSingleClaudePost(payload, index);
-    posts.push(post);
-    if (options.onProgress) {
-      await options.onProgress({ current: index + 1, total });
-    }
+  console.log('[claude] Starting batch generation mode');
+
+  // バッチ生成（1回のAPI呼び出しで全投稿生成）
+  const posts = await generateBatchClaudePosts(payload);
+
+  console.log(`[claude] Batch generation complete: ${posts.length} posts generated`);
+
+  // プログレス通知（互換性のため）
+  if (options.onProgress) {
+    await options.onProgress({ current: posts.length, total: posts.length });
   }
+
   return { posts };
 }
