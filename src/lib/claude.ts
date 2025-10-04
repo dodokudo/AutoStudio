@@ -314,7 +314,7 @@ function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
   const topPosts = payload.ownWinningPosts.slice(0, 10);
   const sections: string[] = [];
 
-  sections.push('### 自社過去勝ち投稿トップ10（全50本から抽出）');
+  sections.push('### 自社過去勝ち投稿トップ10（全25本から抽出）');
   topPosts.forEach((post, idx) => {
     sections.push(`${idx + 1}. スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions_total.toLocaleString()} / フォロワー増(2日): +${post.followers_delta_2d}`);
     sections.push(`   - 評価: ${post.evaluation}`);
@@ -327,7 +327,7 @@ function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
   }, {} as Record<string, number>);
 
   sections.push('');
-  sections.push(`### 勝ちパターン分布（全50本）`);
+  sections.push(`### 勝ちパターン分布（全25本）`);
   sections.push(`- pattern_win: ${evalCounts.pattern_win || 0}本`);
   sections.push(`- pattern_niche_hit: ${evalCounts.pattern_niche_hit || 0}本`);
   sections.push(`- pattern_hidden_gem: ${evalCounts.pattern_hidden_gem || 0}本`);
@@ -380,7 +380,7 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '**非AI系発信者**: 構成・フック・展開方法のみ参考（テーマは絶対に真似しない）',
     formatCompetitorSelected(payload),
     '',
-    '## 【重要】自社過去勝ち投稿（50本から学習）',
+    '## 【重要】自社過去勝ち投稿（25本から学習）',
     '以下の自社投稿から、勝ちパターン・トーン・文体DNAを把握してください。',
     formatOwnWinningPosts(payload),
     '',
@@ -398,7 +398,7 @@ function buildLightweightContext(payload: ThreadsPromptPayload, index: number): 
     '2. 競合50本（AI系15本 + 非AI系35本）の構成パターンを分析：',
     '   - AI系15本: テーマ・構成・トーン すべて学習',
     '   - 非AI系35本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
-    '3. 自社50本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
+    '3. 自社25本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
     '4. 上記を統合し、多様性を確保して1本生成',
     '5. 各投稿は必ずAIテーマに限定',
     '',

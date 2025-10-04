@@ -610,7 +610,7 @@ SELECT *
 FROM evaluated
 WHERE evaluation IN ("pattern_win", "pattern_niche_hit", "pattern_hidden_gem")
 ORDER BY score DESC
-LIMIT 10
+LIMIT 25
   `;
 
   type Row = {
