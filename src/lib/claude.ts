@@ -469,7 +469,7 @@ function validateBatchResponse(payload: ThreadsPromptPayload, raw: unknown): Cla
   console.log('[claude] Found posts array, length:', rawObj.posts.length);
 
   const validatedPosts = rawObj.posts.map((post, idx) => {
-    console.log(`[claude] Validating post ${idx + 1}/${rawObj.posts!.length}`);
+    console.log('[claude] Validating post ' + (idx + 1) + '/' + rawObj.posts!.length);
     return validateSinglePost(payload, post, idx);
   });
 
@@ -663,7 +663,7 @@ async function generateBatchClaudePosts(payload: ThreadsPromptPayload): Promise<
   }
 
   console.log('[claude] CLAUDE_API_KEY found, length:', CLAUDE_API_KEY.length);
-  console.log(`[claude] Generating ${payload.meta.targetPostCount} posts in batch mode`);
+  console.log('[claude] Generating ' + payload.meta.targetPostCount + ' posts in batch mode');
 
   const prompt = buildBatchPrompt(payload);
   console.log('[claude] Batch prompt length:', prompt.length, 'characters');
@@ -685,7 +685,7 @@ export async function generateClaudePlans(
   // バッチ生成（1回のAPI呼び出しで全投稿生成）
   const posts = await generateBatchClaudePosts(payload);
 
-  console.log(`[claude] Batch generation complete: ${posts.length} posts generated`);
+  console.log('[claude] Batch generation complete: ' + posts.length + ' posts generated');
 
   // プログレス通知（互換性のため）
   if (options.onProgress) {
