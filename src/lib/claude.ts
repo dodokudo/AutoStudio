@@ -410,7 +410,7 @@ function buildBatchContext(payload: ThreadsPromptPayload): string {
     '   - テーマのバリエーション例: 自動化、効率化、時短、品質向上、コスト削減、ミス防止、学習支援、クリエイティブ、分析など',
     '   - 数字のバリエーション例: 30時間、90%、10倍、5分、3ステップ、50%削減など',
     '   - フックのバリエーション例: 疑問形、否定形、驚き、体験談、逆説、比較など',
-    `   - ${payload.meta.targetPostCount}本全体を俯瞰し、意図的にバランスを取ること',
+    `   - ${payload.meta.targetPostCount}本全体を俯瞰し、意図的にバランスを取ること`,
     '',
     '5. 各投稿は必ずAIテーマに限定',
     '',
@@ -603,8 +603,10 @@ async function requestClaude(prompt: string) {
 
   // Remove markdown code blocks
   let cleanContent = textContent;
-  cleanContent = cleanContent.replace(/```json\s*\n?/gi, '');
-  cleanContent = cleanContent.replace(/```\s*$/g, '');
+  const fenceToken = String.fromCharCode(96).repeat(3);
+  const jsonFenceToken = fenceToken + 'json';
+  cleanContent = cleanContent.split(jsonFenceToken).join('');
+  cleanContent = cleanContent.split(fenceToken).join('');
   cleanContent = cleanContent.trim();
 
   console.log('[claude] Clean content length:', cleanContent.length);
@@ -628,7 +630,7 @@ async function requestClaude(prompt: string) {
       .replace(/,(\s*\])/g, '$1')
       // normalize smart quotes to regular quotes
       .replace(/[\u201C\u201D]/g, '"')
-      .replace(/[\u2018\u2019]/g, '\'')
+      .replace(/[\u2018\u2019]/g, "'")
       // strip zero-width / non-breaking spaces
       .replace(/[\u00A0\u200B\u200C\u200D]/g, '');
 
