@@ -477,7 +477,7 @@ function validateBatchResponse(payload: ThreadsPromptPayload, raw: unknown): Cla
 }
 
 function validateSinglePost(payload: ThreadsPromptPayload, raw: unknown, index: number): ClaudePlanResponsePost {
-  console.log('[claude] Validating response structure:', {
+  console.log(`[claude] Validating post ${index + 1}:`, {
     type: typeof raw,
     isNull: raw === null,
     isArray: Array.isArray(raw),
@@ -485,27 +485,12 @@ function validateSinglePost(payload: ThreadsPromptPayload, raw: unknown, index: 
   });
 
   if (!raw || typeof raw !== 'object') {
-    console.error('[claude] Invalid response: not an object', raw);
-    throw new Error('Claude response is not an object.');
+    console.error(`[claude] Post ${index + 1} is not an object:`, raw);
+    throw new Error(`Post ${index + 1} is not an object.`);
   }
 
-  const rawObj = raw as { post?: unknown; posts?: unknown[] };
-  const record = rawObj.post ?? (Array.isArray(rawObj.posts) ? rawObj.posts[0] : undefined);
-
-  console.log('[claude] Extracted record:', {
-    hasPost: !!rawObj.post,
-    hasPosts: !!rawObj.posts,
-    postsLength: Array.isArray(rawObj.posts) ? rawObj.posts.length : 'not array',
-    recordType: typeof record,
-    recordKeys: record && typeof record === 'object' ? Object.keys(record) : []
-  });
-
-  if (!record || typeof record !== 'object') {
-    console.error('[claude] Missing post object in response', { raw, record });
-    throw new Error('Claude response is missing post object.');
-  }
-
-  const post = record as Record<string, unknown>;
+  // バッチ生成では、rawが直接postオブジェクト
+  const post = raw as Record<string, unknown>;
   const mainPostRaw = sanitizeString(post.mainPost ?? post.main);
   const mainPost = sanitizeThreadsMainPost(mainPostRaw);
 
