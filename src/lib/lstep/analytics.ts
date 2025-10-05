@@ -206,11 +206,24 @@ async function getSourceAnalysis(
   datasetId: string,
   snapshotDate: string,
 ): Promise<SourceAnalysis> {
+  // まずテーブルのカラムをチェック
+  const columnsQuery = await runQuery<{ column_name: string }>(client, projectId, datasetId, {
+    query: `
+      SELECT column_name
+      FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.COLUMNS\`
+      WHERE table_name = @tableName
+        AND column_name = 'source_youtube'
+    `,
+    params: { tableName: TABLE_NAME },
+  });
+
+  const hasYouTubeColumn = columnsQuery.length > 0;
+
   const [row] = await runQuery<{
     total: number;
     threads: number;
     instagram: number;
-    youtube: number;
+    youtube?: number;
     organic: number;
   }>(client, projectId, datasetId, {
     query: `
@@ -218,7 +231,7 @@ async function getSourceAnalysis(
         COUNT(DISTINCT id) AS total,
         SUM(source_threads) AS threads,
         SUM(source_instagram) AS instagram,
-        SUM(IFNULL(source_youtube, 0)) AS youtube,
+        ${hasYouTubeColumn ? 'SUM(IFNULL(source_youtube, 0)) AS youtube,' : ''}
         SUM(inflow_organic) AS organic
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
@@ -229,7 +242,7 @@ async function getSourceAnalysis(
   const total = Number(row?.total ?? 0);
   const threads = Number(row?.threads ?? 0);
   const instagram = Number(row?.instagram ?? 0);
-  const youtube = Number(row?.youtube ?? 0);
+  const youtube = hasYouTubeColumn ? Number(row?.youtube ?? 0) : 0;
   const organic = Number(row?.organic ?? 0);
   const other = Math.max(0, total - threads - instagram - youtube - organic);
 
