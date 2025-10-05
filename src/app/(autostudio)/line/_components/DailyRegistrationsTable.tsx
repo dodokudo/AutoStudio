@@ -8,7 +8,7 @@ interface DailyRegistrationsTableProps {
   hideFilter?: boolean;
 }
 
-type DateRangeFilter = '7days' | '30days' | '90days' | 'all';
+type DateRangeFilter = '3days' | '7days' | '30days' | '90days' | 'all';
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);
@@ -34,7 +34,7 @@ export function DailyRegistrationsTable({ data, hideFilter = false }: DailyRegis
       return data;
     }
 
-    const days = dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : 90;
+    const days = dateRange === '3days' ? 3 : dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : 90;
     return data.slice(0, days);
   }, [data, dateRange, hideFilter]);
 
@@ -45,6 +45,16 @@ export function DailyRegistrationsTable({ data, hideFilter = false }: DailyRegis
         <div className="mb-4 flex items-center gap-2">
         <span className="text-sm text-[color:var(--color-text-secondary)] font-medium">表示期間:</span>
         <div className="flex gap-2">
+          <button
+            onClick={() => setDateRange('3days')}
+            className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+              dateRange === '3days'
+                ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+            }`}
+          >
+            過去3日
+          </button>
           <button
             onClick={() => setDateRange('7days')}
             className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${

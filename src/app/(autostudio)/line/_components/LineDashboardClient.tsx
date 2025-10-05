@@ -9,7 +9,7 @@ interface LineDashboardClientProps {
   initialData: LstepAnalyticsData;
 }
 
-type DateRangeFilter = '7days' | '30days' | '90days' | 'all';
+type DateRangeFilter = '3days' | '7days' | '30days' | '90days' | 'all';
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);
@@ -32,7 +32,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
 
   // 期間フィルターに応じてデータを集計
   const filteredAnalytics = useMemo(() => {
-    const days = dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : dateRange === '90days' ? 90 : null;
+    const days = dateRange === '3days' ? 3 : dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : dateRange === '90days' ? 90 : null;
 
     if (!days) {
       return initialData;
@@ -82,6 +82,16 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
         <div className="flex items-center gap-2">
           <span className="text-sm text-[color:var(--color-text-secondary)] font-medium">表示期間:</span>
           <div className="flex gap-2">
+            <button
+              onClick={() => setDateRange('3days')}
+              className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+                dateRange === '3days'
+                  ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                  : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+              }`}
+            >
+              過去3日
+            </button>
             <button
               onClick={() => setDateRange('7days')}
               className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
@@ -146,39 +156,22 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
             </div>
           </div>
 
-          {/* CVR矢印1 */}
+          {/* CVR矢印 */}
           <div className="flex flex-col items-center gap-1 px-4 py-2 md:py-0">
             <span className="text-2xl">→</span>
             <span
-              className={`text-xs font-semibold ${filteredAnalytics.funnel.surveyEnteredCVR >= 50 ? 'text-[color:var(--color-success)]' : 'text-[color:var(--color-warning)]'}`}
+              className={`text-xs font-semibold ${
+                filteredAnalytics.funnel.lineRegistration > 0 &&
+                (filteredAnalytics.funnel.surveyCompleted / filteredAnalytics.funnel.lineRegistration) * 100 >= 50
+                  ? 'text-[color:var(--color-success)]'
+                  : 'text-[color:var(--color-warning)]'
+              }`}
             >
-              CVR: {formatPercent(filteredAnalytics.funnel.surveyEnteredCVR)}
-            </span>
-            <span className="text-xs text-[color:var(--color-text-muted)]">
-              ({formatNumber(filteredAnalytics.funnel.surveyEntered)}人)
-            </span>
-          </div>
-
-          {/* アンケート流入 */}
-          <div className="flex-1 text-center max-w-[280px]">
-            <div className="bg-[color:var(--color-surface)] border-2 border-[color:var(--color-accent)] rounded-[var(--radius-md)] p-8 shadow-[var(--shadow-soft)]">
-              <div className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">アンケート流入</div>
-              <div className="text-4xl font-bold text-[color:var(--color-text-primary)]">
-                {formatNumber(filteredAnalytics.funnel.surveyEntered)}人
-              </div>
-            </div>
-          </div>
-
-          {/* CVR矢印2 */}
-          <div className="flex flex-col items-center gap-1 px-4 py-2 md:py-0">
-            <span className="text-2xl">→</span>
-            <span
-              className={`text-xs font-semibold ${filteredAnalytics.funnel.surveyCompletedCVR >= 70 ? 'text-[color:var(--color-success)]' : 'text-[color:var(--color-warning)]'}`}
-            >
-              CVR: {formatPercent(filteredAnalytics.funnel.surveyCompletedCVR)}
-            </span>
-            <span className="text-xs text-[color:var(--color-text-muted)]">
-              ({formatNumber(filteredAnalytics.funnel.surveyCompleted)}人)
+              CVR: {formatPercent(
+                filteredAnalytics.funnel.lineRegistration > 0
+                  ? (filteredAnalytics.funnel.surveyCompleted / filteredAnalytics.funnel.lineRegistration) * 100
+                  : 0
+              )}
             </span>
           </div>
 
