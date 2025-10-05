@@ -32,11 +32,26 @@ export async function loadRawCsvToBigQuery(
   // 3. snapshot_date列を追加したヘッダーを作成
   const normalizedHeaders = ['snapshot_date', ...headers.map(normalizeColumnName)];
 
-  // 4. データ行にsnapshot_dateを追加
   const dataLines = lines.slice(2).filter((line) => line.trim() !== '');
+  const friendAddedIndex = headers.findIndex((h) => normalizeColumnName(h) === 'friend_added_at');
+  const lastMsgIndex = headers.findIndex((h) => normalizeColumnName(h) === 'last_msg_at');
+
   const normalizedLines = [
     normalizedHeaders.map((h) => `"${h}"`).join(','),
-    ...dataLines.map((line) => `"${snapshotDate}",${line}`),
+    ...dataLines.map((line) => {
+      const values = parseCSVLine(line);
+
+      if (friendAddedIndex >= 0 && values[friendAddedIndex]) {
+        values[friendAddedIndex] = convertUTCtoJST(values[friendAddedIndex]);
+      }
+
+      if (lastMsgIndex >= 0 && values[lastMsgIndex]) {
+        values[lastMsgIndex] = convertUTCtoJST(values[lastMsgIndex]);
+      }
+
+      const escapedValues = values.map((value) => `"${value.replace(/"/g, '""')}"`);
+      return `"${snapshotDate}",${escapedValues.join(',')}`;
+    }),
   ].join('\n');
 
   // 5. 正規化したCSVをGCSにアップロード
@@ -166,6 +181,46 @@ function normalizeColumnName(name: string): string {
     .toLowerCase();
 
   return normalized;
+}
+
+function convertUTCtoJST(utcTimestamp: string): string {
+  const trimmed = utcTimestamp?.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const candidates = [trimmed, trimmed.replace(/\s*UTC$/i, '').trim()];
+  let date: Date | null = null;
+
+  for (const candidate of candidates) {
+    const isoLike = candidate.includes('T') ? candidate : candidate.replace(' ', 'T');
+    const withZone = /[zZ]$/.test(isoLike) ? isoLike : `${isoLike.replace(/\s*UTC$/i, '')}Z`;
+    const parsed = new Date(withZone);
+    if (!Number.isNaN(parsed.getTime())) {
+      date = parsed;
+      break;
+    }
+  }
+
+  if (!date) {
+    console.warn('[rawCsvLoader] Failed to parse UTC timestamp:', utcTimestamp);
+    return trimmed;
+  }
+
+  const formatted = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+
+  const normalized = formatted.replace(/[\u202f\u00a0]/g, ' ');
+  const iso = normalized.replace(' ', 'T');
+  return `${iso}+09:00`;
 }
 
 async function uploadFileToGcs(
