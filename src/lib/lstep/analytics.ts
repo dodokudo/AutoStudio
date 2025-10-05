@@ -309,7 +309,7 @@ async function getDailyRegistrations(
         SELECT
           CAST(DATE(friend_added_at) AS STRING) AS registration_date,
           COUNT(DISTINCT id) AS registrations,
-          COUNTIF(survey_completed = 1) AS survey_completed
+          SUM(CASE WHEN survey_completed = 1 THEN 1 ELSE 0 END) AS survey_completed
         FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
         WHERE friend_added_at IS NOT NULL
           AND snapshot_date = @latestSnapshotDate
