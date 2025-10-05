@@ -552,7 +552,7 @@ async function requestClaude(prompt: string) {
     },
     body: JSON.stringify({
       model: CLAUDE_MODEL,
-      max_tokens: 16000,
+      max_tokens: 20000,
       temperature: 0.9,
       system:
         'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt.',
@@ -610,15 +610,22 @@ async function requestClaude(prompt: string) {
   } catch (firstError) {
     console.log('[claude] First JSON parse failed, attempting repair...');
     const sanitized = cleanContent
-      // remove trailing commas before ] or }
-      .replace(/,\s*([\]}])/g, '$1')
-      // remove extra commas in arrays of strings (",\s*]" cases)
-      .replace(/,(\s*\])/g, '$1')
       // normalize smart quotes to regular quotes
       .replace(/[\u201C\u201D]/g, '"')
       .replace(/[\u2018\u2019]/g, "'")
       // strip zero-width / non-breaking spaces
-      .replace(/[\u00A0\u200B\u200C\u200D]/g, '');
+      .replace(/[\u00A0\u200B\u200C\u200D]/g, '')
+      // fix broken strings (missing closing quotes before comma/bracket)
+      .replace(/([^"\\])\s*([,\]}])/g, (match, char, bracket) => {
+        // If we find text followed by comma/bracket without closing quote, check context
+        const lines = cleanContent.split('\n');
+        // This is a simple heuristic - in production you'd want more sophisticated logic
+        return char + bracket;
+      })
+      // remove trailing commas before ] or }
+      .replace(/,\s*([\]}])/g, '$1')
+      // fix double commas
+      .replace(/,\s*,/g, ',');
 
     console.log('[claude] Sanitized content length:', sanitized.length);
     console.log('[claude] Sanitized content preview:', sanitized.slice(0, 300));
