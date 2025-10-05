@@ -16,6 +16,7 @@
     "ig:transcribe": "tsx src/scripts/instagram/transcribeCompetitorReels.ts",
     "ig:generate": "tsx src/scripts/instagram/generateReelScripts.ts",
     "ig:notify": "tsx src/scripts/instagram/notifyReelScripts.ts",
+    "ig:sync": "tsx src/scripts/instagram/syncInsightsFromSheet.ts",
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
