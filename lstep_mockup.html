@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINE登録者分析 - ダッシュボード</title>
+    <style>
+        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+        :root {
+            --color-background: #f5f5f5;
+            --color-surface: #ffffff;
+            --color-surface-muted: #fafafa;
+            --color-border: #e1e3e6;
+            --color-text-primary: #161819;
+            --color-text-secondary: #4a4d51;
+            --color-text-muted: #6c6f73;
+            --color-accent: #0a7aff;
+            --color-accent-hover: #005ae0;
+            --color-success: #19c37d;
+            --color-warning: #ffb020;
+            --color-error: #ff4d4f;
+            --shadow-elevated: 0 12px 30px rgba(12, 16, 20, 0.08);
+            --shadow-soft: 0 6px 18px rgba(12, 16, 20, 0.06);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--color-background);
+            padding: 40px 20px;
+            color: var(--color-text-primary);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-elevated);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--color-text-primary);
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(14, 20, 34, 0.05);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 18px 36px rgba(14, 20, 34, 0.12);
+            backdrop-filter: blur(18px);
+        }
+
+        .card h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--color-text-primary);
+        }
+
+        /* ファネル（横方向） */
+        .funnel {
+            display: flex;
+            flex-direction: row;
+            gap: 0;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .funnel-step {
+            flex: 1;
+            text-align: center;
+            max-width: 280px;
+        }
+
+        .funnel-box {
+            background: var(--color-surface);
+            border: 2px solid var(--color-accent);
+            color: var(--color-text-primary);
+            padding: 32px 20px;
+            border-radius: var(--radius-md);
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .funnel-label {
+            font-size: 13px;
+            margin-bottom: 12px;
+            color: var(--color-text-secondary);
+            font-weight: 500;
+        }
+
+        .funnel-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+        }
+
+        .funnel-arrow {
+            color: var(--color-text-muted);
+            font-size: 13px;
+            padding: 0 16px;
+            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .funnel-arrow .arrow-symbol {
+            font-size: 24px;
+        }
+
+        .funnel-arrow.good {
+            color: var(--color-success);
+        }
+
+        .funnel-arrow.warning {
+            color: var(--color-warning);
+        }
+
+        /* 流入経路 */
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .source-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            text-align: center;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .source-card h3 {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .source-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            margin-bottom: 4px;
+        }
+
+        .source-card .percentage {
+            font-size: 14px;
+            color: var(--color-text-muted);
+        }
+
+        /* 属性分析 */
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .bar-chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--color-text-primary);
+        }
+
+        .bar-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .bar-label {
+            width: 120px;
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            font-weight: 500;
+        }
+
+        .bar-container {
+            flex: 1;
+            height: 32px;
+            background: var(--color-surface-muted);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: var(--color-accent);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            transition: width 0.3s ease;
+        }
+
+        .bar-stats {
+            min-width: 100px;
+            text-align: right;
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        /* テーブル */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        thead {
+            background: var(--color-surface-muted);
+        }
+
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        td {
+            padding: 12px 16px;
+            color: var(--color-text-primary);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background: var(--color-surface-muted);
+        }
+
+        .trend-positive {
+            color: var(--color-success);
+            font-weight: 600;
+        }
+
+        .trend-negative {
+            color: var(--color-error);
+            font-weight: 600;
+        }
+
+        .trend-neutral {
+            color: var(--color-text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>LINE登録者分析</h1>
+            <p style="color: var(--color-text-muted); font-size: 14px;">2025年10月5日時点のデータ</p>
+        </div>
+
+        <!-- 日別登録数テーブル -->
+        <div class="card">
+            <h2>📅 日別登録数</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日付</th>
+                            <th>登録数</th>
+                            <th>前日比</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2025-10-05</td>
+                            <td>561</td>
+                            <td class="trend-positive">+392 (↑232%)</td>
+                        </tr>
+                        <tr>
+                            <td>2025-10-04</td>
+                            <td>169</td>
+                            <td class="trend-neutral">-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ファネル分析 -->
+        <div class="card">
+            <h2>📈 ファネル分析</h2>
+            <div class="funnel">
+                <div class="funnel-step">
+                    <div class="funnel-box">
+                        <div class="funnel-label">LINE登録</div>
+                        <div class="funnel-value">561人</div>
+                    </div>
+                </div>
+
+                <div class="funnel-arrow warning">
+                    <span class="arrow-symbol">→</span>
+                    <span>CVR: 45.3%</span>
+                    <span>(254人)</span>
+                </div>
+
+                <div class="funnel-step">
+                    <div class="funnel-box">
+                        <div class="funnel-label">アンケート流入</div>
+                        <div class="funnel-value">254人</div>
+                    </div>
+                </div>
+
+                <div class="funnel-arrow good">
+                    <span class="arrow-symbol">→</span>
+                    <span>CVR: 78.7%</span>
+                    <span>(200人)</span>
+                </div>
+
+                <div class="funnel-step">
+                    <div class="funnel-box">
+                        <div class="funnel-label">アンケート完了</div>
+                        <div class="funnel-value">200人</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 流入経路分析 -->
+        <div class="card">
+            <h2>📱 流入経路分析</h2>
+            <div class="source-grid">
+                <div class="source-card">
+                    <h3>Threads</h3>
+                    <div class="value">143</div>
+                    <div class="percentage">25.5%</div>
+                </div>
+
+                <div class="source-card">
+                    <h3>Instagram</h3>
+                    <div class="value">125</div>
+                    <div class="percentage">22.3%</div>
+                </div>
+
+                <div class="source-card">
+                    <h3>YouTube</h3>
+                    <div class="value">0</div>
+                    <div class="percentage">0.0%</div>
+                </div>
+
+                <div class="source-card">
+                    <h3>その他</h3>
+                    <div class="value">87</div>
+                    <div class="percentage">15.5%</div>
+                </div>
+
+                <div class="source-card">
+                    <h3>オーガニック</h3>
+                    <div class="value">206</div>
+                    <div class="percentage">36.7%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 属性分析 -->
+        <div class="card">
+            <h2>👥 属性分析</h2>
+
+            <!-- 年齢層 -->
+            <div class="bar-chart">
+                <div class="bar-chart-title">年齢層</div>
+                <div class="bar-item">
+                    <div class="bar-label">20代</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 21.4%"></div>
+                    </div>
+                    <div class="bar-stats">120人 (21.4%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">30代</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 35.7%"></div>
+                    </div>
+                    <div class="bar-stats">200人 (35.7%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">40代</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 25.0%"></div>
+                    </div>
+                    <div class="bar-stats">140人 (25.0%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">50代</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 14.3%"></div>
+                    </div>
+                    <div class="bar-stats">80人 (14.3%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">60代</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 3.7%"></div>
+                    </div>
+                    <div class="bar-stats">21人 (3.7%)</div>
+                </div>
+            </div>
+
+            <!-- 職業 -->
+            <div class="bar-chart">
+                <div class="bar-chart-title">職業</div>
+                <div class="bar-item">
+                    <div class="bar-label">会社員</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 32.1%"></div>
+                    </div>
+                    <div class="bar-stats">180人 (32.1%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">フリーランス</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 26.7%"></div>
+                    </div>
+                    <div class="bar-stats">150人 (26.7%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">経営者</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 21.4%"></div>
+                    </div>
+                    <div class="bar-stats">120人 (21.4%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">主婦</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 14.3%"></div>
+                    </div>
+                    <div class="bar-stats">80人 (14.3%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">学生</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 5.5%"></div>
+                    </div>
+                    <div class="bar-stats">31人 (5.5%)</div>
+                </div>
+            </div>
+
+            <!-- 現在の売上 -->
+            <div class="bar-chart">
+                <div class="bar-chart-title">現在の売上（月商）</div>
+                <div class="bar-item">
+                    <div class="bar-label">0円</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 16.0%"></div>
+                    </div>
+                    <div class="bar-stats">90人 (16.0%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">1-10万</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 12.5%"></div>
+                    </div>
+                    <div class="bar-stats">70人 (12.5%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">10-50万</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 21.4%"></div>
+                    </div>
+                    <div class="bar-stats">120人 (21.4%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">50-100万</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 19.6%"></div>
+                    </div>
+                    <div class="bar-stats">110人 (19.6%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">100-500万</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 17.8%"></div>
+                    </div>
+                    <div class="bar-stats">100人 (17.8%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">500-1000万</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 7.1%"></div>
+                    </div>
+                    <div class="bar-stats">40人 (7.1%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">1000万over</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 5.5%"></div>
+                    </div>
+                    <div class="bar-stats">31人 (5.5%)</div>
+                </div>
+            </div>
+
+            <!-- 目標売上 -->
+            <div class="bar-chart">
+                <div class="bar-chart-title">目標売上（月商）</div>
+                <div class="bar-item">
+                    <div class="bar-label">10万over</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 3.6%"></div>
+                    </div>
+                    <div class="bar-stats">20人 (3.6%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">50万over</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 8.9%"></div>
+                    </div>
+                    <div class="bar-stats">50人 (8.9%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">100万over</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 16.0%"></div>
+                    </div>
+                    <div class="bar-stats">90人 (16.0%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">300万over</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 23.2%"></div>
+                    </div>
+                    <div class="bar-stats">130人 (23.2%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">500万over</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 21.4%"></div>
+                    </div>
+                    <div class="bar-stats">120人 (21.4%)</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-label">1000万over</div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: 26.9%"></div>
+                    </div>
+                    <div class="bar-stats">151人 (26.9%)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -16,9 +16,9 @@ export interface FunnelAnalysis {
 // 日別登録数のデータ型
 export interface DailyRegistration {
   date: string;
-  count: number;
-  previousDayChange: number | null;
-  previousDayChangePercent: number | null;
+  registrations: number;
+  surveyCompleted: number;
+  completionRate: number;
 }
 
 // 流入経路分析のデータ型
@@ -168,31 +168,34 @@ async function getDailyRegistrations(
   projectId: string,
   datasetId: string,
 ): Promise<DailyRegistration[]> {
-  const rows = await runQuery<{ snapshot_date: string; count: number }>(client, projectId, datasetId, {
+  const rows = await runQuery<{
+    registration_date: string;
+    registrations: number;
+    survey_completed: number;
+  }>(client, projectId, datasetId, {
     query: `
       SELECT
-        CAST(snapshot_date AS STRING) AS snapshot_date,
-        COUNT(DISTINCT id) AS count
+        CAST(DATE(friend_added_at) AS STRING) AS registration_date,
+        COUNT(DISTINCT id) AS registrations,
+        SUM(CASE WHEN survey_completed = 1 THEN 1 ELSE 0 END) AS survey_completed
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-      GROUP BY snapshot_date
-      ORDER BY snapshot_date DESC
+      WHERE friend_added_at IS NOT NULL
+      GROUP BY registration_date
+      ORDER BY registration_date DESC
       LIMIT 30
     `,
   });
 
-  const sorted = rows.reverse();
-
-  return sorted.map((row, index) => {
-    const previousDayCount = index > 0 ? sorted[index - 1].count : null;
-    const change = previousDayCount !== null ? row.count - previousDayCount : null;
-    const changePercent =
-      previousDayCount !== null && previousDayCount > 0 ? (change! / previousDayCount) * 100 : null;
+  return rows.map((row) => {
+    const registrations = Number(row.registrations);
+    const surveyCompleted = Number(row.survey_completed);
+    const completionRate = registrations > 0 ? (surveyCompleted / registrations) * 100 : 0;
 
     return {
-      date: row.snapshot_date,
-      count: Number(row.count),
-      previousDayChange: change,
-      previousDayChangePercent: changePercent,
+      date: row.registration_date,
+      registrations,
+      surveyCompleted,
+      completionRate,
     };
   });
 }

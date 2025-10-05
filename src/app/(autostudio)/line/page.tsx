@@ -3,6 +3,7 @@ import { resolveProjectId } from '@/lib/bigquery';
 import { Card } from '@/components/ui/card';
 import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
+import { DailyRegistrationsTable } from './_components/DailyRegistrationsTable';
 
 const PROJECT_ID = (() => {
   const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
@@ -66,57 +67,7 @@ export default async function LineDashboardPage() {
         {/* 日別登録数テーブル */}
         <Card>
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">📅 日別登録数</h2>
-          <div className="overflow-x-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)]">
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-[color:var(--color-surface-muted)]">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
-                    日付
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
-                    登録数
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
-                    前日比
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {analytics.dailyRegistrations.slice(-10).reverse().map((row, index, arr) => (
-                  <tr key={row.date} className="hover:bg-[color:var(--color-surface-muted)]">
-                    <td className="px-4 py-3 text-[color:var(--color-text-primary)] border-b border-[color:var(--color-border)] last:border-b-0">
-                      {formatDateLabel(row.date)}
-                    </td>
-                    <td className="px-4 py-3 text-[color:var(--color-text-primary)] border-b border-[color:var(--color-border)] last:border-b-0">
-                      {formatNumber(row.count)}
-                    </td>
-                    <td className="px-4 py-3 border-b border-[color:var(--color-border)] last:border-b-0">
-                      {row.previousDayChange !== null ? (
-                        <span
-                          className={
-                            row.previousDayChange > 0
-                              ? 'text-[color:var(--color-success)] font-semibold'
-                              : row.previousDayChange < 0
-                                ? 'text-[color:var(--color-error)] font-semibold'
-                                : 'text-[color:var(--color-text-muted)]'
-                          }
-                        >
-                          {row.previousDayChange > 0 ? '+' : ''}
-                          {formatNumber(row.previousDayChange)} (
-                          {row.previousDayChangePercent !== null
-                            ? `${row.previousDayChange > 0 ? '↑' : row.previousDayChange < 0 ? '↓' : ''}${formatPercent(Math.abs(row.previousDayChangePercent))}`
-                            : '-'}
-                          )
-                        </span>
-                      ) : (
-                        <span className="text-[color:var(--color-text-muted)]">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DailyRegistrationsTable data={analytics.dailyRegistrations} />
         </Card>
 
         {/* ファネル分析 */}
