@@ -5,6 +5,7 @@ import type { DailyRegistration } from '@/lib/lstep/analytics';
 
 interface DailyRegistrationsTableProps {
   data: DailyRegistration[];
+  hideFilter?: boolean;
 }
 
 type DateRangeFilter = '7days' | '30days' | '90days' | 'all';
@@ -25,22 +26,23 @@ function formatDateLabel(value: string): string {
   }).format(new Date(value));
 }
 
-export function DailyRegistrationsTable({ data }: DailyRegistrationsTableProps) {
+export function DailyRegistrationsTable({ data, hideFilter = false }: DailyRegistrationsTableProps) {
   const [dateRange, setDateRange] = useState<DateRangeFilter>('30days');
 
   const filteredData = useMemo(() => {
-    if (dateRange === 'all') {
+    if (hideFilter || dateRange === 'all') {
       return data;
     }
 
     const days = dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : 90;
     return data.slice(0, days);
-  }, [data, dateRange]);
+  }, [data, dateRange, hideFilter]);
 
   return (
     <div>
       {/* フィルター */}
-      <div className="mb-4 flex items-center gap-2">
+      {!hideFilter && (
+        <div className="mb-4 flex items-center gap-2">
         <span className="text-sm text-[color:var(--color-text-secondary)] font-medium">表示期間:</span>
         <div className="flex gap-2">
           <button
@@ -84,7 +86,8 @@ export function DailyRegistrationsTable({ data }: DailyRegistrationsTableProps) 
             全期間
           </button>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* テーブル */}
       <div className="overflow-x-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)]">
@@ -118,7 +121,7 @@ export function DailyRegistrationsTable({ data }: DailyRegistrationsTableProps) 
                   <td className="px-4 py-3 text-right text-[color:var(--color-text-primary)] border-b border-[color:var(--color-border)] last:border-b-0">
                     {formatNumber(row.surveyCompleted)}
                   </td>
-                  <td className="px-4 py-3 text-right border-b border-[color:var(--color-border)] last:border-b-0">
+                  <td className="px-4 py-3 text-right text-[color:var(--color-text-primary)] border-b border-[color:var(--color-border)] last:border-b-0">
                     <span
                       className={
                         row.completionRate >= 70

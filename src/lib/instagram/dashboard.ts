@@ -4,7 +4,6 @@ import { listUserCompetitors, type CompetitorProfile } from './competitors';
 import type { BigQuery } from '@google-cloud/bigquery';
 
 const DEFAULT_DATASET = process.env.IG_BQ_DATASET ?? 'autostudio_instagram';
-const ANALYCA_DATASET = 'analyca';
 
 export interface FollowerPoint {
   date: string;
@@ -76,7 +75,7 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string): Promise
       SAFE_CAST(reach AS INT64) AS reach,
       SAFE_CAST(engagement AS INT64) AS engagement
     FROM \
-\`${projectId}.${ANALYCA_DATASET}.instagram_insights\`
+\`${projectId}.${DEFAULT_DATASET}.instagram_insights\`
     WHERE date IS NOT NULL
     ORDER BY date DESC
     LIMIT 30

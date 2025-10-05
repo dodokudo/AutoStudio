@@ -1,30 +1,13 @@
 import { getLstepAnalytics } from '@/lib/lstep/analytics';
 import { resolveProjectId } from '@/lib/bigquery';
-import { Card } from '@/components/ui/card';
 import { Banner } from '@/components/ui/banner';
 import { EmptyState } from '@/components/ui/empty-state';
-import { DailyRegistrationsTable } from './_components/DailyRegistrationsTable';
+import { LineDashboardClient } from './_components/LineDashboardClient';
 
 const PROJECT_ID = (() => {
   const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
   return preferred ? resolveProjectId(preferred) : undefined;
 })();
-
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat('ja-JP').format(value);
-}
-
-function formatPercent(value: number): string {
-  return `${value.toFixed(1)}%`;
-}
-
-function formatDateLabel(value: string): string {
-  return new Intl.DateTimeFormat('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(value));
-}
 
 export const dynamic = 'force-dynamic';
 
