@@ -1,4 +1,4 @@
-import { getLineDashboardData } from '@/lib/lstep/dashboard';
+import { getLstepAnalytics } from '@/lib/lstep/analytics';
 import { resolveProjectId } from '@/lib/bigquery';
 import { Card } from '@/components/ui/card';
 import { Banner } from '@/components/ui/banner';
@@ -11,6 +11,10 @@ const PROJECT_ID = (() => {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
 }
 
 function formatDateLabel(value: string): string {
@@ -36,126 +40,293 @@ export default async function LineDashboardPage() {
   }
 
   try {
-    const dashboard = await getLineDashboardData(PROJECT_ID);
+    const analytics = await getLstepAnalytics(PROJECT_ID);
 
-  if (!dashboard.latestSnapshotDate) {
+    if (!analytics.latestSnapshotDate) {
+      return (
+        <div className="section-stack">
+          <EmptyState
+            title="まだ BigQuery にデータが存在しません"
+            description="Cloud Run / Scheduler のバッチが実行された後に再度確認してください。"
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="section-stack">
-        <EmptyState
-          title="まだ BigQuery にデータが存在しません"
-          description="Cloud Run / Scheduler のバッチが実行された後に再度確認してください。"
-        />
-      </div>
-    );
-  }
-
-  const funnelRows = dashboard.funnel.map((stage, index) => {
-    const first = dashboard.funnel[0];
-    const prev = index > 0 ? dashboard.funnel[index - 1] : null;
-    const toStart = first && first.users > 0 ? stage.users / first.users : null;
-    const toPrev = prev && prev.users > 0 ? stage.users / prev.users : null;
-
-    return {
-      stage: stage.stage,
-      users: stage.users,
-      toStart,
-      toPrev,
-    };
-  });
-
-  return (
-    <div className="section-stack">
-      <div className="glass-card text-center">
-        <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">LINE ダッシュボード</h1>
-        <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">
-          最終スナップショット: {formatDateLabel(dashboard.latestSnapshotDate)}
-        </p>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="accent-gradient">
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日次新規友だち数（直近14日）</h2>
-          <dl className="mt-4 space-y-3">
-            {dashboard.dailyNewFriends.map((item) => (
-              <div key={item.date} className="flex items-center justify-between text-sm">
-                <dt className="font-medium text-[color:var(--color-text-secondary)]">{formatDateLabel(item.date)}</dt>
-                <dd className="font-semibold text-[color:var(--color-text-primary)]">{formatNumber(item.count)}</dd>
-              </div>
-            ))}
-            {dashboard.dailyNewFriends.length === 0 && (
-              <p className="text-sm text-[color:var(--color-text-muted)]">データが見つかりません。</p>
-            )}
-          </dl>
-        </Card>
-
+        {/* ヘッダー */}
         <Card>
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">タグ別ユーザー数 TOP10</h2>
-          <div className="mt-4 space-y-3 text-sm">
-            {dashboard.topTags.map((item) => (
-              <div key={item.name} className="flex items-center justify-between text-[color:var(--color-text-secondary)]">
-                <span className="max-w-[70%] truncate" title={item.name}>
-                  {item.name}
-                </span>
-                <span className="font-semibold text-[color:var(--color-text-primary)]">{formatNumber(item.count)}</span>
-              </div>
-            ))}
-            {dashboard.topTags.length === 0 && (
-              <p className="text-sm text-[color:var(--color-text-muted)]">タグデータが見つかりません。</p>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="accent-gradient">
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">流入経路別ユーザー数</h2>
-          <div className="mt-4 space-y-3 text-sm">
-            {dashboard.topSources.map((item) => (
-              <div key={item.name} className="flex items-center justify-between text-[color:var(--color-text-secondary)]">
-                <span className="max-w-[70%] truncate" title={item.name}>
-                  {item.name}
-                </span>
-                <span className="font-semibold text-[color:var(--color-text-primary)]">{formatNumber(item.count)}</span>
-              </div>
-            ))}
-            {dashboard.topSources.length === 0 && (
-              <p className="text-sm text-[color:var(--color-text-muted)]">流入経路データが見つかりません。</p>
-            )}
-          </div>
-        </Card>
-
-        <Card className="accent-gradient">
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル（流入 → 詳細F済 → 成約）</h2>
-          <div className="mt-4 space-y-3 text-sm">
-            {funnelRows.map((row) => (
-              <div key={row.stage} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-[color:var(--color-text-primary)]">{row.stage}</span>
-                  <span className="font-semibold text-[color:var(--color-text-primary)]">{formatNumber(row.users)}</span>
-                </div>
-                <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                  {row.toPrev !== null && row.toPrev !== undefined ? (
-                    <p>前段階比: {(row.toPrev * 100).toFixed(1)}%</p>
-                  ) : (
-                    <p>ファネル起点</p>
-                  )}
-                  {row.toStart !== null && row.toStart !== undefined && row.toPrev !== null ? (
-                    <p>起点比: {(row.toStart * 100).toFixed(1)}%</p>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-            {funnelRows.length === 0 && (
-              <p className="text-sm text-[color:var(--color-text-muted)]">ファネル構成タグが設定されていません。</p>
-            )}
-          </div>
-          <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">
-            使用タグは環境変数 `LSTEP_FUNNEL_TAGS`（`|` 区切り）で変更できます。
+          <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">LINE登録者分析</h1>
+          <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">
+            最終更新: {formatDateLabel(analytics.latestSnapshotDate)}
           </p>
         </Card>
+
+        {/* 日別登録数テーブル */}
+        <Card>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">📅 日別登録数</h2>
+          <div className="overflow-x-auto border border-[color:var(--color-border)] rounded-[var(--radius-md)]">
+            <table className="w-full border-collapse text-sm">
+              <thead className="bg-[color:var(--color-surface-muted)]">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                    日付
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                    登録数
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                    前日比
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.dailyRegistrations.slice(-10).reverse().map((row, index, arr) => (
+                  <tr key={row.date} className="hover:bg-[color:var(--color-surface-muted)]">
+                    <td className="px-4 py-3 text-[color:var(--color-text-primary)] border-b border-[color:var(--color-border)] last:border-b-0">
+                      {formatDateLabel(row.date)}
+                    </td>
+                    <td className="px-4 py-3 text-[color:var(--color-text-primary)] border-b border-[color:var(--color-border)] last:border-b-0">
+                      {formatNumber(row.count)}
+                    </td>
+                    <td className="px-4 py-3 border-b border-[color:var(--color-border)] last:border-b-0">
+                      {row.previousDayChange !== null ? (
+                        <span
+                          className={
+                            row.previousDayChange > 0
+                              ? 'text-[color:var(--color-success)] font-semibold'
+                              : row.previousDayChange < 0
+                                ? 'text-[color:var(--color-error)] font-semibold'
+                                : 'text-[color:var(--color-text-muted)]'
+                          }
+                        >
+                          {row.previousDayChange > 0 ? '+' : ''}
+                          {formatNumber(row.previousDayChange)} (
+                          {row.previousDayChangePercent !== null
+                            ? `${row.previousDayChange > 0 ? '↑' : row.previousDayChange < 0 ? '↓' : ''}${formatPercent(Math.abs(row.previousDayChangePercent))}`
+                            : '-'}
+                          )
+                        </span>
+                      ) : (
+                        <span className="text-[color:var(--color-text-muted)]">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {/* ファネル分析 */}
+        <Card>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">📈 ファネル分析</h2>
+          <div className="flex flex-col md:flex-row items-center justify-center gap-0">
+            {/* LINE登録 */}
+            <div className="flex-1 text-center max-w-[280px]">
+              <div className="bg-[color:var(--color-surface)] border-2 border-[color:var(--color-accent)] rounded-[var(--radius-md)] p-8 shadow-[var(--shadow-soft)]">
+                <div className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">LINE登録</div>
+                <div className="text-4xl font-bold text-[color:var(--color-text-primary)]">
+                  {formatNumber(analytics.funnel.lineRegistration)}人
+                </div>
+              </div>
+            </div>
+
+            {/* CVR矢印1 */}
+            <div className="flex flex-col items-center gap-1 px-4 py-2 md:py-0">
+              <span className="text-2xl">→</span>
+              <span
+                className={`text-xs font-semibold ${analytics.funnel.surveyEnteredCVR >= 50 ? 'text-[color:var(--color-success)]' : 'text-[color:var(--color-warning)]'}`}
+              >
+                CVR: {formatPercent(analytics.funnel.surveyEnteredCVR)}
+              </span>
+              <span className="text-xs text-[color:var(--color-text-muted)]">
+                ({formatNumber(analytics.funnel.surveyEntered)}人)
+              </span>
+            </div>
+
+            {/* アンケート流入 */}
+            <div className="flex-1 text-center max-w-[280px]">
+              <div className="bg-[color:var(--color-surface)] border-2 border-[color:var(--color-accent)] rounded-[var(--radius-md)] p-8 shadow-[var(--shadow-soft)]">
+                <div className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">アンケート流入</div>
+                <div className="text-4xl font-bold text-[color:var(--color-text-primary)]">
+                  {formatNumber(analytics.funnel.surveyEntered)}人
+                </div>
+              </div>
+            </div>
+
+            {/* CVR矢印2 */}
+            <div className="flex flex-col items-center gap-1 px-4 py-2 md:py-0">
+              <span className="text-2xl">→</span>
+              <span
+                className={`text-xs font-semibold ${analytics.funnel.surveyCompletedCVR >= 70 ? 'text-[color:var(--color-success)]' : 'text-[color:var(--color-warning)]'}`}
+              >
+                CVR: {formatPercent(analytics.funnel.surveyCompletedCVR)}
+              </span>
+              <span className="text-xs text-[color:var(--color-text-muted)]">
+                ({formatNumber(analytics.funnel.surveyCompleted)}人)
+              </span>
+            </div>
+
+            {/* アンケート完了 */}
+            <div className="flex-1 text-center max-w-[280px]">
+              <div className="bg-[color:var(--color-surface)] border-2 border-[color:var(--color-accent)] rounded-[var(--radius-md)] p-8 shadow-[var(--shadow-soft)]">
+                <div className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">アンケート完了</div>
+                <div className="text-4xl font-bold text-[color:var(--color-text-primary)]">
+                  {formatNumber(analytics.funnel.surveyCompleted)}人
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* 流入経路分析 */}
+        <Card>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">📱 流入経路分析</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-md)] p-5 text-center shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">Threads</h3>
+              <div className="text-3xl font-bold text-[color:var(--color-text-primary)] mb-1">
+                {formatNumber(analytics.sources.threads)}
+              </div>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {formatPercent(analytics.sources.threadsPercent)}
+              </div>
+            </div>
+
+            <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-md)] p-5 text-center shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">Instagram</h3>
+              <div className="text-3xl font-bold text-[color:var(--color-text-primary)] mb-1">
+                {formatNumber(analytics.sources.instagram)}
+              </div>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {formatPercent(analytics.sources.instagramPercent)}
+              </div>
+            </div>
+
+            <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-md)] p-5 text-center shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">YouTube</h3>
+              <div className="text-3xl font-bold text-[color:var(--color-text-primary)] mb-1">
+                {formatNumber(analytics.sources.youtube)}
+              </div>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {formatPercent(analytics.sources.youtubePercent)}
+              </div>
+            </div>
+
+            <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-md)] p-5 text-center shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">その他</h3>
+              <div className="text-3xl font-bold text-[color:var(--color-text-primary)] mb-1">
+                {formatNumber(analytics.sources.other)}
+              </div>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {formatPercent(analytics.sources.otherPercent)}
+              </div>
+            </div>
+
+            <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-md)] p-5 text-center shadow-[var(--shadow-soft)]">
+              <h3 className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">オーガニック</h3>
+              <div className="text-3xl font-bold text-[color:var(--color-text-primary)] mb-1">
+                {formatNumber(analytics.sources.organic)}
+              </div>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {formatPercent(analytics.sources.organicPercent)}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* 属性分析 */}
+        <Card>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">👥 属性分析</h2>
+
+          {/* 年齢層 */}
+          <div className="mb-8">
+            <h3 className="text-base font-semibold text-[color:var(--color-text-primary)] mb-3">年齢層</h3>
+            <div className="space-y-3">
+              {analytics.attributes.age.map((item) => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <div className="w-24 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
+                  <div className="flex-1 h-8 bg-[color:var(--color-surface-muted)] rounded-[var(--radius-sm)] overflow-hidden">
+                    <div
+                      className="h-full bg-[color:var(--color-accent)] transition-all duration-300"
+                      style={{ width: `${item.percent}%` }}
+                    />
+                  </div>
+                  <div className="min-w-[100px] text-right text-sm text-[color:var(--color-text-secondary)]">
+                    {formatNumber(item.count)}人 ({formatPercent(item.percent)})
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 職業 */}
+          <div className="mb-8">
+            <h3 className="text-base font-semibold text-[color:var(--color-text-primary)] mb-3">職業</h3>
+            <div className="space-y-3">
+              {analytics.attributes.job.map((item) => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <div className="w-24 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
+                  <div className="flex-1 h-8 bg-[color:var(--color-surface-muted)] rounded-[var(--radius-sm)] overflow-hidden">
+                    <div
+                      className="h-full bg-[color:var(--color-accent)] transition-all duration-300"
+                      style={{ width: `${item.percent}%` }}
+                    />
+                  </div>
+                  <div className="min-w-[100px] text-right text-sm text-[color:var(--color-text-secondary)]">
+                    {formatNumber(item.count)}人 ({formatPercent(item.percent)})
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 現在の売上 */}
+          <div className="mb-8">
+            <h3 className="text-base font-semibold text-[color:var(--color-text-primary)] mb-3">現在の売上（月商）</h3>
+            <div className="space-y-3">
+              {analytics.attributes.currentRevenue.map((item) => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <div className="w-24 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
+                  <div className="flex-1 h-8 bg-[color:var(--color-surface-muted)] rounded-[var(--radius-sm)] overflow-hidden">
+                    <div
+                      className="h-full bg-[color:var(--color-accent)] transition-all duration-300"
+                      style={{ width: `${item.percent}%` }}
+                    />
+                  </div>
+                  <div className="min-w-[100px] text-right text-sm text-[color:var(--color-text-secondary)]">
+                    {formatNumber(item.count)}人 ({formatPercent(item.percent)})
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 目標売上 */}
+          <div>
+            <h3 className="text-base font-semibold text-[color:var(--color-text-primary)] mb-3">目標売上（月商）</h3>
+            <div className="space-y-3">
+              {analytics.attributes.goalRevenue.map((item) => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <div className="w-24 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
+                  <div className="flex-1 h-8 bg-[color:var(--color-surface-muted)] rounded-[var(--radius-sm)] overflow-hidden">
+                    <div
+                      className="h-full bg-[color:var(--color-accent)] transition-all duration-300"
+                      style={{ width: `${item.percent}%` }}
+                    />
+                  </div>
+                  <div className="min-w-[100px] text-right text-sm text-[color:var(--color-text-secondary)]">
+                    {formatNumber(item.count)}人 ({formatPercent(item.percent)})
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
       </div>
-    </div>
-  );
+    );
   } catch (error) {
     console.error('[line/page] Error:', error);
     return (
