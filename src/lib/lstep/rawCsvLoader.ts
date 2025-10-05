@@ -71,7 +71,7 @@ export async function loadRawCsvToBigQuery(
         },
         sourceFormat: 'CSV',
         skipLeadingRows: 1,
-        writeDisposition: 'WRITE_APPEND',
+        writeDisposition: 'WRITE_TRUNCATE', // 既存データを削除してから挿入（重複防止）
         autodetect: true,
         schemaUpdateOptions: exists ? ['ALLOW_FIELD_ADDITION', 'ALLOW_FIELD_RELAXATION'] : undefined, // 新しい列を自動追加
       },

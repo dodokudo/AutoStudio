@@ -2,7 +2,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient } from '@/lib/bigquery';
 
 const DEFAULT_DATASET = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
-const TABLE_NAME = 'lstep_friends_raw';
+const TABLE_NAME = 'lstep_friends_jst'; // JSTに変換したビューを使用
 
 // ファネル分析のデータ型
 export interface FunnelAnalysis {
@@ -307,11 +307,11 @@ async function getDailyRegistrations(
       ),
       daily_stats AS (
         SELECT
-          CAST(DATE(friend_added_at) AS STRING) AS registration_date,
+          CAST(friend_added_date_jst AS STRING) AS registration_date,
           COUNT(DISTINCT id) AS registrations,
-          SUM(CASE WHEN survey_completed = 1 THEN 1 ELSE 0 END) AS survey_completed
+          COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END) AS survey_completed
         FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-        WHERE friend_added_at IS NOT NULL
+        WHERE friend_added_date_jst IS NOT NULL
           AND snapshot_date = @latestSnapshotDate
         GROUP BY registration_date
       )

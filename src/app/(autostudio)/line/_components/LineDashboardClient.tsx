@@ -45,25 +45,57 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     const totalRegistrations = dailyDataInRange.reduce((sum, day) => sum + day.registrations, 0);
     const totalSurveyCompleted = dailyDataInRange.reduce((sum, day) => sum + day.surveyCompleted, 0);
 
-    // 登録日で絞り込んだユーザーIDリストが必要だが、日別データからは算出できないため、
-    // 簡易的に日別データの合計値を使用
     const funnel = {
       lineRegistration: totalRegistrations,
-      surveyEntered: Math.round(totalRegistrations * (initialData.funnel.surveyEnteredCVR / 100)),
+      surveyEntered: 0,
       surveyCompleted: totalSurveyCompleted,
-      surveyEnteredCVR: totalRegistrations > 0
-        ? (Math.round(totalRegistrations * (initialData.funnel.surveyEnteredCVR / 100)) / totalRegistrations) * 100
-        : 0,
-      surveyCompletedCVR: totalRegistrations > 0 && totalSurveyCompleted > 0
-        ? (totalSurveyCompleted / Math.round(totalRegistrations * (initialData.funnel.surveyEnteredCVR / 100))) * 100
-        : 0,
+      surveyEnteredCVR: 0,
+      surveyCompletedCVR: totalRegistrations > 0 ? (totalSurveyCompleted / totalRegistrations) * 100 : 0,
     };
 
-    // 流入経路と属性は元のデータをそのまま使用（サーバーサイドで期間指定が必要）
+    // 流入経路と属性分析を期間に応じて概算（登録数の比率で按分）
+    const registrationRatio = initialData.funnel.lineRegistration > 0
+      ? totalRegistrations / initialData.funnel.lineRegistration
+      : 0;
+
+    const sources = {
+      threads: Math.round(initialData.sources.threads * registrationRatio),
+      threadsPercent: initialData.sources.threadsPercent,
+      instagram: Math.round(initialData.sources.instagram * registrationRatio),
+      instagramPercent: initialData.sources.instagramPercent,
+      youtube: Math.round(initialData.sources.youtube * registrationRatio),
+      youtubePercent: initialData.sources.youtubePercent,
+      other: Math.round(initialData.sources.other * registrationRatio),
+      otherPercent: initialData.sources.otherPercent,
+      organic: Math.round(initialData.sources.organic * registrationRatio),
+      organicPercent: initialData.sources.organicPercent,
+    };
+
+    const attributes = {
+      age: initialData.attributes.age.map(item => ({
+        ...item,
+        count: Math.round(item.count * registrationRatio),
+      })),
+      job: initialData.attributes.job.map(item => ({
+        ...item,
+        count: Math.round(item.count * registrationRatio),
+      })),
+      currentRevenue: initialData.attributes.currentRevenue.map(item => ({
+        ...item,
+        count: Math.round(item.count * registrationRatio),
+      })),
+      goalRevenue: initialData.attributes.goalRevenue.map(item => ({
+        ...item,
+        count: Math.round(item.count * registrationRatio),
+      })),
+    };
+
     return {
       ...initialData,
       funnel,
       dailyRegistrations: dailyDataInRange,
+      sources,
+      attributes,
     };
   }, [initialData, dateRange]);
 
