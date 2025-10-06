@@ -169,6 +169,30 @@ export async function replaceTodayPlans(plans: GeneratedPlanInput[], fallbackSch
   }).replace(/\//g, '-');
   console.log('[replaceTodayPlans] Today date (JST):', today);
 
+  // 既存のドラフトプラン（投稿予約中でないもの）を削除
+  const deleteSql = `
+    DELETE FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+    WHERE generation_date = DATE(@today)
+      AND status = 'draft'
+      AND plan_id NOT IN (
+        SELECT DISTINCT plan_id
+        FROM \`${PROJECT_ID}.${DATASET}.thread_post_jobs\`
+        WHERE status IN ('pending', 'processing')
+      )
+  `;
+
+  try {
+    const [deleteJob] = await client.query({
+      query: deleteSql,
+      params: { today }
+    });
+    const deletedRows = (deleteJob as { metadata?: { numDmlAffectedRows?: string } }).metadata?.numDmlAffectedRows || '0';
+    console.log('[replaceTodayPlans] Deleted existing draft plans:', deletedRows);
+  } catch (error) {
+    console.error('[replaceTodayPlans] Error deleting existing plans:', error);
+    throw error;
+  }
+
   // 各プランをMERGE文でupsert
   for (const [index, plan] of plans.entries()) {
     const params = {

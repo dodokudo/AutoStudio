@@ -349,35 +349,25 @@ async function getSourceAnalysis(
   datasetId: string,
   snapshotDate: string,
 ): Promise<SourceAnalysis> {
-  // まずテーブルのカラムをチェック
-  const columnsQuery = await runQuery<{ column_name: string }>(client, projectId, datasetId, {
-    query: `
-      SELECT column_name
-      FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.COLUMNS\`
-      WHERE table_name = @tableName
-        AND column_name = 'source_youtube'
-    `,
-    params: { tableName: TABLE_NAME },
-  });
-
-  const hasYouTubeColumn = columnsQuery.length > 0;
-
   const [row] = await runQuery<{
     total: number;
     threads: number;
     instagram: number;
-    youtube?: number;
+    youtube: number;
     organic: number;
   }>(client, projectId, datasetId, {
     query: `
       SELECT
-        COUNT(DISTINCT id) AS total,
-        SUM(source_threads) AS threads,
-        SUM(source_instagram) AS instagram,
-        ${hasYouTubeColumn ? 'SUM(IFNULL(source_youtube, 0)) AS youtube,' : ''}
-        SUM(inflow_organic) AS organic
-      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-      WHERE snapshot_date = @snapshotDate
+        COUNT(DISTINCT core.user_id) AS total,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Threads', core.user_id, NULL)) AS threads,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Instagram', core.user_id, NULL)) AS instagram,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'YouTube', core.user_id, NULL)) AS youtube,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name IN ('OG', 'Organic'), core.user_id, NULL)) AS organic
+      FROM \`${projectId}.${datasetId}.user_core\` core
+      LEFT JOIN \`${projectId}.${datasetId}.user_sources\` sources
+        ON core.user_id = sources.user_id
+        AND core.snapshot_date = sources.snapshot_date
+      WHERE core.snapshot_date = @snapshotDate
     `,
     params: { snapshotDate },
   });
@@ -385,9 +375,10 @@ async function getSourceAnalysis(
   const total = Number(row?.total ?? 0);
   const threads = Number(row?.threads ?? 0);
   const instagram = Number(row?.instagram ?? 0);
-  const youtube = hasYouTubeColumn ? Number(row?.youtube ?? 0) : 0;
+  const youtube = Number(row?.youtube ?? 0);
   const organic = Number(row?.organic ?? 0);
-  const other = Math.max(0, total - threads - instagram - youtube - organic);
+  const matched = threads + instagram + youtube + organic;
+  const other = Math.max(0, total - matched);
 
   return {
     threads,
@@ -414,40 +405,29 @@ async function getSourceAnalysisByDateRange(
   startDate?: string,
   endDate?: string,
 ): Promise<SourceAnalysis> {
-  // まずテーブルのカラムをチェック
-  const columnsQuery = await runQuery<{ column_name: string }>(client, projectId, datasetId, {
-    query: `
-      SELECT column_name
-      FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.COLUMNS\`
-      WHERE table_name = @tableName
-        AND column_name = 'source_youtube'
-    `,
-    params: { tableName: TABLE_NAME },
-  });
-
-  const hasYouTubeColumn = columnsQuery.length > 0;
-
   const dateFilter = startDate && endDate
-    ? 'AND DATE(friend_added_at) BETWEEN @startDate AND @endDate'
+    ? 'AND DATE(core.friend_added_at) BETWEEN @startDate AND @endDate'
     : '';
 
   const [row] = await runQuery<{
     total: number;
     threads: number;
     instagram: number;
-    youtube?: number;
+    youtube: number;
     organic: number;
   }>(client, projectId, datasetId, {
     query: `
       SELECT
-        COUNT(DISTINCT id) AS total,
-        SUM(source_threads) AS threads,
-        SUM(source_instagram) AS instagram,
-        ${hasYouTubeColumn ? 'SUM(IFNULL(source_youtube, 0)) AS youtube,' : ''}
-        SUM(inflow_organic) AS organic
-      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-      WHERE snapshot_date = @snapshotDate
-        AND friend_added_at IS NOT NULL
+        COUNT(DISTINCT core.user_id) AS total,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Threads', core.user_id, NULL)) AS threads,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Instagram', core.user_id, NULL)) AS instagram,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'YouTube', core.user_id, NULL)) AS youtube,
+        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name IN ('OG', 'Organic'), core.user_id, NULL)) AS organic
+      FROM \`${projectId}.${datasetId}.user_core\` core
+      LEFT JOIN \`${projectId}.${datasetId}.user_sources\` sources
+        ON core.user_id = sources.user_id
+        AND core.snapshot_date = sources.snapshot_date
+      WHERE core.snapshot_date = @snapshotDate
         ${dateFilter}
     `,
     params: { snapshotDate, startDate, endDate },
@@ -456,9 +436,10 @@ async function getSourceAnalysisByDateRange(
   const total = Number(row?.total ?? 0);
   const threads = Number(row?.threads ?? 0);
   const instagram = Number(row?.instagram ?? 0);
-  const youtube = hasYouTubeColumn ? Number(row?.youtube ?? 0) : 0;
+  const youtube = Number(row?.youtube ?? 0);
   const organic = Number(row?.organic ?? 0);
-  const other = Math.max(0, total - threads - instagram - youtube - organic);
+  const matched = threads + instagram + youtube + organic;
+  const other = Math.max(0, total - matched);
 
   return {
     threads,

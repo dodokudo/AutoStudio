@@ -88,7 +88,6 @@ export async function loadRawCsvToBigQuery(
         skipLeadingRows: 1,
         writeDisposition: 'WRITE_TRUNCATE', // 既存データを削除してから挿入（重複防止）
         autodetect: true,
-        schemaUpdateOptions: exists ? ['ALLOW_FIELD_ADDITION', 'ALLOW_FIELD_RELAXATION'] : undefined, // 新しい列を自動追加
       },
     },
   });
@@ -109,7 +108,12 @@ function parseCSVLine(line: string): string[] {
     const char = line[i];
 
     if (char === '"') {
-      inQuotes = !inQuotes;
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1; // skip escaped quote
+      } else {
+        inQuotes = !inQuotes;
+      }
     } else if (char === ',' && !inQuotes) {
       result.push(current);
       current = '';
@@ -119,7 +123,7 @@ function parseCSVLine(line: string): string[] {
   }
 
   result.push(current);
-  return result;
+  return result.map((value) => value.replace(/\r$/, ''));
 }
 
 function normalizeColumnName(name: string): string {
