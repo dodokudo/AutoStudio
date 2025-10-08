@@ -609,26 +609,64 @@ async function requestClaude(prompt: string) {
     return parsed;
   } catch (firstError) {
     console.log('[claude] First JSON parse failed, attempting repair...');
-    const sanitized = cleanContent
+    let sanitized = cleanContent
       // normalize smart quotes to regular quotes
       .replace(/[\u201C\u201D]/g, '"')
       .replace(/[\u2018\u2019]/g, "'")
       // strip zero-width / non-breaking spaces
       .replace(/[\u00A0\u200B\u200C\u200D]/g, '')
-      // fix broken strings (missing closing quotes before comma/bracket)
-      .replace(/([^"\\])\s*([,\]}])/g, (match, char, bracket) => {
-        // If we find text followed by comma/bracket without closing quote, check context
-        const lines = cleanContent.split('\n');
-        // This is a simple heuristic - in production you'd want more sophisticated logic
-        return char + bracket;
-      })
       // remove trailing commas before ] or }
       .replace(/,\s*([\]}])/g, '$1')
       // fix double commas
       .replace(/,\s*,/g, ',');
 
+    // Fix unclosed strings - find strings that don't have closing quotes
+    // Match pattern: "key": "value that doesn't close properly
+    sanitized = sanitized.replace(/"([^"]*?)"\s*:\s*"([^"]*?)(\n|$)(?!")/g, (match, key, value, ending) => {
+      // If the value doesn't end with a quote, add one
+      if (!value.endsWith('"')) {
+        return `"${key}": "${value}"${ending}`;
+      }
+      return match;
+    });
+
+    // Fix unclosed arrays - if we have [ without matching ]
+    const openBrackets = (sanitized.match(/\[/g) || []).length;
+    const closeBrackets = (sanitized.match(/\]/g) || []).length;
+    if (openBrackets > closeBrackets) {
+      console.log('[claude] Detected unclosed arrays, adding missing ] brackets');
+      sanitized = sanitized.trimEnd();
+      // Remove any trailing comma or incomplete text
+      sanitized = sanitized.replace(/,\s*$/, '');
+      // Add missing closing brackets
+      for (let i = 0; i < openBrackets - closeBrackets; i++) {
+        sanitized += '\n]';
+      }
+    }
+
+    // Fix unclosed objects - if we have { without matching }
+    const openBraces = (sanitized.match(/\{/g) || []).length;
+    const closeBraces = (sanitized.match(/\}/g) || []).length;
+    if (openBraces > closeBraces) {
+      console.log('[claude] Detected unclosed objects, adding missing } braces');
+      sanitized = sanitized.trimEnd();
+      // Remove any trailing comma or incomplete text
+      sanitized = sanitized.replace(/,\s*$/, '');
+      // Add missing closing braces
+      for (let i = 0; i < openBraces - closeBraces; i++) {
+        sanitized += '\n}';
+      }
+    }
+
+    // Try to fix incomplete string values at the end
+    // Match pattern where a string value is not closed before a newline or end
+    sanitized = sanitized.replace(/"([^"]*?)"\s*:\s*"([^"]*?)$/gm, (match, key, value) => {
+      return `"${key}": "${value}"`;
+    });
+
     console.log('[claude] Sanitized content length:', sanitized.length);
     console.log('[claude] Sanitized content preview:', sanitized.slice(0, 300));
+    console.log('[claude] Sanitized content suffix:', sanitized.slice(-300));
 
     try {
       const parsed = JSON.parse(sanitized) as unknown;
