@@ -1,0 +1,36 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/threads-pattern-extraction:latest'
+      - '-f'
+      - deploy/threads/Dockerfile
+      - '.'
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - 'gcr.io/$PROJECT_ID/threads-pattern-extraction:latest'
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - create
+      - threads-pattern-extraction
+      - '--image'
+      - gcr.io/$PROJECT_ID/threads-pattern-extraction:latest
+      - '--region'
+      - 'asia-northeast1'
+      - '--service-account'
+      - 'autostudio@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-env-vars'
+      - BQ_PROJECT_ID=mark-454114
+      - '--set-secrets'
+      - GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest
+      - '--max-retries'
+      - '3'
+      - '--task-timeout'
+      - '600s'
+images:
+  - gcr.io/$PROJECT_ID/threads-pattern-extraction:latest
