@@ -50,7 +50,7 @@ function sanitizeLearningSummary(summary: string | null | undefined): string {
 
 async function fetchLatestLearnings(): Promise<LearningResult | null> {
   try {
-    const [rows] = await learningsClient.query<LearningRow>({
+    const [rows] = await learningsClient.query({
       query: `
         SELECT
           learning_id,
@@ -66,11 +66,12 @@ async function fetchLatestLearnings(): Promise<LearningResult | null> {
       `,
     });
 
-    if (!rows.length) {
+    const typedRows = rows as LearningRow[];
+    if (!typedRows.length) {
       return null;
     }
 
-    const row = rows[0];
+    const row = typedRows[0];
     const learningSummary = sanitizeLearningSummary(
       typeof row.learning_summary === 'string' ? row.learning_summary : toPlainText(row.learning_summary),
     );
