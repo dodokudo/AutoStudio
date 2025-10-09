@@ -1,4 +1,5 @@
 import { ThreadsPromptPayload } from '@/types/prompt';
+import { createBigQueryClient, resolveProjectId } from './bigquery';
 import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
 
 const CLAUDE_API_URL = process.env.CLAUDE_API_URL?.trim() ?? 'https://api.anthropic.com/v1/messages';
@@ -6,6 +7,93 @@ const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY?.trim();
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL?.trim() ?? 'claude-sonnet-4-5-20250929';
 
 const AI_THEME_KEYWORDS = ['ai', 'chatgpt', 'claude', 'llm', '生成', '自動化'];
+const DATASET_THREADS = 'autostudio_threads';
+const LEARNINGS_TABLE = 'thread_prompt_learnings';
+const PROJECT_ID = resolveProjectId();
+const learningsClient = createBigQueryClient(PROJECT_ID);
+const LEARNING_SUMMARY_MAX_LENGTH = 2000;
+
+interface LearningRow {
+  learning_id?: string;
+  generated_at?: string | Date;
+  analysis_period_start?: string;
+  analysis_period_end?: string;
+  learning_summary?: string;
+  sample_count?: number;
+  avg_char_delta?: number | null;
+}
+
+interface LearningResult {
+  learningId: string;
+  generatedAt: string;
+  analysisPeriodStart: string;
+  analysisPeriodEnd: string;
+  learningSummary: string;
+  sampleCount: number;
+  avgCharDelta: number | null;
+}
+
+function toPlainText(value: string | Date | undefined | null): string {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function sanitizeLearningSummary(summary: string | null | undefined): string {
+  if (!summary) return '';
+  const trimmed = summary.trim();
+  if (trimmed.length <= LEARNING_SUMMARY_MAX_LENGTH) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, LEARNING_SUMMARY_MAX_LENGTH - 1)}…`;
+}
+
+async function fetchLatestLearnings(): Promise<LearningResult | null> {
+  try {
+    const [rows] = await learningsClient.query<LearningRow>({
+      query: `
+        SELECT
+          learning_id,
+          generated_at,
+          analysis_period_start,
+          analysis_period_end,
+          learning_summary,
+          sample_count,
+          avg_char_delta
+        FROM \`${PROJECT_ID}.${DATASET_THREADS}.${LEARNINGS_TABLE}\`
+        ORDER BY generated_at DESC
+        LIMIT 1
+      `,
+    });
+
+    if (!rows.length) {
+      return null;
+    }
+
+    const row = rows[0];
+    const learningSummary = sanitizeLearningSummary(
+      typeof row.learning_summary === 'string' ? row.learning_summary : toPlainText(row.learning_summary),
+    );
+
+    return {
+      learningId: toPlainText(row.learning_id),
+      generatedAt: toPlainText(row.generated_at),
+      analysisPeriodStart: toPlainText(row.analysis_period_start),
+      analysisPeriodEnd: toPlainText(row.analysis_period_end),
+      learningSummary,
+      sampleCount: typeof row.sample_count === 'number' ? row.sample_count : Number(row.sample_count ?? 0),
+      avgCharDelta:
+        typeof row.avg_char_delta === 'number' || row.avg_char_delta === null
+          ? row.avg_char_delta
+          : Number.isFinite(Number(row.avg_char_delta))
+            ? Number(row.avg_char_delta)
+            : null,
+    };
+  } catch (error) {
+    console.error('[claude] Failed to fetch latest learnings:', error);
+    return null;
+  }
+}
 
 const JSON_SCHEMA_EXAMPLE = `{
   "post": {
@@ -341,8 +429,8 @@ function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
   }
 
   const sections: string[] = [];
-  sections.push('### 🌟 門口さん（@mon_guchi）- 固定ポスト誘導の達人');
-  sections.push(`ティアS/Aから上位5本を特別抽出。固定ポスト・プロフィール誘導手法を特に注目して学習。`);
+  sections.push('### 🌟 門口さん（@mon_guchi）- 文章構成の達人');
+  sections.push(`ティアS/Aから上位5本を特別抽出。文章構成・フック・展開方法を学習。固定ポスト誘導手法も参考に。`);
   sections.push('');
 
   payload.monguchiPosts.forEach((post, idx) => {
@@ -356,14 +444,29 @@ function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
   return sections.join('\n');
 }
 
-function buildBatchContext(payload: ThreadsPromptPayload): string {
+async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string> {
   const accountLine = `平均フォロワー: ${payload.accountSummary.averageFollowers.toLocaleString()} / 平均プロフ閲覧: ${payload.accountSummary.averageProfileViews.toLocaleString()} / 最新増減 フォロワー ${payload.accountSummary.followersChange >= 0 ? '+' : ''}${payload.accountSummary.followersChange}・プロフ閲覧 ${payload.accountSummary.profileViewsChange >= 0 ? '+' : ''}${payload.accountSummary.profileViewsChange}`;
 
   const schedules = payload.meta.recommendedSchedule
     .map((time, idx) => `  ${idx + 1}本目: ${time}`)
     .join('\n');
 
+  const learningLines: string[] = [];
+  try {
+    const learnings = await fetchLatestLearnings();
+    if (learnings && learnings.sampleCount >= 5 && learnings.learningSummary) {
+      const summary = learnings.learningSummary.trim();
+      learningLines.push('## 📊 ユーザー編集パターン学習（優先度：最高）');
+      learningLines.push(summary);
+      learningLines.push('上記のパターンに従って生成してください。特に繰り返し削除される表現は使わず、追加される表現は最初から含めること。');
+      learningLines.push('');
+    }
+  } catch (error) {
+    console.error('[claude] Failed to append learning summary to prompt:', error);
+  }
+
   return [
+    ...learningLines,
     '# CONTEXT (batch generation)',
     '## アカウントの現状',
     `- ${accountLine}`,
@@ -378,7 +481,7 @@ function buildBatchContext(payload: ThreadsPromptPayload): string {
     '## 【最重要】門口さん特別枠',
     formatMonguchiPosts(payload),
     '',
-    '## 【重要】競合勝ち構成パターン（AI系10本 + 非AI系20本 = 30本）',
+    '## 【重要】競合勝ち構成パターン（AI系20本 + 非AI系30本 = 50本）',
     '以下の競合投稿から構成パターンを学習してください。',
     '**AI系発信者**: テーマ・構成・トーン すべて参考にする',
     '**非AI系発信者**: 構成・フック・展開方法のみ参考（テーマは絶対に真似しない）',
@@ -393,13 +496,13 @@ function buildBatchContext(payload: ThreadsPromptPayload): string {
     payload.writingChecklist.reminders.map((item) => `- ${item}`).join('\n'),
     '',
     '## 生成指示',
-    '1. 🌟 門口さんの投稿から固定ポスト誘導の手法を最優先で学習',
-    '   - 「固定の特典でも解説してるんですが」のような自然な誘導文',
-    '   - プロフィールや固定投稿への導線設計',
+    '1. 🌟 門口さんの投稿から文章構成・フック・展開方法を学習',
+    '   - 文章の組み立て方、読者の引き込み方',
+    '   - 補足：固定ポスト誘導手法も参考にする',
     '',
-    '2. 競合30本（AI系10本 + 非AI系20本）の構成パターンを分析：',
-    '   - AI系10本: テーマ・構成・トーン すべて学習',
-    '   - 非AI系20本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
+    '2. 競合50本（AI系20本 + 非AI系30本）の構成パターンを分析：',
+    '   - AI系20本: テーマ・構成・トーン すべて学習',
+    '   - 非AI系30本: 構成・フック・展開・締め方のみ学習（テーマは絶対に真似しない）',
     '',
     '3. 自社10本から、工藤さんの文体DNA・トーン・勝ちパターンを把握',
     '',
@@ -435,15 +538,15 @@ function buildBatchContext(payload: ThreadsPromptPayload): string {
     '}',
     '',
     '**重要**: 上記はフォーマット例です。実際の内容は以下から学習して生成:',
-    '- テーマ・構成: 門口さん5本 + 競合30本 + 自社10本',
+    '- テーマ・構成: 門口さん5本 + 競合50本 + 自社10本',
     '- 文体・トーン: 工藤さんの自社10本 + KUDO_MASTER_PROMPT',
     '- 多様性: 各投稿で異なるテーマ・フック・数字・表現を使用',
     '- 文字数厳守: mainPost 150-200文字、comments 400-500文字（500文字超過厳禁）',
   ].join('\n');
 }
 
-function buildBatchPrompt(payload: ThreadsPromptPayload): string {
-  const context = buildBatchContext(payload);
+async function buildBatchPrompt(payload: ThreadsPromptPayload): Promise<string> {
+  const context = await buildBatchContext(payload);
   return [context, '', KUDO_MASTER_PROMPT].join('\n\n');
 }
 
@@ -699,7 +802,7 @@ async function generateBatchClaudePosts(payload: ThreadsPromptPayload): Promise<
   console.log('[claude] CLAUDE_API_KEY found, length:', CLAUDE_API_KEY.length);
   console.log('[claude] Generating ' + payload.meta.targetPostCount + ' posts in batch mode');
 
-  const prompt = buildBatchPrompt(payload);
+  const prompt = await buildBatchPrompt(payload);
   console.log('[claude] Batch prompt length:', prompt.length, 'characters');
 
   const parsed = await requestClaude(prompt);

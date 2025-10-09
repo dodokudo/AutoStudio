@@ -497,20 +497,20 @@ non_ai_focused AS (
   SELECT * FROM filtered
   WHERE genre NOT IN ('AI', 'AI活用', 'AI活用/自動化', 'ChatGPT', 'Claude', 'LLM', '生成AI')
 ),
--- AI系から10本取得（ランダムサンプリング）
+-- AI系から20本取得（ランダムサンプリング）
 ai_selected AS (
   SELECT *, TRUE AS is_ai_focused
   FROM ai_focused
   ORDER BY RAND()
-  LIMIT 10
+  LIMIT 20
 ),
--- 非AI系から20本取得（門口さん除外 - 別途全文抽出済み）（ランダムサンプリング）
+-- 非AI系から30本取得（門口さん除外 - 別途全文抽出済み）（ランダムサンプリング）
 non_ai_selected AS (
   SELECT *, FALSE AS is_ai_focused
   FROM non_ai_focused
   WHERE username != 'mon_guchi'
   ORDER BY RAND()
-  LIMIT 20
+  LIMIT 30
 )
 
 SELECT * FROM ai_selected
