@@ -1,5 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient } from '@/lib/bigquery';
+import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
 
 const DEFAULT_DATASET = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 const TABLE_NAME = 'lstep_friends_raw';
@@ -341,7 +342,7 @@ async function getDailyRegistrations(
 }
 
 /**
- * 流入経路分析を取得
+ * 流入経路分析を取得（countLineSourceRegistrationsと同じロジック）
  */
 async function getSourceAnalysis(
   client: BigQuery,
@@ -349,36 +350,58 @@ async function getSourceAnalysis(
   datasetId: string,
   snapshotDate: string,
 ): Promise<SourceAnalysis> {
-  const [row] = await runQuery<{
-    total: number;
-    threads: number;
-    instagram: number;
-    youtube: number;
-    organic: number;
-  }>(client, projectId, datasetId, {
+  // 各ソースごとにcountLineSourceRegistrationsを使用
+  const threads = await countLineSourceRegistrations(projectId, {
+    startDate: '', // 使われない
+    endDate: '', // 使われない
+    sourceName: 'Threads',
+    datasetId,
+  });
+
+  const instagram = await countLineSourceRegistrations(projectId, {
+    startDate: '', // 使われない
+    endDate: '', // 使われない
+    sourceName: 'Instagram',
+    datasetId,
+  });
+
+  const youtube = await countLineSourceRegistrations(projectId, {
+    startDate: '', // 使われない
+    endDate: '', // 使われない
+    sourceName: 'YouTube',
+    datasetId,
+  });
+
+  // OrganicとOGを別々にカウント
+  const organic = await countLineSourceRegistrations(projectId, {
+    startDate: '', // 使われない
+    endDate: '', // 使われない
+    sourceName: 'Organic',
+    datasetId,
+  });
+
+  const og = await countLineSourceRegistrations(projectId, {
+    startDate: '', // 使われない
+    endDate: '', // 使われない
+    sourceName: 'OG',
+    datasetId,
+  });
+
+  const organicTotal = organic + og;
+  const matched = threads + instagram + youtube + organicTotal;
+
+  // "その他"を計算するために全体のユーザー数を取得
+  const [totalRow] = await runQuery<{ total: number }>(client, projectId, datasetId, {
     query: `
-      SELECT
-        COUNT(DISTINCT core.user_id) AS total,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Threads', core.user_id, NULL)) AS threads,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Instagram', core.user_id, NULL)) AS instagram,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'YouTube', core.user_id, NULL)) AS youtube,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name IN ('OG', 'Organic'), core.user_id, NULL)) AS organic
-      FROM \`${projectId}.${datasetId}.user_core\` core
-      LEFT JOIN \`${projectId}.${datasetId}.user_sources\` sources
-        ON core.user_id = sources.user_id
-        AND core.snapshot_date = sources.snapshot_date
-      WHERE core.snapshot_date = @snapshotDate
-        AND DATE(core.friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
+      SELECT COUNT(DISTINCT user_id) AS total
+      FROM \`${projectId}.${datasetId}.user_core\`
+      WHERE snapshot_date = @snapshotDate
+        AND DATE(friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
     `,
     params: { snapshotDate },
   });
 
-  const total = Number(row?.total ?? 0);
-  const threads = Number(row?.threads ?? 0);
-  const instagram = Number(row?.instagram ?? 0);
-  const youtube = Number(row?.youtube ?? 0);
-  const organic = Number(row?.organic ?? 0);
-  const matched = threads + instagram + youtube + organic;
+  const total = Number(totalRow?.total ?? 0);
   const other = Math.max(0, total - matched);
 
   return {
@@ -390,8 +413,8 @@ async function getSourceAnalysis(
     youtubePercent: total > 0 ? (youtube / total) * 100 : 0,
     other,
     otherPercent: total > 0 ? (other / total) * 100 : 0,
-    organic,
-    organicPercent: total > 0 ? (organic / total) * 100 : 0,
+    organic: organicTotal,
+    organicPercent: total > 0 ? (organicTotal / total) * 100 : 0,
   };
 }
 
