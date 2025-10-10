@@ -75,6 +75,14 @@ export default async function YoutubeDashboardPage() {
         label: '登録者純増 (30日)',
         value: formatNumber(Math.round(data.overview.subscriberDelta30d)),
       },
+      {
+        label: 'LINE登録数',
+        value: data.lineRegistrationCount !== null ? formatNumber(data.lineRegistrationCount) : '-',
+        delta:
+          data.lineRegistrationCount !== null && data.overview.totalViews30d > 0
+            ? `遷移率: ${((data.lineRegistrationCount / data.overview.totalViews30d) * 100).toFixed(2)}%`
+            : undefined,
+      },
     ];
 
     const own30 = data.analytics.own.last30Days;

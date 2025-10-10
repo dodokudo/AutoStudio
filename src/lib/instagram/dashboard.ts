@@ -1,5 +1,6 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { loadInstagramConfig } from './config';
+import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
 import type { BigQuery } from '@google-cloud/bigquery';
 
 const DEFAULT_DATASET = process.env.IG_BQ_DATASET ?? 'autostudio_instagram';
@@ -52,6 +53,7 @@ export interface InstagramDashboardData {
   reels: ReelHighlight[];
   stories: StoryHighlight[];
   scripts: ReelScriptSummary[];
+  lineRegistrationCount: number | null;
 }
 
 export async function getInstagramDashboardData(projectId: string): Promise<InstagramDashboardData> {
@@ -65,12 +67,29 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     fetchLatestScripts(client, projectId),
   ]);
 
+  // Fetch LINE registration count for the last 30 days
+  let lineRegistrationCount: number | null = null;
+  try {
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 30);
+
+    lineRegistrationCount = await countLineSourceRegistrations(projectId, {
+      startDate: startDate.toISOString().slice(0, 10),
+      endDate: endDate.toISOString().slice(0, 10),
+      sourceName: 'Instagram',
+    });
+  } catch (lineError) {
+    console.warn('[instagram/dashboard] Failed to load LINE registration count', lineError);
+  }
+
   return {
     followerSeries,
     latestFollower: followerSeries[0],
     reels,
     stories,
     scripts,
+    lineRegistrationCount,
   };
 }
 

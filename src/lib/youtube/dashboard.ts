@@ -1,4 +1,5 @@
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
 
 export interface YoutubeOverview {
   totalViews30d: number;
@@ -39,6 +40,7 @@ export interface YoutubeDashboardData {
     comparison: ComparisonSummary | null;
   };
   competitors: YoutubeCompetitorSummary[];
+  lineRegistrationCount: number | null;
 }
 
 interface AnalyticsSummary {
@@ -314,6 +316,22 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
     }
   }
 
+  // Fetch LINE registration count for the last 30 days
+  let lineRegistrationCount: number | null = null;
+  try {
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 30);
+
+    lineRegistrationCount = await countLineSourceRegistrations(projectId, {
+      startDate: startDate.toISOString().slice(0, 10),
+      endDate: endDate.toISOString().slice(0, 10),
+      sourceName: 'YouTube',
+    });
+  } catch (lineError) {
+    console.warn('[youtube/dashboard] Failed to load LINE registration count', lineError);
+  }
+
   console.log('[youtube/dashboard] Dashboard data fetching completed successfully');
   return {
       overview: {
@@ -329,6 +347,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       themes,
       analytics,
       competitors,
+      lineRegistrationCount,
     };
   } catch (error) {
     console.error('[youtube/dashboard] Error fetching dashboard data:', error);

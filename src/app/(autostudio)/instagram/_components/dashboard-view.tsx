@@ -411,8 +411,15 @@ export function InstagramDashboardView({ data }: Props) {
                     <p className="text-3xl font-bold text-gray-900 dark:text-gray-200">{summary.latestEngagement.toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">リール数</p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-200">{summary.totalReels.toLocaleString()}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">LINE登録数</p>
+                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-200">
+                      {data.lineRegistrationCount !== null ? data.lineRegistrationCount.toLocaleString() : '-'}
+                    </p>
+                    {data.lineRegistrationCount !== null && summary.latestReach > 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        遷移率: {((data.lineRegistrationCount / summary.latestReach) * 100).toFixed(2)}%
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
