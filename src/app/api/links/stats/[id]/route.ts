@@ -13,6 +13,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json(stats, { status: 200 });
   } catch (error) {
     console.error('[links/stats] failed', error);
-    return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+    console.error('[links/stats] error details:', error instanceof Error ? error.message : String(error));
+    console.error('[links/stats] error stack:', error instanceof Error ? error.stack : 'no stack');
+    return NextResponse.json({
+      error: 'Failed to fetch stats',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 }
