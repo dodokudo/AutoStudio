@@ -222,15 +222,21 @@ export async function getLinkStats(shortLinkId: string): Promise<LinkStats> {
     clicksToday,
     clicksThisWeek,
     clicksThisMonth,
-    clicksByDate: clicksByDateResult.map((row: Record<string, unknown>) => ({
-      date: String(row.date),
-      clicks: parseInt(String(row.clicks)),
-    })),
-    clicksByReferrer: clicksByReferrerResult.map((row: Record<string, unknown>) => ({
+    clicksByDate: (clicksByDateResult as Array<Record<string, unknown>>).map((row) => {
+      const dateValue = row.date;
+      const dateStr = typeof dateValue === 'object' && dateValue !== null && 'value' in dateValue
+        ? String((dateValue as { value: unknown }).value)
+        : String(dateValue);
+      return {
+        date: dateStr,
+        clicks: parseInt(String(row.clicks)),
+      };
+    }),
+    clicksByReferrer: (clicksByReferrerResult as Array<Record<string, unknown>>).map((row) => ({
       referrer: String(row.referrer),
       clicks: parseInt(String(row.clicks)),
     })),
-    clicksByDevice: clicksByDeviceResult.map((row: Record<string, unknown>) => ({
+    clicksByDevice: (clicksByDeviceResult as Array<Record<string, unknown>>).map((row) => ({
       deviceType: String(row.deviceType),
       clicks: parseInt(String(row.clicks)),
     })),
