@@ -205,7 +205,7 @@ export async function fetchYoutubeAnalytics(
 
   google.options({ auth });
 
-  const response = (await youtubeAnalytics.reports.query({
+  const response = await youtubeAnalytics.reports.query({
     ids: 'channel==MINE',
     startDate: params.startDate,
     endDate: params.endDate,
@@ -213,10 +213,11 @@ export async function fetchYoutubeAnalytics(
     dimensions: params.dimensions,
     filters: params.filters,
     maxResults: params.maxResults ?? 200,
-  })) as youtubeAnalytics_v2.Schema$QueryResponse;
+  });
 
-  const columnHeaders = response.columnHeaders ?? [];
-  const rows = response.rows ?? [];
+  const data = response.data;
+  const columnHeaders = data.columnHeaders ?? [];
+  const rows = data.rows ?? [];
 
   return rows.map((row): YoutubeAnalyticsRow => {
     const metrics: Record<string, number> = {};

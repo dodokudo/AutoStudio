@@ -1,9 +1,9 @@
 schedule: '0 6 * * *'
 timeZone: 'Asia/Tokyo'
 httpTarget:
-  uri: https://REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/PROJECT_ID/services/autostudio-youtube-sync:run
+  uri: https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/mark-454114/services/autostudio-youtube-sync:run
   httpMethod: POST
   headers:
     Content-Type: application/json
   oauthToken:
-    serviceAccountEmail: scheduler-invoker@PROJECT_ID.iam.gserviceaccount.com
+    serviceAccountEmail: scheduler-invoker@mark-454114.iam.gserviceaccount.com

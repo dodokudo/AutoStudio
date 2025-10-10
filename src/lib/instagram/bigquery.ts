@@ -160,5 +160,60 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'active', type: 'BOOL' },
     { name: 'created_at', type: 'TIMESTAMP' },
   ], undefined, ['user_id']);
-}
 
+  await ensureTable(dataset, 'instagram_reels', [
+    { name: 'id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'caption', type: 'STRING' },
+    { name: 'media_product_type', type: 'STRING' },
+    { name: 'media_type', type: 'STRING' },
+    { name: 'permalink', type: 'STRING' },
+    { name: 'timestamp', type: 'TIMESTAMP' },
+    { name: 'views', type: 'INT64' },
+    { name: 'reach', type: 'INT64' },
+    { name: 'total_interactions', type: 'INT64' },
+    { name: 'like_count', type: 'INT64' },
+    { name: 'comments_count', type: 'INT64' },
+    { name: 'saved', type: 'INT64' },
+    { name: 'shares', type: 'INT64' },
+    { name: 'video_view_total_time_hours', type: 'STRING' },
+    { name: 'avg_watch_time_seconds', type: 'FLOAT64' },
+    { name: 'drive_image_url', type: 'STRING' },
+    { name: 'thumbnail_url', type: 'STRING' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+    { name: 'updated_at', type: 'TIMESTAMP' },
+  ], 'timestamp', ['user_id', 'instagram_id']);
+
+  await ensureTable(dataset, 'instagram_stories', [
+    { name: 'id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'drive_image_url', type: 'STRING' },
+    { name: 'thumbnail_url', type: 'STRING' },
+    { name: 'timestamp', type: 'TIMESTAMP' },
+    { name: 'views', type: 'INT64' },
+    { name: 'reach', type: 'INT64' },
+    { name: 'replies', type: 'INT64' },
+    { name: 'caption', type: 'STRING' },
+    { name: 'total_interactions', type: 'INT64' },
+    { name: 'follows', type: 'INT64' },
+    { name: 'profile_visits', type: 'INT64' },
+    { name: 'navigation', type: 'INT64' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+    { name: 'updated_at', type: 'TIMESTAMP' },
+  ], 'timestamp', ['user_id', 'instagram_id']);
+
+  await ensureTable(dataset, 'instagram_insights', [
+    { name: 'id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'date', type: 'DATE' },
+    { name: 'followers_count', type: 'INT64' },
+    { name: 'posts_count', type: 'INT64' },
+    { name: 'reach', type: 'INT64' },
+    { name: 'engagement', type: 'INT64' },
+    { name: 'profile_views', type: 'INT64' },
+    { name: 'website_clicks', type: 'INT64' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+  ], 'date', ['user_id']);
+}

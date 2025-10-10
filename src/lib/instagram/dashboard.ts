@@ -1,9 +1,9 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { loadInstagramConfig } from './config';
-import { listUserCompetitors, type CompetitorProfile } from './competitors';
 import type { BigQuery } from '@google-cloud/bigquery';
 
 const DEFAULT_DATASET = process.env.IG_BQ_DATASET ?? 'autostudio_instagram';
+const DEFAULT_LOCATION = process.env.IG_GCP_LOCATION ?? 'asia-northeast1';
 
 export interface FollowerPoint {
   date: string;
@@ -12,19 +12,29 @@ export interface FollowerPoint {
   engagement: number;
 }
 
-export interface CompetitorHighlight {
-  username: string;
-  views: number | null;
-  likes: number | null;
-  comments: number | null;
+export interface ReelHighlight {
+  instagramId: string;
   caption: string | null;
   permalink: string | null;
+  views: number | null;
+  reach: number | null;
+  likeCount: number | null;
+  commentsCount: number | null;
+  saved: number | null;
+  shares: number | null;
+  avgWatchTimeSeconds: number | null;
+  timestamp: string | null;
 }
 
-export interface TranscriptInsight {
-  summary: string;
-  hooks: string[];
-  ctaIdeas: string[];
+export interface StoryHighlight {
+  instagramId: string;
+  caption: string | null;
+  views: number | null;
+  reach: number | null;
+  replies: number | null;
+  completionRate: number | null;
+  timestamp: string | null;
+  profileVisits: number | null;
 }
 
 export interface ReelScriptSummary {
@@ -39,50 +49,51 @@ export interface ReelScriptSummary {
 export interface InstagramDashboardData {
   followerSeries: FollowerPoint[];
   latestFollower?: FollowerPoint;
-  competitorHighlights: CompetitorHighlight[];
-  transcriptInsights: TranscriptInsight[];
+  reels: ReelHighlight[];
+  stories: StoryHighlight[];
   scripts: ReelScriptSummary[];
-  userCompetitors: CompetitorProfile[];
 }
 
 export async function getInstagramDashboardData(projectId: string): Promise<InstagramDashboardData> {
-  const client = createBigQueryClient(projectId, process.env.IG_GCP_LOCATION ?? 'asia-northeast1');
   const config = loadInstagramConfig();
+  const client = createBigQueryClient(projectId, DEFAULT_LOCATION);
 
-  const [followerSeries, competitorHighlights, transcriptInsights, scripts, userCompetitors] = await Promise.all([
-    fetchFollowerSeries(client, projectId),
-    fetchCompetitorHighlights(client, projectId),
-    fetchTranscriptInsights(client, projectId),
+  const [followerSeries, reels, stories, scripts] = await Promise.all([
+    fetchFollowerSeries(client, projectId, config.defaultUserId),
+    fetchReelHighlights(client, projectId, config.defaultUserId),
+    fetchStoryHighlights(client, projectId, config.defaultUserId),
     fetchLatestScripts(client, projectId),
-    listUserCompetitors(config.defaultUserId, client).catch(() => [] as CompetitorProfile[]),
   ]);
 
   return {
     followerSeries,
     latestFollower: followerSeries[0],
-    competitorHighlights,
-    transcriptInsights,
+    reels,
+    stories,
     scripts,
-    userCompetitors,
   };
 }
 
-async function fetchFollowerSeries(client: BigQuery, projectId: string): Promise<FollowerPoint[]> {
+async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: string): Promise<FollowerPoint[]> {
   const query = `
     SELECT
       DATE(date) AS date,
       SAFE_CAST(followers_count AS INT64) AS followers,
       SAFE_CAST(reach AS INT64) AS reach,
       SAFE_CAST(engagement AS INT64) AS engagement
-    FROM \
-\`${projectId}.${DEFAULT_DATASET}.instagram_insights\`
-    WHERE date IS NOT NULL
+    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_insights\`
+    WHERE user_id = @user_id
     ORDER BY date DESC
     LIMIT 30
   `;
 
   try {
-    const [rows] = await client.query(query);
+    const [rows] = await client.query({
+      query,
+      params: { user_id: userId },
+      location: DEFAULT_LOCATION,
+    });
+
     return rows.map((row) => ({
       date: row.date as string,
       followers: Number(row.followers ?? 0),
@@ -95,71 +106,105 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string): Promise
   }
 }
 
-async function fetchCompetitorHighlights(client: BigQuery, projectId: string): Promise<CompetitorHighlight[]> {
-  const dataset = DEFAULT_DATASET;
+async function fetchReelHighlights(client: BigQuery, projectId: string, userId: string): Promise<ReelHighlight[]> {
   const query = `
     SELECT
-      raw.username,
-      raw.caption,
-      raw.permalink,
-      insights.views,
-      insights.likes,
-      insights.comments
-    FROM \
-\`${projectId}.${dataset}.competitor_reels_raw\` AS raw
-    LEFT JOIN \
-\`${projectId}.${dataset}.competitor_reels_insights\` AS insights
-      ON raw.instagram_media_id = insights.instagram_media_id
-    WHERE raw.snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
-    ORDER BY COALESCE(insights.views, 0) DESC
-    LIMIT 10
-  `;
-
-  try {
-    const [rows] = await client.query(query);
-    return rows.map((row) => ({
-      username: row.username as string,
-      caption: (row.caption as string) ?? null,
-      permalink: (row.permalink as string) ?? null,
-      views: row.views !== undefined ? Number(row.views) : null,
-      likes: row.likes !== undefined ? Number(row.likes) : null,
-      comments: row.comments !== undefined ? Number(row.comments) : null,
-    }));
-  } catch (error) {
-    console.warn('[instagram/dashboard] Failed to load competitor highlights', error);
-    return [];
-  }
-}
-
-async function fetchTranscriptInsights(client: BigQuery, projectId: string): Promise<TranscriptInsight[]> {
-  const dataset = DEFAULT_DATASET;
-  const query = `
-    SELECT
-      summary,
-      hooks,
-      cta_ideas
-    FROM \
-\`${projectId}.${dataset}.competitor_reels_transcripts\`
-    WHERE snapshot_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
-    ORDER BY snapshot_date DESC
+      instagram_id,
+      caption,
+      permalink,
+      views,
+      reach,
+      like_count,
+      comments_count,
+      saved,
+      shares,
+      avg_watch_time_seconds,
+      timestamp
+    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reels\`
+    WHERE user_id = @user_id
+      AND (
+        timestamp IS NULL
+        OR timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 45 DAY)
+      )
+    ORDER BY COALESCE(views, 0) DESC, timestamp DESC
     LIMIT 12
   `;
 
   try {
-    const [rows] = await client.query(query);
+    const [rows] = await client.query({
+      query,
+      params: { user_id: userId },
+      location: DEFAULT_LOCATION,
+    });
+
     return rows.map((row) => ({
-      summary: (row.summary as string) ?? '',
-      hooks: Array.isArray(row.hooks) ? (row.hooks as string[]).filter(Boolean) : [],
-      ctaIdeas: Array.isArray(row.cta_ideas) ? (row.cta_ideas as string[]).filter(Boolean) : [],
+      instagramId: row.instagram_id as string,
+      caption: (row.caption as string) ?? null,
+      permalink: (row.permalink as string) ?? null,
+      views: row.views !== undefined ? Number(row.views) : null,
+      reach: row.reach !== undefined ? Number(row.reach) : null,
+      likeCount: row.like_count !== undefined ? Number(row.like_count) : null,
+      commentsCount: row.comments_count !== undefined ? Number(row.comments_count) : null,
+      saved: row.saved !== undefined ? Number(row.saved) : null,
+      shares: row.shares !== undefined ? Number(row.shares) : null,
+      avgWatchTimeSeconds:
+        row.avg_watch_time_seconds !== undefined ? Number(row.avg_watch_time_seconds) : null,
+      timestamp: row.timestamp ? new Date(row.timestamp as string).toISOString() : null,
     }));
   } catch (error) {
-    console.warn('[instagram/dashboard] Failed to load transcript insights', error);
+    console.warn('[instagram/dashboard] Failed to load reel highlights', error);
+    return [];
+  }
+}
+
+async function fetchStoryHighlights(client: BigQuery, projectId: string, userId: string): Promise<StoryHighlight[]> {
+  const query = `
+    SELECT
+      instagram_id,
+      caption,
+      views,
+      reach,
+      replies,
+      profile_visits,
+      SAFE_DIVIDE(views, NULLIF(reach, 0)) AS completion_rate,
+      timestamp
+    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_stories\`
+    WHERE user_id = @user_id
+      AND (
+        timestamp IS NULL
+        OR timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 45 DAY)
+      )
+    ORDER BY COALESCE(reach, 0) DESC, timestamp DESC
+    LIMIT 12
+  `;
+
+  try {
+    const [rows] = await client.query({
+      query,
+      params: { user_id: userId },
+      location: DEFAULT_LOCATION,
+    });
+
+    return rows.map((row) => ({
+      instagramId: row.instagram_id as string,
+      caption: (row.caption as string) ?? null,
+      views: row.views !== undefined ? Number(row.views) : null,
+      reach: row.reach !== undefined ? Number(row.reach) : null,
+      replies: row.replies !== undefined ? Number(row.replies) : null,
+      completionRate:
+        row.completion_rate !== undefined && row.completion_rate !== null
+          ? Number(row.completion_rate)
+          : null,
+      profileVisits: row.profile_visits !== undefined ? Number(row.profile_visits) : null,
+      timestamp: row.timestamp ? new Date(row.timestamp as string).toISOString() : null,
+    }));
+  } catch (error) {
+    console.warn('[instagram/dashboard] Failed to load story highlights', error);
     return [];
   }
 }
 
 async function fetchLatestScripts(client: BigQuery, projectId: string): Promise<ReelScriptSummary[]> {
-  const dataset = DEFAULT_DATASET;
   const query = `
     SELECT
       title,
@@ -168,19 +213,21 @@ async function fetchLatestScripts(client: BigQuery, projectId: string): Promise<
       cta,
       story_text,
       inspiration_sources
-    FROM \
-\`${projectId}.${dataset}.my_reels_scripts\`
+    FROM \`${projectId}.${DEFAULT_DATASET}.my_reels_scripts\`
     WHERE snapshot_date = (
       SELECT MAX(snapshot_date)
-      FROM \
-\`${projectId}.${dataset}.my_reels_scripts\`
+      FROM \`${projectId}.${DEFAULT_DATASET}.my_reels_scripts\`
     )
     ORDER BY created_at DESC
     LIMIT 5
   `;
 
   try {
-    const [rows] = await client.query(query);
+    const [rows] = await client.query({
+      query,
+      location: DEFAULT_LOCATION,
+    });
+
     return rows.map((row) => ({
       title: (row.title as string) ?? 'Untitled',
       hook: (row.hook as string) ?? '',

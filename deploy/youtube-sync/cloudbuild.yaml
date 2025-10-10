@@ -15,43 +15,22 @@ steps:
     entrypoint: gcloud
     args:
       - run
-      - deploy
+      - jobs
+      - update
       - autostudio-youtube-sync
       - '--image'
       - gcr.io/$PROJECT_ID/autostudio-youtube-sync:latest
       - '--region'
       - 'asia-northeast1'
-      - '--platform'
-      - managed
-      - '--no-allow-unauthenticated'
-      - '--update-env-vars'
-      - GOOGLE_SERVICE_ACCOUNT_JSON=$$GOOGLE_SERVICE_ACCOUNT_JSON,YOUTUBE_API_KEY=$$YOUTUBE_API_KEY,YOUTUBE_CHANNEL_ID=$$YOUTUBE_CHANNEL_ID,YOUTUBE_COMPETITOR_IDS=$$YOUTUBE_COMPETITOR_IDS,YOUTUBE_BQ_DATASET_ID=$$YOUTUBE_BQ_DATASET_ID,YOUTUBE_OAUTH_CLIENT_ID=$$YOUTUBE_OAUTH_CLIENT_ID,YOUTUBE_OAUTH_CLIENT_SECRET=$$YOUTUBE_OAUTH_CLIENT_SECRET,YOUTUBE_OAUTH_REFRESH_TOKEN=$$YOUTUBE_OAUTH_REFRESH_TOKEN
-    secretEnv:
-      - GOOGLE_SERVICE_ACCOUNT_JSON
-      - YOUTUBE_API_KEY
-      - YOUTUBE_CHANNEL_ID
-      - YOUTUBE_COMPETITOR_IDS
-      - YOUTUBE_BQ_DATASET_ID
-      - YOUTUBE_OAUTH_CLIENT_ID
-      - YOUTUBE_OAUTH_CLIENT_SECRET
-      - YOUTUBE_OAUTH_REFRESH_TOKEN
-availableSecrets:
-  secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/GOOGLE_SERVICE_ACCOUNT_JSON/versions/latest
-      env: GOOGLE_SERVICE_ACCOUNT_JSON
-    - versionName: projects/$PROJECT_ID/secrets/YOUTUBE_API_KEY/versions/latest
-      env: YOUTUBE_API_KEY
-    - versionName: projects/$PROJECT_ID/secrets/YOUTUBE_CHANNEL_ID/versions/latest
-      env: YOUTUBE_CHANNEL_ID
-    - versionName: projects/$PROJECT_ID/secrets/YOUTUBE_COMPETITOR_IDS/versions/latest
-      env: YOUTUBE_COMPETITOR_IDS
-    - versionName: projects/$PROJECT_ID/secrets/YOUTUBE_BQ_DATASET_ID/versions/latest
-      env: YOUTUBE_BQ_DATASET_ID
-    - versionName: projects/$PROJECT_ID/secrets/YOUTUBE_OAUTH_CLIENT_ID/versions/latest
-      env: YOUTUBE_OAUTH_CLIENT_ID
-    - versionName: projects/$PROJECT_ID/secrets/YOUTUBE_OAUTH_CLIENT_SECRET/versions/latest
-      env: YOUTUBE_OAUTH_CLIENT_SECRET
-    - versionName: projects/$PROJECT_ID/secrets/YOUTUBE_OAUTH_REFRESH_TOKEN/versions/latest
-      env: YOUTUBE_OAUTH_REFRESH_TOKEN
+      - '--service-account'
+      - 'autostudio@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-env-vars'
+      - YOUTUBE_BQ_DATASET_ID=autostudio_media
+      - '--set-secrets'
+      - GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest,YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest,YOUTUBE_CHANNEL_ID=YOUTUBE_CHANNEL_ID:latest,YOUTUBE_COMPETITOR_IDS=YOUTUBE_COMPETITOR_IDS:latest,YOUTUBE_OAUTH_CLIENT_ID=YOUTUBE_OAUTH_CLIENT_ID:latest,YOUTUBE_OAUTH_CLIENT_SECRET=YOUTUBE_OAUTH_CLIENT_SECRET:latest,YOUTUBE_OAUTH_REFRESH_TOKEN=YOUTUBE_OAUTH_REFRESH_TOKEN:latest
+      - '--max-retries'
+      - '3'
+      - '--task-timeout'
+      - '600s'
 images:
   - gcr.io/$PROJECT_ID/autostudio-youtube-sync:latest
