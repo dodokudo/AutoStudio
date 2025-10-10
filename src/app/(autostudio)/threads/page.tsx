@@ -6,7 +6,7 @@ import { resolveProjectId } from "@/lib/bigquery";
 import { OverviewTab } from "./_components/overview-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { countLineSourceRegistrations } from "@/lib/lstep/dashboard";
-import { getThreadsLinkClicks } from "@/lib/links/analytics";
+import { getThreadsLinkClicksByRange } from "@/lib/links/analytics";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
 
 const PROJECT_ID = resolveProjectId();
@@ -26,6 +26,13 @@ const RANGE_SELECT_OPTIONS = [
 export const dynamic = 'force-dynamic';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+const formatDateKey = (date: Date): string => {
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getUTCDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 type QueueMetrics = {
   draft: number;
@@ -182,7 +189,13 @@ export default async function ThreadsHome({
   const activeTab = ["overview", "insights"].includes(tabParam) ? tabParam : "overview";
 
   try {
-    const [insights, planSummaries, dashboard, insightsActivity, threadsLinkClicks] = await Promise.all([
+    const { start: rangeStartDate, end: rangeEndDate } = selectedRangeWindow;
+
+    const durationMs = Math.max(rangeEndDate.getTime() - rangeStartDate.getTime(), DAY_MS);
+    const previousRangeEnd = new Date(rangeStartDate.getTime() - 1);
+    const previousRangeStart = new Date(previousRangeEnd.getTime() - durationMs);
+
+    const [insights, planSummaries, dashboard, insightsActivity, currentClicks, previousClicks] = await Promise.all([
       getThreadsInsights(PROJECT_ID, insightsOptions),
       (async () => {
         await seedPlansIfNeeded();
@@ -190,28 +203,31 @@ export default async function ThreadsHome({
       })(),
       getThreadsDashboard(),
       getThreadsInsightsData(),
-      getThreadsLinkClicks(),
+      getThreadsLinkClicksByRange(rangeStartDate, rangeEndDate),
+      getThreadsLinkClicksByRange(previousRangeStart, previousRangeEnd),
     ]);
 
     let lineRegistrationCount: number | null = null;
+    let profileViewsForRange: number | null = null;
+    let previousProfileViews: number | null = null;
+    let linkClicksForRange: number | null = null;
+    let previousLinkClicks: number | null = null;
+    let postsCountForRange: number = insights.postCount;
+    let previousPostsCount: number | null = null;
+
     if (selectedRangeWindow) {
+      const rangeStartKey = formatDateKey(rangeStartDate);
+      const rangeEndKey = formatDateKey(rangeEndDate);
+
       try {
         lineRegistrationCount = await countLineSourceRegistrations(PROJECT_ID, {
+          startDate: rangeStartKey,
+          endDate: rangeEndKey,
           sourceName: 'Threads',
         });
       } catch (lineError) {
         console.error('[threads/page] Failed to load LINE registrations:', lineError);
       }
-    }
-
-    let profileViewsForRange: number | null = null;
-    let previousProfileViews: number | null = null;
-    if (selectedRangeWindow) {
-      const { start: rangeStartDate, end: rangeEndDate } = selectedRangeWindow;
-
-      const durationMs = Math.max(rangeEndDate.getTime() - rangeStartDate.getTime(), DAY_MS);
-      const previousRangeEnd = new Date(rangeStartDate.getTime());
-      const previousRangeStart = new Date(previousRangeEnd.getTime() - durationMs);
 
       const sumImpressionsWithin = (windowStart: Date, windowEnd: Date) =>
         insightsActivity.posts.reduce((total, post) => {
@@ -228,7 +244,39 @@ export default async function ThreadsHome({
 
       profileViewsForRange = sumImpressionsWithin(rangeStartDate, rangeEndDate);
       previousProfileViews = sumImpressionsWithin(previousRangeStart, previousRangeEnd);
+
+      linkClicksForRange = currentClicks.reduce((sum, item) => sum + item.clicks, 0);
+      previousLinkClicks = previousClicks.reduce((sum, item) => sum + item.clicks, 0);
+
+      const countPostsWithin = (windowStart: Date, windowEnd: Date) =>
+        insightsActivity.posts.reduce((total, post) => {
+          const postedAt = new Date(post.postedAt);
+          if (Number.isNaN(postedAt.getTime())) {
+            return total;
+          }
+          return postedAt.getTime() >= windowStart.getTime() && postedAt.getTime() <= windowEnd.getTime()
+            ? total + 1
+            : total;
+        }, 0);
+
+      postsCountForRange = countPostsWithin(rangeStartDate, rangeEndDate);
+      previousPostsCount = countPostsWithin(previousRangeStart, previousRangeEnd);
     }
+
+    if (lineRegistrationCount === null) {
+      try {
+        lineRegistrationCount = await countLineSourceRegistrations(PROJECT_ID, {
+          sourceName: 'Threads',
+        });
+      } catch (lineError) {
+        console.error('[threads/page] Failed to load default LINE registrations:', lineError);
+      }
+    }
+
+    const totalLinkClicks =
+      typeof linkClicksForRange === 'number'
+        ? linkClicksForRange
+        : threadsLinkClicks.reduce((sum, item) => sum + item.clicks, 0);
 
     const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
       if (value === undefined) return undefined;
@@ -277,7 +325,6 @@ export default async function ThreadsHome({
         ? undefined
         : resolveDeltaTone(profileViewsDeltaValue);
 
-    const totalLinkClicks = threadsLinkClicks.reduce((sum, item) => sum + item.clicks, 0);
 
     const profileViewsNumeric =
       typeof profileViewsForRange === 'number'
@@ -291,8 +338,32 @@ export default async function ThreadsHome({
         ? lineRegistrationCount
         : null;
 
+    const linkClicksDeltaValue =
+      previousLinkClicks !== null ? totalLinkClicks - previousLinkClicks : null;
+
+    const postsDeltaValue =
+      previousPostsCount !== null ? postsCountForRange - previousPostsCount : null;
+
     const linkClickConversionRate = safeDivide(totalLinkClicks, profileViewsNumeric);
     const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, totalLinkClicks);
+
+    const rangeDurationDays = selectedRangeWindow
+      ? Math.max(1, Math.round((selectedRangeWindow.end.getTime() - selectedRangeWindow.start.getTime()) / DAY_MS) + 1)
+      : selectedPreset.days;
+
+    const postsPerDay = rangeDurationDays ? postsCountForRange / rangeDurationDays : null;
+
+    const postsDeltaParts = [
+      postsDeltaValue !== null ? `${postsDeltaValue > 0 ? '+' : ''}${formatNumber(postsDeltaValue)}投稿` : null,
+      postsPerDay !== null ? `${postsPerDay.toFixed(1)}件` : null,
+    ].filter((part): part is string => Boolean(part));
+
+    const linkDeltaParts = [
+      linkClickConversionRate !== null ? `遷移率: ${formatPercent(linkClickConversionRate, 2)}` : null,
+      linkClicksDeltaValue !== null
+        ? `前期間比 ${linkClicksDeltaValue > 0 ? '+' : ''}${formatNumber(linkClicksDeltaValue)}クリック`
+        : null,
+    ].filter((part): part is string => Boolean(part));
 
     const stats = [
       {
@@ -307,10 +378,11 @@ export default async function ThreadsHome({
         deltaTone: resolveDeltaTone(insights.accountSummary.followersChange),
       },
       {
-        label: '期間内投稿数',
-        value: formatNumber(insights.postCount),
-        delta: `推奨 ${formatNumber(insights.meta.targetPostCount)} 投稿`,
-        deltaTone: 'neutral' as const,
+        label: '投稿数',
+        value: formatNumber(postsCountForRange),
+        delta: postsDeltaParts.length ? postsDeltaParts.join(' / ') : undefined,
+        deltaTone:
+          postsDeltaValue !== null ? resolveDeltaTone(postsDeltaValue) ?? 'neutral' : postsDeltaParts.length ? 'neutral' : undefined,
       },
       {
         label: '閲覧数',
@@ -321,11 +393,10 @@ export default async function ThreadsHome({
       {
         label: 'リンククリック数',
         value: formatNumber(totalLinkClicks),
-        delta:
-          linkClickConversionRate !== null
-            ? `遷移率: ${formatPercent(linkClickConversionRate, 2)}`
-            : undefined,
-        deltaHighlight: linkClickConversionRate !== null,
+        delta: linkDeltaParts.length ? linkDeltaParts.join(' / ') : undefined,
+        deltaTone:
+          linkClicksDeltaValue !== null ? resolveDeltaTone(linkClicksDeltaValue) ?? 'neutral' : undefined,
+        deltaHighlight: linkDeltaParts.length > 0,
       },
       {
         label: 'LINE登録数',
@@ -347,8 +418,6 @@ export default async function ThreadsHome({
       },
       { draft: 0, approved: 0, scheduled: 0, rejected: 0 },
     );
-
-    const totalPlans = planSummaries.length;
 
     const heroStats = [
       {
