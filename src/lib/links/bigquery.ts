@@ -182,8 +182,8 @@ export async function getLinkStats(shortLinkId: string): Promise<LinkStats> {
       FROM \`${projectId}.${dataset}.click_logs\`
       WHERE short_link_id = @shortLinkId
       AND clicked_at >= @monthAgo
-      GROUP BY DATE(clicked_at)
-      ORDER BY DATE(clicked_at) DESC
+      GROUP BY FORMAT_DATE('%Y-%m-%d', DATE(clicked_at))
+      ORDER BY FORMAT_DATE('%Y-%m-%d', DATE(clicked_at)) DESC
     `,
     params: { shortLinkId, monthAgo },
   });
