@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from 'react';
 import type { InstagramDashboardData } from '@/lib/instagram/dashboard';
 import { StatPill } from '@/components/StatPill';
 import LoadingScreen from '@/components/LoadingScreen';
-import { ProfileHeader } from '@/components/ui/ProfileHeader';
 import { useDateRange, DatePreset } from '@/lib/dateRangeStore';
 import {
   ComposedChart,
@@ -229,9 +228,6 @@ export function InstagramDashboardView({ data }: Props) {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden">
       {/* SaaS風アクセント - デスクトップのみ */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 to-blue-500 hidden lg:block"></div>
-
-      {/* プロフィールヘッダー */}
-      <ProfileHeader userId="demo-user" />
 
       {/* Mobile Fixed Header - YouTube Studio風 */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white shadow-sm h-[60px]">
