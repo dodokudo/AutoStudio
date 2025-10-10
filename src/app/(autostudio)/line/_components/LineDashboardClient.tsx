@@ -9,7 +9,7 @@ interface LineDashboardClientProps {
   initialData: LstepAnalyticsData;
 }
 
-type DateRangeFilter = '3days' | '7days' | '30days' | '90days' | 'all';
+type DateRangeFilter = '3days' | '7days' | '30days' | '90days' | 'all' | 'custom';
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);
@@ -27,19 +27,39 @@ function formatDateLabel(value: string): string {
   }).format(new Date(value));
 }
 
+function formatDateForInput(value: string): string {
+  return new Date(value).toISOString().split('T')[0];
+}
+
 export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [dateRange, setDateRange] = useState<DateRangeFilter>('all');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
 
   // 期間フィルターに応じてデータを集計
   const filteredAnalytics = useMemo(() => {
-    const days = dateRange === '3days' ? 3 : dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : dateRange === '90days' ? 90 : null;
+    let dailyDataInRange = initialData.dailyRegistrations;
 
-    if (!days) {
-      return initialData;
+    if (dateRange === 'custom' && customStartDate && customEndDate) {
+      // カスタム日付範囲でフィルター
+      const start = new Date(customStartDate);
+      const end = new Date(customEndDate);
+
+      dailyDataInRange = initialData.dailyRegistrations.filter(day => {
+        const dayDate = new Date(day.date);
+        return dayDate >= start && dayDate <= end;
+      });
+    } else {
+      // プリセット期間でフィルター
+      const days = dateRange === '3days' ? 3 : dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : dateRange === '90days' ? 90 : null;
+
+      if (!days) {
+        return initialData;
+      }
+
+      // 日別登録数から期間分のデータを取得
+      dailyDataInRange = initialData.dailyRegistrations.slice(0, days);
     }
-
-    // 日別登録数から期間分のデータを取得
-    const dailyDataInRange = initialData.dailyRegistrations.slice(0, days);
 
     // ファネル分析の再計算
     const totalRegistrations = dailyDataInRange.reduce((sum, day) => sum + day.registrations, 0);
@@ -97,7 +117,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       sources,
       attributes,
     };
-  }, [initialData, dateRange]);
+  }, [initialData, dateRange, customStartDate, customEndDate]);
 
   return (
     <div className="section-stack">
@@ -111,60 +131,99 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
 
       {/* 期間フィルター */}
       <Card>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-[color:var(--color-text-secondary)] font-medium">表示期間:</span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setDateRange('3days')}
-              className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
-                dateRange === '3days'
-                  ? 'bg-[color:var(--color-accent)] text-white font-medium'
-                  : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
-              }`}
-            >
-              過去3日
-            </button>
-            <button
-              onClick={() => setDateRange('7days')}
-              className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
-                dateRange === '7days'
-                  ? 'bg-[color:var(--color-accent)] text-white font-medium'
-                  : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
-              }`}
-            >
-              過去7日
-            </button>
-            <button
-              onClick={() => setDateRange('30days')}
-              className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
-                dateRange === '30days'
-                  ? 'bg-[color:var(--color-accent)] text-white font-medium'
-                  : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
-              }`}
-            >
-              過去30日
-            </button>
-            <button
-              onClick={() => setDateRange('90days')}
-              className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
-                dateRange === '90days'
-                  ? 'bg-[color:var(--color-accent)] text-white font-medium'
-                  : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
-              }`}
-            >
-              過去90日
-            </button>
-            <button
-              onClick={() => setDateRange('all')}
-              className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
-                dateRange === 'all'
-                  ? 'bg-[color:var(--color-accent)] text-white font-medium'
-                  : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
-              }`}
-            >
-              全期間
-            </button>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-[color:var(--color-text-secondary)] font-medium">表示期間:</span>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => setDateRange('3days')}
+                className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+                  dateRange === '3days'
+                    ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                    : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                過去3日
+              </button>
+              <button
+                onClick={() => setDateRange('7days')}
+                className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+                  dateRange === '7days'
+                    ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                    : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                過去7日
+              </button>
+              <button
+                onClick={() => setDateRange('30days')}
+                className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+                  dateRange === '30days'
+                    ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                    : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                過去30日
+              </button>
+              <button
+                onClick={() => setDateRange('90days')}
+                className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+                  dateRange === '90days'
+                    ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                    : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                過去90日
+              </button>
+              <button
+                onClick={() => setDateRange('all')}
+                className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+                  dateRange === 'all'
+                    ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                    : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                全期間
+              </button>
+              <button
+                onClick={() => setDateRange('custom')}
+                className={`px-3 py-1.5 text-sm rounded-[var(--radius-sm)] transition-colors ${
+                  dateRange === 'custom'
+                    ? 'bg-[color:var(--color-accent)] text-white font-medium'
+                    : 'bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                日付指定
+              </button>
+            </div>
           </div>
+
+          {/* カスタム日付選択 */}
+          {dateRange === 'custom' && (
+            <div className="flex items-center gap-3 pl-24">
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-[color:var(--color-text-secondary)]">開始日:</span>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  max={customEndDate || undefined}
+                  className="px-3 py-1.5 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-sm)] bg-[color:var(--color-surface)] text-[color:var(--color-text-primary)]"
+                />
+              </label>
+              <span className="text-sm text-[color:var(--color-text-secondary)]">〜</span>
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-[color:var(--color-text-secondary)]">終了日:</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  min={customStartDate || undefined}
+                  className="px-3 py-1.5 text-sm border border-[color:var(--color-border)] rounded-[var(--radius-sm)] bg-[color:var(--color-surface)] text-[color:var(--color-text-primary)]"
+                />
+              </label>
+            </div>
+          )}
         </div>
       </Card>
 
