@@ -352,37 +352,27 @@ async function getSourceAnalysis(
 ): Promise<SourceAnalysis> {
   // 各ソースごとにcountLineSourceRegistrationsを使用
   const threads = await countLineSourceRegistrations(projectId, {
-    startDate: '', // 使われない
-    endDate: '', // 使われない
     sourceName: 'Threads',
     datasetId,
   });
 
   const instagram = await countLineSourceRegistrations(projectId, {
-    startDate: '', // 使われない
-    endDate: '', // 使われない
     sourceName: 'Instagram',
     datasetId,
   });
 
   const youtube = await countLineSourceRegistrations(projectId, {
-    startDate: '', // 使われない
-    endDate: '', // 使われない
-    sourceName: 'YouTube',
+    sourceName: 'Youtube',
     datasetId,
   });
 
   // OrganicとOGを別々にカウント
   const organic = await countLineSourceRegistrations(projectId, {
-    startDate: '', // 使われない
-    endDate: '', // 使われない
     sourceName: 'Organic',
     datasetId,
   });
 
   const og = await countLineSourceRegistrations(projectId, {
-    startDate: '', // 使われない
-    endDate: '', // 使われない
     sourceName: 'OG',
     datasetId,
   });
@@ -429,40 +419,43 @@ async function getSourceAnalysisByDateRange(
   startDate?: string,
   endDate?: string,
 ): Promise<SourceAnalysis> {
-  const dateFilter = startDate && endDate
-    ? 'AND DATE(core.friend_added_at) BETWEEN @startDate AND @endDate'
-    : '';
+  const [threads, instagram, youtube, organic, og] = await Promise.all([
+    countLineSourceRegistrations(projectId, {
+      sourceName: 'Threads',
+      datasetId,
+    }),
+    countLineSourceRegistrations(projectId, {
+      sourceName: 'Instagram',
+      datasetId,
+    }),
+    countLineSourceRegistrations(projectId, {
+      sourceName: 'Youtube',
+      datasetId,
+    }),
+    countLineSourceRegistrations(projectId, {
+      sourceName: 'Organic',
+      datasetId,
+    }),
+    countLineSourceRegistrations(projectId, {
+      sourceName: 'OG',
+      datasetId,
+    }),
+  ]);
 
-  const [row] = await runQuery<{
-    total: number;
-    threads: number;
-    instagram: number;
-    youtube: number;
-    organic: number;
-  }>(client, projectId, datasetId, {
+  const organicTotal = organic + og;
+
+  const [totalRow] = await runQuery<{ total: number }>(client, projectId, datasetId, {
     query: `
-      SELECT
-        COUNT(DISTINCT core.user_id) AS total,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Threads', core.user_id, NULL)) AS threads,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'Instagram', core.user_id, NULL)) AS instagram,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name = 'YouTube', core.user_id, NULL)) AS youtube,
-        COUNT(DISTINCT IF(sources.source_flag = 1 AND sources.source_name IN ('OG', 'Organic'), core.user_id, NULL)) AS organic
-      FROM \`${projectId}.${datasetId}.user_core\` core
-      LEFT JOIN \`${projectId}.${datasetId}.user_sources\` sources
-        ON core.user_id = sources.user_id
-        AND core.snapshot_date = sources.snapshot_date
-      WHERE core.snapshot_date = @snapshotDate
-        ${dateFilter}
+      SELECT COUNT(DISTINCT user_id) AS total
+      FROM \`${projectId}.${datasetId}.user_core\`
+      WHERE snapshot_date = @snapshotDate
+        AND DATE(friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
     `,
-    params: { snapshotDate, startDate, endDate },
+    params: { snapshotDate },
   });
 
-  const total = Number(row?.total ?? 0);
-  const threads = Number(row?.threads ?? 0);
-  const instagram = Number(row?.instagram ?? 0);
-  const youtube = Number(row?.youtube ?? 0);
-  const organic = Number(row?.organic ?? 0);
-  const matched = threads + instagram + youtube + organic;
+  const total = Number(totalRow?.total ?? 0);
+  const matched = threads + instagram + youtube + organicTotal;
   const other = Math.max(0, total - matched);
 
   return {
@@ -474,8 +467,8 @@ async function getSourceAnalysisByDateRange(
     youtubePercent: total > 0 ? (youtube / total) * 100 : 0,
     other,
     otherPercent: total > 0 ? (other / total) * 100 : 0,
-    organic,
-    organicPercent: total > 0 ? (organic / total) * 100 : 0,
+    organic: organicTotal,
+    organicPercent: total > 0 ? (organicTotal / total) * 100 : 0,
   };
 }
 

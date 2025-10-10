@@ -319,14 +319,8 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
   // Fetch LINE registration count for the last 30 days
   let lineRegistrationCount: number | null = null;
   try {
-    const endDate = new Date();
-    const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - 30);
-
     lineRegistrationCount = await countLineSourceRegistrations(projectId, {
-      startDate: startDate.toISOString().slice(0, 10),
-      endDate: endDate.toISOString().slice(0, 10),
-      sourceName: 'YouTube',
+      sourceName: 'Youtube',
     });
   } catch (lineError) {
     console.warn('[youtube/dashboard] Failed to load LINE registration count', lineError);

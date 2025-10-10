@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { LstepAnalyticsData } from '@/lib/lstep/analytics';
 import { Card } from '@/components/ui/card';
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
@@ -31,10 +31,140 @@ function formatDateForInput(value: string): string {
   return new Date(value).toISOString().split('T')[0];
 }
 
+function formatIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeCustomRange(start: string, end: string): { start: string; end: string } | null {
+  if (!start || !end) return null;
+  const startDate = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return null;
+  }
+  if (startDate.getTime() > endDate.getTime()) {
+    return { start: formatIsoDate(endDate), end: formatIsoDate(startDate) };
+  }
+  return { start: formatIsoDate(startDate), end: formatIsoDate(endDate) };
+}
+
+function calculatePresetRange(range: DateRangeFilter): { start: string; end: string } | null {
+  const daysMap: Record<DateRangeFilter, number | null> = {
+    '3days': 3,
+    '7days': 7,
+    '30days': 30,
+    '90days': 90,
+    all: null,
+    custom: null,
+  };
+
+  const days = daysMap[range];
+  if (!days) return null;
+
+  const end = new Date();
+  const start = new Date(end.getTime());
+  start.setDate(start.getDate() - (days - 1));
+
+  return {
+    start: formatIsoDate(start),
+    end: formatIsoDate(end),
+  };
+}
+
 export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [dateRange, setDateRange] = useState<DateRangeFilter>('all');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [sourceStats, setSourceStats] = useState(initialData.sources);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+  const [sourcesError, setSourcesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let abort = false;
+
+    if (dateRange === 'all') {
+      setSourceStats(initialData.sources);
+      setSourcesLoading(false);
+      setSourcesError(null);
+      return () => {
+        abort = true;
+      };
+    }
+
+    let range: { start: string; end: string } | null = null;
+
+    if (dateRange === 'custom') {
+      if (!customStartDate || !customEndDate) {
+        return () => {
+          abort = true;
+        };
+      }
+      range = normalizeCustomRange(customStartDate, customEndDate);
+    } else {
+      range = calculatePresetRange(dateRange);
+    }
+
+    if (!range) {
+      return () => {
+        abort = true;
+      };
+    }
+
+    const controller = new AbortController();
+    setSourcesLoading(true);
+    setSourcesError(null);
+
+    fetch(`/api/line/source-counts?start=${range.start}&end=${range.end}`, {
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch source counts (${response.status})`);
+        }
+        return response.json() as Promise<{
+          threads: number;
+          instagram: number;
+          youtube: number;
+          organic: number;
+          other: number;
+        }>;
+      })
+      .then((data) => {
+        if (abort) return;
+        const { threads, instagram, youtube, organic, other } = data;
+        const total = threads + instagram + youtube + organic + other;
+        const toPercent = (value: number) => (total > 0 ? (value / total) * 100 : 0);
+
+        setSourceStats({
+          threads,
+          threadsPercent: toPercent(threads),
+          instagram,
+          instagramPercent: toPercent(instagram),
+          youtube,
+          youtubePercent: toPercent(youtube),
+          other,
+          otherPercent: toPercent(other),
+          organic,
+          organicPercent: toPercent(organic),
+        });
+      })
+      .catch((error) => {
+        if (abort || error.name === 'AbortError') return;
+        setSourcesError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (abort) return;
+        setSourcesLoading(false);
+      });
+
+    return () => {
+      abort = true;
+      controller.abort();
+    };
+  }, [dateRange, customStartDate, customEndDate, initialData.sources]);
 
   // 期間フィルターに応じてデータを集計
   const filteredAnalytics = useMemo(() => {
@@ -78,19 +208,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       ? totalRegistrations / initialData.funnel.lineRegistration
       : 0;
 
-    const sources = {
-      threads: Math.round(initialData.sources.threads * registrationRatio),
-      threadsPercent: initialData.sources.threadsPercent,
-      instagram: Math.round(initialData.sources.instagram * registrationRatio),
-      instagramPercent: initialData.sources.instagramPercent,
-      youtube: Math.round(initialData.sources.youtube * registrationRatio),
-      youtubePercent: initialData.sources.youtubePercent,
-      other: Math.round(initialData.sources.other * registrationRatio),
-      otherPercent: initialData.sources.otherPercent,
-      organic: Math.round(initialData.sources.organic * registrationRatio),
-      organicPercent: initialData.sources.organicPercent,
-    };
-
     const attributes = {
       age: initialData.attributes.age.map(item => ({
         ...item,
@@ -114,10 +231,10 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       ...initialData,
       funnel,
       dailyRegistrations: dailyDataInRange,
-      sources,
+      sources: sourceStats,
       attributes,
     };
-  }, [initialData, dateRange, customStartDate, customEndDate]);
+  }, [initialData, dateRange, customStartDate, customEndDate, sourceStats]);
 
   return (
     <div className="section-stack">
@@ -281,6 +398,12 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       {/* 流入経路分析 */}
       <Card>
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">📱 流入経路分析</h2>
+        {sourcesLoading && (
+          <p className="text-xs text-[color:var(--color-text-muted)] mb-2">最新の流入データを取得しています…</p>
+        )}
+        {sourcesError && (
+          <p className="text-xs text-[color:var(--color-danger)] mb-2">{sourcesError}</p>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-[var(--radius-md)] p-5 text-center shadow-[var(--shadow-soft)]">
             <h3 className="text-sm text-[color:var(--color-text-secondary)] font-medium mb-3">Threads</h3>

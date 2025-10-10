@@ -197,8 +197,6 @@ export default async function ThreadsHome({
     if (selectedRangeWindow) {
       try {
         lineRegistrationCount = await countLineSourceRegistrations(PROJECT_ID, {
-          startDate: selectedRangeWindow.start.toISOString().slice(0, 10),
-          endDate: selectedRangeWindow.end.toISOString().slice(0, 10),
           sourceName: 'Threads',
         });
       } catch (lineError) {

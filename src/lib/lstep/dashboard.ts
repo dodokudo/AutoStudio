@@ -27,8 +27,8 @@ export interface LineDashboardData {
 }
 
 interface LineSourceCountOptions {
-  startDate: string;
-  endDate: string;
+  startDate?: string;
+  endDate?: string;
   sourceName?: string;
   datasetId?: string;
 }
@@ -135,7 +135,22 @@ export async function countLineSourceRegistrations(
 ): Promise<number> {
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
 
-  console.log(`[lstep/dashboard] Counting LINE registrations for ${sourceName} (last 30 days)`);
+  const resolveDate = (value?: string): string | null => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+    const parsed = new Date(`${trimmed}T00:00:00Z`);
+    return Number.isNaN(parsed.getTime()) ? null : trimmed;
+  };
+
+  const resolvedEnd = resolveDate(endDate) ?? new Date().toISOString().slice(0, 10);
+  const resolvedEndDate = new Date(`${resolvedEnd}T00:00:00Z`);
+  const resolvedStart = resolveDate(startDate)
+    ?? (() => {
+      const start = new Date(resolvedEndDate.getTime());
+      start.setUTCDate(start.getUTCDate() - 30 + 1);
+      return start.toISOString().slice(0, 10);
+    })();
 
   const [row] = await runQuery<{ total: bigint | number | string | null }>(client, projectId, datasetId, {
     query: `
@@ -145,22 +160,24 @@ export async function countLineSourceRegistrations(
         INNER JOIN \`${projectId}.${datasetId}.user_sources\` sources
           ON core.user_id = sources.user_id
           AND core.snapshot_date = sources.snapshot_date
-        WHERE DATE(core.friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
-          AND sources.source_name = '${sourceName}'
+        WHERE DATE(core.friend_added_at) BETWEEN @startDate AND @endDate
+          AND sources.source_name = @sourceName
           AND sources.source_flag = 1
       )
       SELECT COUNT(*) AS total
       FROM matched_users
     `,
+    params: { startDate: resolvedStart, endDate: resolvedEnd, sourceName },
   });
 
   const value = row?.total;
-  const result = typeof value === 'number' ? value :
-                 typeof value === 'bigint' ? Number(value) :
-                 typeof value === 'string' ? Number(value) || 0 : 0;
-
-  console.log(`[lstep/dashboard] LINE registration count for ${sourceName}: ${result}`);
-  return result;
+  return typeof value === 'number'
+    ? value
+    : typeof value === 'bigint'
+      ? Number(value)
+      : typeof value === 'string'
+        ? Number(value) || 0
+        : 0;
 }
 
 async function buildFunnel(client: BigQuery, projectId: string, datasetId: string): Promise<FunnelStage[]> {
