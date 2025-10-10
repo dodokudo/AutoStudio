@@ -107,19 +107,19 @@ function toIsoFromJst(raw: string | undefined): string | null {
     .replace(/時|分|秒/g, ':');
 
   const match = normalized.match(
-    /(?<year>\d{4})-(?<month>\d{1,2})-(?<day>\d{1,2})(?:\s+(?<hour>\d{1,2}):(?<minute>\d{1,2})(?::(?<second>\d{1,2}))?)?/,
+    /(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/,
   );
 
-  if (!match || !match.groups) {
+  if (!match) {
     return null;
   }
 
-  const year = Number(match.groups.year);
-  const month = Number(match.groups.month);
-  const day = Number(match.groups.day);
-  const hour = Number(match.groups.hour ?? '0');
-  const minute = Number(match.groups.minute ?? '0');
-  const second = Number(match.groups.second ?? '0');
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4] ?? '0');
+  const minute = Number(match[5] ?? '0');
+  const second = Number(match[6] ?? '0');
 
   if ([year, month, day, hour, minute, second].some((value) => Number.isNaN(value))) {
     return null;
