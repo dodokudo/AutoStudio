@@ -27,10 +27,6 @@ function formatDateLabel(value: string): string {
   }).format(new Date(value));
 }
 
-function formatDateForInput(value: string): string {
-  return new Date(value).toISOString().split('T')[0];
-}
-
 function formatIsoDate(date: Date): string {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
