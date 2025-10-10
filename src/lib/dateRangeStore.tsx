@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type DatePreset = 'yesterday' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'custom';
+export type DatePreset = 'yesterday' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'custom' | 'all';
 
 export interface DateRange {
   start: Date;
@@ -103,6 +103,12 @@ const getDateRangeFromPreset = (preset: DatePreset, customStart?: Date, customEn
       return getThisMonthRange();
     case 'last-month':
       return getLastMonthRange();
+    case 'all':
+      // 全期間: 非常に広い範囲を返す
+      return {
+        start: new Date('2000-01-01'),
+        end: new Date('2099-12-31')
+      };
     case 'custom':
       if (customStart && customEnd) {
         const start = new Date(customStart);
