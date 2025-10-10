@@ -15,7 +15,11 @@ interface PendingRow {
 
 async function main(): Promise<void> {
   const config = loadInstagramConfig();
-  const drive = google.drive({ version: 'v3' });
+  const auth = new google.auth.GoogleAuth({
+    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+  const drive = google.drive({ version: 'v3', auth });
   const bigquery = createInstagramBigQuery();
 
   await ensureInstagramTables(bigquery);
@@ -83,32 +87,36 @@ async function transcribeWithGemini(params: { row: PendingRow; drive: ReturnType
 
   const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 
-  const uploadUrl = 'https://generativelanguage.googleapis.com/v1beta/files';
+  const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${config.geminiApiKey}`;
+  const { body, contentType } = createMultipart(arrayBuffer, row.instagram_media_id);
   const uploadResponse = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
-      'x-goog-api-key': config.geminiApiKey,
+      'Content-Type': contentType,
+      'X-Goog-Upload-Protocol': 'multipart',
     },
-    body: createMultipart(arrayBuffer, row.instagram_media_id),
+    body,
   });
 
   if (!uploadResponse.ok) {
     const text = await uploadResponse.text();
-    throw new Error(`Gemini upload failed: ${text}`);
+    throw new Error(`Gemini upload failed (${uploadResponse.status}): ${text}`);
   }
 
   const uploadResult = await uploadResponse.json();
-  const fileUri: string | undefined = uploadResult?.file?.uri;
+  const fileUri: string | undefined = uploadResult?.file?.uri || uploadResult?.file?.name;
   if (!fileUri) {
-    throw new Error('Gemini upload did not return file uri');
+    throw new Error(`Gemini upload did not return file uri. Response: ${JSON.stringify(uploadResult)}`);
   }
 
+  // Wait for file to be processed
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
   const prompt = buildGeminiPrompt();
-  const generateUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent';
+  const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.geminiApiKey}`;
   const generateResponse = await fetch(generateUrl, {
     method: 'POST',
     headers: {
-      'x-goog-api-key': config.geminiApiKey,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
@@ -155,11 +163,43 @@ async function transcribeWithGemini(params: { row: PendingRow; drive: ReturnType
   return payload;
 }
 
-function createMultipart(buffer: ArrayBuffer, filename: string): FormData {
-  const formData = new FormData();
-  const file = new Blob([buffer], { type: 'video/mp4' });
-  formData.append('file', file, `${filename}.mp4`);
-  return formData;
+function createMultipart(buffer: ArrayBuffer, filename: string): { body: Buffer; contentType: string } {
+  const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+  const CRLF = '\r\n';
+
+  const metadata = JSON.stringify({
+    file: {
+      displayName: filename
+    }
+  });
+
+  const parts: Buffer[] = [];
+
+  // Metadata part
+  parts.push(Buffer.from(
+    `--${boundary}${CRLF}` +
+    `Content-Type: application/json; charset=UTF-8${CRLF}` +
+    CRLF +
+    metadata +
+    CRLF
+  ));
+
+  // File data part
+  parts.push(Buffer.from(
+    `--${boundary}${CRLF}` +
+    `Content-Type: video/mp4${CRLF}` +
+    CRLF
+  ));
+  parts.push(Buffer.from(buffer));
+  parts.push(Buffer.from(CRLF));
+
+  // Closing boundary
+  parts.push(Buffer.from(`--${boundary}--${CRLF}`));
+
+  const body = Buffer.concat(parts);
+  const contentType = `multipart/related; boundary=${boundary}`;
+
+  return { body, contentType };
 }
 
 function buildGeminiPrompt(): string {
