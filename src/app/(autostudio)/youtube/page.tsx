@@ -132,6 +132,9 @@ export default async function YoutubeDashboardPage() {
             <Card key={card.label} className="accent-gradient">
               <p className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-[0.08em]">{card.label}</p>
               <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
+              {card.delta && (
+                <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.delta}</p>
+              )}
             </Card>
           ))}
         </div>
