@@ -69,7 +69,7 @@ async function main() {
   `;
 
   const [existingRows] = await bigquery.query({ query: checkQuery });
-  const existingUsernames = new Set(existingRows.map((row: any) => row.username));
+  const existingUsernames = new Set(existingRows.map((row: { username: string }) => row.username));
 
   // Prepare rows to insert
   const rowsToInsert = usernames

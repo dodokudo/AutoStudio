@@ -95,7 +95,7 @@ async function transcribeWithGemini(params: { row: PendingRow; drive: ReturnType
       'Content-Type': contentType,
       'X-Goog-Upload-Protocol': 'multipart',
     },
-    body,
+    body: body as unknown as BodyInit,
   });
 
   if (!uploadResponse.ok) {

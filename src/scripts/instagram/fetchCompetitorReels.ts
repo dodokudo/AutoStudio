@@ -3,7 +3,6 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
 import { google } from 'googleapis';
-import { BigQuery } from '@google-cloud/bigquery';
 import { ensureInstagramTables, createInstagramBigQuery } from '@/lib/instagram/bigquery';
 import { listActiveCompetitors } from '@/lib/instagram/competitors';
 import { loadInstagramConfig } from '@/lib/instagram/config';
@@ -41,7 +40,18 @@ async function main(): Promise<void> {
   // Fetch all videos from the shared folder
   let pageToken: string | undefined;
   let totalVideos = 0;
-  const allRows: any[] = [];
+  const allRows: Array<{
+    snapshot_date: string;
+    drive_file_id: string;
+    drive_file_url: string;
+    username: string;
+    instagram_media_id: string;
+    caption: null;
+    permalink: string;
+    media_type: string;
+    posted_at: string;
+    created_at: string;
+  }> = [];
 
   do {
     const response = await drive.files.list({

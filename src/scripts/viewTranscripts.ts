@@ -27,7 +27,14 @@ async function main() {
 
   console.log(`\n📝 最新の文字起こしデータ (${rows.length}件)\n`);
 
-  rows.forEach((row: any, index: number) => {
+  rows.forEach((row: {
+    instagram_media_id: string;
+    snapshot_date: { value: string };
+    summary: string;
+    key_points?: string[];
+    hooks?: string[];
+    cta_ideas?: string[];
+  }, index: number) => {
     console.log(`\n━━━ [${index + 1}] ${row.instagram_media_id} ━━━`);
     console.log(`📅 日付: ${row.snapshot_date.value}`);
     console.log(`\n📋 要約:`);
