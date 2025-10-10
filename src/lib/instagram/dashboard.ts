@@ -77,7 +77,7 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
 async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: string): Promise<FollowerPoint[]> {
   const query = `
     SELECT
-      DATE(date) AS date,
+      FORMAT_DATE('%Y-%m-%d', DATE(date)) AS date,
       SAFE_CAST(followers_count AS INT64) AS followers,
       SAFE_CAST(reach AS INT64) AS reach,
       SAFE_CAST(engagement AS INT64) AS engagement
@@ -95,7 +95,7 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: 
     });
 
     return rows.map((row) => ({
-      date: row.date as string,
+      date: String(row.date),
       followers: Number(row.followers ?? 0),
       reach: Number(row.reach ?? 0),
       engagement: Number(row.engagement ?? 0),
@@ -119,7 +119,7 @@ async function fetchReelHighlights(client: BigQuery, projectId: string, userId: 
       saved,
       shares,
       avg_watch_time_seconds,
-      timestamp
+      FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S.%3FZ', timestamp) AS timestamp
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reels\`
     WHERE user_id = @user_id
       AND (
@@ -138,18 +138,18 @@ async function fetchReelHighlights(client: BigQuery, projectId: string, userId: 
     });
 
     return rows.map((row) => ({
-      instagramId: row.instagram_id as string,
-      caption: (row.caption as string) ?? null,
-      permalink: (row.permalink as string) ?? null,
-      views: row.views !== undefined ? Number(row.views) : null,
-      reach: row.reach !== undefined ? Number(row.reach) : null,
-      likeCount: row.like_count !== undefined ? Number(row.like_count) : null,
-      commentsCount: row.comments_count !== undefined ? Number(row.comments_count) : null,
-      saved: row.saved !== undefined ? Number(row.saved) : null,
-      shares: row.shares !== undefined ? Number(row.shares) : null,
+      instagramId: String(row.instagram_id),
+      caption: row.caption ? String(row.caption) : null,
+      permalink: row.permalink ? String(row.permalink) : null,
+      views: row.views !== undefined && row.views !== null ? Number(row.views) : null,
+      reach: row.reach !== undefined && row.reach !== null ? Number(row.reach) : null,
+      likeCount: row.like_count !== undefined && row.like_count !== null ? Number(row.like_count) : null,
+      commentsCount: row.comments_count !== undefined && row.comments_count !== null ? Number(row.comments_count) : null,
+      saved: row.saved !== undefined && row.saved !== null ? Number(row.saved) : null,
+      shares: row.shares !== undefined && row.shares !== null ? Number(row.shares) : null,
       avgWatchTimeSeconds:
-        row.avg_watch_time_seconds !== undefined ? Number(row.avg_watch_time_seconds) : null,
-      timestamp: row.timestamp ? new Date(row.timestamp as string).toISOString() : null,
+        row.avg_watch_time_seconds !== undefined && row.avg_watch_time_seconds !== null ? Number(row.avg_watch_time_seconds) : null,
+      timestamp: row.timestamp ? String(row.timestamp) : null,
     }));
   } catch (error) {
     console.warn('[instagram/dashboard] Failed to load reel highlights', error);
@@ -167,7 +167,7 @@ async function fetchStoryHighlights(client: BigQuery, projectId: string, userId:
       replies,
       profile_visits,
       SAFE_DIVIDE(views, NULLIF(reach, 0)) AS completion_rate,
-      timestamp
+      FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S.%3FZ', timestamp) AS timestamp
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_stories\`
     WHERE user_id = @user_id
       AND (
@@ -186,17 +186,17 @@ async function fetchStoryHighlights(client: BigQuery, projectId: string, userId:
     });
 
     return rows.map((row) => ({
-      instagramId: row.instagram_id as string,
-      caption: (row.caption as string) ?? null,
-      views: row.views !== undefined ? Number(row.views) : null,
-      reach: row.reach !== undefined ? Number(row.reach) : null,
-      replies: row.replies !== undefined ? Number(row.replies) : null,
+      instagramId: String(row.instagram_id),
+      caption: row.caption ? String(row.caption) : null,
+      views: row.views !== undefined && row.views !== null ? Number(row.views) : null,
+      reach: row.reach !== undefined && row.reach !== null ? Number(row.reach) : null,
+      replies: row.replies !== undefined && row.replies !== null ? Number(row.replies) : null,
       completionRate:
         row.completion_rate !== undefined && row.completion_rate !== null
           ? Number(row.completion_rate)
           : null,
-      profileVisits: row.profile_visits !== undefined ? Number(row.profile_visits) : null,
-      timestamp: row.timestamp ? new Date(row.timestamp as string).toISOString() : null,
+      profileVisits: row.profile_visits !== undefined && row.profile_visits !== null ? Number(row.profile_visits) : null,
+      timestamp: row.timestamp ? String(row.timestamp) : null,
     }));
   } catch (error) {
     console.warn('[instagram/dashboard] Failed to load story highlights', error);

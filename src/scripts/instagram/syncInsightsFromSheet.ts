@@ -33,7 +33,7 @@ interface ReelRow {
   media_product_type: string;
   media_type: string;
   permalink: string;
-  timestamp_iso: string | null;
+  timestamp_iso: string;
   views: number;
   reach: number;
   total_interactions: number;
@@ -41,23 +41,23 @@ interface ReelRow {
   comments_count: number;
   saved: number;
   shares: number;
-  video_view_total_time_hours: string | null;
-  avg_watch_time_seconds: number | null;
-  drive_image_url: string | null;
-  thumbnail_url: string | null;
+  video_view_total_time_hours: string;
+  avg_watch_time_seconds: number;
+  drive_image_url: string;
+  thumbnail_url: string;
 }
 
 interface StoryRow {
   id: string;
   user_id: string;
   instagram_id: string;
-  drive_image_url: string | null;
-  thumbnail_url: string | null;
-  timestamp_iso: string | null;
+  drive_image_url: string;
+  thumbnail_url: string;
+  timestamp_iso: string;
   views: number;
   reach: number;
   replies: number;
-  caption: string | null;
+  caption: string;
   total_interactions: number;
   follows: number;
   profile_visits: number;
@@ -132,7 +132,9 @@ function toIsoFromJst(raw: string | undefined): string | null {
 }
 
 function buildInsightRows(rows: SheetRow[], userId: string): InsightRow[] {
-  return rows
+  const uniqueMap = new Map<string, InsightRow>();
+
+  rows
     .map((row) => (Array.isArray(row) ? row : undefined))
     .map((row) => {
       if (!row) return null;
@@ -150,11 +152,18 @@ function buildInsightRows(rows: SheetRow[], userId: string): InsightRow[] {
         website_clicks: parseNumber(row[6]),
       } as InsightRow;
     })
-    .filter((row): row is InsightRow => row !== null);
+    .filter((row): row is InsightRow => row !== null)
+    .forEach((row) => {
+      uniqueMap.set(row.id, row);
+    });
+
+  return Array.from(uniqueMap.values());
 }
 
 function buildReelRows(rows: SheetRow[], userId: string): ReelRow[] {
-  return rows
+  const uniqueMap = new Map<string, ReelRow>();
+
+  rows
     .filter((row): row is string[] => Array.isArray(row) && Boolean(row[0]))
     .map((row) => {
       const instagramId = row[0] ?? '';
@@ -166,7 +175,7 @@ function buildReelRows(rows: SheetRow[], userId: string): ReelRow[] {
         media_product_type: row[2] ?? '',
         media_type: row[3] ?? '',
         permalink: row[4] ?? '',
-        timestamp_iso: toIsoFromJst(row[5]),
+        timestamp_iso: toIsoFromJst(row[5]) || '',
         views: parseNumber(row[6]),
         reach: parseNumber(row[7]),
         total_interactions: parseNumber(row[8]),
@@ -174,16 +183,23 @@ function buildReelRows(rows: SheetRow[], userId: string): ReelRow[] {
         comments_count: parseNumber(row[10]),
         saved: parseNumber(row[11]),
         shares: parseNumber(row[12]),
-        video_view_total_time_hours: row[13]?.trim() ? row[13].trim() : null,
-        avg_watch_time_seconds: parseOptionalNumber(row[14]),
-        drive_image_url: row[15]?.trim() || null,
-        thumbnail_url: row[16]?.trim() || null,
+        video_view_total_time_hours: row[13]?.trim() ? row[13].trim() : '',
+        avg_watch_time_seconds: parseOptionalNumber(row[14]) ?? 0,
+        drive_image_url: row[15]?.trim() || '',
+        thumbnail_url: row[16]?.trim() || '',
       };
+    })
+    .forEach((row) => {
+      uniqueMap.set(row.id, row);
     });
+
+  return Array.from(uniqueMap.values());
 }
 
 function buildStoryRows(rows: SheetRow[], userId: string): StoryRow[] {
-  return rows
+  const uniqueMap = new Map<string, StoryRow>();
+
+  rows
     .filter((row): row is string[] => Array.isArray(row) && Boolean(row[0]))
     .map((row) => {
       const instagramId = row[0] ?? '';
@@ -191,19 +207,24 @@ function buildStoryRows(rows: SheetRow[], userId: string): StoryRow[] {
         id: `${userId}_${instagramId}`,
         user_id: userId,
         instagram_id: instagramId,
-        drive_image_url: row[1]?.trim() || null,
-        thumbnail_url: row[2]?.trim() || null,
-        timestamp_iso: toIsoFromJst(row[3]),
+        drive_image_url: row[1]?.trim() || '',
+        thumbnail_url: row[2]?.trim() || '',
+        timestamp_iso: toIsoFromJst(row[3]) || '',
         views: parseNumber(row[4]),
         reach: parseNumber(row[5]),
         replies: parseNumber(row[6]),
-        caption: row[7]?.trim() || null,
+        caption: row[7]?.trim() || '',
         total_interactions: parseNumber(row[8]),
         follows: parseNumber(row[9]),
         profile_visits: parseNumber(row[10]),
         navigation: parseNumber(row[11]),
       };
+    })
+    .forEach((row) => {
+      uniqueMap.set(row.id, row);
     });
+
+  return Array.from(uniqueMap.values());
 }
 
 async function upsertInstagramInsights(
@@ -273,7 +294,7 @@ async function upsertInstagramReels(
       media_product_type = S.media_product_type,
       media_type = S.media_type,
       permalink = S.permalink,
-      timestamp = COALESCE(SAFE.TIMESTAMP(S.timestamp_iso), T.timestamp),
+      timestamp = COALESCE(SAFE.TIMESTAMP(NULLIF(S.timestamp_iso, '')), T.timestamp),
       views = S.views,
       reach = S.reach,
       total_interactions = S.total_interactions,
@@ -281,10 +302,10 @@ async function upsertInstagramReels(
       comments_count = S.comments_count,
       saved = S.saved,
       shares = S.shares,
-      video_view_total_time_hours = S.video_view_total_time_hours,
-      avg_watch_time_seconds = S.avg_watch_time_seconds,
-      drive_image_url = S.drive_image_url,
-      thumbnail_url = S.thumbnail_url,
+      video_view_total_time_hours = NULLIF(S.video_view_total_time_hours, ''),
+      avg_watch_time_seconds = NULLIF(S.avg_watch_time_seconds, 0),
+      drive_image_url = NULLIF(S.drive_image_url, ''),
+      thumbnail_url = NULLIF(S.thumbnail_url, ''),
       updated_at = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN
       INSERT (
@@ -318,7 +339,7 @@ async function upsertInstagramReels(
         S.media_product_type,
         S.media_type,
         S.permalink,
-        SAFE.TIMESTAMP(S.timestamp_iso),
+        SAFE.TIMESTAMP(NULLIF(S.timestamp_iso, '')),
         S.views,
         S.reach,
         S.total_interactions,
@@ -326,10 +347,10 @@ async function upsertInstagramReels(
         S.comments_count,
         S.saved,
         S.shares,
-        S.video_view_total_time_hours,
-        S.avg_watch_time_seconds,
-        S.drive_image_url,
-        S.thumbnail_url,
+        NULLIF(S.video_view_total_time_hours, ''),
+        NULLIF(S.avg_watch_time_seconds, 0),
+        NULLIF(S.drive_image_url, ''),
+        NULLIF(S.thumbnail_url, ''),
         CURRENT_TIMESTAMP(),
         CURRENT_TIMESTAMP()
       )
@@ -357,13 +378,13 @@ async function upsertInstagramStories(
     USING UNNEST(@rows) S
     ON T.user_id = S.user_id AND T.instagram_id = S.instagram_id
     WHEN MATCHED THEN UPDATE SET
-      drive_image_url = S.drive_image_url,
-      thumbnail_url = S.thumbnail_url,
-      timestamp = COALESCE(SAFE.TIMESTAMP(S.timestamp_iso), T.timestamp),
+      drive_image_url = NULLIF(S.drive_image_url, ''),
+      thumbnail_url = NULLIF(S.thumbnail_url, ''),
+      timestamp = COALESCE(SAFE.TIMESTAMP(NULLIF(S.timestamp_iso, '')), T.timestamp),
       views = S.views,
       reach = S.reach,
       replies = S.replies,
-      caption = S.caption,
+      caption = NULLIF(S.caption, ''),
       total_interactions = S.total_interactions,
       follows = S.follows,
       profile_visits = S.profile_visits,
@@ -392,13 +413,13 @@ async function upsertInstagramStories(
         S.id,
         S.user_id,
         S.instagram_id,
-        S.drive_image_url,
-        S.thumbnail_url,
-        SAFE.TIMESTAMP(S.timestamp_iso),
+        NULLIF(S.drive_image_url, ''),
+        NULLIF(S.thumbnail_url, ''),
+        SAFE.TIMESTAMP(NULLIF(S.timestamp_iso, '')),
         S.views,
         S.reach,
         S.replies,
-        S.caption,
+        NULLIF(S.caption, ''),
         S.total_interactions,
         S.follows,
         S.profile_visits,
