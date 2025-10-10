@@ -177,13 +177,13 @@ export async function getLinkStats(shortLinkId: string): Promise<LinkStats> {
   const [clicksByDateResult] = await bigquery.query({
     query: `
       SELECT
-        DATE(clicked_at) as date,
+        FORMAT_DATE('%Y-%m-%d', DATE(clicked_at)) as date,
         COUNT(*) as clicks
       FROM \`${projectId}.${dataset}.click_logs\`
       WHERE short_link_id = @shortLinkId
       AND clicked_at >= @monthAgo
-      GROUP BY date
-      ORDER BY date DESC
+      GROUP BY DATE(clicked_at)
+      ORDER BY DATE(clicked_at) DESC
     `,
     params: { shortLinkId, monthAgo },
   });
