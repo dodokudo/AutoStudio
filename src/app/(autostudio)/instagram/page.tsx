@@ -13,11 +13,7 @@ export default async function InstagramDashboardPage() {
     await ensureInstagramTables(bigquery);
     const data = await getInstagramDashboardData(config.projectId);
 
-    return (
-      <div className="section-stack">
-        <InstagramDashboardView data={data} />
-      </div>
-    );
+    return <InstagramDashboardView data={data} />;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return (

@@ -8,10 +8,11 @@ import {
 } from '@/lib/youtube/bigquery';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
 import { Card } from '@/components/ui/card';
-// import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Banner } from '@/components/ui/banner';
+import { YoutubeDashboardTabs } from './_components/YoutubeDashboardTabs';
 
 function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
   return new Intl.NumberFormat('ja-JP', options).format(value);
@@ -127,65 +128,10 @@ export default async function YoutubeDashboardPage() {
           ))}
         </div>
 
-        <Card>
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">自チャンネル指標</h2>
-          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">直近30日 / 7日のスナップショットを比較します。</p>
-          <div className="mt-4 overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-border)]">
-            <Table className="text-sm">
-              <thead>
-                <tr>
-                  <th className="w-1/3">指標</th>
-                  <th>直近30日</th>
-                  <th>直近7日</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ownMetricsRows.map((row) => (
-                  <tr key={row.label}>
-                    <td className="font-medium text-[color:var(--color-text-primary)]">{row.label}</td>
-                    <td>{row.value30}</td>
-                    <td>{row.value7}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </div>
-        </Card>
-
-        <Card>
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">競合チャンネルの動向</h2>
-          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新スナップショットでの主要指標です。</p>
-          {competitorRows.length ? (
-            <div className="mt-4 overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-border)]">
-              <Table className="text-xs">
-                <thead>
-                <tr>
-                  <th>チャンネル</th>
-                  <th>登録者</th>
-                  <th>平均伸び速度</th>
-                  <th>平均ER</th>
-                  <th>最新動画</th>
-                  <th>投稿日</th>
-                </tr>
-                </thead>
-                <tbody>
-                  {competitorRows.map((row) => (
-                    <tr key={row.channel}>
-                      <td className="font-medium text-[color:var(--color-text-primary)]">{row.channel}</td>
-                      <td>{row.subscribers}</td>
-                      <td>{row.viewVelocity}</td>
-                      <td>{row.engagement}</td>
-                      <td>{row.latestVideo}</td>
-                      <td>{row.latestPublishedAt}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          ) : (
-            <EmptyState title="データがありません" description="競合チャンネルの統計が取り込まれると表示されます。" />
-          )}
-        </Card>
+        <YoutubeDashboardTabs
+          ownMetricsRows={ownMetricsRows}
+          competitorRows={competitorRows}
+        />
 
         {/* Comparison section temporarily disabled due to type issues */}
         {/* {comparison ? (

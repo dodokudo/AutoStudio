@@ -119,7 +119,7 @@ async function fetchReelHighlights(client: BigQuery, projectId: string, userId: 
       saved,
       shares,
       avg_watch_time_seconds,
-      FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S.%3FZ', timestamp) AS timestamp
+      FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', timestamp) AS timestamp
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reels\`
     WHERE user_id = @user_id
       AND (
@@ -167,7 +167,7 @@ async function fetchStoryHighlights(client: BigQuery, projectId: string, userId:
       replies,
       profile_visits,
       SAFE_DIVIDE(views, NULLIF(reach, 0)) AS completion_rate,
-      FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S.%3FZ', timestamp) AS timestamp
+      FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', timestamp) AS timestamp
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_stories\`
     WHERE user_id = @user_id
       AND (

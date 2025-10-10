@@ -219,7 +219,6 @@ export async function insertVideos(context: YoutubeBigQueryContext, rows: VideoR
 export async function insertAnalytics(context: YoutubeBigQueryContext, rows: AnalyticsRow[]) {
   if (!rows.length) return;
   const { client, datasetId, projectId } = context;
-  const table = client.dataset(datasetId).table('media_metrics_daily');
 
   const formatted = rows.flatMap((row) =>
     Object.entries(row.metrics).map(([metricType, value]) => ({
@@ -234,6 +233,31 @@ export async function insertAnalytics(context: YoutubeBigQueryContext, rows: Ana
 
   if (!formatted.length) return;
 
+  // Get unique dates from the data
+  const dates = Array.from(new Set(rows.map(r => r.date)));
+
+  // Try to delete existing data for these dates (will fail if in streaming buffer, which is ok)
+  try {
+    const deleteQuery = `
+      DELETE FROM \`${projectId}.${datasetId}.media_metrics_daily\`
+      WHERE media = 'youtube'
+        AND date IN (SELECT PARSE_DATE('%Y-%m-%d', date_str) FROM UNNEST(@dates) AS date_str)
+    `;
+    await client.query({
+      query: deleteQuery,
+      params: { dates },
+    });
+    console.info(`[youtube] deleted existing analytics data for ${dates.length} dates`);
+  } catch (error) {
+    if ((error as Error).message?.includes('streaming buffer')) {
+      console.warn('[youtube] Could not delete existing data (streaming buffer active). Data may be duplicated temporarily.');
+    } else {
+      throw error;
+    }
+  }
+
+  // Insert new data
+  const table = client.dataset(datasetId).table('media_metrics_daily');
   await table.insert(formatted, { ignoreUnknownValues: true });
   console.info(`[youtube] inserted ${formatted.length} analytics metrics into ${projectId}.${datasetId}.media_metrics_daily`);
 }
