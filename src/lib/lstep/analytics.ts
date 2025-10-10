@@ -368,6 +368,7 @@ async function getSourceAnalysis(
         ON core.user_id = sources.user_id
         AND core.snapshot_date = sources.snapshot_date
       WHERE core.snapshot_date = @snapshotDate
+        AND DATE(core.friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
     `,
     params: { snapshotDate },
   });
