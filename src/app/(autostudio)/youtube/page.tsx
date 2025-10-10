@@ -127,7 +127,7 @@ export default async function YoutubeDashboardPage() {
     return (
       <div className="section-stack">
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {overviewCards.map((card) => (
             <Card key={card.label} className="accent-gradient">
               <p className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-[0.08em]">{card.label}</p>
