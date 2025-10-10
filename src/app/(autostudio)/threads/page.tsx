@@ -276,7 +276,7 @@ export default async function ThreadsHome({
     const totalLinkClicks =
       typeof linkClicksForRange === 'number'
         ? linkClicksForRange
-        : threadsLinkClicks.reduce((sum, item) => sum + item.clicks, 0);
+        : currentClicks.reduce((sum, item) => sum + item.clicks, 0);
 
     const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
       if (value === undefined) return undefined;
