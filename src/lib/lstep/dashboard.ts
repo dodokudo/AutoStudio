@@ -133,16 +133,9 @@ export async function countLineSourceRegistrations(
   projectId: string,
   { startDate, endDate, sourceName = 'Threads', datasetId = DEFAULT_DATASET }: LineSourceCountOptions,
 ): Promise<number> {
-  if (!startDate || !endDate) {
-    return 0;
-  }
-
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
 
-  const normalizedStart = startDate <= endDate ? startDate : endDate;
-  const normalizedEnd = startDate <= endDate ? endDate : startDate;
-
-  console.log(`[lstep/dashboard] Counting LINE registrations for ${sourceName}: ${normalizedStart} to ${normalizedEnd}`);
+  console.log(`[lstep/dashboard] Counting LINE registrations for ${sourceName} (last 30 days)`);
 
   const [row] = await runQuery<{ total: bigint | number | string | null }>(client, projectId, datasetId, {
     query: `
@@ -152,18 +145,13 @@ export async function countLineSourceRegistrations(
         INNER JOIN \`${projectId}.${datasetId}.user_sources\` sources
           ON core.user_id = sources.user_id
           AND core.snapshot_date = sources.snapshot_date
-        WHERE DATE(core.friend_added_at) BETWEEN DATE(@startDate) AND DATE(@endDate)
-          AND sources.source_name = @sourceName
+        WHERE DATE(core.friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
+          AND sources.source_name = '${sourceName}'
           AND sources.source_flag = 1
       )
       SELECT COUNT(*) AS total
       FROM matched_users
     `,
-    params: {
-      sourceName,
-      startDate: normalizedStart,
-      endDate: normalizedEnd,
-    },
   });
 
   const value = row?.total;
