@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     const organicTotal = organic + og;
 
     const client = createBigQueryClient(PROJECT_ID, process.env.LSTEP_BQ_LOCATION);
-    const [rows] = await client.query<{ total: bigint | number | string | null }>({
+    const totalQueryResult = await client.query<{ total: bigint | number | string | null }>({
       query: `
         SELECT COUNT(DISTINCT user_id) AS total
         FROM \`${PROJECT_ID}.${DATASET_ID}.user_core\`
@@ -79,7 +79,8 @@ export async function GET(request: Request) {
       params: { startDate: start, endDate: end },
     });
 
-    const totalValue = rows?.[0]?.total;
+    const [totalRows] = totalQueryResult as [{ total: bigint | number | string | null }[]];
+    const totalValue = totalRows?.[0]?.total;
     const total =
       typeof totalValue === 'number'
         ? totalValue
