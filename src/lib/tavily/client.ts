@@ -17,6 +17,13 @@ export interface TavilySearchResult {
   score: number;
 }
 
+interface TavilyRawResult {
+  title?: string;
+  url?: string;
+  content?: string;
+  score?: number;
+}
+
 export interface TavilySearchOptions {
   query: string;
   searchDepth?: 'basic' | 'advanced';
@@ -45,7 +52,7 @@ export async function searchWeb(options: TavilySearchOptions): Promise<TavilySea
     excludeDomains,
   });
 
-  return response.results.map((result: any) => ({
+  return response.results.map((result: TavilyRawResult) => ({
     title: result.title ?? '',
     url: result.url ?? '',
     content: result.content ?? '',
