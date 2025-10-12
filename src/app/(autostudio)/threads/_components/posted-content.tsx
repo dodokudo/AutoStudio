@@ -57,25 +57,57 @@ const toOptionalString = (value: unknown): string | undefined => {
   return undefined;
 };
 
+const formatTokyoDate = (date: Date) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+
+const parseToTokyoDateString = (value?: string): string | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return formatTokyoDate(parsed);
+};
+
 const normalizeLogs = (rawLogs: MaybePostedLog[] | undefined): PostedLogEntry[] => {
   if (!rawLogs || !Array.isArray(rawLogs)) {
     return [];
   }
+
+  const todayTokyo = formatTokyoDate(new Date());
 
   return rawLogs.flatMap((raw): PostedLogEntry[] => {
     if (!raw || typeof raw !== 'object') {
       return [];
     }
 
-    const status = toOptionalString(raw.status) ?? 'unknown';
+    const statusRaw = toOptionalString(raw.status);
+    const normalizedStatus = statusRaw?.trim().toLowerCase() ?? 'unknown';
     const mainText = toOptionalString(raw.mainText ?? raw.main_text) ?? '';
-    if (status !== 'success' || mainText.trim().length === 0) {
+
+    const isPosted =
+      normalizedStatus === 'success' ||
+      normalizedStatus === 'succeeded' ||
+      normalizedStatus === 'posted' ||
+      normalizedStatus === 'complete' ||
+      normalizedStatus === 'completed';
+
+    if (!isPosted || mainText.trim().length === 0) {
       return [];
     }
 
     const planId = (toOptionalString(raw.planId ?? raw.plan_id) ?? '').trim() || 'unknown';
     const postedAt = toOptionalString(raw.postedAt ?? raw.posted_at);
     const createdAt = toOptionalString(raw.createdAt ?? raw.created_at);
+    const logTokyoDate = parseToTokyoDateString(postedAt) ?? parseToTokyoDateString(createdAt);
+    if (!logTokyoDate || logTokyoDate !== todayTokyo) {
+      return [];
+    }
 
     const logId =
       toOptionalString(raw.logId ?? raw.log_id) ??
@@ -84,7 +116,7 @@ const normalizeLogs = (rawLogs: MaybePostedLog[] | undefined): PostedLogEntry[] 
     return [{
       logId,
       planId,
-      status,
+      status: normalizedStatus,
       mainText,
       templateId: (toOptionalString(raw.templateId ?? raw.template_id)?.trim() || undefined),
       theme: (toOptionalString(raw.theme)?.trim() || undefined),
@@ -190,11 +222,11 @@ export function PostedContent({ initialLogs = [] }: PostedContentProps) {
           <EmptyState title="投稿済みのコンテンツはありません" description="投稿が完了すると、ここに最新の内容が表示されます。" />
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 xl:grid-cols-2">
+        <div className="mt-6 grid gap-4">
           {postedLogs.map((log) => (
             <div
               key={log.logId}
-              className="flex h-full flex-col rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-white p-5 shadow-[var(--shadow-soft)]"
+              className="flex h-full flex-col rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 shadow-[var(--shadow-soft)]"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-secondary)]">
                 <span className="rounded-full bg-[#f2f4f7] px-2.5 py-1 text-[11px] font-medium">

@@ -59,6 +59,63 @@ const parseDate = (dateStr: string) => {
   }
 };
 
+const formatDateKey = (date?: Date | null): string | null => {
+  if (!date || Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const isWithinDateRange = (dateKey: string, startKey: string | null, endKey: string | null): boolean => {
+  if (!dateKey) {
+    return false;
+  }
+  if (!startKey || !endKey) {
+    return true;
+  }
+  return dateKey >= startKey && dateKey <= endKey;
+};
+
+const normalizeMediaUrl = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.includes('lh3.googleusercontent.com')) {
+    return trimmed;
+  }
+
+  const fileIdMatch = trimmed.match(/\/file\/d\/([^/]+)\//);
+  if (fileIdMatch?.[1]) {
+    return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
+  }
+
+  const idParamMatch = trimmed.match(/[?&]id=([^&]+)/);
+  if (idParamMatch?.[1]) {
+    return `https://lh3.googleusercontent.com/d/${idParamMatch[1]}`;
+  }
+
+  if (trimmed.startsWith('http')) {
+    return trimmed;
+  }
+
+  return null;
+};
+
+const resolveMediaUrl = (...urls: Array<string | null | undefined>): string | null => {
+  for (const candidate of urls) {
+    const normalized = normalizeMediaUrl(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+};
+
 export function InstagramDashboardView({ data }: Props) {
   const { dateRange, updatePreset } = useDateRange();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -206,19 +263,53 @@ export function InstagramDashboardView({ data }: Props) {
 
   // サマリー計算
   const summary = useMemo(() => {
-    const latestFollower = data.latestFollower;
+    const startKey = formatDateKey(dateRange.start);
+    const endKey = formatDateKey(dateRange.end);
+    const useAllRange = dateRange.preset === 'all';
+
+    const followerSeriesInRange = useAllRange
+      ? data.followerSeries
+      : data.followerSeries.filter((point) => isWithinDateRange(point.date, startKey, endKey));
+
+    const followerSeriesAsc = [...followerSeriesInRange].sort((a, b) => a.date.localeCompare(b.date));
+    const latestFollowerPoint =
+      followerSeriesAsc[followerSeriesAsc.length - 1]
+      ?? data.latestFollower;
+
+    const earliestFollowerPoint =
+      followerSeriesAsc[0]
+      ?? (data.followerSeries.length > 0
+        ? data.followerSeries[data.followerSeries.length - 1]
+        : data.latestFollower);
+
+    const followerGrowth =
+      latestFollowerPoint && earliestFollowerPoint
+        ? (latestFollowerPoint.followers ?? 0) - (earliestFollowerPoint.followers ?? 0)
+        : 0;
+
+    const reachTotal = followerSeriesInRange.reduce((sum, point) => sum + (point.reach ?? 0), 0);
+    const engagementTotal = followerSeriesInRange.reduce((sum, point) => sum + (point.engagement ?? 0), 0);
+
+    let lineRegistrations: number | null = null;
+    if (data.lineRegistrationSeries.length > 0) {
+      const lineSeriesInRange = useAllRange
+        ? data.lineRegistrationSeries
+        : data.lineRegistrationSeries.filter((point) => isWithinDateRange(point.date, startKey, endKey));
+      lineRegistrations = lineSeriesInRange.reduce((sum, point) => sum + (point.count ?? 0), 0);
+    } else if (data.lineRegistrationCount !== null) {
+      lineRegistrations = data.lineRegistrationCount;
+    }
 
     return {
-      currentFollowers: latestFollower?.followers || 0,
-      followerGrowth: 0, // BigQueryデータには含まれない場合は0
-      latestReach: latestFollower?.reach || 0,
-      latestEngagement: latestFollower?.engagement || 0,
-      totalReels: data.reels.length,
-      totalStories: data.stories.length,
+      currentFollowers: latestFollowerPoint?.followers ?? 0,
+      followerGrowth,
+      latestReach: reachTotal,
+      latestEngagement: engagementTotal,
+      totalReels: filteredReels.length,
+      totalStories: filteredStories.length,
+      lineRegistrations,
     };
-  }, [data]);
-
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  }, [data, dateRange, filteredReels, filteredStories]);
 
   if (!mounted) {
     return <LoadingScreen />;
@@ -413,11 +504,11 @@ export function InstagramDashboardView({ data }: Props) {
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">LINE登録数</p>
                     <p className="text-3xl font-bold text-gray-900 dark:text-gray-200">
-                      {data.lineRegistrationCount !== null ? data.lineRegistrationCount.toLocaleString() : '-'}
+                      {summary.lineRegistrations !== null ? summary.lineRegistrations.toLocaleString() : '-'}
                     </p>
-                    {data.lineRegistrationCount !== null && summary.latestReach > 0 && (
+                    {summary.lineRegistrations !== null && summary.latestReach > 0 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        遷移率: {((data.lineRegistrationCount / summary.latestReach) * 100).toFixed(2)}%
+                        遷移率: {((summary.lineRegistrations / summary.latestReach) * 100).toFixed(2)}%
                       </p>
                     )}
                   </div>
@@ -473,30 +564,46 @@ export function InstagramDashboardView({ data }: Props) {
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {sortedReels.slice(0, 5).map((reel, index) => (
-                    <div key={reel.instagramId} className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        {reel.timestamp ? new Date(reel.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
-                      </p>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-3 line-clamp-2">
-                        {reel.caption || 'キャプションなし'}
-                      </p>
-                      <div className="space-y-1">
-                        <div className="flex items-center text-xs">
-                          <span className="mr-1">👁️</span>
-                          <span className="font-semibold">{(reel.views || 0).toLocaleString()}</span>
+                  {sortedReels.slice(0, 5).map((reel, index) => {
+                    const thumbnailUrl = resolveMediaUrl(reel.thumbnailUrl, reel.driveImageUrl);
+                    return (
+                      <div key={reel.instagramId} className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
+                        <div className="mb-3 aspect-[9/16] w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                          {thumbnailUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={thumbnailUrl}
+                              alt={`リール${index + 1}のサムネイル`}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-xs text-gray-400">サムネイルなし</span>
+                          )}
                         </div>
-                        <div className="flex items-center text-xs">
-                          <span className="mr-1">❤️</span>
-                          <span className="font-semibold">{(reel.likeCount || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center text-xs">
-                          <span className="mr-1">💬</span>
-                          <span className="font-semibold">{(reel.commentsCount || 0).toLocaleString()}</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                          {reel.timestamp ? new Date(reel.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-3 line-clamp-2">
+                          {reel.caption || 'キャプションなし'}
+                        </p>
+                        <div className="space-y-1">
+                          <div className="flex items-center text-xs">
+                            <span className="mr-1">👁️</span>
+                            <span className="font-semibold">{(reel.views || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center text-xs">
+                            <span className="mr-1">❤️</span>
+                            <span className="font-semibold">{(reel.likeCount || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center text-xs">
+                            <span className="mr-1">💬</span>
+                            <span className="font-semibold">{(reel.commentsCount || 0).toLocaleString()}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -514,30 +621,46 @@ export function InstagramDashboardView({ data }: Props) {
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {sortedStories.slice(0, 5).map((story, index) => (
-                    <div key={story.instagramId} className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        {story.timestamp ? new Date(story.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
-                      </p>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-3 line-clamp-2">
-                        {story.caption || 'キャプションなし'}
-                      </p>
-                      <div className="space-y-1">
-                        <div className="flex items-center text-xs">
-                          <span className="mr-1">👁️</span>
-                          <span className="font-semibold">{(story.views || 0).toLocaleString()}</span>
+                  {sortedStories.slice(0, 5).map((story, index) => {
+                    const thumbnailUrl = resolveMediaUrl(story.thumbnailUrl, story.driveImageUrl);
+                    return (
+                      <div key={story.instagramId} className="bg-white dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
+                        <div className="mb-3 aspect-[9/16] w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                          {thumbnailUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={thumbnailUrl}
+                              alt={`ストーリー${index + 1}のサムネイル`}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-xs text-gray-400">サムネイルなし</span>
+                          )}
                         </div>
-                        <div className="flex items-center text-xs">
-                          <span className="mr-1">📊</span>
-                          <span className="font-semibold">{((story.completionRate || 0) * 100).toFixed(1)}%</span>
-                        </div>
-                        <div className="flex items-center text-xs">
-                          <span className="mr-1">💬</span>
-                          <span className="font-semibold">{(story.replies || 0).toLocaleString()}</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                          {story.timestamp ? new Date(story.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-3 line-clamp-2">
+                          {story.caption || 'キャプションなし'}
+                        </p>
+                        <div className="space-y-1">
+                          <div className="flex items-center text-xs">
+                            <span className="mr-1">👁️</span>
+                            <span className="font-semibold">{(story.views || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center text-xs">
+                            <span className="mr-1">📊</span>
+                            <span className="font-semibold">{((story.completionRate || 0) * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex items-center text-xs">
+                            <span className="mr-1">💬</span>
+                            <span className="font-semibold">{(story.replies || 0).toLocaleString()}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -571,33 +694,49 @@ export function InstagramDashboardView({ data }: Props) {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {sortedReels.map((reel) => (
-                  <div key={reel.instagramId} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-2 line-clamp-2">
-                      {reel.caption || 'キャプションなし'}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                      {reel.timestamp ? new Date(reel.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <StatPill icon="👁️" value={reel.views || 0} color="blue" />
-                      <StatPill icon="❤️" value={reel.likeCount || 0} color="red" />
-                      <StatPill icon="💬" value={reel.commentsCount || 0} color="green" />
-                      <StatPill icon="💾" value={reel.saved || 0} color="purple" />
-                      <StatPill icon="↗️" value={reel.shares || 0} color="orange" />
+                {sortedReels.map((reel, index) => {
+                  const thumbnailUrl = resolveMediaUrl(reel.thumbnailUrl, reel.driveImageUrl);
+                  return (
+                    <div key={reel.instagramId} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
+                      <div className="mb-3 aspect-[9/16] w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                        {thumbnailUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={thumbnailUrl}
+                            alt={`リール${index + 1}のサムネイル`}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">サムネイルなし</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-2 line-clamp-2">
+                        {reel.caption || 'キャプションなし'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        {reel.timestamp ? new Date(reel.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <StatPill icon="👁️" value={reel.views || 0} color="blue" />
+                        <StatPill icon="❤️" value={reel.likeCount || 0} color="red" />
+                        <StatPill icon="💬" value={reel.commentsCount || 0} color="green" />
+                        <StatPill icon="💾" value={reel.saved || 0} color="purple" />
+                        <StatPill icon="↗️" value={reel.shares || 0} color="orange" />
+                      </div>
+                      {reel.permalink && (
+                        <a
+                          href={reel.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 block text-sm text-purple-600 dark:text-purple-400 hover:underline"
+                        >
+                          リールを開く →
+                        </a>
+                      )}
                     </div>
-                    {reel.permalink && (
-                      <a
-                        href={reel.permalink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-3 block text-sm text-purple-600 dark:text-purple-400 hover:underline"
-                      >
-                        リールを開く →
-                      </a>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -629,22 +768,38 @@ export function InstagramDashboardView({ data }: Props) {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {sortedStories.map((story) => (
-                  <div key={story.instagramId} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-2 line-clamp-2">
-                      {story.caption || 'キャプションなし'}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                      {story.timestamp ? new Date(story.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <StatPill icon="👁️" value={story.views || 0} color="blue" />
-                      <StatPill icon="📊" value={`${((story.completionRate || 0) * 100).toFixed(1)}%`} color="purple" />
-                      <StatPill icon="💬" value={story.replies || 0} color="green" />
-                      <StatPill icon="👤" value={story.profileVisits || 0} color="orange" />
+                {sortedStories.map((story, index) => {
+                  const thumbnailUrl = resolveMediaUrl(story.thumbnailUrl, story.driveImageUrl);
+                  return (
+                    <div key={story.instagramId} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-lg transition-all duration-200">
+                      <div className="mb-3 aspect-[9/16] w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                        {thumbnailUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={thumbnailUrl}
+                            alt={`ストーリー${index + 1}のサムネイル`}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">サムネイルなし</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-200 mb-2 line-clamp-2">
+                        {story.caption || 'キャプションなし'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        {story.timestamp ? new Date(story.timestamp).toLocaleDateString('ja-JP') : 'N/A'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <StatPill icon="👁️" value={story.views || 0} color="blue" />
+                        <StatPill icon="📊" value={`${((story.completionRate || 0) * 100).toFixed(1)}%`} color="purple" />
+                        <StatPill icon="💬" value={story.replies || 0} color="green" />
+                        <StatPill icon="👤" value={story.profileVisits || 0} color="orange" />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

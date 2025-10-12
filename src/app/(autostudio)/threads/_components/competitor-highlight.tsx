@@ -21,8 +21,8 @@ export function CompetitorHighlights({ items }: CompetitorHighlightProps) {
         <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">直近7日で反応の高かった投稿を要約しています。</p>
       </header>
       <div className="grid gap-4">
-        {items.map((item) => (
-          <article key={item.accountName} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 shadow-[var(--shadow-soft)]">
+        {items.map((item, index) => (
+          <article key={`${item.accountName}-${index}`} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 shadow-[var(--shadow-soft)]">
             <header className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-[color:var(--color-text-primary)]">{item.accountName}</p>

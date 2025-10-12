@@ -1,10 +1,11 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { loadInstagramConfig } from './config';
-import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
+import { listLineSourceRegistrations } from '@/lib/lstep/dashboard';
 import type { BigQuery } from '@google-cloud/bigquery';
 
 const DEFAULT_DATASET = process.env.IG_BQ_DATASET ?? 'autostudio_instagram';
 const DEFAULT_LOCATION = process.env.IG_GCP_LOCATION ?? 'asia-northeast1';
+const LINE_REGISTRATION_LOOKBACK_DAYS = 120;
 
 export interface FollowerPoint {
   date: string;
@@ -25,6 +26,8 @@ export interface ReelHighlight {
   shares: number | null;
   avgWatchTimeSeconds: number | null;
   timestamp: string | null;
+  driveImageUrl: string | null;
+  thumbnailUrl: string | null;
 }
 
 export interface StoryHighlight {
@@ -36,6 +39,8 @@ export interface StoryHighlight {
   completionRate: number | null;
   timestamp: string | null;
   profileVisits: number | null;
+  driveImageUrl: string | null;
+  thumbnailUrl: string | null;
 }
 
 export interface ReelScriptSummary {
@@ -54,6 +59,7 @@ export interface InstagramDashboardData {
   stories: StoryHighlight[];
   scripts: ReelScriptSummary[];
   lineRegistrationCount: number | null;
+  lineRegistrationSeries: { date: string; count: number }[];
 }
 
 export async function getInstagramDashboardData(projectId: string): Promise<InstagramDashboardData> {
@@ -67,12 +73,23 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     fetchLatestScripts(client, projectId),
   ]);
 
-  // Fetch LINE registration count for the last 30 days
+  const lineRangeEnd = new Date();
+  const lineRangeStart = new Date(lineRangeEnd.getTime());
+  lineRangeStart.setUTCDate(lineRangeStart.getUTCDate() - LINE_REGISTRATION_LOOKBACK_DAYS + 1);
+
+  let lineRegistrationSeries: { date: string; count: number }[] = [];
   let lineRegistrationCount: number | null = null;
   try {
-    lineRegistrationCount = await countLineSourceRegistrations(projectId, {
+    const series = await listLineSourceRegistrations(projectId, {
       sourceName: 'Instagram',
+      startDate: lineRangeStart.toISOString().slice(0, 10),
+      endDate: lineRangeEnd.toISOString().slice(0, 10),
     });
+    lineRegistrationSeries = series.map((point) => ({
+      date: point.date,
+      count: point.count,
+    }));
+    lineRegistrationCount = lineRegistrationSeries.reduce((sum, point) => sum + point.count, 0);
   } catch (lineError) {
     console.warn('[instagram/dashboard] Failed to load LINE registration count', lineError);
   }
@@ -84,6 +101,7 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     stories,
     scripts,
     lineRegistrationCount,
+    lineRegistrationSeries,
   };
 }
 
@@ -132,6 +150,8 @@ async function fetchReelHighlights(client: BigQuery, projectId: string, userId: 
       saved,
       shares,
       avg_watch_time_seconds,
+      drive_image_url,
+      thumbnail_url,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', timestamp) AS timestamp
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reels\`
     WHERE user_id = @user_id
@@ -162,6 +182,8 @@ async function fetchReelHighlights(client: BigQuery, projectId: string, userId: 
       shares: row.shares !== undefined && row.shares !== null ? Number(row.shares) : null,
       avgWatchTimeSeconds:
         row.avg_watch_time_seconds !== undefined && row.avg_watch_time_seconds !== null ? Number(row.avg_watch_time_seconds) : null,
+      driveImageUrl: row.drive_image_url ? String(row.drive_image_url) : null,
+      thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : null,
       timestamp: row.timestamp ? String(row.timestamp) : null,
     }));
   } catch (error) {
@@ -180,6 +202,8 @@ async function fetchStoryHighlights(client: BigQuery, projectId: string, userId:
       replies,
       profile_visits,
       SAFE_DIVIDE(views, NULLIF(reach, 0)) AS completion_rate,
+      drive_image_url,
+      thumbnail_url,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', timestamp) AS timestamp
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_stories\`
     WHERE user_id = @user_id
@@ -209,6 +233,8 @@ async function fetchStoryHighlights(client: BigQuery, projectId: string, userId:
           ? Number(row.completion_rate)
           : null,
       profileVisits: row.profile_visits !== undefined && row.profile_visits !== null ? Number(row.profile_visits) : null,
+      driveImageUrl: row.drive_image_url ? String(row.drive_image_url) : null,
+      thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : null,
       timestamp: row.timestamp ? String(row.timestamp) : null,
     }));
   } catch (error) {

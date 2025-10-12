@@ -6,49 +6,8 @@ import {
   listContentScripts,
   type StoredContentScript,
 } from '@/lib/youtube/bigquery';
-import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Table } from '@/components/ui/table';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Banner } from '@/components/ui/banner';
-import { YoutubeDashboardTabs } from './_components/YoutubeDashboardTabs';
-
-function formatNumber(value: number, options?: Intl.NumberFormatOptions) {
-  return new Intl.NumberFormat('ja-JP', options).format(value);
-}
-
-function formatPercentage(value: number | null | undefined) {
-  if (value === undefined || value === null || Number.isNaN(value)) return '–';
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatDuration(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '–';
-  const minutes = Math.floor(seconds / 60);
-  const sec = Math.round(seconds % 60);
-  return `${minutes}分${sec.toString().padStart(2, '0')}秒`;
-}
-
-function buildNotionUrl(pageId?: string) {
-  if (!pageId) return undefined;
-  const compact = pageId.replace(/-/g, '');
-  return `https://www.notion.so/${compact}`;
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return '–';
-  try {
-    return new Intl.DateTimeFormat('ja-JP', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
+import { YoutubeDashboardShell } from './_components/YoutubeDashboardShell';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,139 +21,17 @@ export default async function YoutubeDashboardPage() {
     await ensureYoutubeTables(context);
     const scripts: StoredContentScript[] = await listContentScripts(context, { limit: 12 });
 
-    const overviewCards = [
-      {
-        label: '直近30日視聴回数',
-        value: formatNumber(Math.round(data.overview.totalViews30d)),
-      },
-      {
-        label: '平均視聴時間',
-        value: formatDuration(data.overview.avgViewDuration),
-      },
-      {
-        label: '登録者純増 (30日)',
-        value: formatNumber(Math.round(data.overview.subscriberDelta30d)),
-      },
-      {
-        label: 'LINE登録数',
-        value: data.lineRegistrationCount !== null ? formatNumber(data.lineRegistrationCount) : '-',
-        delta:
-          data.lineRegistrationCount !== null && data.overview.totalViews30d > 0
-            ? `遷移率: ${((data.lineRegistrationCount / data.overview.totalViews30d) * 100).toFixed(2)}%`
-            : undefined,
-      },
-    ];
-
-    const own30 = data.analytics.own.last30Days;
-    const own7 = data.analytics.own.last7Days;
-    // const comparison = data.analytics.comparison;
-
-    const ownMetricsRows = [
-      {
-        label: '視聴回数',
-        value30: `${formatNumber(own30.views)} 回`,
-        value7: `${formatNumber(own7.views)} 回`,
-      },
-      {
-        label: '視聴時間',
-        value30: `${formatNumber(own30.watchTimeMinutes)} 分`,
-        value7: `${formatNumber(own7.watchTimeMinutes)} 分`,
-      },
-      {
-        label: '平均視聴持続',
-        value30: formatDuration(own30.averageViewDurationSeconds),
-        value7: formatDuration(own7.averageViewDurationSeconds),
-      },
-      {
-        label: '登録者純増',
-        value30: `${own30.subscriberNet >= 0 ? '+' : ''}${formatNumber(own30.subscriberNet)}`,
-        value7: `${own7.subscriberNet >= 0 ? '+' : ''}${formatNumber(own7.subscriberNet)}`,
-      },
-    ];
-
-    const competitorRows = data.competitors.map((competitor) => ({
-      channel: competitor.channelTitle,
-      subscribers: competitor.subscriberCount ? `${formatNumber(competitor.subscriberCount)} 人` : '–',
-      viewVelocity: competitor.avgViewVelocity ? `${formatNumber(Math.round(competitor.avgViewVelocity))} /日` : '–',
-      engagement: formatPercentage(competitor.avgEngagementRate),
-      latestVideo:
-        competitor.latestVideoTitle
-          ? `${competitor.latestVideoTitle} (${competitor.latestVideoViewCount ? formatNumber(competitor.latestVideoViewCount) : '–'}回)`
-          : '–',
-      latestPublishedAt: competitor.latestVideoPublishedAt ? formatDateTime(competitor.latestVideoPublishedAt) : '–',
-    }));
-
     return (
       <div className="section-stack">
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {overviewCards.map((card) => (
-            <Card key={card.label} className="accent-gradient">
-              <p className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-[0.08em]">{card.label}</p>
-              <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
-              {card.delta && (
-                <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.delta}</p>
-              )}
-            </Card>
-          ))}
-        </div>
-
-        <YoutubeDashboardTabs
-          ownMetricsRows={ownMetricsRows}
-          competitorRows={competitorRows}
+        <YoutubeDashboardShell
+          overview={data.overview}
+          overviewSeries={data.overviewSeries}
+          analytics={data.analytics}
+          topVideos={data.topVideos}
+          competitors={data.competitors}
+          scripts={scripts}
+          lineRegistrationCount={data.lineRegistrationCount}
         />
-
-        {/* Comparison section temporarily disabled due to type issues */}
-        {/* {comparison ? (
-          <Card>
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">自分 vs 競合</h2>
-            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">最新スナップショットでの平均値比較です。</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <ComparisonBlock title="視聴回数" own={comparison.views.own} competitors={comparison.views.competitors} unit="回" />
-              <ComparisonBlock title="視聴時間" own={comparison.watchTime.own} competitors={comparison.watchTime.competitors} unit="分" />
-              <ComparisonBlock title="平均視聴維持率" own={comparison.retention.own} competitors={comparison.retention.competitors} formatter={formatPercentage} />
-              <ComparisonBlock title="登録者増減" own={comparison.subscribers.own} competitors={comparison.subscribers.competitors} />
-            </div>
-          </Card>
-        ) : null} */}
-
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">Notion 台本管理</h2>
-              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">Notion に保存された動画台本を一覧で確認できます。</p>
-            </div>
-            <ScriptGenerateButton themeKeyword="YouTube動画" />
-          </div>
-
-          {scripts.length ? (
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {scripts.map((script) => (
-                <Card key={script.notionPageId} className="accent-gradient">
-                  <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{script.title || 'Untitled Script'}</h3>
-                  <div className="mt-3 text-sm text-[color:var(--color-text-secondary)]">
-                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">Summary</p>
-                    <p className="mt-1">{script.summary || '—'}</p>
-                  </div>
-                  {script.notionPageId ? (
-                    <a
-                      href={buildNotionUrl(script.notionPageId)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-block text-xs text-[color:var(--color-accent)] hover:underline"
-                    >
-                      Notionで開く
-                    </a>
-                  ) : null}
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4">
-              <EmptyState title="台本がまだありません" description="台本生成を実行すると最新案がここに表示されます。" />
-            </div>
-          )}
-        </Card>
       </div>
     );
   } catch (error) {
@@ -210,34 +47,3 @@ export default async function YoutubeDashboardPage() {
     );
   }
 }
-
-/* function ComparisonBlock({
-  title,
-  own,
-  competitors,
-  unit,
-  formatter = (value: number) => `${formatNumber(value)}${unit ?? ''}`,
-}: {
-  title: string;
-  own: number;
-  competitors: number;
-  unit?: string;
-  formatter?: (value: number) => string;
-}) {
-  return (
-    <Card className="bg-white">
-      <p className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-[0.08em]">{title}</p>
-      <div className="mt-3 flex items-center justify-between text-sm text-[color:var(--color-text-secondary)]">
-        <div>
-          <p className="text-xs text-[color:var(--color-text-muted)]">自チャンネル</p>
-          <p className="text-lg font-semibold text-[color:var(--color-text-primary)]">{formatter(own)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-[color:var(--color-text-muted)]">競合平均</p>
-          <p className="text-lg font-semibold text-[color:var(--color-text-primary)]">{formatter(competitors)}</p>
-        </div>
-      </div>
-    </Card>
-  );
-} */
-

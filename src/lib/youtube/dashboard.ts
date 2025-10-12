@@ -8,6 +8,13 @@ export interface YoutubeOverview {
   latestSnapshotDate: string | null;
 }
 
+export interface YoutubeOverviewSeriesPoint {
+  date: string;
+  views: number;
+  watchTimeMinutes: number;
+  subscriberNet: number;
+}
+
 export interface YoutubeVideoSummary {
   videoId: string;
   title: string;
@@ -30,6 +37,7 @@ export interface YoutubeThemeSuggestion {
 
 export interface YoutubeDashboardData {
   overview: YoutubeOverview;
+  overviewSeries: YoutubeOverviewSeriesPoint[];
   topVideos: YoutubeVideoSummary[];
   themes: YoutubeThemeSuggestion[];
   analytics: {
@@ -183,8 +191,11 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       `,
     });
 
-    const latestRows = latestRowsRaw as Array<{ snapshot_date: string | null }>;
-    const latestSnapshotDate = latestRows[0]?.snapshot_date ?? null;
+    const latestRows = latestRowsRaw as Array<{ snapshot_date: unknown }>;
+    const latestSnapshotDateRaw = latestRows[0]?.snapshot_date ?? null;
+    const latestSnapshotDate = latestSnapshotDateRaw
+      ? toTimestamp(latestSnapshotDateRaw) ?? (typeof latestSnapshotDateRaw === 'string' ? latestSnapshotDateRaw : null)
+      : null;
     console.log('[youtube/dashboard] Latest snapshot date:', latestSnapshotDate);
 
     console.log('[youtube/dashboard] Fetching overview metrics...');
@@ -214,6 +225,54 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
     };
 
     console.log('[youtube/dashboard] Overview metrics:', overviewRow);
+
+    let overviewSeries: YoutubeOverviewSeriesPoint[] = [];
+    try {
+      console.log('[youtube/dashboard] Fetching overview time series...');
+      const [seriesRowsRaw] = await client.query({
+        query: `
+          WITH daily_metrics AS (
+            SELECT
+              date,
+              SUM(IF(metric_type = 'views', value, 0)) AS views,
+              SUM(IF(metric_type = 'estimatedMinutesWatched', value, 0)) AS watch_minutes,
+              SUM(IF(metric_type = 'subscribersGained', value, 0)) AS subscribers_gained,
+              SUM(IF(metric_type = 'subscribersLost', value, 0)) AS subscribers_lost
+            FROM \`${projectId}.${datasetId}.media_metrics_daily\`
+            WHERE media = 'youtube'
+              AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+            GROUP BY date
+          )
+          SELECT
+            date,
+            views,
+            watch_minutes,
+            IFNULL(subscribers_gained, 0) - IFNULL(subscribers_lost, 0) AS subscriber_net
+          FROM daily_metrics
+          ORDER BY date
+        `,
+      });
+
+      overviewSeries = (seriesRowsRaw as Array<{
+        date: unknown;
+        views: number | null;
+        watch_minutes: number | null;
+        subscriber_net: number | null;
+      }>).map((row) => ({
+        date: (() => {
+          if (!row.date) return '';
+          const normalized = toTimestamp(row.date);
+          if (normalized) return normalized;
+          return typeof row.date === 'string' ? row.date : '';
+        })(),
+        views: Number(row.views ?? 0),
+        watchTimeMinutes: Number(row.watch_minutes ?? 0),
+        subscriberNet: Number(row.subscriber_net ?? 0),
+      }));
+    } catch (seriesError) {
+      console.warn('[youtube/dashboard] Failed to fetch overview time series', seriesError);
+      overviewSeries = [];
+    }
 
   let topVideos: YoutubeVideoSummary[] = [];
   if (latestSnapshotDate) {
@@ -337,6 +396,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
         subscriberDelta30d: Number(overviewRow.subscriber_delta_30d) || 0,
         latestSnapshotDate,
       },
+      overviewSeries,
       topVideos,
       themes,
       analytics,

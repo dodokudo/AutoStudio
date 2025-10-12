@@ -129,28 +129,60 @@ export async function getLineDashboardData(projectId: string): Promise<LineDashb
   };
 }
 
+export interface LineSourceRegistrationPoint {
+  date: string;
+  count: number;
+}
+
+const DEFAULT_LINE_LOOKBACK_DAYS = 30;
+
+function normalizeNumeric(value: unknown): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function resolveDate(value?: string): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const parsed = new Date(`${trimmed}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? null : trimmed;
+}
+
+function resolveLineSourceDateRange(options: LineSourceCountOptions): { startDate: string; endDate: string } {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const resolvedEnd = resolveDate(options.endDate) ?? todayIso;
+  const resolvedEndDate = new Date(`${resolvedEnd}T00:00:00Z`);
+  const resolvedStart =
+    resolveDate(options.startDate)
+    ?? (() => {
+      const start = new Date(resolvedEndDate.getTime());
+      start.setUTCDate(start.getUTCDate() - DEFAULT_LINE_LOOKBACK_DAYS + 1);
+      return start.toISOString().slice(0, 10);
+    })();
+
+  return { startDate: resolvedStart, endDate: resolvedEnd };
+}
+
 export async function countLineSourceRegistrations(
   projectId: string,
   { startDate, endDate, sourceName = 'Threads', datasetId = DEFAULT_DATASET }: LineSourceCountOptions,
 ): Promise<number> {
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
 
-  const resolveDate = (value?: string): string | null => {
-    if (!value) return null;
-    const trimmed = value.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
-    const parsed = new Date(`${trimmed}T00:00:00Z`);
-    return Number.isNaN(parsed.getTime()) ? null : trimmed;
-  };
-
-  const resolvedEnd = resolveDate(endDate) ?? new Date().toISOString().slice(0, 10);
-  const resolvedEndDate = new Date(`${resolvedEnd}T00:00:00Z`);
-  const resolvedStart = resolveDate(startDate)
-    ?? (() => {
-      const start = new Date(resolvedEndDate.getTime());
-      start.setUTCDate(start.getUTCDate() - 30 + 1);
-      return start.toISOString().slice(0, 10);
-    })();
+  const { startDate: resolvedStart, endDate: resolvedEnd } = resolveLineSourceDateRange({
+    startDate,
+    endDate,
+  });
 
   const [row] = await runQuery<{ total: bigint | number | string | null }>(client, projectId, datasetId, {
     query: `
@@ -170,14 +202,72 @@ export async function countLineSourceRegistrations(
     params: { startDate: resolvedStart, endDate: resolvedEnd, sourceName },
   });
 
-  const value = row?.total;
-  return typeof value === 'number'
-    ? value
-    : typeof value === 'bigint'
-      ? Number(value)
-      : typeof value === 'string'
-        ? Number(value) || 0
-        : 0;
+  return normalizeNumeric(row?.total);
+}
+
+export async function listLineSourceRegistrations(
+  projectId: string,
+  options: LineSourceCountOptions = {},
+): Promise<LineSourceRegistrationPoint[]> {
+  const { sourceName = 'Threads', datasetId = DEFAULT_DATASET } = options;
+  const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
+  const { startDate, endDate } = resolveLineSourceDateRange(options);
+
+  const rows = await runQuery<{ date: string | null; total: bigint | number | string | null }>(
+    client,
+    projectId,
+    datasetId,
+    {
+      query: `
+        WITH matched_users AS (
+          SELECT DISTINCT
+            core.user_id,
+            DATE(core.friend_added_at) AS joined_date
+          FROM \`${projectId}.${datasetId}.user_core\` core
+          INNER JOIN \`${projectId}.${datasetId}.user_sources\` sources
+            ON core.user_id = sources.user_id
+            AND core.snapshot_date = sources.snapshot_date
+          WHERE DATE(core.friend_added_at) BETWEEN @startDate AND @endDate
+            AND sources.source_name = @sourceName
+            AND sources.source_flag = 1
+        )
+        SELECT
+          joined_date AS date,
+          COUNT(*) AS total
+        FROM matched_users
+        GROUP BY joined_date
+        ORDER BY joined_date DESC
+      `,
+      params: { startDate, endDate, sourceName },
+    },
+  );
+
+  const normalizeDate = (value: unknown): string => {
+    if (!value) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (value instanceof Date) {
+      return value.toISOString().slice(0, 10);
+    }
+    if (typeof value === 'object' && value !== null && 'value' in value) {
+      const nested = (value as { value?: unknown }).value;
+      if (typeof nested === 'string') {
+        return nested;
+      }
+      if (nested instanceof Date) {
+        return nested.toISOString().slice(0, 10);
+      }
+    }
+    return String(value);
+  };
+
+  return rows.map((row) => ({
+    date: normalizeDate(row?.date),
+    count: normalizeNumeric(row?.total),
+  }));
 }
 
 async function buildFunnel(client: BigQuery, projectId: string, datasetId: string): Promise<FunnelStage[]> {
