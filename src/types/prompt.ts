@@ -112,6 +112,12 @@ export interface OwnPost {
   score: number;
 }
 
+export interface PromptWebResearch {
+  topic: string;
+  summary: string;
+  searchedAt: string;
+}
+
 export interface ThreadsPromptPayload {
   meta: PromptMeta;
   accountSummary: PromptAccountSummary;
@@ -126,4 +132,5 @@ export interface ThreadsPromptPayload {
   competitorSelected: CompetitorPost[];
   ownWinningPosts: OwnPost[];
   monguchiPosts: MonguchiPost[];
+  webResearch?: PromptWebResearch;
 }

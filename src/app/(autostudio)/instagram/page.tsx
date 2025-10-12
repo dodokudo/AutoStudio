@@ -1,7 +1,7 @@
 import { ensureInstagramTables } from '@/lib/instagram/bigquery';
 import { createInstagramBigQuery, loadInstagramConfig } from '@/lib/instagram';
 import { getInstagramDashboardData } from '@/lib/instagram/dashboard';
-import { InstagramDashboardView } from './_components/dashboard-view';
+import { InstagramDashboardView } from './_components/dashboard-view.client';
 import { Banner } from '@/components/ui/banner';
 
 export const dynamic = 'force-dynamic';

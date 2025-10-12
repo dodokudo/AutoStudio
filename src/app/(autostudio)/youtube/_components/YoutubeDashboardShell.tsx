@@ -285,7 +285,7 @@ export function YoutubeDashboardShell({
         <div className="border-b border-[color:var(--color-border)] px-6 py-4">
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">動画別パフォーマンス</h2>
           <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-            タグ・LINE登録数・ホーム画面からの流入を含めた粒度で分析できます。各行を選択すると詳細が表示されます。
+            LINE登録数を含めた粒度で分析できます。各行を選択すると詳細が表示されます。
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -297,8 +297,6 @@ export function YoutubeDashboardShell({
                 <th className="px-4 py-3">伸び速度</th>
                 <th className="px-4 py-3">エンゲージメント</th>
                 <th className="px-4 py-3">LINE登録</th>
-                <th className="px-4 py-3">ホーム流入</th>
-                <th className="px-4 py-3">タグ</th>
               </tr>
             </thead>
             <tbody>
@@ -332,21 +330,7 @@ export function YoutubeDashboardShell({
                     </td>
                     <td className="px-4 py-3 text-sm">{video.viewVelocity ? `${formatNumber(Math.round(video.viewVelocity))} /日` : '–'}</td>
                     <td className="px-4 py-3 text-sm">{video.engagementRate !== undefined ? formatPercent(video.engagementRate) : '–'}</td>
-                    <td className="px-4 py-3 text-sm text-[color:var(--color-text-muted)]">連携予定</td>
-                    <td className="px-4 py-3 text-sm text-[color:var(--color-text-muted)]">連携予定</td>
-                    <td className="px-4 py-3 text-xs text-[color:var(--color-text-secondary)]">
-                      {video.tags && video.tags.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {video.tags.slice(0, 6).map((tag) => (
-                            <span key={tag} className="rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-[11px]">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        'タグ情報なし'
-                      )}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-[color:var(--color-text-muted)]">–</td>
                   </tr>
                 );
               })}
@@ -378,24 +362,8 @@ export function YoutubeDashboardShell({
                   <MetricChip label="コメント" value={formatNumber(selectedVideo.commentCount ?? 0)} />
                   <MetricChip label="日次伸び速度" value={selectedVideo.viewVelocity ? `${formatNumber(Math.round(selectedVideo.viewVelocity))} /日` : '–'} />
                   <MetricChip label="平均エンゲージメント" value={selectedVideo.engagementRate !== undefined ? formatPercent(selectedVideo.engagementRate) : '–'} />
-                  <MetricChip label="LINE登録" value="連携予定" muted />
-                  <MetricChip label="ホーム流入" value="連携予定" muted />
+                  <MetricChip label="LINE登録" value="–" muted />
                 </div>
-                {selectedVideo.tags && selectedVideo.tags.length ? (
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">タグ</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {selectedVideo.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full bg-[color:var(--color-surface-muted)] px-3 py-1 text-xs text-[color:var(--color-text-secondary)]"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
                 <div className="flex gap-3">
                   <Link
                     href={`https://www.youtube.com/watch?v=${selectedVideo.videoId}`}

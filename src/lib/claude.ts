@@ -466,6 +466,18 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
     console.error('[claude] Failed to append learning summary to prompt:', error);
   }
 
+  const webResearchSection = payload.webResearch ? [
+    '## 🔍 最新のWeb情報（Tavily検索結果）',
+    `検索トピック: ${payload.webResearch.topic}`,
+    `取得日時: ${new Date(payload.webResearch.searchedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
+    '',
+    '最新のトレンド情報:',
+    payload.webResearch.summary,
+    '',
+    '**活用方法**: 上記の最新情報を踏まえて、トレンドに沿った実践的なTipsを作成してください。',
+    '',
+  ] : [];
+
   return [
     ...learningLines,
     '# CONTEXT (batch generation)',
@@ -479,6 +491,7 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
     '- 推奨投稿時刻:',
     schedules,
     '',
+    ...webResearchSection,
     '## 【最重要】門口さん特別枠',
     formatMonguchiPosts(payload),
     '',

@@ -1,32 +1,45 @@
-import Link from 'next/link';
-import { Card } from '@/components/ui/card';
+import { Banner } from '@/components/ui/banner';
+import { getHomeDashboardData } from '@/lib/home/dashboard';
+import { HomeDashboardShell } from './_components/HomeDashboardShell';
 
-const destinations = [
-  { href: '/threads', title: 'Threads', description: '投稿管理とインサイト分析' },
-  { href: '/instagram', title: 'Instagram', description: 'フィード・ストーリーの運用' },
-  { href: '/youtube', title: 'YouTube', description: '動画台本と分析レポート' },
-  { href: '/line', title: 'LINE', description: 'メッセージ配信とシナリオ管理' },
-];
+export const dynamic = 'force-dynamic';
 
-export default function HomePage() {
-  return (
-    <div className="section-stack">
+const RANGE_PRESETS = [
+  { value: '7d', label: '7日間', days: 7 },
+  { value: '30d', label: '30日間', days: 30 },
+  { value: '90d', label: '90日間', days: 90 },
+] as const;
 
-      {/* Platform cards with subtle accent gradient */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {destinations.map((destination) => (
-          <Link
-            key={destination.href}
-            href={destination.href}
-            className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]"
-          >
-            <Card className="h-full transition-all duration-300 hover:shadow-[var(--shadow-elevated)] hover:scale-[1.02] accent-gradient">
-              <h2 className="text-lg font-medium text-[color:var(--color-text-primary)]">{destination.title}</h2>
-              <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">{destination.description}</p>
-            </Card>
-          </Link>
-        ))}
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[]>;
+}) {
+  const rangeParam = typeof searchParams?.range === 'string' ? searchParams.range : undefined;
+  const selectedRangeOption = RANGE_PRESETS.find((option) => option.value === rangeParam) ?? RANGE_PRESETS[0];
+
+  try {
+    const data = await getHomeDashboardData({ rangeDays: selectedRangeOption.days, rangeValue: selectedRangeOption.value });
+
+    return (
+      <div className="section-stack">
+        <HomeDashboardShell
+          data={data}
+          rangeOptions={RANGE_PRESETS.map(({ value, label }) => ({ value, label }))}
+          selectedRange={selectedRangeOption.value}
+        />
       </div>
-    </div>
-  );
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      <div className="section-stack">
+        <Banner variant="error">
+          <p className="font-semibold">ホームダッシュボードの読み込みに失敗しました</p>
+          <p className="mt-1 text-sm">{message}</p>
+          <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">BigQuery や API 連携設定をご確認ください。</p>
+        </Banner>
+      </div>
+    );
+  }
 }

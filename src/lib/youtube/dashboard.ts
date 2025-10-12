@@ -40,6 +40,7 @@ export interface YoutubeDashboardData {
   overviewSeries: YoutubeOverviewSeriesPoint[];
   topVideos: YoutubeVideoSummary[];
   themes: YoutubeThemeSuggestion[];
+  channelSummary: YoutubeChannelSummary | null;
   analytics: {
     own: {
       last30Days: AnalyticsSummary;
@@ -76,6 +77,15 @@ interface YoutubeCompetitorSummary {
   latestVideoTitle?: string;
   latestVideoViewCount?: number | null;
   latestVideoPublishedAt?: string;
+}
+
+export interface YoutubeChannelSummary {
+  channelId: string;
+  title: string;
+  subscriberCount: number | null;
+  viewCount: number | null;
+  videoCount: number | null;
+  snapshotDate: string | null;
 }
 
 const STOPWORDS = new Set([
@@ -375,6 +385,17 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
     }
   }
 
+  console.log('[youtube/dashboard] Fetching self channel summary...');
+  let channelSummary: YoutubeChannelSummary | null = null;
+  if (latestSnapshotDate) {
+    try {
+      channelSummary = await fetchSelfChannelSummary(client, projectId, datasetId, latestSnapshotDate);
+    } catch (channelError) {
+      console.warn('[youtube/dashboard] Failed to load self channel summary', channelError);
+      channelSummary = null;
+    }
+  }
+
   // Fetch LINE registration count for the last 30 days
   let lineRegistrationCount: number | null = null;
   try {
@@ -399,6 +420,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       overviewSeries,
       topVideos,
       themes,
+      channelSummary,
       analytics,
       competitors,
       lineRegistrationCount,
@@ -633,4 +655,50 @@ async function buildCompetitorSummary(
     console.error('[youtube/dashboard] Error in buildCompetitorSummary:', error);
     throw error;
   }
+}
+
+async function fetchSelfChannelSummary(
+  client: ReturnType<typeof createBigQueryClient>,
+  projectId: string,
+  datasetId: string,
+  snapshotDate: string,
+): Promise<YoutubeChannelSummary | null> {
+  const [rows] = await client.query({
+    query: `
+      SELECT
+        channel_id,
+        channel_title,
+        subscriber_count,
+        view_count,
+        video_count
+      FROM \`${projectId}.${datasetId}.media_channels_snapshot\`
+      WHERE media = 'youtube'
+        AND snapshot_date = @snapshot_date
+        AND is_self = TRUE
+      ORDER BY collected_at DESC
+      LIMIT 1
+    `,
+    params: { snapshot_date: snapshotDate },
+  });
+
+  const row = (rows as Array<{
+    channel_id: string;
+    channel_title: string | null;
+    subscriber_count: number | null;
+    view_count: number | null;
+    video_count: number | null;
+  }>)[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    channelId: row.channel_id,
+    title: row.channel_title ?? row.channel_id,
+    subscriberCount: row.subscriber_count ?? null,
+    viewCount: row.view_count ?? null,
+    videoCount: row.video_count ?? null,
+    snapshotDate,
+  };
 }

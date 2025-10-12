@@ -1,6 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
 import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
+import { searchForThreadsContent } from './tavily/client';
 import type {
   PromptAccountSummary,
   PromptSelfPost,
@@ -845,7 +846,7 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
   const startDateStr = startDate.toISOString().slice(0, 10);
   const endDateStr = endDate.toISOString().slice(0, 10);
 
-  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries, postCount, competitorSelected, ownWinningPosts, monguchiPosts] =
+  const [accountSummary, topSelfPosts, competitorHighlights, trendingTopics, templateSummaries, postCount, competitorSelected, ownWinningPosts, monguchiPosts, webResearch] =
     await Promise.all([
       fetchAccountSummary(client, projectId, rangeDays, startDateStr, endDateStr),
       fetchTopSelfPosts(client, projectId, startDateStr, endDateStr),
@@ -856,6 +857,20 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
       fetchCompetitorSelected(client, projectId, startDateStr, endDateStr),
       fetchOwnWinningPosts(client, projectId, startDateStr, endDateStr),
       fetchMonguchiPosts(client, projectId, startDateStr, endDateStr),
+      (async () => {
+        try {
+          const topic = 'AI活用 生成AI 最新トレンド 2025';
+          const summary = await searchForThreadsContent(topic);
+          return summary ? {
+            topic,
+            summary,
+            searchedAt: new Date().toISOString(),
+          } : undefined;
+        } catch (error) {
+          console.error('[promptBuilder] Tavily search failed:', error);
+          return undefined;
+        }
+      })(),
     ]);
 
   const targetCount = 10;
@@ -885,5 +900,6 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
     competitorSelected,
     ownWinningPosts,
     monguchiPosts,
+    webResearch,
   };
 }

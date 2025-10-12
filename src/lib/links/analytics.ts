@@ -8,6 +8,14 @@ export interface LinkClicksByDate {
   clicks: number;
 }
 
+export interface LinkClicksSummary {
+  total: number;
+  byCategory: Array<{
+    category: string;
+    clicks: number;
+  }>;
+}
+
 export async function getThreadsLinkClicks(): Promise<LinkClicksByDate[]> {
   const end = new Date();
   const start = new Date(end.getTime());
@@ -77,4 +85,59 @@ export async function getTotalThreadsClicks(): Promise<number> {
   const result = rows[0] as Record<string, unknown>;
 
   return parseInt(String(result?.total_clicks || 0));
+}
+
+export async function getLinkClicksSummary({
+  startDate,
+  endDate,
+}: {
+  startDate: Date;
+  endDate: Date;
+}): Promise<LinkClicksSummary> {
+  const bigquery = createBigQueryClient(projectId);
+
+  const query = `
+    WITH latest_links AS (
+      SELECT
+        id,
+        category,
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) AS rn
+      FROM \`${projectId}.${dataset}.short_links\`
+      WHERE is_active = TRUE
+    ),
+    filtered_clicks AS (
+      SELECT
+        cl.short_link_id,
+        DATE(cl.clicked_at) AS clicked_date
+      FROM \`${projectId}.${dataset}.click_logs\` cl
+      WHERE DATE(cl.clicked_at) BETWEEN @startDate AND @endDate
+    )
+    SELECT
+      COALESCE(ll.category, 'unknown') AS category,
+      COUNT(*) AS clicks
+    FROM filtered_clicks fc
+    JOIN latest_links ll ON fc.short_link_id = ll.id
+    WHERE ll.rn = 1
+    GROUP BY category
+  `;
+
+  const [rows] = await bigquery.query({
+    query,
+    params: {
+      startDate: startDate.toISOString().slice(0, 10),
+      endDate: endDate.toISOString().slice(0, 10),
+    },
+  });
+
+  const byCategory = rows.map((row: Record<string, unknown>) => ({
+    category: String(row.category ?? 'unknown'),
+    clicks: Number(row.clicks ?? 0),
+  }));
+
+  const total = byCategory.reduce((sum, entry) => sum + entry.clicks, 0);
+
+  return {
+    total,
+    byCategory,
+  };
 }

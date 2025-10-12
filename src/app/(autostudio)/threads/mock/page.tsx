@@ -7,7 +7,7 @@ import { TopContentCard } from '../_components/top-content-card';
 import { TemplateSummary } from '../_components/template-summary';
 import { CompetitorHighlights } from '../_components/competitor-highlight';
 
-type TabKey = 'postInsights' | 'competitorInsights';
+type TabKey = 'post' | 'insights' | 'competitor';
 
 const ACCOUNT_OVERVIEW_METRICS = [
   { label: '本日の投稿予定', value: '3件', note: '午前2件 / 夕方1件' },
@@ -224,7 +224,7 @@ const COMPETITOR_PROFILES = [
 ];
 
 export default function ThreadsUiRefreshMock() {
-  const [activeTab, setActiveTab] = useState<TabKey>('postInsights');
+  const [activeTab, setActiveTab] = useState<TabKey>('post');
   const [topContentSort, setTopContentSort] = useState<'postedAt' | 'views' | 'likes'>('views');
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string>(COMPETITOR_PROFILES[0].id);
 
@@ -238,27 +238,38 @@ export default function ThreadsUiRefreshMock() {
       <header className="flex flex-col gap-2">
         <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">Threads UI Refresh Mock</h1>
         <p className="text-sm text-[color:var(--color-text-secondary)]">
-          投稿インサイトと競合インサイトの2軸で構成する新レイアウトのたたき台です。
+          投稿・インサイト・競合インサイトを分離した3タブ構成のたたき台です。
         </p>
       </header>
 
       <nav className="flex overflow-x-auto border-b border-[color:var(--color-border)] scrollbar-hide">
         <button
           type="button"
-          onClick={() => setActiveTab('postInsights')}
+          onClick={() => setActiveTab('post')}
           className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-            activeTab === 'postInsights'
+            activeTab === 'post'
               ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
               : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
           }`}
         >
-          投稿インサイト
+          投稿
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('competitorInsights')}
+          onClick={() => setActiveTab('insights')}
           className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-            activeTab === 'competitorInsights'
+            activeTab === 'insights'
+              ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
+              : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+          }`}
+        >
+          インサイト
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('competitor')}
+          className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+            activeTab === 'competitor'
               ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
               : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
           }`}
@@ -267,7 +278,7 @@ export default function ThreadsUiRefreshMock() {
         </button>
       </nav>
 
-      {activeTab === 'postInsights' ? (
+      {activeTab === 'post' ? (
         <div className="section-stack">
           <section className="grid gap-6 lg:grid-cols-2">
             <Card>
@@ -307,7 +318,7 @@ export default function ThreadsUiRefreshMock() {
                 <textarea
                   rows={6}
                   placeholder="本文 (各段落を改行で区切り、CTAも記載)"
-                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focusリング[color:var(--color-accent)]"
+                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                 />
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-secondary)]">
@@ -395,13 +406,13 @@ export default function ThreadsUiRefreshMock() {
               </div>
             </Card>
           </section>
-
-          <section className="section-stack">
-            <AccountInsightsCard data={ACCOUNT_INSIGHTS_MOCK} note="レポート期間: 直近7日間 (モック)" />
-            <TopContentCard posts={TOP_CONTENT_SAMPLE} sortOption={topContentSort} onSortChange={setTopContentSort} />
-            <TemplateSummary items={TEMPLATE_SUMMARY_SAMPLE} />
-          </section>
         </div>
+      ) : activeTab === 'insights' ? (
+        <section className="section-stack">
+          <AccountInsightsCard data={ACCOUNT_INSIGHTS_MOCK} note="レポート期間: 直近7日間 (モック)" />
+          <TopContentCard posts={TOP_CONTENT_SAMPLE} sortOption={topContentSort} onSortChange={setTopContentSort} />
+          <TemplateSummary items={TEMPLATE_SUMMARY_SAMPLE} />
+        </section>
       ) : (
         <div className="section-stack">
           <section className="space-y-4">
