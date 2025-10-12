@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import type { DailyFollowerMetric, PostInsight } from '@/lib/threadsInsightsData';
+import type { PromptTemplateSummary } from '@/types/prompt';
 import { Card } from '@/components/ui/card';
 import { AccountInsightsCard } from './account-insights-card';
 import { TopContentCard } from './top-content-card';
+import { TemplateSummary } from './template-summary';
 import { InsightsRangeSelector } from './insights-range-selector';
 
 interface RangePreset {
@@ -21,6 +23,7 @@ interface InsightsTabProps {
   customStart?: string;
   customEnd?: string;
   noteText: string;
+  templateSummaries?: PromptTemplateSummary[];
 }
 
 const FALLBACK_INSIGHTS: Array<{
@@ -56,6 +59,7 @@ export function InsightsTab({
   customStart,
   customEnd,
   noteText,
+  templateSummaries,
 }: InsightsTabProps) {
   const [topContentSort, setTopContentSort] = useState<TopContentSort>('views');
 
@@ -222,6 +226,7 @@ export function InsightsTab({
           />
         }
       />
+      {templateSummaries && templateSummaries.length ? <TemplateSummary items={templateSummaries} /> : null}
       <TopContentCard posts={topContentData} sortOption={topContentSort} onSortChange={setTopContentSort} />
     </div>
   );

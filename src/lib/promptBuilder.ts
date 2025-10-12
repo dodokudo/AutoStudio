@@ -1,7 +1,7 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
 import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
-import { searchForThreadsContent } from './tavily/client';
+import { searchMultipleTopics } from './tavily/client';
 import type {
   PromptAccountSummary,
   PromptSelfPost,
@@ -15,6 +15,7 @@ import type {
   CompetitorPost,
   OwnPost,
   MonguchiPost,
+  WebSearchResult,
 } from '../types/prompt';
 
 interface BuildPromptOptions {
@@ -859,13 +860,43 @@ export async function buildThreadsPromptPayload(options: BuildPromptOptions): Pr
       fetchMonguchiPosts(client, projectId, startDateStr, endDateStr),
       (async () => {
         try {
-          const topic = 'AI活用 生成AI 最新トレンド 2025';
-          const summary = await searchForThreadsContent(topic);
-          return summary ? {
-            topic,
-            summary,
+          const today = new Date();
+          const thisMonth = `${today.getFullYear()}年${today.getMonth() + 1}月`;
+
+          const newsTopics = [
+            `生成AI 新モデル リリース ${thisMonth}`,
+            `ChatGPT Claude Gemini アップデート 今週`,
+          ];
+
+          const howtoTopics = [
+            `生成AI 業務効率化 最新事例 ${thisMonth}`,
+            `AI活用 時短テクニック 実践`,
+          ];
+
+          const [newsResults, howtoResults] = await Promise.all([
+            searchMultipleTopics(newsTopics),
+            searchMultipleTopics(howtoTopics),
+          ]);
+
+          const latestNews: WebSearchResult[] = newsResults.slice(0, 3).map(r => ({
+            title: r.title,
+            url: r.url,
+            content: r.content.slice(0, 300),
+            extractedDate: r.extractedDate?.toISOString(),
+          }));
+
+          const practicalHowTo: WebSearchResult[] = howtoResults.slice(0, 5).map(r => ({
+            title: r.title,
+            url: r.url,
+            content: r.content.slice(0, 300),
+            extractedDate: r.extractedDate?.toISOString(),
+          }));
+
+          return {
+            latestNews,
+            practicalHowTo,
             searchedAt: new Date().toISOString(),
-          } : undefined;
+          };
         } catch (error) {
           console.error('[promptBuilder] Tavily search failed:', error);
           return undefined;

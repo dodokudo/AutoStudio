@@ -3,8 +3,9 @@ import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
 import { getThreadsDashboard } from "@/lib/threadsDashboard";
 import { getThreadsInsightsData } from "@/lib/threadsInsightsData";
 import { resolveProjectId } from "@/lib/bigquery";
-import { OverviewTab } from "./_components/overview-tab";
+import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
+import { CompetitorTab } from "./_components/competitor-tab";
 import { countLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getThreadsLinkClicksByRange } from "@/lib/links/analytics";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
@@ -34,12 +35,7 @@ const formatDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-type QueueMetrics = {
-  draft: number;
-  approved: number;
-  scheduled: number;
-  rejected: number;
-};
+type ThreadsTabKey = 'post' | 'insights' | 'competitor';
 
 type DisplayHighlight = {
   accountName: string;
@@ -185,8 +181,10 @@ export default async function ThreadsHome({
     return { start, end: now } as const;
   })();
 
-  const tabParam = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : "overview";
-  const activeTab = ["overview", "insights"].includes(tabParam) ? tabParam : "overview";
+  const tabParamRaw = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : undefined;
+  const normalizedTabParam = tabParamRaw === 'overview' ? 'post' : tabParamRaw;
+  const allowedTabs: ThreadsTabKey[] = ['post', 'insights', 'competitor'];
+  const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'post';
 
   try {
     const { start: rangeStartDate, end: rangeEndDate } = selectedRangeWindow;
@@ -409,37 +407,6 @@ export default async function ThreadsHome({
       },
     ];
 
-    const queueMetrics = planSummaries.reduce<QueueMetrics>(
-      (acc, plan) => {
-        if (plan.status in acc) {
-          acc[plan.status as keyof QueueMetrics] += 1;
-        }
-        return acc;
-      },
-      { draft: 0, approved: 0, scheduled: 0, rejected: 0 },
-    );
-
-    const heroStats = [
-      {
-        label: '承認待ち',
-        value: queueMetrics.draft,
-        caption: 'レビューが必要な投稿',
-        tone: 'text-amber-600 bg-amber-100/60',
-      },
-      {
-        label: '本日予約',
-        value: queueMetrics.scheduled,
-        caption: 'Threads API による予約',
-        tone: 'text-sky-600 bg-sky-100/60',
-      },
-      {
-        label: '今日完了',
-        value: dashboard.jobCounts.succeededToday,
-        caption: '投稿成功数 (本日)',
-        tone: 'text-emerald-600 bg-emerald-100/60',
-      },
-    ];
-
     const competitorHighlights: DisplayHighlight[] = (
       insights.competitorHighlights.length ? insights.competitorHighlights : FALLBACK_HIGHLIGHTS
     ).map((item) => toDisplayHighlight(item));
@@ -458,6 +425,12 @@ export default async function ThreadsHome({
         ? insights.templateSummaries
         : FALLBACK_TEMPLATES;
 
+    const templateOptions =
+      insights.templateSummaries?.map((template) => ({
+        value: template.templateId,
+        label: `${template.templateId} (v${template.version})`,
+      })) || [];
+
     const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
 
     return (
@@ -470,10 +443,10 @@ export default async function ThreadsHome({
               ...(rangeParam && { range: rangeParam }),
               ...(customStart && { start: customStart }),
               ...(customEnd && { end: customEnd }),
-              tab: 'overview',
+              tab: 'post',
             }).toString()}`}
             className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'overview'
+              activeTab === 'post'
                 ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
                 : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
             }`}
@@ -495,12 +468,26 @@ export default async function ThreadsHome({
           >
             インサイト
           </a>
+          <a
+            href={`?${new URLSearchParams({
+              ...(rangeParam && { range: rangeParam }),
+              ...(customStart && { start: customStart }),
+              ...(customEnd && { end: customEnd }),
+              tab: 'competitor',
+            }).toString()}`}
+            className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'competitor'
+                ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
+                : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+            }`}
+          >
+            競合インサイト
+          </a>
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'overview' ? (
-          <OverviewTab
-            heroStats={heroStats}
+        {activeTab === 'post' ? (
+          <PostTab
             stats={stats}
             noteText={noteText}
             rangeSelectorOptions={rangeSelectorOptions}
@@ -508,19 +495,10 @@ export default async function ThreadsHome({
             customStart={customStart}
             customEnd={customEnd}
             planSummaries={planSummaries}
-            templateOptions={
-              insights.templateSummaries?.map((template) => ({
-                value: template.templateId,
-                label: `${template.templateId} (v${template.version})`,
-              })) || []
-            }
-            trendingTopics={trendingTopics}
-            competitorHighlights={competitorHighlights}
-            templateSummaries={templateSummaries}
-            dashboard={dashboard}
-            queueMetrics={queueMetrics}
+            templateOptions={templateOptions}
+            recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
           />
-        ) : (
+        ) : activeTab === 'insights' ? (
           <InsightsTab
             posts={insightsActivity.posts}
             dailyMetrics={insightsActivity.dailyMetrics}
@@ -530,7 +508,10 @@ export default async function ThreadsHome({
             customStart={customStart}
             customEnd={customEnd}
             noteText={noteText}
+            templateSummaries={templateSummaries}
           />
+        ) : (
+          <CompetitorTab highlights={competitorHighlights} trendingTopics={trendingTopics} />
         )}
       </div>
     );

@@ -60,6 +60,56 @@ export async function searchWeb(options: TavilySearchOptions): Promise<TavilySea
   }));
 }
 
+export interface SearchResultWithDate extends TavilySearchResult {
+  extractedDate?: Date;
+}
+
+function extractDateFromText(text: string): Date | null {
+  const jpPattern = /(\d{4})年(\d{1,2})月(\d{1,2})日/;
+  const match = text.match(jpPattern);
+  if (match) {
+    return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+  }
+
+  const isoPattern = /(\d{4})-(\d{2})-(\d{2})/;
+  const isoMatch = text.match(isoPattern);
+  if (isoMatch) {
+    return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
+  }
+
+  return null;
+}
+
+export async function searchMultipleTopics(
+  topics: string[],
+  options?: Partial<TavilySearchOptions>
+): Promise<SearchResultWithDate[]> {
+  const results = await Promise.all(
+    topics.map(topic => searchWeb({
+      query: topic,
+      searchDepth: 'advanced',
+      maxResults: 2,
+      includeDomains: ['*.jp', 'zenn.dev', 'qiita.com', 'note.com'],
+      ...options,
+    }))
+  );
+
+  const flatResults = results.flat();
+  const withDates: SearchResultWithDate[] = flatResults.map(result => {
+    const extractedDate = extractDateFromText(result.title + ' ' + result.content);
+    return { ...result, extractedDate: extractedDate || undefined };
+  });
+
+  withDates.sort((a, b) => {
+    if (!a.extractedDate && !b.extractedDate) return 0;
+    if (!a.extractedDate) return 1;
+    if (!b.extractedDate) return -1;
+    return b.extractedDate.getTime() - a.extractedDate.getTime();
+  });
+
+  return withDates;
+}
+
 export async function searchForThreadsContent(topic: string): Promise<string> {
   const results = await searchWeb({
     query: topic,

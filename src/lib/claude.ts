@@ -467,14 +467,42 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
   }
 
   const webResearchSection = payload.webResearch ? [
-    '## 🔍 最新のWeb情報（Tavily検索結果）',
-    `検索トピック: ${payload.webResearch.topic}`,
+    '## 🔥 最新AI情報（Tavily検索結果）',
     `取得日時: ${new Date(payload.webResearch.searchedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
     '',
-    '最新のトレンド情報:',
-    payload.webResearch.summary,
+    '### 📰 最新リリース・アップデート（投稿の2本で活用）',
+    '最も新しいAIニュースを優先して参考にしてください。',
+    ...payload.webResearch.latestNews.map((item, index) => {
+      const dateStr = item.extractedDate
+        ? ` [${new Date(item.extractedDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}]`
+        : '';
+      return [
+        `【${index + 1}】${item.title}${dateStr}`,
+        item.content,
+        `URL: ${item.url}`,
+        '',
+      ].join('\n');
+    }),
     '',
-    '**活用方法**: 上記の最新情報を踏まえて、トレンドに沿った実践的なTipsを作成してください。',
+    '### 💡 実践的HowTo・活用事例（投稿の8本で活用）',
+    '具体的な業務効率化や時短テクニックを参考にしてください。',
+    ...payload.webResearch.practicalHowTo.map((item, index) => {
+      const dateStr = item.extractedDate
+        ? ` [${new Date(item.extractedDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}]`
+        : '';
+      return [
+        `【${index + 1}】${item.title}${dateStr}`,
+        item.content,
+        `URL: ${item.url}`,
+        '',
+      ].join('\n');
+    }),
+    '',
+    '**活用指示:**',
+    `- ${payload.meta.targetPostCount}本中2本：最新ニュースベースの投稿を作成`,
+    `- ${payload.meta.targetPostCount}本中8本：実践HowToベースの投稿を作成`,
+    '- 各投稿は完全に異なるテーマ・フック・構成にすること',
+    '- 最新情報を活かして、既存投稿との差別化を図ること',
     '',
   ] : [];
 

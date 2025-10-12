@@ -118,9 +118,9 @@ export function IndividualPostCard() {
   return (
     <Card className="w-full">
       <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">個別投稿生成</h2>
+        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">個別投稿作成</h2>
         <p className="text-sm text-[color:var(--color-text-secondary)]">
-          任意のテーマを指定して 1 件の投稿案を生成し、そのまま編集・承認できます。
+          任意のテーマから1件の投稿案を生成し、そのまま編集・承認できます。
         </p>
       </div>
 

@@ -112,9 +112,16 @@ export interface OwnPost {
   score: number;
 }
 
+export interface WebSearchResult {
+  title: string;
+  url: string;
+  content: string;
+  extractedDate?: string;
+}
+
 export interface PromptWebResearch {
-  topic: string;
-  summary: string;
+  latestNews: WebSearchResult[];
+  practicalHowTo: WebSearchResult[];
   searchedAt: string;
 }
 
