@@ -29,7 +29,7 @@ export function TemplateSummary({ items }: TemplateSummaryProps) {
     <Card>
       <header className="mb-4">
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">テンプレート評価</h2>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">投稿後72時間の指標を基にテンプレートの調子を確認できます。</p>
+        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">投稿後48時間の指標を基にテンプレートの調子を確認できます。</p>
       </header>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.slice(0, 6).map((item) => (

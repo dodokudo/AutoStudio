@@ -125,14 +125,14 @@ export function OverviewTab(props: OverviewTabProps) {
         </div>
       </Card>
 
-      <PostedContent initialPostedPlans={props.planSummaries.filter(plan => plan.status === 'posted')} />
+      <PostedContent initialLogs={props.dashboard.recentLogs} />
 
       <CompetitorHighlights items={props.competitorHighlights} />
 
       <TrendingTopics items={props.trendingTopics} />
       <DebugPanel />
       <TemplateSummary items={props.templateSummaries} />
-      <DashboardCards jobCounts={props.dashboard.jobCounts} recentLogs={props.dashboard.recentLogs} />
+      <DashboardCards jobCounts={props.dashboard.jobCounts} />
       <div className="flex justify-end">
         <Button onClick={() => alert('投稿確定機能は未実装です')}>
           今日の投稿を確定

@@ -12,12 +12,18 @@ export interface ThreadsDashboardData {
     succeededToday: number;
   };
   recentLogs: Array<{
-    jobId: string;
+    logId: string;
+    jobId?: string;
     planId: string;
     status: string;
     postedThreadId?: string;
     errorMessage?: string;
     postedAt?: string;
+    createdAt?: string;
+    mainText?: string;
+    templateId?: string;
+    theme?: string;
+    scheduledTime?: string;
   }>;
 }
 
@@ -37,15 +43,23 @@ export async function getThreadsDashboard(): Promise<ThreadsDashboardData> {
   const [logsRows] = await client.query({
     query: `
       SELECT
-        job_id,
-        plan_id,
-        status,
-        posted_thread_id,
-        error_message,
-        posted_at
-      FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\`
-      ORDER BY posted_at DESC
-      LIMIT 10
+        l.log_id,
+        l.job_id,
+        l.plan_id,
+        l.status,
+        l.posted_thread_id,
+        l.error_message,
+        l.posted_at,
+        l.created_at,
+        p.main_text,
+        p.template_id,
+        p.theme,
+        p.scheduled_time
+      FROM \`${PROJECT_ID}.${DATASET}.thread_posting_logs\` l
+      LEFT JOIN \`${PROJECT_ID}.${DATASET}.thread_post_plans\` p
+        ON l.plan_id = p.plan_id
+      ORDER BY l.created_at DESC
+      LIMIT 50
     `,
   });
 
@@ -57,12 +71,18 @@ export async function getThreadsDashboard(): Promise<ThreadsDashboardData> {
       succeededToday: Number(jobCountsRow.succeeded_today ?? 0),
     },
     recentLogs: logsRows.map((row) => ({
-      jobId: row.job_id ? String(row.job_id) : '',
+      jobId: row.job_id ? String(row.job_id) : undefined,
       planId: row.plan_id ? String(row.plan_id) : '',
       status: row.status ? String(row.status) : '',
+      logId: row.log_id ? String(row.log_id) : '',
       postedThreadId: row.posted_thread_id ? String(row.posted_thread_id) : undefined,
       errorMessage: row.error_message ? String(row.error_message) : undefined,
       postedAt: row.posted_at ? String(row.posted_at) : undefined,
+      createdAt: row.created_at ? String(row.created_at) : undefined,
+      mainText: row.main_text ? String(row.main_text) : undefined,
+      templateId: row.template_id ? String(row.template_id) : undefined,
+      theme: row.theme ? String(row.theme) : undefined,
+      scheduledTime: row.scheduled_time ? String(row.scheduled_time) : undefined,
     })),
   };
 }
