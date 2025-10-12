@@ -18,13 +18,6 @@ import type { PostInsight } from '@/lib/threadsInsightsData';
 const PROJECT_ID = resolveProjectId();
 const DEFAULT_RANGE_DAYS = 7;
 
-export interface HomeKpiCard {
-  label: string;
-  value: string;
-  delta?: string | null;
-  description?: string | null;
-}
-
 export interface HomeFollowerBreakdown {
   platform: 'threads' | 'instagram' | 'youtube' | 'line';
   label: string;
@@ -56,13 +49,16 @@ export interface HomeDashboardData {
     end: string;
   };
   selectedRange: string;
-  kpiCards: HomeKpiCard[];
   followerBreakdown: HomeFollowerBreakdown[];
   totalFollowers: number;
   highlights: HomeHighlight[];
   tasks: HomeTaskItem[];
   lineFunnel: Array<{ stage: string; users: number }>;
   lineRegistrationBySource: Array<{ source: string; registrations: number }>;
+  clickSummary: {
+    total: number;
+    breakdown: string | null;
+  };
   storedScripts: StoredContentScript[];
   youtubeTopVideo?: YoutubeVideoSummary;
   instagramTopReel?: ReelHighlight;
@@ -201,10 +197,6 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
   ];
 
   const totalFollowers = followerBreakdown.reduce((sum, item) => sum + (item.count ?? 0), 0);
-  const totalFollowersDelta = followerBreakdown.reduce((sum, item) => sum + (item.delta ?? 0), 0);
-
-  const lineRegistrationsPeriod = lineDelta;
-
   const linkClicksByCategory = new Map(linkSummary.byCategory.map((item) => [item.category, item.clicks]));
   const topClicksDescription = ['threads', 'instagram', 'youtube']
     .map((category) => {
@@ -215,34 +207,10 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
     .filter((value): value is string => Boolean(value))
     .join(' / ');
 
-  const kpiCards: HomeKpiCard[] = [
-    {
-      label: '総フォロワー',
-      value: `${formatNumberIntl(totalFollowers)} 人`,
-      delta: totalFollowersDelta.toLocaleString('ja-JP', { signDisplay: 'always' }),
-      description: '主要チャネルの合計フォロワー数',
-    },
-    {
-      label: '直近クリック数',
-      value: `${formatNumberIntl(linkSummary.total)} 件`,
-      description: topClicksDescription || '主要リンクの合計クリック数',
-    },
-    {
-      label: 'LINE登録数',
-      value: `${formatNumberIntl(lineRegistrationsPeriod)} 人`,
-      description: `期間: ${toDateKey(periodStart)} 〜 ${toDateKey(periodEnd)}`,
-    },
-    {
-      label: 'CPA (広告)',
-      value: '–',
-      description: '広告データ連携を準備中',
-    },
-    {
-      label: '広告消化金額',
-      value: '–',
-      description: '広告データ連携を準備中',
-    },
-  ];
+  const clickSummary = {
+    total: linkSummary.total,
+    breakdown: topClicksDescription || null,
+  };
 
   const threadsHighlightPost = threadsInsights.posts[0];
   const instagramHighlightReel = instagramData.reels[0];
@@ -336,13 +304,13 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
       end: toDateKey(periodEnd),
     },
     selectedRange: selectedRangeValue,
-    kpiCards,
     followerBreakdown,
     totalFollowers,
     highlights,
     tasks,
     lineFunnel: lineData.funnel,
     lineRegistrationBySource,
+    clickSummary,
     storedScripts,
     youtubeTopVideo: youtubeHighlightVideo,
     instagramTopReel: instagramHighlightReel,

@@ -6,6 +6,8 @@ import { resolveProjectId } from "@/lib/bigquery";
 import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { CompetitorTab } from "./_components/competitor-tab";
+import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
+import { InsightsRangeSelector } from './_components/insights-range-selector';
 import { countLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getThreadsLinkClicksByRange } from "@/lib/links/analytics";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
@@ -13,11 +15,13 @@ import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTo
 const PROJECT_ID = resolveProjectId();
 
 const INSIGHTS_RANGE_OPTIONS = [
-  { label: "3日間", value: "3d", days: 3 },
   { label: "7日間", value: "7d", days: 7 },
+  { label: "昨日", value: "1d", days: 1 },
+  { label: "3日間", value: "3d", days: 3 },
   { label: "30日間", value: "30d", days: 30 },
 ] as const;
 const RANGE_SELECT_OPTIONS = [
+  { label: "昨日", value: "1d" },
   { label: "3日間", value: "3d" },
   { label: "7日間", value: "7d" },
   { label: "30日間", value: "30d" },
@@ -137,7 +141,7 @@ export default async function ThreadsHome({
   const isValidDateString = (value: string | undefined): value is string =>
     !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-  const defaultRange = INSIGHTS_RANGE_OPTIONS[1];
+  const defaultRange = INSIGHTS_RANGE_OPTIONS.find((option) => option.value === '7d') ?? INSIGHTS_RANGE_OPTIONS[0];
   const selectedPreset = INSIGHTS_RANGE_OPTIONS.find((option) => option.value === rangeParam) ?? defaultRange;
   let selectedRangeValue: string = selectedPreset.value;
   let noteText = `レポート期間: ${selectedPreset.label}`;
@@ -433,56 +437,37 @@ export default async function ThreadsHome({
 
     const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
 
+    const sharedParams = new URLSearchParams();
+    if (rangeParam) sharedParams.set('range', rangeParam);
+    if (customStart) sharedParams.set('start', customStart);
+    if (customEnd) sharedParams.set('end', customEnd);
+
+    const tabItems = (
+      [
+        { id: 'post' as ThreadsTabKey, label: '投稿' },
+        { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
+        { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
+      ] satisfies Array<{ id: ThreadsTabKey; label: string }>
+    ).map((item) => {
+      const params = new URLSearchParams(sharedParams.toString());
+      params.set('tab', item.id);
+      return {
+        id: item.id,
+        label: item.label,
+        href: `?${params.toString()}`,
+      };
+    });
+
     return (
       <div className="section-stack">
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-[color:var(--color-border)] overflow-x-auto scrollbar-hide">
-          <a
-            href={`?${new URLSearchParams({
-              ...(rangeParam && { range: rangeParam }),
-              ...(customStart && { start: customStart }),
-              ...(customEnd && { end: customEnd }),
-              tab: 'post',
-            }).toString()}`}
-            className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'post'
-                ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
-                : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
-            }`}
-          >
-            投稿
-          </a>
-          <a
-            href={`?${new URLSearchParams({
-              ...(rangeParam && { range: rangeParam }),
-              ...(customStart && { start: customStart }),
-              ...(customEnd && { end: customEnd }),
-              tab: 'insights',
-            }).toString()}`}
-            className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'insights'
-                ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
-                : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
-            }`}
-          >
-            インサイト
-          </a>
-          <a
-            href={`?${new URLSearchParams({
-              ...(rangeParam && { range: rangeParam }),
-              ...(customStart && { start: customStart }),
-              ...(customEnd && { end: customEnd }),
-              tab: 'competitor',
-            }).toString()}`}
-            className={`px-4 md:px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'competitor'
-                ? 'border-b-2 border-[color:var(--color-accent)] text-[color:var(--color-accent)]'
-                : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
-            }`}
-          >
-            競合インサイト
-          </a>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <DashboardTabs items={tabItems} value={activeTab} className="flex-1 min-w-[240px]" />
+          <InsightsRangeSelector
+            options={rangeSelectorOptions}
+            value={selectedRangeValue}
+            customStart={customStart}
+            customEnd={customEnd}
+          />
         </div>
 
         {/* Tab Content */}
@@ -490,10 +475,6 @@ export default async function ThreadsHome({
           <PostTab
             stats={stats}
             noteText={noteText}
-            rangeSelectorOptions={rangeSelectorOptions}
-            selectedRangeValue={selectedRangeValue}
-            customStart={customStart}
-            customEnd={customEnd}
             planSummaries={planSummaries}
             templateOptions={templateOptions}
             recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
@@ -502,7 +483,6 @@ export default async function ThreadsHome({
           <InsightsTab
             posts={insightsActivity.posts}
             dailyMetrics={insightsActivity.dailyMetrics}
-            rangeSelectorOptions={rangeSelectorOptions}
             rangePresets={INSIGHTS_RANGE_OPTIONS.map(({ value, days }) => ({ value, days }))}
             selectedRangeValue={selectedRangeValue}
             customStart={customStart}

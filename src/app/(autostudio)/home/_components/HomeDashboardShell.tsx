@@ -7,17 +7,14 @@ import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
+import { dashboardCardClass } from '@/components/dashboard/styles';
 import type { HomeDashboardData, HomeHighlight } from '@/lib/home/dashboard';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
 
-interface RangeOption {
-  value: string;
-  label: string;
-}
-
 interface HomeDashboardShellProps {
   data: HomeDashboardData;
-  rangeOptions: RangeOption[];
+  rangeOptions: Array<{ value: string; label: string }>;
   selectedRange: string;
 }
 
@@ -34,13 +31,21 @@ function formatDelta(value: number | null | undefined): string | null {
   return `${value > 0 ? '+' : ''}${numberFormatter.format(value)}`;
 }
 
+type TopCardKey = 'threads' | 'instagram' | 'youtube' | 'line' | 'clicks';
+
+type TopCard = {
+  key: TopCardKey;
+  label: string;
+  value: string;
+  delta?: string | null;
+  description?: string | null;
+};
+
 export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDashboardShellProps) {
-  const { kpiCards, followerBreakdown, highlights, tasks, lineFunnel, lineRegistrationBySource } = data;
+  const { followerBreakdown, highlights, tasks, lineFunnel, lineRegistrationBySource, clickSummary } = data;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
-  const periodLabel = `${data.period.start} 〜 ${data.period.end}`;
 
   const handleRangeChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -53,49 +58,51 @@ export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDa
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
+  const orderedPlatforms: Array<'threads' | 'instagram' | 'youtube' | 'line'> = ['threads', 'instagram', 'youtube', 'line'];
+  const followerCards: TopCard[] = [];
+  orderedPlatforms.forEach((platform) => {
+    const item = followerBreakdown.find((entry) => entry.platform === platform);
+    if (!item) return;
+    followerCards.push({
+      key: platform,
+      label: item.label,
+      value: `${formatNumber(item.count)} 人`,
+      delta: formatDelta(item.delta),
+    });
+  });
+
+  const lineIndex = followerCards.findIndex((card) => card.key === 'line');
+  const clickCard: TopCard = {
+    key: 'clicks',
+    label: '直近クリック数',
+    value: `${formatNumber(clickSummary.total)} 件`,
+    description: clickSummary.breakdown,
+  };
+  const topCards = [...followerCards];
+  topCards.splice(lineIndex >= 0 ? lineIndex : topCards.length, 0, clickCard);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {followerBreakdown.map((item) => (
-            <Card key={item.platform} className="min-w-[180px] p-4 accent-gradient">
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{item.label}</p>
-              <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{formatNumber(item.count)} 人</p>
-              {formatDelta(item.delta) ? (
-                <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{formatDelta(item.delta)}</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {topCards.map((card) => (
+            <Card key={card.key} className={dashboardCardClass}>
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
+              <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
+              {card.delta ? <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.delta}</p> : null}
+              {card.description ? (
+                <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.description}</p>
               ) : null}
             </Card>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {rangeOptions.map((option) => (
-            <Button
-              key={option.value}
-              variant={option.value === selectedRange ? 'primary' : 'secondary'}
-              onClick={() => handleRangeChange(option.value)}
-              className="h-9 px-4 text-xs"
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-xs text-[color:var(--color-text-muted)]">期間: {periodLabel}</p>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {kpiCards.map((card) => (
-          <Card key={card.label} className="p-4">
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
-            <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
-            {card.delta ? (
-              <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.delta}</p>
-            ) : null}
-            {card.description ? (
-              <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.description}</p>
-            ) : null}
-          </Card>
-        ))}
+        <DashboardDateRangePicker
+          options={rangeOptions}
+          value={selectedRange}
+          onChange={handleRangeChange}
+          allowCustom={false}
+          latestLabel={`最新 ${data.period.end}`}
+        />
       </div>
 
       <section className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">

@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Table } from '@/components/ui/table';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
+import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
+import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
+import { dashboardCardClass } from '@/components/dashboard/styles';
 import type {
   YoutubeDashboardData,
   YoutubeOverviewSeriesPoint,
@@ -18,6 +20,13 @@ import type { StoredContentScript } from '@/lib/youtube/bigquery';
 import { YoutubeViewTrendChart } from './YoutubeViewTrendChart';
 
 type TabKey = 'scripts' | 'own' | 'competitors';
+
+const RANGE_OPTIONS = [
+  { value: '7d', label: '7日間' },
+  { value: '1d', label: '昨日' },
+  { value: '30d', label: '30日間' },
+  { value: '90d', label: '90日間' },
+];
 
 interface YoutubeDashboardShellProps {
   overview: YoutubeDashboardData['overview'];
@@ -85,6 +94,7 @@ export function YoutubeDashboardShell({
   lineRegistrationCount,
 }: YoutubeDashboardShellProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('own');
+  const [selectedRange, setSelectedRange] = useState<string>('7d');
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(topVideos[0]?.videoId ?? null);
 
   useEffect(() => {
@@ -139,16 +149,9 @@ export function YoutubeDashboardShell({
 
   const ownTabContent = (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">YouTube チャンネルアナリティクス</h1>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-          運用中のチャンネル指標をYouTube Studioライクなレイアウトで把握できます。
-        </p>
-      </div>
-
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (
-          <Card key={card.label} className="p-4">
+          <Card key={card.label} className={dashboardCardClass}>
             <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">
               {card.label}
             </p>
@@ -512,17 +515,20 @@ export function YoutubeDashboardShell({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((tab) => (
-          <Button
-            key={tab.id}
-            variant={activeTab === tab.id ? 'primary' : 'secondary'}
-            onClick={() => setActiveTab(tab.id)}
-            className="px-5"
-          >
-            {tab.label}
-          </Button>
-        ))}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <DashboardTabsInteractive
+          items={TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
+          value={activeTab}
+          onChange={(next) => setActiveTab(next as TabKey)}
+          className="flex-1 min-w-[240px]"
+        />
+        <DashboardDateRangePicker
+          options={RANGE_OPTIONS}
+          value={selectedRange}
+          onChange={setSelectedRange}
+          allowCustom={false}
+          latestLabel={overview.latestSnapshotDate ? `最新 ${dateFormatter.format(new Date(overview.latestSnapshotDate))}` : undefined}
+        />
       </div>
 
       {activeTab === 'own' ? ownTabContent : null}

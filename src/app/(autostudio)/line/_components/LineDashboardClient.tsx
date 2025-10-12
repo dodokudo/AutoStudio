@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
+import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
+import { dashboardCardClass } from '@/components/dashboard/styles';
 import type { LstepAnalyticsData } from '@/lib/lstep/analytics';
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
 
@@ -11,9 +13,10 @@ interface LineDashboardClientProps {
   initialData: LstepAnalyticsData;
 }
 
-type DateRangeFilter = '3days' | '7days' | '30days' | '90days' | 'all' | 'custom';
+type DateRangeFilter = 'yesterday' | '3days' | '7days' | '30days' | '90days' | 'all' | 'custom';
 
 const RANGE_PRESETS: Array<{ id: Exclude<DateRangeFilter, 'custom'>; label: string }> = [
+  { id: 'yesterday', label: '昨日' },
   { id: '3days', label: '過去3日' },
   { id: '7days', label: '過去7日' },
   { id: '30days', label: '過去30日' },
@@ -66,6 +69,7 @@ function normalizeCustomRange(start: string, end: string): { start: string; end:
 
 function calculatePresetRange(range: DateRangeFilter): { start: string; end: string } | null {
   const daysMap: Record<DateRangeFilter, number | null> = {
+    yesterday: 1,
     '3days': 3,
     '7days': 7,
     '30days': 30,
@@ -190,6 +194,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       });
     } else if (dateRange !== 'all') {
       const daysLookup: Record<Exclude<DateRangeFilter, 'custom'>, number | null> = {
+        yesterday: 1,
         '3days': 3,
         '7days': 7,
         '30days': 30,
@@ -287,17 +292,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     ];
   }, [filteredAnalytics]);
 
-  const rangeSummary = useMemo(() => {
-    if (dateRange === 'custom') {
-      if (customStartDate && customEndDate) {
-        return `${customStartDate} 〜 ${customEndDate}`;
-      }
-      return '日付指定';
-    }
-    const preset = RANGE_PRESETS.find((item) => item.id === dateRange);
-    return preset ? preset.label : '全期間';
-  }, [customEndDate, customStartDate, dateRange]);
-
   const funnelCards = useMemo(() => {
     const completionFromRegistration =
       filteredAnalytics.funnel.lineRegistration > 0
@@ -355,72 +349,51 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     [filteredAnalytics.attributes],
   );
 
+  const datePickerOptions = useMemo(
+    () => [...RANGE_PRESETS.map((preset) => ({ value: preset.id, label: preset.label })), { value: 'custom', label: 'カスタム' }],
+    [],
+  );
+
+  const handleRangeSelect = (nextValue: string) => {
+    setDateRange(nextValue as DateRangeFilter);
+    if (nextValue !== 'custom') {
+      setCustomStartDate('');
+      setCustomEndDate('');
+    }
+  };
+
+  const handleCustomRangeChange = (start: string, end: string) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    setDateRange('custom');
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {LINE_TABS.map((tab) => (
-            <Button
-              key={tab.id}
-              variant={activeTab === tab.id ? 'primary' : 'secondary'}
-              onClick={() => setActiveTab(tab.id)}
-              className="px-5"
-            >
-              {tab.label}
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={dateRange}
-            onChange={(event) => setDateRange(event.target.value as DateRangeFilter)}
-            className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-          >
-            <option value="3days">過去3日</option>
-            <option value="7days">過去7日</option>
-            <option value="30days">過去30日</option>
-            <option value="90days">過去90日</option>
-            <option value="all">全期間</option>
-            <option value="custom">カスタム</option>
-          </select>
-          <span className="text-xs text-[color:var(--color-text-muted)]">{rangeSummary}</span>
-          {initialData.latestSnapshotDate ? (
-            <span className="text-xs text-[color:var(--color-text-muted)]">
-              最新 {formatDateLabel(initialData.latestSnapshotDate)}
-            </span>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <DashboardTabsInteractive
+          items={LINE_TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
+          value={activeTab}
+          onChange={(next) => setActiveTab(next as LineTabKey)}
+          className="flex-1 min-w-[240px]"
+        />
+        <DashboardDateRangePicker
+          options={datePickerOptions}
+          value={dateRange}
+          onChange={handleRangeSelect}
+          allowCustom
+          customStart={customStartDate}
+          customEnd={customEndDate}
+          onCustomChange={handleCustomRangeChange}
+          latestLabel={initialData.latestSnapshotDate ? `最新 ${formatDateLabel(initialData.latestSnapshotDate)}` : undefined}
+        />
       </div>
-      {dateRange === 'custom' ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-[color:var(--color-text-secondary)]">
-          <label className="flex items-center gap-1">
-            <span>開始</span>
-            <input
-              type="date"
-              value={customStartDate}
-              onChange={(event) => setCustomStartDate(event.target.value)}
-              max={customEndDate || undefined}
-              className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2 py-1 text-[color:var(--color-text-primary)]"
-            />
-          </label>
-          <label className="flex items-center gap-1">
-            <span>終了</span>
-            <input
-              type="date"
-              value={customEndDate}
-              onChange={(event) => setCustomEndDate(event.target.value)}
-              min={customStartDate || undefined}
-              className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2 py-1 text-[color:var(--color-text-primary)]"
-            />
-          </label>
-        </div>
-      ) : null}
 
       {activeTab === 'main' ? (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {summaryCards.map((card) => (
-              <Card key={card.label} className="p-4">
+              <Card key={card.label} className={dashboardCardClass}>
                 <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
                 <p className="mt-3 text-xl font-semibold text-[color:var(--color-text-primary)]">{card.primary}</p>
                 {card.secondary ? (

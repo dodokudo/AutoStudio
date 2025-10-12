@@ -1,18 +1,12 @@
 'use client';
 
 import { InsightsCard } from './insights-card';
-import { InsightsRangeSelector } from './insights-range-selector';
 import { IndividualPostCard } from './individual-post-card';
 import { RegenerateButton } from './regenerate-button';
 import { PostQueueContainer } from './post-queue-container';
 import { PostedContent } from './posted-content';
 import type { ThreadPlanSummary } from '@/types/threadPlan';
 import { Card } from '@/components/ui/card';
-
-type RangeOption = {
-  label: string;
-  value: string;
-};
 
 type TemplateOption = {
   value: string;
@@ -28,10 +22,6 @@ type PostTabProps = {
     deltaHighlight?: boolean;
   }>;
   noteText: string;
-  rangeSelectorOptions: RangeOption[];
-  selectedRangeValue: string;
-  customStart?: string;
-  customEnd?: string;
   planSummaries: ThreadPlanSummary[];
   templateOptions: TemplateOption[];
   recentLogs?: Array<Record<string, unknown>>;
@@ -40,10 +30,6 @@ type PostTabProps = {
 export function PostTab({
   stats,
   noteText,
-  rangeSelectorOptions,
-  selectedRangeValue,
-  customStart,
-  customEnd,
   planSummaries,
   templateOptions,
   recentLogs,
@@ -54,14 +40,6 @@ export function PostTab({
         title="アカウントの概要"
         stats={stats}
         note={noteText}
-        actions={
-          <InsightsRangeSelector
-            options={rangeSelectorOptions}
-            value={selectedRangeValue}
-            customStart={customStart}
-            customEnd={customEnd}
-          />
-        }
       />
 
       <IndividualPostCard />

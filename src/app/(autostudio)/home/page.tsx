@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const RANGE_PRESETS = [
   { value: '7d', label: '7日間', days: 7 },
+  { value: '1d', label: '昨日', days: 1 },
   { value: '30d', label: '30日間', days: 30 },
   { value: '90d', label: '90日間', days: 90 },
 ] as const;
@@ -16,7 +17,8 @@ export default async function HomePage({
   searchParams?: Record<string, string | string[]>;
 }) {
   const rangeParam = typeof searchParams?.range === 'string' ? searchParams.range : undefined;
-  const selectedRangeOption = RANGE_PRESETS.find((option) => option.value === rangeParam) ?? RANGE_PRESETS[0];
+  const defaultRangeOption = RANGE_PRESETS.find((option) => option.value === '7d') ?? RANGE_PRESETS[0];
+  const selectedRangeOption = RANGE_PRESETS.find((option) => option.value === rangeParam) ?? defaultRangeOption;
 
   try {
     const data = await getHomeDashboardData({ rangeDays: selectedRangeOption.days, rangeValue: selectedRangeOption.value });

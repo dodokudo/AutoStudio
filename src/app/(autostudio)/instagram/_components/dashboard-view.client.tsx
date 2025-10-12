@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { InstagramDashboardData } from '@/lib/instagram/dashboard';
 import LoadingScreen from '@/components/LoadingScreen';
 import { useDateRange, DatePreset } from '@/lib/dateRangeStore';
+import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
+import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 import {
   ComposedChart,
   Bar,
@@ -17,7 +19,6 @@ import {
 } from 'recharts';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { classNames } from '@/lib/classNames';
 
 interface Props {
   data: InstagramDashboardData;
@@ -138,7 +139,6 @@ export function InstagramDashboardView({ data }: Props) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'reels' | 'stories' | 'scripts'>('dashboard');
   const [customStartDate, setCustomStartDate] = useState(() => formatDateForInput(dateRange.start));
   const [customEndDate, setCustomEndDate] = useState(() => formatDateForInput(dateRange.end));
-  const [showCustomDateModal, setShowCustomDateModal] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [reelSortBy, setReelSortBy] = useState('date');
   const [reelSortOrder, setReelSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -349,54 +349,60 @@ export function InstagramDashboardView({ data }: Props) {
       ? `${formatDateForInput(dateRange.start)} 〜 ${formatDateForInput(dateRange.end)}`
       : presetLabels[dateRange.preset];
 
+  const datePickerOptions = useMemo(
+    () =>
+      (Object.keys(presetLabels) as Array<DatePreset>).map((preset) => ({
+        value: preset,
+        label: presetLabels[preset],
+      })),
+    [],
+  );
+
+  const handleRangeSelect = (nextValue: string) => {
+    const preset = nextValue as DatePreset;
+    if (preset === 'custom') {
+      const start = parseDate(customStartDate) ?? new Date();
+      const end = parseDate(customEndDate) ?? new Date();
+      updatePreset('custom', start, end);
+    } else {
+      updatePreset(preset);
+    }
+  };
+
+  const handleCustomRangeChange = (start: string, end: string) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    const parsedStart = parseDate(start);
+    const parsedEnd = parseDate(end);
+    if (parsedStart && parsedEnd) {
+      updatePreset('custom', parsedStart, parsedEnd);
+    }
+  };
+
+  const latestLabel = dateRange.preset === 'custom' ? rangeSummary : undefined;
+
   if (!mounted) {
     return <LoadingScreen />;
   }
 
   return (
     <div className="section-stack mx-auto max-w-6xl pb-12">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {tabItems.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setActiveTab(tab.value)}
-              className={classNames(
-                'h-9 rounded-[var(--radius-sm)] px-3 text-sm font-medium transition-colors',
-                activeTab === tab.value
-                  ? 'bg-[color:var(--color-text-primary)] text-white'
-                  : 'border border-[color:var(--color-border)] bg-white text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={dateRange.preset}
-            onChange={(event) => {
-              const value = event.target.value as DatePreset;
-              if (value === 'custom') {
-                setCustomStartDate(formatDateForInput(dateRange.start));
-                setCustomEndDate(formatDateForInput(dateRange.end));
-                setShowCustomDateModal(true);
-              } else {
-                updatePreset(value);
-              }
-            }}
-            className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-          >
-            <option value="yesterday">昨日</option>
-            <option value="this-week">今週</option>
-            <option value="last-week">先週</option>
-            <option value="this-month">今月</option>
-            <option value="last-month">先月</option>
-            <option value="custom">カスタム期間</option>
-          </select>
-          <span className="text-xs text-[color:var(--color-text-muted)]">{rangeSummary}</span>
-        </div>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <DashboardTabsInteractive
+          items={tabItems.map((tab) => ({ id: tab.value, label: tab.label }))}
+          value={activeTab}
+          onChange={(next) => setActiveTab(next as typeof activeTab)}
+        />
+        <DashboardDateRangePicker
+          options={datePickerOptions}
+          value={dateRange.preset}
+          onChange={handleRangeSelect}
+          allowCustom
+          customStart={customStartDate}
+          customEnd={customEndDate}
+          onCustomChange={handleCustomRangeChange}
+          latestLabel={latestLabel}
+        />
       </div>
 
       {activeTab === 'dashboard' && (
@@ -810,51 +816,6 @@ export function InstagramDashboardView({ data }: Props) {
         </Card>
       )}
 
-      {showCustomDateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-white p-6 shadow-xl">
-            <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">カスタム期間を設定</h3>
-            <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">表示したい期間の開始日と終了日を選択してください。</p>
-            <div className="mt-4 space-y-3">
-              <label className="flex flex-col gap-1 text-xs text-[color:var(--color-text-secondary)]">
-                開始日
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(event) => setCustomStartDate(event.target.value)}
-                  className="h-10 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-[color:var(--color-text-secondary)]">
-                終了日
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(event) => setCustomEndDate(event.target.value)}
-                  className="h-10 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-                />
-              </label>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" className="h-9 px-4 text-sm" onClick={() => setShowCustomDateModal(false)}>
-                キャンセル
-              </Button>
-              <Button
-                className="h-9 px-4 text-sm"
-                onClick={() => {
-                  if (customStartDate && customEndDate) {
-                    updatePreset('custom', new Date(customStartDate), new Date(customEndDate));
-                  }
-                  setShowCustomDateModal(false);
-                }}
-                disabled={!customStartDate || !customEndDate}
-              >
-                適用
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

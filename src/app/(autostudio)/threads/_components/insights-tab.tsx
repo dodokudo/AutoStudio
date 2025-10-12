@@ -7,7 +7,6 @@ import { Card } from '@/components/ui/card';
 import { AccountInsightsCard } from './account-insights-card';
 import { TopContentCard } from './top-content-card';
 import { TemplateSummary } from './template-summary';
-import { InsightsRangeSelector } from './insights-range-selector';
 
 interface RangePreset {
   value: string;
@@ -17,7 +16,6 @@ interface RangePreset {
 interface InsightsTabProps {
   posts: PostInsight[];
   dailyMetrics: DailyFollowerMetric[];
-  rangeSelectorOptions: Array<{ label: string; value: string }>;
   rangePresets: RangePreset[];
   selectedRangeValue: string;
   customStart?: string;
@@ -53,7 +51,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function InsightsTab({
   posts,
   dailyMetrics,
-  rangeSelectorOptions,
   rangePresets,
   selectedRangeValue,
   customStart,
@@ -214,18 +211,7 @@ export function InsightsTab({
         </div>
       ) : null}
 
-      <AccountInsightsCard
-        data={accountInsightsData}
-        note={noteText}
-        filterControl={
-          <InsightsRangeSelector
-            options={rangeSelectorOptions}
-            value={selectedRangeValue}
-            customStart={customStart}
-            customEnd={customEnd}
-          />
-        }
-      />
+      <AccountInsightsCard data={accountInsightsData} note={noteText} />
       {templateSummaries && templateSummaries.length ? <TemplateSummary items={templateSummaries} /> : null}
       <TopContentCard posts={topContentData} sortOption={topContentSort} onSortChange={setTopContentSort} />
     </div>
