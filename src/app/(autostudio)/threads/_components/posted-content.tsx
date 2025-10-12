@@ -62,15 +62,15 @@ const normalizeLogs = (rawLogs: MaybePostedLog[] | undefined): PostedLogEntry[] 
     return [];
   }
 
-  const mappedEntries = rawLogs.map((raw) => {
+  return rawLogs.flatMap((raw): PostedLogEntry[] => {
     if (!raw || typeof raw !== 'object') {
-      return null;
+      return [];
     }
 
     const status = toOptionalString(raw.status) ?? 'unknown';
     const mainText = toOptionalString(raw.mainText ?? raw.main_text) ?? '';
     if (status !== 'success' || mainText.trim().length === 0) {
-      return null;
+      return [];
     }
 
     const planId = (toOptionalString(raw.planId ?? raw.plan_id) ?? '').trim() || 'unknown';
@@ -81,7 +81,7 @@ const normalizeLogs = (rawLogs: MaybePostedLog[] | undefined): PostedLogEntry[] 
       toOptionalString(raw.logId ?? raw.log_id) ??
       `${planId}-${postedAt ?? createdAt ?? String(Date.now())}`;
 
-    return {
+    return [{
       logId,
       planId,
       status,
@@ -94,10 +94,8 @@ const normalizeLogs = (rawLogs: MaybePostedLog[] | undefined): PostedLogEntry[] 
       createdAt,
       jobId: (toOptionalString(raw.jobId ?? raw.job_id)?.trim() || undefined),
       errorMessage: (toOptionalString(raw.errorMessage ?? raw.error_message)?.trim() || undefined),
-    } satisfies PostedLogEntry;
+    }];
   });
-
-  return mappedEntries.filter((entry): entry is PostedLogEntry => entry !== null);
 };
 
 const formatTimestamp = (value?: string) => {
