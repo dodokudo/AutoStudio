@@ -412,37 +412,6 @@ export default async function ThreadsHome({
     ];
 
 
-    const queueMetrics = planSummaries.reduce(
-      (acc, plan) => {
-        if (plan.status in acc) {
-          acc[plan.status as keyof typeof acc] += 1;
-        }
-        return acc;
-      },
-      { draft: 0, approved: 0, scheduled: 0, rejected: 0 },
-    );
-
-    const heroStats = [
-      {
-        label: '承認待ち',
-        value: queueMetrics.draft,
-        caption: 'レビューが必要な投稿',
-        tone: 'text-amber-600 bg-amber-100/60',
-      },
-      {
-        label: '本日予約',
-        value: queueMetrics.scheduled,
-        caption: 'Threads API による予約',
-        tone: 'text-sky-600 bg-sky-100/60',
-      },
-      {
-        label: '今日完了',
-        value: dashboard.jobCounts.succeededToday,
-        caption: '投稿成功数 (本日)',
-        tone: 'text-emerald-600 bg-emerald-100/60',
-      },
-    ];
-
     const competitorHighlights: DisplayHighlight[] = (
       insights.competitorHighlights.length ? insights.competitorHighlights : FALLBACK_HIGHLIGHTS
     ).map((item) => toDisplayHighlight(item));
@@ -505,11 +474,6 @@ export default async function ThreadsHome({
         {/* Tab Content */}
         {activeTab === 'post' ? (
           <PostTab
-            heroStats={heroStats}
-            rangeSelectorOptions={rangeSelectorOptions}
-            selectedRangeValue={selectedRangeValue}
-            customStart={customStart}
-            customEnd={customEnd}
             stats={stats}
             noteText={noteText}
             planSummaries={planSummaries}
