@@ -88,7 +88,7 @@ export async function searchMultipleTopics(
     topics.map(topic => searchWeb({
       query: topic,
       searchDepth: 'advanced',
-      maxResults: 2,
+      maxResults: 3,
       includeDomains: ['*.jp', 'zenn.dev', 'qiita.com', 'note.com'],
       ...options,
     }))

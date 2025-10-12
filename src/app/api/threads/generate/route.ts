@@ -66,14 +66,14 @@ export async function POST() {
           searchMultipleTopics(howtoTopics),
         ]);
 
-        const latestNews: WebSearchResult[] = newsResults.slice(0, 3).map(r => ({
+        const latestNews: WebSearchResult[] = newsResults.slice(0, 4).map(r => ({
           title: r.title,
           url: r.url,
           content: r.content.slice(0, 300),
           extractedDate: r.extractedDate?.toISOString(),
         }));
 
-        const practicalHowTo: WebSearchResult[] = howtoResults.slice(0, 5).map(r => ({
+        const practicalHowTo: WebSearchResult[] = howtoResults.slice(0, 6).map(r => ({
           title: r.title,
           url: r.url,
           content: r.content.slice(0, 300),
