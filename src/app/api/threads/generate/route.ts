@@ -3,7 +3,9 @@ import { generateClaudePlans } from '@/lib/claude';
 import { replaceTodayPlans } from '@/lib/bigqueryPlans';
 import { notifyGenerateFailure } from '@/lib/notifications';
 import { resolveProjectId } from '@/lib/bigquery';
+import { searchMultipleTopics } from '@/lib/tavily/client';
 import type { PlanStatus, ThreadPlanSummary } from '@/types/threadPlan';
+import type { WebSearchResult } from '@/types/prompt';
 
 const PROJECT_ID = resolveProjectId();
 
@@ -42,6 +44,51 @@ export async function POST() {
     try {
       await send({ type: 'stage', stage: 'initializing', message: 'プロンプトを準備しています…' });
       const payload = await buildThreadsPromptPayload({ projectId: PROJECT_ID });
+
+      // Web検索を実行（投稿生成時のみ）
+      await send({ type: 'stage', stage: 'searching', message: '最新のAI情報を検索中…' });
+      try {
+        const today = new Date();
+        const thisMonth = `${today.getFullYear()}年${today.getMonth() + 1}月`;
+
+        const newsTopics = [
+          `生成AI 新モデル リリース ${thisMonth}`,
+          `ChatGPT Claude Gemini アップデート 今週`,
+        ];
+
+        const howtoTopics = [
+          `生成AI 業務効率化 最新事例 ${thisMonth}`,
+          `AI活用 時短テクニック 実践`,
+        ];
+
+        const [newsResults, howtoResults] = await Promise.all([
+          searchMultipleTopics(newsTopics),
+          searchMultipleTopics(howtoTopics),
+        ]);
+
+        const latestNews: WebSearchResult[] = newsResults.slice(0, 3).map(r => ({
+          title: r.title,
+          url: r.url,
+          content: r.content.slice(0, 300),
+          extractedDate: r.extractedDate?.toISOString(),
+        }));
+
+        const practicalHowTo: WebSearchResult[] = howtoResults.slice(0, 5).map(r => ({
+          title: r.title,
+          url: r.url,
+          content: r.content.slice(0, 300),
+          extractedDate: r.extractedDate?.toISOString(),
+        }));
+
+        payload.webResearch = {
+          latestNews,
+          practicalHowTo,
+          searchedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        console.error('[threads/generate] Tavily search failed:', error);
+        // Web検索失敗してもプロンプト生成は継続
+      }
 
       const total = Math.max(1, payload.meta.targetPostCount);
       await send({ type: 'start', total });
