@@ -62,42 +62,42 @@ const normalizeLogs = (rawLogs: MaybePostedLog[] | undefined): PostedLogEntry[] 
     return [];
   }
 
-  return rawLogs
-    .map((raw) => {
-      if (!raw || typeof raw !== 'object') {
-        return null;
-      }
+  const mappedEntries = rawLogs.map((raw) => {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
 
-      const status = toOptionalString(raw.status) ?? 'unknown';
-      const mainText = toOptionalString(raw.mainText ?? raw.main_text) ?? '';
-      if (status !== 'success' || mainText.trim().length === 0) {
-        return null;
-      }
+    const status = toOptionalString(raw.status) ?? 'unknown';
+    const mainText = toOptionalString(raw.mainText ?? raw.main_text) ?? '';
+    if (status !== 'success' || mainText.trim().length === 0) {
+      return null;
+    }
 
-      const planId = (toOptionalString(raw.planId ?? raw.plan_id) ?? '').trim() || 'unknown';
-      const postedAt = toOptionalString(raw.postedAt ?? raw.posted_at);
-      const createdAt = toOptionalString(raw.createdAt ?? raw.created_at);
+    const planId = (toOptionalString(raw.planId ?? raw.plan_id) ?? '').trim() || 'unknown';
+    const postedAt = toOptionalString(raw.postedAt ?? raw.posted_at);
+    const createdAt = toOptionalString(raw.createdAt ?? raw.created_at);
 
-      const logId =
-        toOptionalString(raw.logId ?? raw.log_id) ??
-        `${planId}-${postedAt ?? createdAt ?? String(Date.now())}`;
+    const logId =
+      toOptionalString(raw.logId ?? raw.log_id) ??
+      `${planId}-${postedAt ?? createdAt ?? String(Date.now())}`;
 
-      return {
-        logId,
-        planId,
-        status,
-        mainText,
-        templateId: (toOptionalString(raw.templateId ?? raw.template_id)?.trim() || undefined),
-        theme: (toOptionalString(raw.theme)?.trim() || undefined),
-        scheduledTime: (toOptionalString(raw.scheduledTime ?? raw.scheduled_time)?.trim() || undefined),
-        postedThreadId: (toOptionalString(raw.postedThreadId ?? raw.posted_thread_id)?.trim() || undefined),
-        postedAt,
-        createdAt,
-        jobId: (toOptionalString(raw.jobId ?? raw.job_id)?.trim() || undefined),
-        errorMessage: (toOptionalString(raw.errorMessage ?? raw.error_message)?.trim() || undefined),
-      };
-    })
-    .filter((entry): entry is PostedLogEntry => entry !== null);
+    return {
+      logId,
+      planId,
+      status,
+      mainText,
+      templateId: (toOptionalString(raw.templateId ?? raw.template_id)?.trim() || undefined),
+      theme: (toOptionalString(raw.theme)?.trim() || undefined),
+      scheduledTime: (toOptionalString(raw.scheduledTime ?? raw.scheduled_time)?.trim() || undefined),
+      postedThreadId: (toOptionalString(raw.postedThreadId ?? raw.posted_thread_id)?.trim() || undefined),
+      postedAt,
+      createdAt,
+      jobId: (toOptionalString(raw.jobId ?? raw.job_id)?.trim() || undefined),
+      errorMessage: (toOptionalString(raw.errorMessage ?? raw.error_message)?.trim() || undefined),
+    } satisfies PostedLogEntry;
+  });
+
+  return mappedEntries.filter((entry): entry is PostedLogEntry => entry !== null);
 };
 
 const formatTimestamp = (value?: string) => {
