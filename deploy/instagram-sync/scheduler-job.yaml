@@ -1,0 +1,15 @@
+name: autostudio-instagram-sync-daily
+schedule: '0 8 * * *'
+timeZone: 'Asia/Tokyo'
+attemptDeadline: 600s
+retryConfig:
+  retryCount: 2
+  minBackoffDuration: 60s
+  maxBackoffDuration: 300s
+httpTarget:
+  uri: https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/mark-454114/jobs/autostudio-instagram-sync:run
+  httpMethod: POST
+  headers:
+    User-Agent: Google-Cloud-Scheduler
+  oauthToken:
+    serviceAccountEmail: scheduler-invoker@mark-454114.iam.gserviceaccount.com

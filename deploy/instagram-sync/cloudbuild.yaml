@@ -1,0 +1,32 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-sync:latest'
+      - '-f'
+      - 'deploy/instagram-sync/Dockerfile'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-sync:latest'
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'autostudio-instagram-sync'
+      - '--image=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-sync:latest'
+      - '--region=asia-northeast1'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--max-retries=2'
+      - '--task-timeout=600'
+      - '--env-vars-file=deploy/instagram-sync/env.yaml'
+images:
+  - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-sync:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

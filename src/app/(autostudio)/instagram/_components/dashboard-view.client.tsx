@@ -142,7 +142,7 @@ export function InstagramDashboardView({ data }: Props) {
   const [mounted, setMounted] = useState(false);
   const [reelSortBy, setReelSortBy] = useState('date');
   const [reelSortOrder, setReelSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [storySortBy, setStorySortBy] = useState('date');
+  const [storySortBy, setStorySortBy] = useState<'date' | 'reach' | 'views' | 'viewRate' | 'reactions'>('reach');
   const [storySortOrder, setStorySortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
@@ -239,10 +239,16 @@ export function InstagramDashboardView({ data }: Props) {
     return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
   }, [followerByDate]);
 
-  const computeViewRate = useCallback((timestamp?: string | null, views?: number | null): number | null => {
+  const computeReelViewRate = useCallback((timestamp?: string | null, views?: number | null): number | null => {
     const followers = resolveFollowerCount(timestamp);
     if (!followers || !views) return null;
     return views / followers;
+  }, [resolveFollowerCount]);
+
+  const computeReachRate = useCallback((timestamp?: string | null, reach?: number | null): number | null => {
+    const followers = resolveFollowerCount(timestamp);
+    if (!followers || !reach) return null;
+    return reach / followers;
   }, [resolveFollowerCount]);
 
   const sortedStories = useMemo(() => {
@@ -255,6 +261,10 @@ export function InstagramDashboardView({ data }: Props) {
           aValue = a.timestamp || '';
           bValue = b.timestamp || '';
           break;
+        case 'reach':
+          aValue = a.reach || 0;
+          bValue = b.reach || 0;
+          break;
         case 'views':
           aValue = a.views || 0;
           bValue = b.views || 0;
@@ -262,8 +272,8 @@ export function InstagramDashboardView({ data }: Props) {
         case 'viewRate': {
           const aFollowers = resolveFollowerCount(a.timestamp);
           const bFollowers = resolveFollowerCount(b.timestamp);
-          const aRate = aFollowers && a.views ? a.views / aFollowers : null;
-          const bRate = bFollowers && b.views ? b.views / bFollowers : null;
+          const aRate = aFollowers && a.reach ? a.reach / aFollowers : null;
+          const bRate = bFollowers && b.reach ? b.reach / bFollowers : null;
           aValue = aRate ?? 0;
           bValue = bRate ?? 0;
           break;
@@ -493,7 +503,7 @@ export function InstagramDashboardView({ data }: Props) {
               <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
                 {sortedReels.slice(0, 5).map((reel) => {
                   const thumbnailUrl = resolveMediaUrl(reel.thumbnailUrl, reel.driveImageUrl);
-                  const viewRate = computeViewRate(reel.timestamp, reel.views ?? null);
+                  const viewRate = computeReelViewRate(reel.timestamp, reel.views ?? null);
                   return (
                     <div
                       key={reel.instagramId}
@@ -547,7 +557,7 @@ export function InstagramDashboardView({ data }: Props) {
               <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
                 {sortedStories.slice(0, 5).map((story) => {
                   const thumbnailUrl = resolveMediaUrl(story.thumbnailUrl, story.driveImageUrl);
-                  const viewRate = computeViewRate(story.timestamp, story.views ?? null);
+                  const reachRate = computeReachRate(story.timestamp, story.reach ?? null);
                   return (
                     <div
                       key={story.instagramId}
@@ -563,6 +573,12 @@ export function InstagramDashboardView({ data }: Props) {
                         <p className="text-xs text-[color:var(--color-text-muted)]">{formatDisplayDate(story.timestamp)}</p>
                         <dl className="space-y-2 text-sm text-[color:var(--color-text-secondary)]">
                           <div className="flex items-center justify-between">
+                            <dt className="font-medium text-[color:var(--color-text-muted)]">リーチ</dt>
+                            <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                              {story.reach?.toLocaleString() ?? '—'}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between">
                             <dt className="font-medium text-[color:var(--color-text-muted)]">閲覧数</dt>
                             <dd className="font-semibold text-[color:var(--color-text-primary)]">
                               {story.views?.toLocaleString() ?? '—'}
@@ -571,7 +587,7 @@ export function InstagramDashboardView({ data }: Props) {
                           <div className="flex items-center justify-between">
                             <dt className="font-medium text-[color:var(--color-text-muted)]">閲覧率</dt>
                             <dd className="font-semibold text-[color:var(--color-text-primary)]">
-                              {viewRate !== null ? `${(viewRate * 100).toFixed(1)}%` : '—'}
+                              {reachRate !== null ? `${(reachRate * 100).toFixed(1)}%` : '—'}
                             </dd>
                           </div>
                         </dl>
@@ -694,10 +710,11 @@ export function InstagramDashboardView({ data }: Props) {
             <div className="flex items-center gap-2">
               <select
                 value={storySortBy}
-                onChange={(event) => setStorySortBy(event.target.value)}
+                onChange={(event) => setStorySortBy(event.target.value as typeof storySortBy)}
                 className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
               >
                 <option value="date">日付</option>
+                <option value="reach">リーチ</option>
                 <option value="views">閲覧数</option>
                 <option value="viewRate">閲覧率</option>
                 <option value="reactions">リアクション</option>
@@ -715,9 +732,9 @@ export function InstagramDashboardView({ data }: Props) {
             {sortedStories.map((story) => {
               const thumbnailUrl = resolveMediaUrl(story.thumbnailUrl, story.driveImageUrl);
               const followerCount = resolveFollowerCount(story.timestamp);
-              const viewRate =
-                followerCount && story.views
-                  ? story.views / followerCount
+              const reachRate =
+                followerCount && story.reach
+                  ? story.reach / followerCount
                   : null;
               return (
                 <div key={story.instagramId} className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 sm:flex-row">
@@ -736,17 +753,17 @@ export function InstagramDashboardView({ data }: Props) {
                     </p>
                     <dl className="grid grid-cols-2 gap-y-2 text-sm text-[color:var(--color-text-secondary)] sm:grid-cols-3">
                       <div>
-                        <dt>閲覧数</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.views?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
                         <dt>リーチ</dt>
                         <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.reach?.toLocaleString() ?? '—'}</dd>
                       </div>
                       <div>
+                        <dt>閲覧数</dt>
+                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.views?.toLocaleString() ?? '—'}</dd>
+                      </div>
+                      <div>
                         <dt>閲覧率</dt>
                         <dd className="font-semibold text-[color:var(--color-text-primary)]">
-                          {viewRate !== null ? `${(viewRate * 100).toFixed(1)}%` : '—'}
+                          {reachRate !== null ? `${(reachRate * 100).toFixed(1)}%` : '—'}
                         </dd>
                       </div>
                       <div>

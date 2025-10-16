@@ -126,12 +126,12 @@ const getDateRangeFromPreset = (preset: DatePreset, customStart?: Date, customEn
 
 export const DateRangeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const getInitialRange = (): DateRange => {
-    const yesterdayRange = getYesterdayRange();
+    const thisWeekRange = getThisWeekRange();
 
     return {
-      start: yesterdayRange.start,
-      end: yesterdayRange.end,
-      preset: 'yesterday'
+      start: thisWeekRange.start,
+      end: thisWeekRange.end,
+      preset: 'this-week'
     };
   };
 

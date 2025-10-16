@@ -56,7 +56,7 @@ async function fetchRecentInsights(bigquery: BigQuery, config: ReturnType<typeof
     SELECT metric, value
     FROM (
       SELECT 'views' AS metric, SUM(views) AS value FROM \
-\`${config.projectId}.autostudio_instagram.instagram_reels\`
+\`${config.projectId}.${config.dataset}.instagram_reels\`
       WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
     )
   `;
