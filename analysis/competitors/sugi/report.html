@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>すぎさん｜インスタアカウント設計士｜Threadsレポート（直近30日）</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Hiragino Sans", "Yu Gothic", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        line-height: 1.6;
+      }
+      body { margin: 0; padding: 0; background: #f1f4fb; color: #0f172a; }
+      .hero { padding: 44px 32px 32px; background: linear-gradient(135deg, #1d4ed8, #6366f1); color: #f8fafc; }
+      .hero h1 { margin: 0; font-size: 2.2rem; letter-spacing: 0.01em; }
+      .hero p { margin: 10px 0 0; opacity: 0.9; font-size: 0.95rem; }
+      .container { max-width: 1080px; margin: 0 auto; padding: 32px 32px 64px; }
+      h2 { margin: 48px 0 18px; font-size: 1.55rem; color: #0f172a; }
+      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
+      .card { background: #ffffff; border-radius: 14px; padding: 20px; border: 1px solid rgba(148, 163, 184, 0.25); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08); }
+      .card h3 { margin: 0 0 6px; font-size: 0.92rem; color: #64748b; font-weight: 600; }
+      .card strong { display: block; font-size: 1.75rem; color: #0f172a; letter-spacing: 0.01em; }
+      .card small { color: #64748b; font-size: 0.78rem; }
+      .chart-section { background: #ffffff; border-radius: 20px; border: 1px solid rgba(148, 163, 184, 0.22); padding: 24px; box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08); }
+      .chart-section header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+      .chart-section h3 { margin: 0; font-size: 1.05rem; color: #0f172a; }
+      .chart-section span { font-size: 0.8rem; color: #64748b; }
+      .combined-chart svg text { font-size: 0.64rem; fill: #94a3b8; }
+      .highlight-list { margin: 0; padding-left: 1.2rem; color: #1f2937; font-size: 0.95rem; }
+      .highlight-list li + li { margin-top: 6px; }
+      .category-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+      .category-card { background: #ffffff; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.2); padding: 20px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08); }
+      .category-card header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+      .category-card h3 { margin: 0; font-size: 1rem; color: #0f172a; }
+      .category-card header span { font-size: 0.8rem; color: #64748b; }
+      .category-card .metric-row { display: flex; justify-content: space-between; color: #334155; font-size: 0.88rem; margin: 4px 0; }
+      .category-card .example { margin-top: 12px; font-size: 0.86rem; color: #475569; }
+      .posts-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+      .post-card { background: #ffffff; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.24); padding: 22px; box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1); display: flex; flex-direction: column; gap: 14px; }
+      .post-card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+      .post-card .rank { font-size: 1.1rem; font-weight: 600; color: #2563eb; }
+      .post-card .meta { margin: 0; color: #1f2937; font-size: 0.9rem; }
+      .post-card .meta span { margin-left: 6px; font-size: 0.8rem; color: #475569; }
+      .badge { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 999px; background: rgba(37, 99, 235, 0.12); color: #1d4ed8; font-size: 0.72rem; font-weight: 600; }
+      .post-metrics { display: flex; flex-wrap: wrap; gap: 14px; margin: 0; padding: 0; list-style: none; color: #1f2937; font-size: 0.82rem; }
+      .post-metrics li { display: flex; flex-direction: column; gap: 2px; min-width: 96px; }
+      .post-metrics strong { font-size: 1.02rem; color: #0f172a; }
+      .post-preview { margin: 0; font-size: 0.95rem; color: #1e293b; font-weight: 600; }
+      .post-body { border-radius: 12px; background: rgba(226, 232, 240, 0.45); padding: 12px 14px; font-size: 0.9rem; color: #1e293b; }
+      .post-body summary { cursor: pointer; list-style: none; font-weight: 600; color: #2563eb; display: flex; align-items: center; gap: 6px; }
+      .post-body summary::-webkit-details-marker { display: none; }
+      .post-body summary::after { content: '＋'; font-size: 0.75rem; transition: transform 0.2s ease; }
+      .post-body[open] summary::after { content: '－'; }
+      .post-body div { margin-top: 10px; line-height: 1.65; }
+      .post-body div br + br { margin-bottom: 6px; }
+      .muted { color: #94a3b8; }
+      .cta { margin-top: 52px; padding: 24px; border-radius: 16px; background: linear-gradient(120deg, rgba(37, 99, 235, 0.12), rgba(99, 102, 241, 0.18)); border: 1px solid rgba(99, 102, 241, 0.28); box-shadow: 0 16px 28px rgba(59, 130, 246, 0.16); }
+      .cta p { margin: 0 0 12px; color: #1f2937; }
+      .cta a { display: inline-block; padding: 10px 18px; border-radius: 10px; background: rgba(37, 99, 235, 0.14); color: #1d4ed8; text-decoration: none; font-weight: 600; }
+      @media (max-width: 820px) {
+        .chart-section header { flex-direction: column; align-items: flex-start; }
+      }
+      @media (max-width: 640px) {
+        .hero { padding: 36px 22px 24px; }
+        .container { padding: 28px 22px 60px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <h1>すぎさん｜インスタアカウント設計士｜Threads運用レポート</h1>
+      <p>対象期間：2025-09-17 〜 2025-10-16（直近30日）</p>
+    </header>
+    <main class="container">
+      
+    <section class="stats-grid">
+      <article class="card">
+        <h3>投稿本数</h3>
+        <strong>30本</strong>
+        <small>平均 1.00 本 / 日</small>
+      </article>
+      <article class="card">
+        <h3>総インプレッション</h3>
+        <strong>517,669</strong>
+        <small>平均 17,256 / 中央値 9,912</small>
+      </article>
+      <article class="card">
+        <h3>勝ち投稿（1万インプ超）</h3>
+        <strong>15本</strong>
+        <small>勝率 50.00%</small>
+      </article>
+      <article class="card">
+        <h3>総いいね・平均率</h3>
+        <strong>4,408件</strong>
+        <small>平均いいね率 1.23%</small>
+      </article>
+      <article class="card">
+        <h3>フォロワー純増</h3>
+        <strong>1,655</strong>
+        <small>11,345 → 13,000</small>
+      </article>
+    </section>
+  
+      <section>
+        <h2>日別推移</h2>
+        
+    <section class="chart-section">
+      <header>
+        <h3>日別インプレッション×フォロワー増</h3>
+        <span>ライン：インプレッション（左軸）／バー：フォロワー増加数（右軸）</span>
+      </header>
+      <div class="combined-chart">
+        <svg viewBox="0 0 1176 260" width="100%" height="260">
+          <defs>
+            <linearGradient id="lineGrad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#60a5fa" />
+              <stop offset="100%" stop-color="#2563eb" />
+            </linearGradient>
+          </defs>
+          <rect x="68" y="32" width="1040" height="176" fill="#f8fafc" rx="14"></rect>
+          <g transform="translate(0,208.0)">
+        <text x="54" text-anchor="end">0</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,164.0)">
+        <text x="54" text-anchor="end">22,250</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,120.0)">
+        <text x="54" text-anchor="end">44,500</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,76.0)">
+        <text x="54" text-anchor="end">66,750</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,32.0)">
+        <text x="54" text-anchor="end">89,000</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g>
+          <line x1="68" y1="208.0" x2="1108" y2="208.0" stroke="#cbd5f5" stroke-dasharray="4 4" />
+          <rect x="58.0" y="208.0" width="20" height="0.0" fill="#7c3aed" rx="4"></rect><rect x="93.9" y="208.0" width="20" height="0.0" fill="#7c3aed" rx="4"></rect><rect x="129.7" y="208.0" width="20" height="0.0" fill="#7c3aed" rx="4"></rect><rect x="165.6" y="208.0" width="20" height="0.0" fill="#7c3aed" rx="4"></rect><rect x="201.4" y="208.0" width="20" height="0.0" fill="#7c3aed" rx="4"></rect><rect x="237.3" y="208.0" width="20" height="0.0" fill="#7c3aed" rx="4"></rect><rect x="273.2" y="182.0" width="20" height="26.0" fill="#7c3aed" rx="4"></rect><rect x="309.0" y="200.7" width="20" height="7.3" fill="#7c3aed" rx="4"></rect><rect x="344.9" y="165.8" width="20" height="42.2" fill="#7c3aed" rx="4"></rect><rect x="380.8" y="169.9" width="20" height="38.1" fill="#7c3aed" rx="4"></rect><rect x="416.6" y="187.7" width="20" height="20.3" fill="#7c3aed" rx="4"></rect><rect x="452.5" y="131.8" width="20" height="76.2" fill="#7c3aed" rx="4"></rect><rect x="488.3" y="197.5" width="20" height="10.5" fill="#7c3aed" rx="4"></rect><rect x="524.2" y="163.4" width="20" height="44.6" fill="#7c3aed" rx="4"></rect><rect x="560.1" y="192.6" width="20" height="15.4" fill="#7c3aed" rx="4"></rect><rect x="595.9" y="141.5" width="20" height="66.5" fill="#7c3aed" rx="4"></rect><rect x="631.8" y="119.6" width="20" height="88.4" fill="#7c3aed" rx="4"></rect><rect x="667.7" y="181.2" width="20" height="26.8" fill="#7c3aed" rx="4"></rect><rect x="703.5" y="168.3" width="20" height="39.7" fill="#7c3aed" rx="4"></rect><rect x="739.4" y="117.2" width="20" height="90.8" fill="#7c3aed" rx="4"></rect><rect x="775.2" y="182.9" width="20" height="25.1" fill="#7c3aed" rx="4"></rect><rect x="811.1" y="106.6" width="20" height="101.4" fill="#7c3aed" rx="4"></rect><rect x="847.0" y="83.9" width="20" height="124.1" fill="#7c3aed" rx="4"></rect><rect x="882.8" y="152.0" width="20" height="56.0" fill="#7c3aed" rx="4"></rect><rect x="918.7" y="148.0" width="20" height="60.0" fill="#7c3aed" rx="4"></rect><rect x="954.6" y="161.8" width="20" height="46.2" fill="#7c3aed" rx="4"></rect><rect x="990.4" y="203.1" width="20" height="4.9" fill="#7c3aed" rx="4"></rect><rect x="1026.3" y="32.0" width="20" height="176.0" fill="#7c3aed" rx="4"></rect><rect x="1062.1" y="106.6" width="20" height="101.4" fill="#7c3aed" rx="4"></rect><rect x="1098.0" y="153.7" width="20" height="54.3" fill="#7c3aed" rx="4"></rect>
+          <polyline fill="none" stroke="url(#lineGrad)" stroke-width="3" points="68.0,208.0 103.9,208.0 139.7,208.0 175.6,208.0 211.4,208.0 247.3,208.0 283.2,208.0 319.0,208.0 354.9,175.8 390.8,126.9 426.6,188.2 462.5,184.3 498.3,182.7 534.2,173.2 570.1,96.9 605.9,186.2 641.8,153.3 677.7,166.5 713.5,191.8 749.4,144.7 785.2,193.4 821.1,85.4 857.0,32.0 892.8,122.0 928.7,208.0 964.6,188.2 1000.4,187.9 1036.3,194.0 1072.1,162.9 1108.0,208.0" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          <text x="68.0" y="242" text-anchor="middle">09-17</text><text x="103.9" y="242" text-anchor="middle">09-18</text><text x="139.7" y="242" text-anchor="middle">09-19</text><text x="175.6" y="242" text-anchor="middle">09-20</text><text x="211.4" y="242" text-anchor="middle">09-21</text><text x="247.3" y="242" text-anchor="middle">09-22</text><text x="283.2" y="242" text-anchor="middle">09-23</text><text x="319.0" y="242" text-anchor="middle">09-24</text><text x="354.9" y="242" text-anchor="middle">09-25</text><text x="390.8" y="242" text-anchor="middle">09-26</text><text x="426.6" y="242" text-anchor="middle">09-27</text><text x="462.5" y="242" text-anchor="middle">09-28</text><text x="498.3" y="242" text-anchor="middle">09-29</text><text x="534.2" y="242" text-anchor="middle">09-30</text><text x="570.1" y="242" text-anchor="middle">10-01</text><text x="605.9" y="242" text-anchor="middle">10-02</text><text x="641.8" y="242" text-anchor="middle">10-03</text><text x="677.7" y="242" text-anchor="middle">10-04</text><text x="713.5" y="242" text-anchor="middle">10-05</text><text x="749.4" y="242" text-anchor="middle">10-06</text><text x="785.2" y="242" text-anchor="middle">10-07</text><text x="821.1" y="242" text-anchor="middle">10-08</text><text x="857.0" y="242" text-anchor="middle">10-09</text><text x="892.8" y="242" text-anchor="middle">10-10</text><text x="928.7" y="242" text-anchor="middle">10-11</text><text x="964.6" y="242" text-anchor="middle">10-12</text><text x="1000.4" y="242" text-anchor="middle">10-13</text><text x="1036.3" y="242" text-anchor="middle">10-14</text><text x="1072.1" y="242" text-anchor="middle">10-15</text><text x="1108.0" y="242" text-anchor="middle">10-16</text>
+          <text x="1122" y="32.0" text-anchor="start">217</text><text x="1122" y="76.0" text-anchor="start">163</text><text x="1122" y="120.0" text-anchor="start">109</text><text x="1122" y="164.0" text-anchor="start">54</text><text x="1122" y="208.0" text-anchor="start">0</text>
+        </svg>
+      </div>
+    </section>
+  
+      </section>
+      <section>
+        <h2>ハイライト</h2>
+        <ul class="highlight-list"><li>最大リーチは <strong>2025-10-09 09:00「私の大嫌いな、伸びない人がする言葉」</strong> の 89,000 インプレッション。</li><li>勝ち投稿率は <strong>50.00%</strong>（15 / 30）。</li><li>フォロワー純増は <strong>1,655</strong>（期間内 11,345 → 13,000）。</li><li>最大フォロワー増投稿は <strong>2025-10-08 09:00「【超重要】インスタのアルゴリズムが変わります。先日インスタCEOが自身のアカウントで発表していたんですが、まだ正式に変更にはなっていないもののテスト導入されていて、いち早く知って対応しておけばリールの再生数爆伸びていく可能性大です。逆に知らないとどんどん落ちていくんですが、この度インスタがテスト導入する機能が、」</strong> の +174。</li><li>最もフォロワーが増えた日は <strong>2025-10-14</strong> の +217。</li><li>最多カテゴリは <strong>アルゴリズム/仕様</strong>（9本 / 平均 21,840 インプ / 平均いいね率 1.27%）。</li></ul>
+      </section>
+      <section>
+        <h2>カテゴリ別パフォーマンス</h2>
+        <div class="category-grid">
+        <article class="category-card">
+          <header>
+            <h3>アルゴリズム/仕様</h3>
+            <span>9本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>21,840</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>1.27%</strong>
+          </div>
+          <p class="example">【超重要】インスタのアルゴリズムが変わります。先日インスタCEOが自身のアカウントで発表していたんですが、まだ正式に変更にはなっていないもののテスト導入されていて、いち早く知って対応しておけばリールの再生数爆伸びていく可能性大です。逆に知らないとどんどん落ちていくんですが、この度インスタがテスト導入する機能が、</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>自己開示/マインド</h3>
+            <span>7本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>25,258</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>1.59%</strong>
+          </div>
+          <p class="example">私の大嫌いな、伸びない人がする言葉</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>その他</h3>
+            <span>4本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>7,008</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>1.23%</strong>
+          </div>
+          <p class="example">私はよくモリベユリさんやひかるさんと「競合」として見られるんですが(そしてそれは大変光栄な事なのですが)、実はそれぞれバチバチに競合ではないのですよ。少なくとも私はその認識です。思っているよりも顧客は被らないし、または心地よく被るのです(たぶんね。違ったらすみません)。だからこそ私はこの発信だしこの打ち出し方なのです。ここを理解する事ができるあなたはそれを自分のジャンルに持ち帰り、競合になりえる発信者を並べてみて、どんなひとがクライアントさんになるのかをそれぞれで考えてみると良いですよ。色々な事が見えてきます。</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>リール/動画</h3>
+            <span>4本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>16,798</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.98%</strong>
+          </div>
+          <p class="example">【重要】週3投稿では伸びません</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>ストーリーズ/フィード</h3>
+            <span>3本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>8,440</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.64%</strong>
+          </div>
+          <p class="example">インスタの4つの機能についてま～だ理解していないひとがいるので全て解説していきます。長くなりますがこれ理解すればアカウントの質ぐん！っとあがりますから必読です。</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>運用戦略/マネタイズ</h3>
+            <span>3本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>7,920</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>1.24%</strong>
+          </div>
+          <p class="example">コメント誘導はしないでください。</p>
+        </article>
+      </div>
+      </section>
+      <section>
+        <h2>インプレッション上位トップ10（クリックで本文表示）</h2>
+        <div class="posts-grid">
+      <article class="post-card">
+        <header>
+          <span class="rank">#1</span>
+          <div>
+            <p class="meta">2025-10-09 09:00<span>(木)</span></p>
+            <span class="badge">自己開示/マインド</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>89,000</strong><span>インプレッション</span></li>
+          <li><strong>386</strong><span>いいね</span></li>
+          <li><strong>0.43%</strong><span>いいね率</span></li>
+          <li><strong>+137</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">私の大嫌いな、伸びない人がする言葉</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>私の大嫌いな、伸びない人がする言葉<br />これ私に言ってきた人達、見事に人生楽しくなさそうです。それは...  <br />すぎさんだからできたんだよね<br />これです。本当に嫌い。私留学経験があって、3か国語話せるんです。でね、ある日友人に「すぎさんだからできたんだよね。頭もいいし、お金もあるし」みたいな事言われたんですよ。「はぁ？」ってなりました。<br />学生時代、みんなが遊んでいる間にバイト3つ掛け持ちして留学費用貯めて、隙間時間はすべて勉強にあててました。自分が努力しないとできない不器用なタイプだってわかっているから、人より努力したんですよ。それに向かって「あなただからできるんだよね」って、めっちゃ失礼です。<br />違うよ？やったからできるんだよ？今、周りで成果をあげている人達を見てみてください。本当に「そのひとだからできた」で済ませて良いでしょうか？きっと人一番努力して学んで自分を律してきています。今もなお、です。<br />人の頑張りを認められず、自分ができない言い訳に環境を使うひとはいつまで経っても状況変わりません。忙しいのなんて世の中全員一緒だし、何か新しい事始めるなら、できない事なんて今日も明日もふりかかってきます。これ言うと、 <br />努力ができる事が才能だから<br />とか言われます。そう思うのであれば、起業なんて目指さない方が良い。超天才を除いては、起業なんてバカみたいな努力の上でしか成り立ちません。普通のひとが自分で事業を始めてそれを継続するなんて、普通の生活を継続したままでできるわけがないんです。さらに自分で商品を作り、そこに価値をつけて販売するのであれば、その責任を果たすだけの努力をひたすらにし続ける必要があるんです。<br />もちろん、ひとによって短期間でやり切るタイプのひとと、時間をかけてじっくりやるタイプのひとがいます。でも私も短期間に見えて、学生時代や会社員時代の経験が基盤を作ってきたから今があるんです。みんな同じです。<br />だからね、ひとをうらやむより前に、まずは自分が動くんだ。努力が絶対成果に繋がるわけではないけど、努力なくして成果はないから。<br />https://www.threads.com/@sugisan_insta_/post/DPkHu1Lk778?xmt=AQF02qNUGQ4k2OUmasT3J7-RU31k5Fydq8UoJI34NQstFg</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#2</span>
+          <div>
+            <p class="meta">2025-10-08 09:00<span>(水)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>62,000</strong><span>インプレッション</span></li>
+          <li><strong>277</strong><span>いいね</span></li>
+          <li><strong>0.45%</strong><span>いいね率</span></li>
+          <li><strong>+174</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">【超重要】インスタのアルゴリズムが変わります。先日インスタCEOが自身のアカウントで発表していたんですが、まだ正式に変更にはなっていないもののテスト導入されていて、いち早く知って対応しておけばリールの再生数爆伸びていく可能性大です。逆に知ら…</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>【超重要】インスタのアルゴリズムが変わります。先日インスタCEOが自身のアカウントで発表していたんですが、まだ正式に変更にはなっていないもののテスト導入されていて、いち早く知って対応しておけばリールの再生数爆伸びていく可能性大です。逆に知らないとどんどん落ちていくんですが、この度インスタがテスト導入する機能が、<br />ユーザーが自分のアルゴリズムを作る事ができる機能です。つまり、興味のあるカテゴリーを選び、それに関連するリールが優先的におすすめ欄に表示される様になる機能。<br />つまりどういう事かというと、今まではリールの評価が高いとどんどん広い層に届いていき、数十万再生いくと自分のジャンルにそんなに興味がない層にも届いていた、という事。今回、この機能が導入される事により、興味のないひとには表示されづらくなるのでこの広がりが少なくなる、つまり再生数が伸びづらくなる可能性が高くなります。<br />そう聞くと「再生数が落ちるなんて最悪じゃん」と思いがちなんですが逆です。これが導入される事によりチャンスしかなくて、<br />自分のジャンルに興味のあるひとによりしっかりと投稿が届く精度が高まる、という事です。自分のアカウントのエンゲージメント、つまり評価をさげる様な層に届かなくなるため、自然とアカウントの状態が良くなっていくんです。そうなる事で、逆にフォロワー内からのリールの評価があがり拡散される、そしてその先でも興味のあるひとだけに届いていくので評価があがる、その繰り返しでどんどん伸びていくんです。しかも届く先は興味の濃い層なのでしっかり見てくれる層という最高な流れです。<br />この変化を活かすためには届けたい層が「有益だ、また見たい」と思う様な投稿を作り続ける事、これしかありません。ゴールに連れていくために必要な情報を一貫性を持って発信し続けてください。そうすれば、しっかりと伸びて、さらに必要なひとに届いているので、しっかりと売れるアカウントになっていきます。<br />一貫性を保つためにすべき事だけ最後にまとめておきますね。 <br />① コンセプト設計をやる<br />もうこれしつこいぐらい言っています。固定ポストのリンクから受け取れるコンセプト設計徹底解説を読んでやってください。まずはこれがないと一貫性なんて絶対に作れませんので必須です。<br />② 要素分解をする<br />コンセプトができたら、ターゲットを「現在地」から「ゴール」に連れていくために必要な要素を洗い出してください。例えば私の様に「インスタでゼロイチを目指す」であれば、設計・インスタ運用・集客・マインド等に分けられます。これの洗い出しです。<br />③ さらに細分化する<br />これは台本やカリキュラムを作る際にやりますが、例えばインスタ運用でも「ストーリー・リール・ライブ」の様い細分化されるし、リールであれば「台本・撮影・編集」の様にさらに細分化されます。これをやりましょう。<br />④ 出てきたネタを徹底的に発信<br />要素分解や細分化で出てきた内容の中で、リサーチをして需要がある内容だけを徹底的に発信していってください。そうする事で、一貫性、つまりターゲットがゴールに行くために必要な情報だけで埋め尽くされ、興味のある層にバンバン届いていきます！ <br />https://www.threads.com/@sugisan_insta_/post/DPhiXazE2LJ?xmt=AQF0907jj_anmyfI-sEJ8--IFLBQv0mqSktAhCJi27agHw</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#3</span>
+          <div>
+            <p class="meta">2025-10-01 09:00<span>(水)</span></p>
+            <span class="badge">自己開示/マインド</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>50,000</strong><span>インプレッション</span></li>
+          <li><strong>648</strong><span>いいね</span></li>
+          <li><strong>1.30%</strong><span>いいね率</span></li>
+          <li><strong>+74</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">我が家のパパは、5年前に無職になりました。</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>我が家のパパは、5年前に無職になりました。<br />観光系の仕事をしていたため、コロナの影響で失業。その頃育休中だった私の手取りは15万円程度。家賃払ったらもう手元にほぼなにも残らず、貯金切り崩して家族3人生きてました。外国籍のパパはそう簡単に仕事が見つからず、精神的に病んでしまい、私が大黒柱として働く事になりました。役職手当、残業手当、資格手当、もらえるものは全てもらおうと必死に働いて、朝は7時には家を出て、帰りは23時。娘の顔は週末しか見れない時もありました。寝顔を見ながら、何度泣いたかわかりません。今でもあの時の暮らしを思うと泣けます。その時長女は1歳でした。<br />お金もない、時間もない状況で、正直記憶がないんですよね。働いている時間はたぶん今と変わらないんですけど、その時は本当にただ「必死にお金を稼ぐ」だけで、仕事が楽しいとか考える余裕もありませんでした。でも徐々にお給料があがっていき、パパも元気になり働ける様になり、そしてインスタを始めて今に至るわけです。次女も生まれ、生活はかなり楽になりました。<br />でね、娘が3歳からずーーーーっと言っていたのが「ディズニーランドのホテルに泊まりたい」だったんです。でももちろん前はそんなお金なくて旅行さえ行けなかったし、インスタ始めてからは時間が取れなくて行けなかったんです。だからディズニーストアとか行ってごまかしてました(笑)<br />でもね、来週...行ってきます。泊まりディズニー！たぶん、たかだかディズニーなんですよ。今なら余裕で払えるから「すごい事！」ってわけでもないんです。でも、我が家にとっては家族全員で泣いちゃうぐらい大きな出来事なんです。どんなに良い家に住むよりも、良い時計を買うよりも、一番叶えたかった夢なんです。良い部屋取っちゃったんだから。あー自分頑張った。<br />インスタを見てるとさ... <br />「家族との時間を犠牲にしてまでやりたいの？」みたいなの見かけますよね。私、それ見る度に心痛くなるんですよ。私はあの頃、そうするしかなかったから。でもね、今は違うんです。時間は相変わらずないけど、でも私からすると、毎日娘達の顔が見れて、一緒にご飯が食べれて、週末1日でも一緒に過ごせる。そして、自分がやりたい事ができている今が本当に幸せなんですよね。<br />起業をしたり、インスタを頑張ると、絶対に子どもとの時間って減るんです。でも、じゃあ何時間子どもと一緒に過ごしたら正解？子どもがどうなったら「子どもに我慢させていない」とか「子どもを犠牲にしていない」って言い切れる？そんなのね、どんな形だって無理なんです。母親が子どもに罪悪感を感じるのなんて当たり前。でもね、起業するって決めたなら、その罪悪感も受け入れていくんです。その分、それを糧に頑張る。そして、その結果を家族に還元していく。それがみんながハッピーになる唯一の道です。<br />現在20:30、私は今までカフェで仕事をしていて、パパがワンオペで頑張っています。これから家に帰り、娘達を寝かしつけて今日はまだ仕事です。これが我が家の最高なスタイルです！ <br /><br />https://www.threads.com/@sugisan_insta_/post/DPQ-qhXE30M?xmt=AQF0dI44mFs1U9MY2k4RpGeXUhUdMgM_h183w8l7M-cRvQ</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#4</span>
+          <div>
+            <p class="meta">2025-09-26 09:00<span>(金)</span></p>
+            <span class="badge">リール/動画</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>41,000</strong><span>インプレッション</span></li>
+          <li><strong>201</strong><span>いいね</span></li>
+          <li><strong>0.49%</strong><span>いいね率</span></li>
+          <li><strong>+54</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">【重要】週3投稿では伸びません</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>【重要】週3投稿では伸びません<br />私が犯した一番の罪は「最低週3投稿」を流行させてしまった事だと思っています。あくまでも「最低ライン」として、時間が取れない方、フルタイム勤務をされている方とかでも継続できる様にそうお伝えしてきましたが、まさかこんなに多くのひとが「最低ライン」を取ると思っていませんでした。なぜか「週3投稿すれば大丈夫」にすり替わっていませんか？<br />これ超危険で理由はふたつ。<br />① 質をあげない限りリーチは取れない<br />伸びていくためには、まずはリーチをできる限り取らないといけないわけで、同じ質の投稿をするのであれば週3より週7の方がリーチが取れるのは至極当然。例えばめちゃくちゃクリエイティブに凝った1本でリーチを爆発的に取るリールを作るなら話は別ですが、私レベルのリールであれば平均数万再生。たまにあたって数十万再生。だったら「自分の最高質を保った状態でできる最大数を出す運用」が最適解なんです。<br />② 最低ラインを取るマインドが伸びない原因<br />「最低週3投稿」と言われた時に「それなら私は週7投稿して差をつけます」がすぎさんマインドです。別にすぎさんマインドになる必要はないものの、ここで「週3でいいや」って思うひとは、全てを「最低値」で取っていきます。この最低値を取るマインドで、アカウントが大量にあるインスタ戦国時代で伸びて行けるわけがありません。<br />つまりね、<br />「伸びる投稿頻度」なんでものは存在しないんですよ。自分の生活で「ちょっと無理してできる範囲」の中で、どう質と量のバランスを取るかをしっかり見極める事が大事なんです。<br />あなたが週3投稿しかできないなら<br />ずば抜けた質を求めてください。<br />あなたの質が高くないのであれば<br />ずば抜けた数をこなしてください。<br />厳しく聞こえるかもしれませんが、今のままでは週3投稿頑張って継続しても「全然伸びなかった～」となるのでハッキリお伝えしておきます！でもね、運用初期は慣れない作業で時間がかかりますから仕方ないです。目標は最初の3ヶ月は週3投稿、その間に最低限の質とスピードを身に着けて、3ヶ月以降はできる限り投稿数をあげていく。ここからが勝負ですから。<br />時間管理が難しい、そんな簡単にできないって方もいると思います。そこはね、もう環境の整理です。やるからにはやるんです。私がなぜ子ども2人いて、講座運営もしながら毎日投稿を続けられているのか、そのヒントは全て固定リンクから受け取れる特典で解説していますので見てください！ <br /><br />https://www.threads.com/@sugisan_insta_/post/DPCpcS2k5kp?xmt=AQF0dUDF3Fk4pi6T-rcuWPD6Vc5ZfVwr2BkzbodfEhvbpQ</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#5</span>
+          <div>
+            <p class="meta">2025-10-06 09:00<span>(月)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>32,000</strong><span>インプレッション</span></li>
+          <li><strong>147</strong><span>いいね</span></li>
+          <li><strong>0.46%</strong><span>いいね率</span></li>
+          <li><strong>+114</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">2026年リールはオワコン化していきます。</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>2026年リールはオワコン化していきます。<br />最近のインスタの変更を見ていれば明らかですよね。今までの様に伸びてるネタを参考にして作っても、これだけ同じ様なリールが量産されている中でもう見られません。これからのインスタで伸ばしていく勝ちリールは1つしかなくて<br />完全に質勝負です。質と言うと「映像」と思いがちなんですが違いまして、これから伸びる新型リールは、とにかくペルソナの理解をしてペルソナの悩みを代弁し、本人も気づいていない問題点を認識してもらい、しっかり解決策まで解説するんです。つまり、完全にターゲットにロックオンしてそのひとにだけ打ち続けるんです。これ固定ポストから受け取れる「0→1達成徹底解説」のテキストで全て解説しているのでそれ見たひとはもうわかっているはずで、ここ理解したひとからどんどん差ついていきます。つまり、インフルエンサーの様な母数を増やした投稿はしてはいけないという事。そのために「やめるべき3つの事」をお伝えしていきます。<br />① 伸ばす事をやめる<br />画質や編集にこだわりすぎなんですが、90％のリールがズレているのはここで、伸ばす事だけに注力しているので伸びているリールの表面だけを真似して二番煎じになりまったく伸びなくなっていきます。大事なのはリサーチからニーズのあるネタだけを参考に、自分のターゲットに沿った解決策を提示する事。ここから始めてください。<br />② アルゴリズムを追うのをやめる<br />正直アルゴリズムが変わっても根本的にやらなければいけない事はまったく変わっていません。なので、最低限の情報だけ拾ってください。色々なアカウントを見ていると言ってる事が違ったり、情報過多になりますのでこのアカウントだけで大丈夫です。<br />③ リサーチをやめる<br />リサーチのやり方がズレてます。例えばダイエットの発信をしているひとがダイエットのアカウントを知識をつけるためにリサーチをする必要はありません。それを始めてしまうと、影響力のあるアカウントの意見に左右され、自分の意見が言えなくなります。あくまでもどんなネタが求められているのかを知りそれを自分の軸に沿って発信する事が大事ですので、リサーチは冒頭10秒見るだけでOKです！<br />https://www.threads.com/@sugisan_insta_/post/DPchaJqEwxz?xmt=AQF0S1jtUge2V_aEHvYoSu02j2ZtCSiGzAx-q3DW-Zf25A</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#6</span>
+          <div>
+            <p class="meta">2025-10-10 09:00<span>(金)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>30,000</strong><span>インプレッション</span></li>
+          <li><strong>133</strong><span>いいね</span></li>
+          <li><strong>0.44%</strong><span>いいね率</span></li>
+          <li><strong>+67</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">【緊急】インスタのアルゴリズムが変わりました</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>【緊急】インスタのアルゴリズムが変わりました<br />これ気づいたひといますか？一昨日ぐらいから急にリールが伸びづらくなっています。リール投稿しても驚くほど伸びないです。どの発信者も総じて伸びが悪いです。原因と対策解説します。<br />原因は...わかりません(笑)<br />こういう時に「アルゴリズムがこう変わったから～」とかっていうのはあくまでも予測でしかなくて、公式から発表がない限り正しい原因はわからないし、アルゴリズムの微調整は常に行われているものなので考えるだけ無駄です。でも対策はあります。4ついきます。<br />① 気にせずいつも通り続ける<br />こういう時に焦って変な事するひといるんですけど、いつも通りで大丈夫です。自分だけがガタ落ちしていたらそれは改善すべきですが、全体的に落ちているのであればインスタ側の調整で、どこかでまた変わります。まずは焦らず変わらずいけば問題ないです。<br />② 後伸びするんで気にしない<br />しっかり数値見ながら継続的に運用しているとわかるんですが、今はとにかく後伸びします。2週間とか1か月後とかにまだまだ伸びている事とかよくあります。なので、今回っていなくても良いリールであれば後から回っていくので気にしなくてOKです。<br />③ リサーチをしっかりする<br />と言ってもできる事はやっていきたいので、自分と同じレベル感のアカウントをとにかく見まくってください。伸びない状況の中でも、伸びてるリールってあるんで、何が今伸びやすいのか、をしっかり見てください。<br />④ Threadsを頑張る<br />インスタが伸びないならThreadsを伸ばせば良いじゃん！って考えです。しっかり伸びますから。こういう時期に焦って色々施策打っても無理なんで、だったらしばらく様子みつつThreads頑張っちゃおうぜぃ♪<br />https://www.threads.com/@sugisan_insta_/post/DPpQjKkk6JU?xmt=AQF0ZDh-HizYAQtNBLxvjQ9yx-g6X2usTXtAY8b6MDHyYA</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#7</span>
+          <div>
+            <p class="meta">2025-10-03 09:00<span>(金)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>21,000</strong><span>インプレッション</span></li>
+          <li><strong>154</strong><span>いいね</span></li>
+          <li><strong>0.73%</strong><span>いいね率</span></li>
+          <li><strong>+73</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">9月からアルゴリズムの変更でリールの再生数がガタ落ちしているアカウントが出てきておりまして、このままだとインスタやめちゃうんじゃないかと心配しています。でもこれアルゴリズムのせいではなくて今までの運用のせいなんですよね。毎日100アカウント…</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>9月からアルゴリズムの変更でリールの再生数がガタ落ちしているアカウントが出てきておりまして、このままだとインスタやめちゃうんじゃないかと心配しています。でもこれアルゴリズムのせいではなくて今までの運用のせいなんですよね。毎日100アカウント以上見ていて気付いた特徴と改善策をお伝えしますので、まずはこれを試してみてください。<br />そもそもインスタのアルゴリズムを理解してほしいんですが、私達は【内部エンゲージメント】と【外部エンゲージメント】というものの両方を大事にする必要があるんです。エンゲージメントとは「再生時間・シェア・いいね」等ではかられ、内部エンゲとはフォロワーさんからの評価の事で、外部エンゲとはフォロワー外からの評価の事です。<br />そして今、再生数がガタ落ちしているアカウントの特徴は「内部エンゲ激低のアカウント」です。つまり、フォロワー内からまったく評価を得る事ができていないアカウント達の外部流出が激減し、再生数がガタ落ちしているんです。こうなる要因のひとつが、外部エンゲばかり気にして目先だけの運用をしてきた結果です。<br />つまり、内部エンゲージメントをいかにあげていけるかが鍵なんですが、そのためにできる事をお伝えします。これ「すでに落ちているひと」だけじゃなくて「これから落としたくないひと」にも大事なポイントなので対策としてもやった方が良いですよ。ちょっと大変ではありますが、生き返らせたいなら必須です。5ついきます。<br />①ストーリーに力を入れる<br />リールは外部に出ていくのに対し、ストーリーというのはフォロワーさんにだけ表示される機能です。つまり、内部エンゲをあげる超大事な機能です。ここでいかにフォロワーさんに向けて価値提供をしコミュニケーションを取るか。そして見てくれる層を広げるか(=閲覧率をあげる)が超重要です。見せかけのフォロワーではなく「興味度の高いフォロワー」をいかに増やし、興味を高めてもらい、リールを見てもらい、そこでも反応をもらうかが重要です。<br />②コンセプト・サービスを見直す<br />内部エンゲが低くなっているひとのほとんどが目先のリーチに走っています。そして、コンセプトやサービスがおざなりになり、最終熱量のないアカウントになります。内部エンゲをあげるために大事な事は「見続けてもらう事」です。でも、ノウハウなんて正直3ヶ月も見ればだいたい全部言い切ってます。それでも見続けてもらう理由は「コンセプトに共感しているから」とか「いつかサービスを購入したい」と思っているからです。これずっと固定ポストでやり方解説してるのにやってくれるひとめちゃくちゃ少なくて悲しい。<br />③露出を増やす<br />内部エンゲを取り戻すには、見ていないフォロワーさんを減らすか、見てくれるフォロワーさんを増やすしかありません。ある程度はフォロワー削除で対応できても、数千フォロワーのアカウントになったら限界があります。なので、新規フォロワーをつけていくしかありません。リールの投稿頻度を増やし、リサーチベースでリーチを狙ったキラーコンテンツを見つけつつ、フォロー率があがりすぎないようにコントロールする教育リールも織り交ぜていきましょう。またThreadsも強化し、別経路からの集客もしっかりやっていきましょう。<br />④導線の見直し<br />このタイミングで見たい指標は「再生数」でも「フォロワー数」でもなく「リード数(LINEへの登録数)」と「集客数」です。この状態のアカウントが爆発的に一気に伸びる事は考えづらく、でも発信を見直していく事で少数でも新規フォロワーがつき、さらに休眠フォロワーの呼び起こしができ、しっかり集客にはつながっていくからです。でもこの「目先指向」で作られたアカウントはだいたいここの思考が弱いです。ここはインスタの見方の変更が超重要です。難しいポイントだけど大事。<br />最後⇩<br />⑤リーチを狙いすぎない<br />アカウントに勢いをつけるために、ある程度リーチを狙うんです。でも、そこを狙いすぎてはまた同じことになります。例えばコメント誘導・〇〇ルーティンみたいなコンテンツに「伸びやすい」という理由で食いつくのはまた「目先指向」になってしまっています。一貫性は保ちつつ、リサーチで需要の把握と伸びやすい冒頭や構成を知り、あとはひたすらPDCAを繰り返す。そうするとどこかで伸びるリールが出てくる、が理想です。<br />これ全部やってもまったく再起できない＆内部エンゲが落ちたままの場合、アカウントの作り直しも検討するかもしません。でもね、まだまだできる事山ほどあるから。まずはひとつづつコツコツと。<br />https://www.threads.com/@sugisan_insta_/post/DPUqdoAE4zD?xmt=AQF0n5hnoNxLIyYpM920heBaGkyGfTgZTbSuE1w57SCVaA</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#8</span>
+          <div>
+            <p class="meta">2025-10-04 09:00<span>(土)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>21,000</strong><span>インプレッション</span></li>
+          <li><strong>122</strong><span>いいね</span></li>
+          <li><strong>0.58%</strong><span>いいね率</span></li>
+          <li><strong>+50</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">ストーリーの連投は不要です。</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>ストーリーの連投は不要です。<br />インスタCEOから「ストーリーを連投してもリーチが落ちるアルゴリズムではなくなった」との発表がありましたね。そうすると「ほら見ろ！連投も良かったじゃないか！大事なのは閲覧率じゃないだろ！」みたいな感じになるんですけど論点ズレすぎ。基準値低すぎ。解説していきます。 <br />私は半年ほど前(フォロワー3万人頃)からストーリー閲覧率が落ち始め、それと同時にリールの再生数も以前と比べ低迷していました。ストーリーの閲覧率はアカウントの状態を示す超重要な指標です。ここが低いアカウントは内部エンゲーメントが低く、力業のバズは狙えてもリール再生数の安定はしません。<br />ちょっと難しい話ですが、バズから入るフォロワー層と日々の安定したリールから入るフォロワー層の「興味度の濃さ」はまったく異なるため、再生数が安定しないアカウントになると集客へは大打撃です。<br />なので、閲覧率の維持は大事で、改善のために連投も1枚長文も短文も全て試し、今は常に平均の閲覧率は20％、幅は18-22%程度。最高で25％程度。おそらくこのフォロワー数の中では良い方になってきました。それと同時に感覚としてアカウントも盛り上がっていますし、再生数も持ち直してきています。<br />そして、ストーリーを連投した際の閲覧率の推移は.. <br />【アルゴリズム変更前】<br />20％→18％→18％→17％→17％<br />20％→19％→18％<br />【アルゴリズム変更後】<br />20％→18％→18％→17％<br />18％→17％→15％<br />そして1枚のストーリーは常に【18-22%】です。マジで変わらん。1枚だろうと連投を織り交ぜようとLINE流入数も変化なく、しっかり集客できています。つまりどういう事かわかります？<br />アルゴリズムとか正直どうでもよくて、内容によるんですよ。これ言ったら元も子もないんですけど、でもそうなの。もしアルゴリズム変わって劇的に閲覧率変わったひといたら教えてください。今のところ周りにはゼロです。だって閲覧が上がるわけじゃないし、全てはアルゴリズムによるんじゃなくて内容によるから。<br />目指すべきは... <br />「閲覧率の維持」でもなく「しっかり見てもらえる事」でもなく「集客につなげる事」でもなく...<br />閲覧率を高く保ちながら<br />読んでタメになる<br />かつ集客に繋がる<br />良いストーリーをあげろ<br />です。みんな閲覧率が大事だ～とか、閲覧率を気にしちゃダメだ～とか、連投なのか1枚なのか...とか言ってますけど、基準値低すぎん？全部やるんだよ！1枚でも満足してもらい、連投でも満足してもらうんだよ！その時のベストをやれるスキルをつけるんだよ！って感じです。だから別に連投してもいいししなくても良い。しても売れるししなくても売れる。でも閲覧率は高く保った方が良いに決まっている。ベストな方法は発信者とアカウントと売り方とターゲットによる。自分とアカウントとユーザーのベストを探し続けて見つけたひとが勝ちです。<br />https://www.threads.com/@sugisan_insta_/post/DPXPdoYE0E-?xmt=AQF0nnoie3qbK7Hv6__EkpnC1gol4ox2Cn9CSjDX2iQVtw</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#9</span>
+          <div>
+            <p class="meta">2025-10-15 09:00<span>(水)</span></p>
+            <span class="badge">その他</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>13,000</strong><span>インプレッション</span></li>
+          <li><strong>105</strong><span>いいね</span></li>
+          <li><strong>0.81%</strong><span>いいね率</span></li>
+          <li><strong>+92</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">私はよくモリベユリさんやひかるさんと「競合」として見られるんですが(そしてそれは大変光栄な事なのですが)、実はそれぞれバチバチに競合ではないのですよ。少なくとも私はその認識です。思っているよりも顧客は被らないし、または心地よく被るのです(た…</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>私はよくモリベユリさんやひかるさんと「競合」として見られるんですが(そしてそれは大変光栄な事なのですが)、実はそれぞれバチバチに競合ではないのですよ。少なくとも私はその認識です。思っているよりも顧客は被らないし、または心地よく被るのです(たぶんね。違ったらすみません)。だからこそ私はこの発信だしこの打ち出し方なのです。ここを理解する事ができるあなたはそれを自分のジャンルに持ち帰り、競合になりえる発信者を並べてみて、どんなひとがクライアントさんになるのかをそれぞれで考えてみると良いですよ。色々な事が見えてきます。<br />https://www.threads.com/@sugisan_insta_/post/DP0z63gEaAI?xmt=AQF0lDoQF-0ZjNkU_jaVG2nSaNMWimErhospR_bPqlezXw</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#10</span>
+          <div>
+            <p class="meta">2025-09-28 09:00<span>(日)</span></p>
+            <span class="badge">自己開示/マインド</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>12,000</strong><span>インプレッション</span></li>
+          <li><strong>106</strong><span>いいね</span></li>
+          <li><strong>0.88%</strong><span>いいね率</span></li>
+          <li><strong>+58</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">100万再生を出してもあなたの夢は叶いません。</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>100万再生を出してもあなたの夢は叶いません。<br />私は過去に運用していたアカウントで、100万再生を数本出しています。フォロワー数も1.8万人いましたが、それは今閉鎖してこのアカウントを作り直しました。その理由を解説します。<br />結論、再生数だけを追った運用をしていたので使い物にならなかったからです。ちょっと考えてみてください。子どもが「ひらがなってどうやって書くの？」って聞いてきたら、まず完成系を見せて、そこから書き順とか教えていきますよね。そして必要なペンとノートを渡します。それと同じです。その「完成系」から逆算して必要な要素を見ていくんです。<br />でも、私は逆算の起点を間違えたんです。私含め大半の方は「再生数」を起点にして、それを伸ばすために冒頭やテロップの入れ方を考えます。でも、私達が本当に叶えたいのはそこじゃないですよね？フォロワー数を増やす事でも、売上をあげる事でもなくて、その先にもっと叶えたい事があるはずです。<br />家族とゆっくり過ごしたいとか、子どもに好きな事させてあげたい、ちょっと贅沢な暮らしがしたいとか。そこから逆算するんです。<br />そのために <br />必要な売上はいくらで、そのうちのいくらをインスタから稼いで、そのためにどれぐらいの集客が必要で、そのためにどれだけのLINE登録が必要で、そのためにどれぐらいの新規フォロワー数が必要か。この逆算なんですよ。<br />そのために必要なリーチ数とフォロー率を獲得するために再生数があるんです。わかりますか？再生数ってめっちゃ枝葉ですよね。この逆算をせずに再生数だけを追うと、再生数だけ取れてもその先の目的までつなげる施策が何もされてないんですよ。だからここで露頭に迷い、マネタイズに繋げられません。<br />逆算の起点は、インスタ外にありますよ。そこ間違えたら、結果インスタ伸びても目的が叶えられずに終わりますので注意してください。<br />https://www.threads.com/@sugisan_insta_/post/DPH4B3LE-8l?xmt=AQF0SqvLN4ck3-Ki4R5y7iV7_mehwVu8vNMQ7Ukoig7Hcw</div>
+        </details>
+      </article>
+    </div>
+      </section>
+      <section class="cta">
+        <p>最新データに更新したい場合は <code>GOOGLE_APPLICATION_CREDENTIALS=... node scripts/exportCompetitorInsights.js</code> を実行してください。</p>
+        <a href="posts.csv">posts.csv を開く</a>
+      </section>
+    </main>
+  </body>
+</html>

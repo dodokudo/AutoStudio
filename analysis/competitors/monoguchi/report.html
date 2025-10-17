@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>門口 拓也｜Threadsレポート（直近30日）</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Hiragino Sans", "Yu Gothic", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        line-height: 1.6;
+      }
+      body { margin: 0; padding: 0; background: #f1f4fb; color: #0f172a; }
+      .hero { padding: 44px 32px 32px; background: linear-gradient(135deg, #1d4ed8, #6366f1); color: #f8fafc; }
+      .hero h1 { margin: 0; font-size: 2.2rem; letter-spacing: 0.01em; }
+      .hero p { margin: 10px 0 0; opacity: 0.9; font-size: 0.95rem; }
+      .container { max-width: 1080px; margin: 0 auto; padding: 32px 32px 64px; }
+      h2 { margin: 48px 0 18px; font-size: 1.55rem; color: #0f172a; }
+      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
+      .card { background: #ffffff; border-radius: 14px; padding: 20px; border: 1px solid rgba(148, 163, 184, 0.25); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08); }
+      .card h3 { margin: 0 0 6px; font-size: 0.92rem; color: #64748b; font-weight: 600; }
+      .card strong { display: block; font-size: 1.75rem; color: #0f172a; letter-spacing: 0.01em; }
+      .card small { color: #64748b; font-size: 0.78rem; }
+      .chart-section { background: #ffffff; border-radius: 20px; border: 1px solid rgba(148, 163, 184, 0.22); padding: 24px; box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08); }
+      .chart-section header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+      .chart-section h3 { margin: 0; font-size: 1.05rem; color: #0f172a; }
+      .chart-section span { font-size: 0.8rem; color: #64748b; }
+      .combined-chart svg text { font-size: 0.64rem; fill: #94a3b8; }
+      .highlight-list { margin: 0; padding-left: 1.2rem; color: #1f2937; font-size: 0.95rem; }
+      .highlight-list li + li { margin-top: 6px; }
+      .category-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+      .category-card { background: #ffffff; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.2); padding: 20px; box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08); }
+      .category-card header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+      .category-card h3 { margin: 0; font-size: 1rem; color: #0f172a; }
+      .category-card header span { font-size: 0.8rem; color: #64748b; }
+      .category-card .metric-row { display: flex; justify-content: space-between; color: #334155; font-size: 0.88rem; margin: 4px 0; }
+      .category-card .example { margin-top: 12px; font-size: 0.86rem; color: #475569; }
+      .posts-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+      .post-card { background: #ffffff; border-radius: 14px; border: 1px solid rgba(148, 163, 184, 0.22); padding: 18px; box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; gap: 12px; }
+      .post-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+      .post-card .rank { font-size: 1rem; font-weight: 600; color: #2563eb; }
+      .post-card .meta { margin: 0; color: #1f2937; font-size: 0.9rem; }
+      .post-card .meta span { margin-left: 6px; font-size: 0.8rem; color: #475569; }
+      .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; background: rgba(37, 99, 235, 0.12); color: #1d4ed8; font-size: 0.72rem; font-weight: 600; }
+      .post-metrics { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin: 4px 0 6px; padding: 0; list-style: none; color: #1f2937; font-size: 0.8rem; }
+      .post-metrics li { display: flex; flex-direction: column; gap: 1px; }
+      .post-metrics strong { font-size: 1rem; color: #0f172a; }
+      .post-preview { margin: 0; font-size: 0.95rem; color: #1e293b; font-weight: 600; }
+      .post-body { border-radius: 12px; background: rgba(226, 232, 240, 0.45); padding: 12px 14px; font-size: 0.9rem; color: #1e293b; }
+      .post-body summary { cursor: pointer; list-style: none; font-weight: 600; color: #2563eb; display: flex; align-items: center; gap: 6px; }
+      .post-body summary::-webkit-details-marker { display: none; }
+      .post-body summary::after { content: '＋'; font-size: 0.75rem; transition: transform 0.2s ease; }
+      .post-body[open] summary::after { content: '－'; }
+      .post-body div { margin-top: 10px; line-height: 1.65; }
+      .post-body div br + br { margin-bottom: 6px; }
+      .muted { color: #94a3b8; }
+      .cta { margin-top: 52px; padding: 24px; border-radius: 16px; background: linear-gradient(120deg, rgba(37, 99, 235, 0.12), rgba(99, 102, 241, 0.18)); border: 1px solid rgba(99, 102, 241, 0.28); box-shadow: 0 16px 28px rgba(59, 130, 246, 0.16); }
+      .cta p { margin: 0 0 12px; color: #1f2937; }
+      .cta a { display: inline-block; padding: 10px 18px; border-radius: 10px; background: rgba(37, 99, 235, 0.14); color: #1d4ed8; text-decoration: none; font-weight: 600; }
+      @media (max-width: 820px) {
+        .chart-section header { flex-direction: column; align-items: flex-start; }
+      }
+      @media (max-width: 640px) {
+        .hero { padding: 36px 22px 24px; }
+        .container { padding: 28px 22px 60px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <h1>門口 拓也｜Threads運用レポート</h1>
+      <p>対象期間：2025-09-17 〜 2025-10-16（直近30日）</p>
+    </header>
+    <main class="container">
+      
+    <section class="stats-grid">
+      <article class="card">
+        <h3>投稿本数</h3>
+        <strong>39本</strong>
+        <small>平均 1.30 本 / 日</small>
+      </article>
+      <article class="card">
+        <h3>総インプレッション</h3>
+        <strong>1,529,284</strong>
+        <small>平均 39,212 / 中央値 22,000</small>
+      </article>
+      <article class="card">
+        <h3>勝ち投稿（1万インプ超）</h3>
+        <strong>29本</strong>
+        <small>勝率 74.36%</small>
+      </article>
+      <article class="card">
+        <h3>総いいね・平均率</h3>
+        <strong>4,555件</strong>
+        <small>平均いいね率 0.54%</small>
+      </article>
+      <article class="card">
+        <h3>フォロワー純増</h3>
+        <strong>2,094</strong>
+        <small>36,534 → 38,628</small>
+      </article>
+    </section>
+  
+      <section>
+        <h2>日別推移</h2>
+        
+    <section class="chart-section">
+      <header>
+        <h3>日別インプレッション×フォロワー増</h3>
+        <span>ライン：インプレッション（左軸）／バー：フォロワー増加数（右軸）</span>
+      </header>
+      <div class="combined-chart">
+        <svg viewBox="0 0 1176 260" width="100%" height="260">
+          <defs>
+            <linearGradient id="lineGrad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#60a5fa" />
+              <stop offset="100%" stop-color="#2563eb" />
+            </linearGradient>
+          </defs>
+          <rect x="68" y="32" width="1040" height="176" fill="#f8fafc" rx="14"></rect>
+          <g transform="translate(0,208.0)">
+        <text x="54" text-anchor="end">0</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,164.0)">
+        <text x="54" text-anchor="end">60,000</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,120.0)">
+        <text x="54" text-anchor="end">120,000</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,76.0)">
+        <text x="54" text-anchor="end">180,000</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g><g transform="translate(0,32.0)">
+        <text x="54" text-anchor="end">240,000</text>
+        <line x1="62" x2="1108" stroke="#e2e8f0" stroke-width="0.5" />
+      </g>
+          <line x1="68" y1="208.0" x2="1108" y2="208.0" stroke="#cbd5f5" stroke-dasharray="4 4" />
+          <rect x="58.0" y="208.0" width="20" height="0.0" fill="#7c3aed" rx="4"></rect><rect x="93.9" y="114.2" width="20" height="93.8" fill="#7c3aed" rx="4"></rect><rect x="129.7" y="169.5" width="20" height="38.5" fill="#7c3aed" rx="4"></rect><rect x="165.6" y="183.6" width="20" height="24.4" fill="#7c3aed" rx="4"></rect><rect x="201.4" y="197.7" width="20" height="10.3" fill="#7c3aed" rx="4"></rect><rect x="237.3" y="207.4" width="20" height="0.6" fill="#7c3aed" rx="4"></rect><rect x="273.2" y="198.9" width="20" height="9.1" fill="#7c3aed" rx="4"></rect><rect x="309.0" y="201.1" width="20" height="6.9" fill="#7c3aed" rx="4"></rect><rect x="344.9" y="202.1" width="20" height="5.9" fill="#7c3aed" rx="4"></rect><rect x="380.8" y="193.0" width="20" height="15.0" fill="#7c3aed" rx="4"></rect><rect x="416.6" y="195.8" width="20" height="12.2" fill="#7c3aed" rx="4"></rect><rect x="452.5" y="197.7" width="20" height="10.3" fill="#7c3aed" rx="4"></rect><rect x="488.3" y="205.2" width="20" height="2.8" fill="#7c3aed" rx="4"></rect><rect x="524.2" y="203.3" width="20" height="4.7" fill="#7c3aed" rx="4"></rect><rect x="560.1" y="205.5" width="20" height="2.5" fill="#7c3aed" rx="4"></rect><rect x="595.9" y="201.1" width="20" height="6.9" fill="#7c3aed" rx="4"></rect><rect x="631.8" y="145.2" width="20" height="62.8" fill="#7c3aed" rx="4"></rect><rect x="667.7" y="194.6" width="20" height="13.4" fill="#7c3aed" rx="4"></rect><rect x="703.5" y="193.0" width="20" height="15.0" fill="#7c3aed" rx="4"></rect><rect x="739.4" y="187.4" width="20" height="20.6" fill="#7c3aed" rx="4"></rect><rect x="775.2" y="193.0" width="20" height="15.0" fill="#7c3aed" rx="4"></rect><rect x="811.1" y="203.0" width="20" height="5.0" fill="#7c3aed" rx="4"></rect><rect x="847.0" y="199.6" width="20" height="8.4" fill="#7c3aed" rx="4"></rect><rect x="882.8" y="200.2" width="20" height="7.8" fill="#7c3aed" rx="4"></rect><rect x="918.7" y="200.8" width="20" height="7.2" fill="#7c3aed" rx="4"></rect><rect x="954.6" y="194.9" width="20" height="13.1" fill="#7c3aed" rx="4"></rect><rect x="990.4" y="205.8" width="20" height="2.2" fill="#7c3aed" rx="4"></rect><rect x="1026.3" y="172.0" width="20" height="36.0" fill="#7c3aed" rx="4"></rect><rect x="1062.1" y="32.0" width="20" height="176.0" fill="#7c3aed" rx="4"></rect><rect x="1098.0" y="179.9" width="20" height="28.1" fill="#7c3aed" rx="4"></rect>
+          <polyline fill="none" stroke="url(#lineGrad)" stroke-width="3" points="68.0,208.0 103.9,190.4 139.7,153.0 175.6,180.1 211.4,196.2 247.3,197.7 283.2,199.2 319.0,192.6 354.9,176.5 390.8,32.0 426.6,177.9 462.5,208.0 498.3,190.4 534.2,196.3 570.1,186.1 605.9,68.7 641.8,134.7 677.7,189.7 713.5,196.1 749.4,169.9 785.2,171.3 821.1,183.8 857.0,195.1 892.8,190.4 928.7,176.5 964.6,180.1 1000.4,142.0 1036.3,90.7 1072.1,143.5 1108.0,201.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          <text x="68.0" y="242" text-anchor="middle">09-17</text><text x="103.9" y="242" text-anchor="middle">09-18</text><text x="139.7" y="242" text-anchor="middle">09-19</text><text x="175.6" y="242" text-anchor="middle">09-20</text><text x="211.4" y="242" text-anchor="middle">09-21</text><text x="247.3" y="242" text-anchor="middle">09-22</text><text x="283.2" y="242" text-anchor="middle">09-23</text><text x="319.0" y="242" text-anchor="middle">09-24</text><text x="354.9" y="242" text-anchor="middle">09-25</text><text x="390.8" y="242" text-anchor="middle">09-26</text><text x="426.6" y="242" text-anchor="middle">09-27</text><text x="462.5" y="242" text-anchor="middle">09-28</text><text x="498.3" y="242" text-anchor="middle">09-29</text><text x="534.2" y="242" text-anchor="middle">09-30</text><text x="570.1" y="242" text-anchor="middle">10-01</text><text x="605.9" y="242" text-anchor="middle">10-02</text><text x="641.8" y="242" text-anchor="middle">10-03</text><text x="677.7" y="242" text-anchor="middle">10-04</text><text x="713.5" y="242" text-anchor="middle">10-05</text><text x="749.4" y="242" text-anchor="middle">10-06</text><text x="785.2" y="242" text-anchor="middle">10-07</text><text x="821.1" y="242" text-anchor="middle">10-08</text><text x="857.0" y="242" text-anchor="middle">10-09</text><text x="892.8" y="242" text-anchor="middle">10-10</text><text x="928.7" y="242" text-anchor="middle">10-11</text><text x="964.6" y="242" text-anchor="middle">10-12</text><text x="1000.4" y="242" text-anchor="middle">10-13</text><text x="1036.3" y="242" text-anchor="middle">10-14</text><text x="1072.1" y="242" text-anchor="middle">10-15</text><text x="1108.0" y="242" text-anchor="middle">10-16</text>
+          <text x="1122" y="32.0" text-anchor="start">563</text><text x="1122" y="76.0" text-anchor="start">422</text><text x="1122" y="120.0" text-anchor="start">282</text><text x="1122" y="164.0" text-anchor="start">141</text><text x="1122" y="208.0" text-anchor="start">0</text>
+        </svg>
+      </div>
+    </section>
+  
+      </section>
+      <section>
+        <h2>ハイライト</h2>
+        <ul class="highlight-list"><li>最大リーチは <strong>2025-09-26 09:00「まじなのか…ストーリーズ10月で終了になります。大変おつかれさまでした。今時代完全に変わってまして、」</strong> の 240,000 インプレッション。</li><li>勝ち投稿率は <strong>74.36%</strong>（29 / 39）。</li><li>フォロワー純増は <strong>2,094</strong>（期間内 36,534 → 38,628）。</li><li>最大フォロワー増投稿は <strong>2025-10-14 09:00「やばmetaから通知きました。あとでスクショ貼ります。結論ハッシュタグつけてるアカウント全部終わります。完全に新ルールでました。もう2025年でインスタ終了です。お疲れ様でした。公式の通知はご確認されましたでしょうか？突然大幅変更がおきてまして対応してない人次々とアカウント終わってまして、」</strong> の +437。</li><li>最もフォロワーが増えた日は <strong>2025-10-15</strong> の +563。</li><li>最多カテゴリは <strong>アルゴリズム/仕様</strong>（23本 / 平均 56,314 インプ / 平均いいね率 0.36%）。</li></ul>
+      </section>
+      <section>
+        <h2>インプレッション上位トップ10（クリックで本文表示）</h2>
+        <div class="posts-grid">
+      <article class="post-card">
+        <header>
+          <span class="rank">#1</span>
+          <div>
+            <p class="meta">2025-09-26 09:00<span>(金)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>240,000</strong><span>インプレッション</span></li>
+          <li><strong>338</strong><span>いいね</span></li>
+          <li><strong>0.14%</strong><span>いいね率</span></li>
+          <li><strong>+74</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">まじなのか…ストーリーズ10月で終了になります。大変おつかれさまでした。今時代完全に変わってまして、</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>まじなのか…ストーリーズ10月で終了になります。大変おつかれさまでした。今時代完全に変わってまして、 <br />ストーリーズでリンク出しまくったり、PRやりまくってたりすると煩わしくてエンゲージ落ちていってアカウント終わっていくんですよね。見出しを書く🙄共感投稿🙄コミュニケーションとってファン化🙄とか全部ズレてまして、オファーなど各種案内は基本ストーリーズではなくプッシュ配信メディアを活用しつつ、日々のストーリーズ運用では投稿数を減らして渾身の1枚もしくは2枚を毎日上げるようにして閲覧ユーザー数を伸ばす。あ、ちなみにストーリーズ連続投稿で閲覧数が落ちる問題が解決した！という話がありましたが、あれ全然解決してません笑 引き続き1-2投稿とストーリーズリカバリの活用がユーザー閲覧数最大化できます。(ストーリーズリカバリ知らなかったらやばいです)で既存フォロワーからのエンゲージなどでシグナルが強まりインスタ側からすればあなたのアカウントをどこにおすすめすればユーザーが満足してアクティブユーザーが増えるのかが明瞭になり都合がいい。で、発信者側からしたら適材適所へのリーチで成約に繋がりやすいユーザーにリーチするのでマネタイズの側面からも明らかにベターです。なので旧型のストーリーズ運用は終わります。<br />新型のストーリーズ運用が必須になるのですが、そもそもの運用でもデータベースの蓄積が必ず影響あるので常にアクティブなフォロワーを獲得する意識が大切。ここ、再生回数だけ追いかけてるとフォロー数が増えてもマネタイズ激よわになる。バランスですね。弊社でも活用して毎月2000人集客したり、難しい医療従事者の採用で長蛇の待ち列ができてしまったりと日本初の事例をたたき出しまくってる運用マニュアルは200ページにて固定で無償配布してます。その辺の教材より有益です🥴<br />https://www.threads.com/@mon_guchi/post/DPC0dfyE42c?xmt=AQF0Vefi6X6nEepikFZd1YWM1owRPaO2aYi4pjRLZvLqvg</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#2</span>
+          <div>
+            <p class="meta">2025-10-02 09:00<span>(木)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>190,000</strong><span>インプレッション</span></li>
+          <li><strong>206</strong><span>いいね</span></li>
+          <li><strong>0.11%</strong><span>いいね率</span></li>
+          <li><strong>+151</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">インスタ先日また新ルールでました。ハッシュタグつけてるアカウント終わります。公式の発表はご確認されましたでしょうか？突然大幅変更がおきてまして対応してない人次々とアカウント終わってまして、</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>インスタ先日また新ルールでました。ハッシュタグつけてるアカウント終わります。公式の発表はご確認されましたでしょうか？突然大幅変更がおきてまして対応してない人次々とアカウント終わってまして、<br />インスタのユーザー数は爆発的に増えていてその要因はリールとそのレコメンド機能。今後はリールとDM機能を中心に考えて再構築していくとのこと。さらにフォローの重要度が下がっているとも。理由はレコメンド機能の精度が圧倒的に高いから。<br />ここまでは固定ポスト読んでる人はもう常識かと思いますが、1点修正がありまして、それがハッシュタグ。<br />かつては流入狙いで30個つけたり、最近ではレコメンドに載るためのジャンル設定で3-5個つけてる人がいましたが今は全く意味のないものになっているとのことです。<br />実際にハッシュタグ消してからリーチ数倍になりました。まじでこれだけで変わることあります。ただ注意点がありまして<br />このハッシュタグの話はシンプルなのですが、抽象度を少し上げると『フォローの価値』が下がっています。<br />え？どゆこと？笑<br />って感じだと思いますがここ理解してると<br />10倍くらい楽に運用できます。悩まなくなる。<br />これはCEOも先日お伝えしてましたね？レコメンド機能を掌握する。そしてそれはリーチ数を爆伸びさせるためではなく適材適所にリーチをさせるために行うってのがポイントです。<br />つまるところ、運用初期段階から一貫した投稿の積み上げ、その全てがリサーチを軸に内容決定、安定的な更新頻度。これらを積み上げることでリールは資産要素が強くはなっていき常時集客に非常に向いている。<br />これが今のポイントになります。まとめると、やるべきことは超簡単です。正しいリサーチと正しいリール投稿の積み上げです。悩む要素がついにゼロになったのでぶち上げていきましょう！やり方は固定で完璧にすべて解説しています。<br />あ、重要なこと書くの忘れてた。あとで追記します！<br />遅くなりました。<br />ハッシュタグを外せばいきなり伸びる！！ってアカウントはおそらく50%いかないくらいなのですが、そもそものアカウントに蓄積されたデータベースによりレコメンドの扱いは決まります。たとえば数万フォロワーいても1万回も再生数回らないアカウントとかたまにありますが完全にズレてますので抜本的な改革が必要になります。でも変にプライド持っちゃって学ぶことから逃げがち。つまるところ、素直な人やこれから伸ばしていく！という段階にいる人はばりチャンスです！これは歴史をみれば構造的に変革のときは下克上のチャンス。僕も頑張ります😂 <br />https://www.threads.com/@mon_guchi/post/DPSOIuKk40n?xmt=AQF037t3ViLqoKn1QsfAwpu2uxONRzbs4zkHIy4Sk59oPw</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#3</span>
+          <div>
+            <p class="meta">2025-10-14 09:00<span>(火)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>160,000</strong><span>インプレッション</span></li>
+          <li><strong>436</strong><span>いいね</span></li>
+          <li><strong>0.27%</strong><span>いいね率</span></li>
+          <li><strong>+437</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">やばmetaから通知きました。あとでスクショ貼ります。結論ハッシュタグつけてるアカウント全部終わります。完全に新ルールでました。もう2025年でインスタ終了です。お疲れ様でした。公式の通知はご確認されましたでしょうか？突然大幅変更がおきてま…</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>やばmetaから通知きました。あとでスクショ貼ります。結論ハッシュタグつけてるアカウント全部終わります。完全に新ルールでました。もう2025年でインスタ終了です。お疲れ様でした。公式の通知はご確認されましたでしょうか？突然大幅変更がおきてまして対応してない人次々とアカウント終わってまして、<br />インスタのユーザー数は爆発的に増えていてその要因はリールとそのレコメンド機能。今後はリールとDM機能を中心に考えて再構築していくとのこと。さらにフォローの重要度が下がっているとも。理由はレコメンド機能の精度が圧倒的に高いから。ここまでは固定ポスト読んでる人はもう常識かと思いますが、1点修正がありまして、それがハッシュタグ。<br />かつては流入狙いで30個つけたり、最近ではレコメンドに載るためのジャンル設定で3-5個つけてる人がいましたが今は全く意味のないものになっているとのことです。<br />なので、つけてるとノイズとなりリーチ精度が抑制されたりするし、同じタグを連続で使うのもダメだし、そもそもタグをどうするか考えてる時間全部無駄。<br />それより、リサーチでリアルタイムニーズを掴み呼応してください。実際にハッシュタグ消してからリーチ数倍になりました。まじでこれだけで変わることあります。<br />ターゲティング精度が神ってるので、それを念頭にすべて選択していく運用がすべてです。固定で手順解説します  <br />通知のやつ貼っときました。探してください。公式によれば12/16からスタートらしいです。AIと利用者のチャット導入しその会話からターゲッティングを決めていくとのこと。もう再生回数をとる時代は完全に終わり、見込みのお客様のリアルタイムなニーズに答え続ける投稿を積み上げることがベースになります。完全にゲームチェンジがおきます。が、門口1年前から気づいてまして運用方法変えてます。その結果、界隈では集客数売上ともにぶち抜いてます。決してバズってるとかリーチ伸びまくりとかでは全くないのですがデータが証明しました。繰り返しますが、完全にゲームチェンジです。かつての常識のままいく人確実にアカウント終わります🙏<br />https://www.threads.com/@mon_guchi/post/DPxJYOSE0fG?xmt=AQF00JkpZaN4Ncs6vi1ChVF1ZWb0YTodSVf5LF8nkGEnOg</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#4</span>
+          <div>
+            <p class="meta">2025-10-03 09:00<span>(金)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>100,000</strong><span>インプレッション</span></li>
+          <li><strong>242</strong><span>いいね</span></li>
+          <li><strong>0.24%</strong><span>いいね率</span></li>
+          <li><strong>+104</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">インスタ新NGルールでました。リールの再生回数は設定や規約や特徴です。やれば絶対再生数が落ちるNG行動。ここ1週間でいきなり落ちた人は必ずどれかに該当するので辞めれば伸びます。変更すれば即改善します。10個ありまして、</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>インスタ新NGルールでました。リールの再生回数は設定や規約や特徴です。やれば絶対再生数が落ちるNG行動。ここ1週間でいきなり落ちた人は必ずどれかに該当するので辞めれば伸びます。変更すれば即改善します。10個ありまして、 <br />インスタCEOの先日のリールで、インスタはここから再構築すると明言されてました。それに伴い以下確認してこれから全面的に押し出すであろうレコメンドを掌握してください。<br />1アクティブクリエイター未設定<br />2ジャンル認知未設定 あれだして<br />3リアルタイムリサーチ未実施<br />え、さすがにこれ知らないとかないよな？<br />4冒頭フック模倣まみれでリーチ抑制<br />5内容も模倣まみれでリーチ抑制<br />6Thread共同投稿設定デフォルトのまま<br />7ハッシュタグ今さらつけてる<br />8投稿時間を固定していない<br />9過去に一度でもコメント誘導した<br />10数々の運用の基本を難しいという幼稚な理由で見て見ぬふりしてる<br />11門口の固定ポストみてない<br />ばり集客できるのうになります。いやいやそんなんあなただけでしょ？って思った人に聞いてほしいのですが、 <br />かつてはフォロワー数至上主義だったが今は違うとインスタのCEOも名言してるのに未だにリーチ数とフォロワー数だけ主軸に考えてるの『誰かが作ったトレンドに二番煎じで乗り続ける』か『イチかバチかで奇抜コンセプト作る』しかなくなる。<br />集客、収益の安定性を前提としたときに明らかに最適解ではない。そこで抑えておいてほしいのが。<br />リアルタイムリサーチの1年継続です。意外と本質は変わらない。僕の場合はフックだけ調整して内容はずっと同じ。2年間変わってない。印象を変えてるだけ。<br />伸び悩んだらコアの部分から変える人いるが愚策でして、成約を生む発信を把握してないだけ。そしてこの原因はデータ分析を怠り感覚でやってるから。全盛期の起業家(笑)みたいな人が下火になってる理由はこれ。3年間くらい言い続けていたのに残念です。<br />そして全てにおいての諸悪の根源は『プライド』です。素直にやらない。でも学ぶべきだと感じ言語化とか脳科学とか意味不明なことに走り出し悟り開いた勘違いし美徳に走る。控えめに言って無念です。皆で盛り上げていきたい<br />“あれだして”は動画編集者への指示だった🤣雑な指示してるのバレる🤣<br />あ、あと<br />https://www.threads.com/@mon_guchi/post/DPUvCYhE28N?xmt=AQF0jqadTIz47WZuerb6zMxmFLimAzoRkCGAfV8WZeQv8w</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#5</span>
+          <div>
+            <p class="meta">2025-10-13 09:00<span>(月)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>90,000</strong><span>インプレッション</span></li>
+          <li><strong>190</strong><span>いいね</span></li>
+          <li><strong>0.21%</strong><span>いいね率</span></li>
+          <li><strong>+46</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">リール10月で終了になります…昨日metaからの通知みた？？自然な会話を装って撮影したり、コント形式やコメント誘導やってもインスタの細かい設定見直してみても、もう全然伸びへん。ズレまくってまして、逆に再生回数落ちまくってインスタ終わっていっ…</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>リール10月で終了になります…昨日metaからの通知みた？？自然な会話を装って撮影したり、コント形式やコメント誘導やってもインスタの細かい設定見直してみても、もう全然伸びへん。ズレまくってまして、逆に再生回数落ちまくってインスタ終わっていってます。今インスタで革命起きてまして公式の発表によれば結論、 <br />レコメンド機能の掌握してリールを投稿していくだけです。旧型リールは一切通用しません。<br />3つあります<br />1オーディエンス設定<br />ここをこれに設定してないと今のリールは後伸びが基本なのでそこから逸脱して、もう何をやって数字でません。今からでもすべて変更もしくは確認してください<br />2シグナル強化設定<br />これまじでやってない人いないのですが、直近1週間以内にログインしてるアクティブユーザーに反応してもらうリールを投稿しないとシグナルが強くならず、一生埋もれたリール量産するだけでインスタ終わります。1週間以内に投稿されたリールで3万回およびフォロワー数以上リーチしてるリールからニーズを抽出必須です<br />3ジャンル設定の徹底<br />ハッシュタグなし、アカウントカテゴリの設定、リアルタイムリサーチからのリール投稿、3ヶ月以内に50-100投稿積み上げ<br />これやれば確実に伸びていくだけじゃなく、ゴリゴリにあなたの発信を求める人にリールが表示されるようになります。<br />結論！！<br />ターゲティングが命です！！<br />全て無償で提供してる情報でまとまってるので即実施してください！<br />いやいや何言ってのーーって思うじゃないですか？ぜひちゃんと読んでほしい。<br />結論、これまでのインスタの常識が無効化されました！<br />このあたり、もう1年以上前からずっと無償で体系化して配ってるのやばい。まだまだインスタは発展途上なので伸ばすタイミング今しかないです。<br />今逃したらもうまた2年くらいはチャンスないです <br />https://www.threads.com/@mon_guchi/post/DPugnRFk5y2?xmt=AQF0hMg1NYTPLtnQJEIXqRCczt8y8OQ_8ruPhjHUop-Qrg</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#6</span>
+          <div>
+            <p class="meta">2025-10-15 09:00<span>(水)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>88,000</strong><span>インプレッション</span></li>
+          <li><strong>207</strong><span>いいね</span></li>
+          <li><strong>0.24%</strong><span>いいね率</span></li>
+          <li><strong>+282</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">ルール変更です。metaから通知きました。リールにBGMつけてる人インスタおわります。すでに続々とアカウント終わってます。すぐやめてほしいのですが、絶対にやっちゃだめな重要な注意点あるので解説します、</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>ルール変更です。metaから通知きました。リールにBGMつけてる人インスタおわります。すでに続々とアカウント終わってます。すぐやめてほしいのですが、絶対にやっちゃだめな重要な注意点あるので解説します、 <br />トレンドの音源や伸びやすい音源などをインスタ上でつけると再生回数が増えるって話しでしたが、それただのBGM検索で引っかかってるだけです。全く興味のないユーザーに閲覧されターゲティング精度が濁りインスタ側が「誰に表示すればいいんだろう？」と迷います。<br />さらに、インスタ側の著作権関係の契約に伴い使用したBGMが利用不可になると無音リールになります。もう最悪です。抜け道もあるのですがいちいち確認面倒ですよね。いつも同じBGMの人とかいますが、ある日突然全リールが無音になるリスクご理解されてますか？<br />今は誰に閲覧されたか？のデータが今後のリーチ先で最も重要で。そのターゲティングを駆使するのが最善なのでBGMは悪手です。<br />さらに先日のmetaの通知(スクショ)によりターゲティングを強化する仕様に変更していくと示唆されました。まじでいよいよ完全なルールチェンジがおきます。 <br />metaからの通知、スクショ貼っときました！そもそもインスタはリールとそのレコメンド精度が業績を牽引していると明言しており、今年は9月時点で昨年度の売上を越えていて絶好調です。このデータを受けてリール機能の強化、ターゲティングの強化をさらにしていくという趣旨でアプリを再構築するとまで言っています。これ2年前から気付いてました。その結果バズなしだけどコツコツ伸びる、集客は日本トップクラスとなりました。すべて固定で資料でまとめています。フォロワーを増やす、リールをバズらせる価値が減り、ターゲット定めてそこに届く発信を積み上げることが主体となります。つまり、過去の常識はすべて崩れます。即対応しましょう！！ <br />https://www.threads.com/@mon_guchi/post/DPzrWt8E3zN?xmt=AQF0xnCIm8fX6gyzBPBAammjAZ3yEBE_N2jvCKrnyUavaQ</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#7</span>
+          <div>
+            <p class="meta">2025-09-19 09:00<span>(金)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>59,000</strong><span>インプレッション</span></li>
+          <li><strong>186</strong><span>いいね</span></li>
+          <li><strong>0.32%</strong><span>いいね率</span></li>
+          <li><strong>+114</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">【大悲報】インスタリール、完全終了します。こインスタの伸ばし方を3つ解説するのですが、リールがいいと聞いて2パターンの映像を横に並べたり、コメント、キャプション誘導して再生数を伸ばしたりするような旧型のリールは9月から全部完全終了になりまし…</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>【大悲報】インスタリール、完全終了します。こインスタの伸ばし方を3つ解説するのですが、リールがいいと聞いて2パターンの映像を横に並べたり、コメント、キャプション誘導して再生数を伸ばしたりするような旧型のリールは9月から全部完全終了になりました。今は新型のリールを投稿していかないといけないのですが、99％の人間が対応できていないので丁寧に解説します。まず前提として<br />固定で基本の運用は熟知していただいている体で話ます。ここ理解してなかったらそもそも伸びません。以下、重要なアップデートポイントです<br />１絞り機能の活用<br />再生回数がとりたいという理由で抽象度を上げるのが主流でしたが今は逆で絞って下さい。それだと再生回数が伸びない(T_T)と感じる人いますよね？次の解説聞いて下さい<br />２インスタのターゲティング機能を活用する<br />今は数百再生でも見込みとなるお客様に動画が届きます。月に1億本も投稿される動画から自分のみたいコンテンツをユーザーが探す事は不可能です。なのでレコメンド機能の精度をあげまくっています。広くリーチしようとすると逆にリーチしてほしいところにリーチしなくなります。再生回数もフォロワーの伸びもそこそこだけどエンゲージメントが低くお問い合わせが入らないアカウントが大量発生しているのはこれが要因です。<br />３リアルタイムリサーチの実施<br />今これを使わないと完全に対応できない形式へと変更されています。詳しくは先日にリールかポストかで解説しています。<br />この3つ全て抑えている人はリールが爆伸び！というより更新したのもがしっかりと集客につながっていきます。<br />https://www.threads.com/@mon_guchi/post/DOwvDwBk8n7?xmt=AQF0srTOUHrbEHWPyAhCGmfBWOD8TfCVATM-EMSZnZsX2w</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#8</span>
+          <div>
+            <p class="meta">2025-10-06 09:00<span>(月)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>52,000</strong><span>インプレッション</span></li>
+          <li><strong>203</strong><span>いいね</span></li>
+          <li><strong>0.39%</strong><span>いいね率</span></li>
+          <li><strong>+75</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">ハッシュタグ完全終了になりました。</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>ハッシュタグ完全終了になりました。<br />つけているアカウントはリールが伸びない仕様に変更されましたのはご存知でしょうか？現につけるのをやめたアカウントから再生回数が突然4倍とかになっているので解説します。<br />ここで結論づけて動画を飛ばすと完全に誤解をしてしまいますのでご注意ください。話していきます、<br />最近リールが伸びない、いいねもコメントもこない、保存もシェアもない<br />発信が楽しくなくなってきて最近インスタ開くのも辛い。<br />CEOの発言はご確認されましたでしょうか？<br />インスタのユーザー数の爆発的な拡大から方向性に関して話しており、そこに全ての答えがありました。<br />大前提として、僕の固定リンクを見ている人は全く問題ないのですが、ないぶん配布資料の量が多いのでここで簡単に解説して完全理解してください。資料200枚とか動画3時間とか作って申し訳ございません。<br />この動画の冒頭でハッシュタグ完全終了と聞いて嘘っておもいましたよね？？<br />その認識が起きていることに全てが詰まっていまして、今インスタは従来の文化をすべて切り捨て再構築されます。<br />インスタのユーザー数が爆増しているのはリールとそのレコメンド機能が牽引しています。<br />自分の興味関心があるものが、次々と表示されユーザーはインスタにハマっていく。いつしかフォローという概念を忘れてみているコンテンツの9割以上がフォローしていないユーザーのリール動画です。<br />そしてインスタはこう明言しています <br />このデータを受け『リールの強化』『リールを中心としたアプリに再構築する』と明言しています。<br />ハッシュタグは昔検索で上位表示させるためにミドルタグビッグタグスモールダグをバランスよく30個つけるのが主流で、その後に『発信のジャンル認定』をもらうために公式から3−5個をつけるのはいいと発表され、大量ハッシュタグ自体は一瞬で終了しました。<br />さすがにここまでは知っていやんな？<br />そこからまた公式から『ハッシュタグの有無はジャンル認知には無関係』と発表されてからハッシュタグ意味ない論が生まれました。<br />さすがにここも追っているよね？新しいのはここからで、<br />ハッシュタグをつけるとリーチが落ちて、つけないとリーチがあがるという話。<br />実はこの理解だけだと逆にリーチが落ちます。おちてますよね？<br />今のリールの目的は再生数を増やすことよりも、自分の発信が必要な人に届けるという認識が必要で、それを抑えると再生数も上がるという構図。これ絶対覚えておいて。<br />そもそも発信者が増加している時点でそれぞれのリールに割り当てられう視聴者数の絶対数は減っている。テレビの視聴率も下がってるやろ？それはSNSや配信番組という新しい形ができて視聴者が分散されたから。インスタのリールの再生回数の減少もこれが理由。<br />じゃあどすれば攻略できる？？<br />１リアルタイムリサーチ<br />直近1週間以内および3万回再生以上フォロワー数以上の再生数を出しているリールから視聴者のニーズを掴み投稿。これで直近でログインしているアクティブなユーザーの興味関心を把握することができるので伸びやすくなる。<br />２投稿の積み上げ<br />1に沿ったリール動画を更新し続けることで直近でログインしているアクティブユーザーの興味関心をはじめ、視聴時間やいいねやコメントをもらいやすくなる。これが積み上がればあなたのアカウントやいつも投稿するリールは誰におすすめすればユーザーが満足してくれるのか？がインスタ側は把握できるからレコメンドに載せやすくなる<br />これが軸となっています。今まで適当に運用したり運用歴が長くなると惰性になったり、途中で発信の方向性を変更したりすると既存フォロワーが興味を示さなくなるのでアカウントはどこにおすすめすればいいか不明になり伸びなくなる。<br />実際に昔から発信している人で更新はしているけどフォロワー数停滞している人いるやろ？あれ時代に対応できなかった失敗例。<br />これらの精度の向上がインスタのユーザー数増加を牽引した。<br />結論、おすすめ掲載の精度を掌握することなのです。<br />で、ハッシュタグの需要は大幅に減少していてそもそも検索でも利用する人が少ない。いちいちシャープマークいれて検索しなくても普通にワードを入れればたくさん動画ヒットするでしょ？<br />なので<br />ハッシュダグがキャプションのところにあるとノイズになる。レコメンド精度が高くなる投稿を積み上げていることが前提ですが、ハッシュタグをつけなくすることでより精度が研ぎ澄まされる。<br />逆にユーザーのニーズを掴んでうまく運用している人はハッシュタグをつけてもつけなくてもそこまでリーチに影響はない。これが理由。<br />動画の前半に僕の固定リンクみている人はダイジョブって伝えたのはこれが理由。アカウントの運用手順をステップにわけて完全に解説しているからそのとおりやっている人は正直ハッシュタグ云々はそこまで影響がない。でもない方がよいというデータのほうが多いのでつけないで投稿している。この程度。<br />ハッシュタグ云々の話で振り回されている人は正直もう伸びない。情報がおくれすぎ。ただしに知識をいれないと全ての努力が水の泡になる。<br />https://www.threads.com/@mon_guchi/post/DPcb90aEzEP?xmt=AQF05lpEErANp76HSPT89PjkTIePwVMpnohCOpHyfcTrww</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#9</span>
+          <div>
+            <p class="meta">2025-10-07 09:00<span>(火)</span></p>
+            <span class="badge">リール/動画</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>50,000</strong><span>インプレッション</span></li>
+          <li><strong>124</strong><span>いいね</span></li>
+          <li><strong>0.25%</strong><span>いいね率</span></li>
+          <li><strong>+33</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">フォロワー削除してる人、アカウント終わります。僕1度もやったことありません🙇もしかしてCEOの発言を見落としてるかもしれなくて、</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>フォロワー削除してる人、アカウント終わります。僕1度もやったことありません🙇もしかしてCEOの発言を見落としてるかもしれなくて、<br />不要なフォロワーの削除をこまめにすることで、フォロー中の人のエンゲージ率を上げるために推薦とされています。<br />てもいちいち定期的に確認するの面倒じゃないですか？それに間違ってロム専用のアカでフォローしてくれてるユーザーアイコン初期設定のままプロフィールも未設定とかのアカウント削除しちゃったらひどない？それにたくさん削除してしまうとスパム認定くらって最悪リーチ抑制、アカウント停止のリスクもあります。<br />たらればですが、細かいことを気にするよりも1本のリールを作る上で時間かけてください。理論上は削除有効ですが、そこまで囚われる事では全くありません。CEOも今はフォロワー数は重要じゃなくリールのおすすめだと明言してた。<br />リサーチ、テーマ決め、冒頭発案、他にもコメントやDMの返信等に1秒でも多くかけてください。その方が合理的でこまめに削除するより重要なことです。毎日不要なフォロワー削除に10分使っていると1年で2日〜3日に相当します。理論上は正しいのですが、ノウハウにすることでもないのがフォロワー削除です。 <br />https://www.threads.com/@mon_guchi/post/DPfGbkFE4EQ?xmt=AQF0Vo67nDk6sUbGnc-ONwyuDcsirP4G-TVELXt_4cVF0Q</div>
+        </details>
+      </article>
+    
+      <article class="post-card">
+        <header>
+          <span class="rank">#10</span>
+          <div>
+            <p class="meta">2025-09-25 09:00<span>(木)</span></p>
+            <span class="badge">アルゴリズム/仕様</span>
+          </div>
+        </header>
+        <ul class="post-metrics">
+          <li><strong>43,000</strong><span>インプレッション</span></li>
+          <li><strong>120</strong><span>いいね</span></li>
+          <li><strong>0.28%</strong><span>いいね率</span></li>
+          <li><strong>+20</strong><span>フォロワー増</span></li>
+        </ul>
+        <p class="post-preview">インスタ昨日CEOの発表により新機能でましたねー！これにより９割のアカウントが終わります。インスタCEOの発信はご確認去れましたでしょう？あ、してなかったらやばいです。結論、リールのアルゴリズムをユーザーが細かく追加削除ができる機能が実装さ…</p>
+        <details class="post-body">
+          <summary>投稿全文を表示</summary>
+          <div>インスタ昨日CEOの発表により新機能でましたねー！これにより９割のアカウントが終わります。インスタCEOの発信はご確認去れましたでしょう？あ、してなかったらやばいです。結論、リールのアルゴリズムをユーザーが細かく追加削除ができる機能が実装されます。この結果リールの再生回数が激減して焦り散らかす人が爆増しますので対策を書きます。<br />ここでCEO本人確認が断言してたのが、<br />1リールとそのおすすめ機能とDMによりアクティブユーザー数が過去最高に<br />1フォローは意味がなくユーザーの趣味趣向に合わせたコンテンツ表示がメイン<br />ということ。つまり、投稿するリール、ユーザーからのエンゲージメント、アカウントのリアクションデータによりリール投稿がどこにリーチするか決まります。<br />これにより各ユーザーのリーチ数は下がり、そのかわりより求めてくれる人に届くようになり、誰におすすめしたらいいか分からないブレブレアカウントは全部終わってしまうということになります。とはいえ、これは僕が2年半前から一貫して言い続けてることで、固定ポストでも運用マニュアル無償配布してますがそこでもこれは前提として解説しています。なので、難しさを毛嫌いせず情報を追いかけ続けてきた人おめでとう！これからはあなたの時代でそれ以外は完全に終わります。<br />ただし <br />これは前々から「このスタイルで運用しような」って言ってた内容と全く変わりません笑<br />8日前の僕のThreadsでも触れてますがついCEOより情報が早くなる門口でした <br />https://www.threads.com/@mon_guchi/post/DPANgjDE3GR?xmt=AQF0A9_G50a6D5kVyD4PGWQVEx0sPDmx-9t92tfHgmZocw</div>
+        </details>
+      </article>
+    </div>
+      </section>
+      <section>
+        <h2>カテゴリ別パフォーマンス</h2>
+        <div class="category-grid">
+        <article class="category-card">
+          <header>
+            <h3>アルゴリズム/仕様</h3>
+            <span>23本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>56,314</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.36%</strong>
+          </div>
+          <p class="example">まじなのか…ストーリーズ10月で終了になります。大変おつかれさまでした。今時代完全に変わってまして、</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>リール/動画</h3>
+            <span>3本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>24,995</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.35%</strong>
+          </div>
+          <p class="example">フォロワー削除してる人、アカウント終わります。僕1度もやったことありません🙇もしかしてCEOの発言を見落としてるかもしれなくて、</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>その他</h3>
+            <span>5本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>18,440</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.98%</strong>
+          </div>
+          <p class="example">新機能『インスタリカバリー』機能でましたね！</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>ストーリーズ/フィード</h3>
+            <span>2本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>10,500</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.60%</strong>
+          </div>
+          <p class="example">週3投稿の人、一定の条件をクリアしないとアカウント終わります</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>運用戦略/マネタイズ</h3>
+            <span>3本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>9,364</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>1.14%</strong>
+          </div>
+          <p class="example">すぎさんのアカウントが復活しました。おそらく明日くらいからまた再開されます。今回は完全に誤バンでした。この件に関してまたすぎさんからも何か発信があるかもですが一旦僕からも言わせてもらいます。こういう知名度がある人に何かアクシデントがおきたときにそれを引用して自分のリスト獲得とかに使っている人いましたよね？そういう人たちのコンテンツやサービスが絶対買わないほうがいいです。すぎさんの影響力が強いおかげで再生数やインプは伸びてましたがそれ以外は全く。むしろ他人の力でしか集客ができないなら無同然です。事業者としてサービス提供者としての価値が一切ないです。顧客たちが可愛そうですね。本人は優しいので見逃してくれると思いますが業界がよりよくなってほしいと思っています。ってことでネタにしていたアカウントを全員晒していきます。↓</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>自己開示/マインド</h3>
+            <span>1本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>7,321</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.93%</strong>
+          </div>
+          <p class="example">これ気付いてない人多いのですが、（初歩的な話です、灯台下暗し的な）「インスタ見てると疲れる！」「煽り的なのが心によくない！」みたいな主張に共感したり、ダイレクトに感じてしまったりするじゃないですか？？これ凄く恥ずかしいことでして、インスタってただのツールなんです。なので「日々使ってますが使いこなせていないあほです🥹」って言ってるのと同じです。例えばGibsonの100万円するギターも初心者が手にしたら8000円の初心者ギターと発揮できる能力に大差ないのと同じ。ツール主体で考えるとそれは他費思考なので、嫌悪感を抱くってのは100%日に原因があります。成長から逸脱し、戦略を間違えてしまい切詰まり疲弊してしまった人がこうなりがち。つまり、改善点まみれピヨピヨで伸び代エグいです。</p>
+        </article>
+      
+        <article class="category-card">
+          <header>
+            <h3>問いかけ型</h3>
+            <span>2本</span>
+          </header>
+          <div class="metric-row">
+            <span>平均インプレッション</span>
+            <strong>5,229</strong>
+          </div>
+          <div class="metric-row">
+            <span>平均いいね率</span>
+            <strong>0.68%</strong>
+          </div>
+          <p class="example">Threadsでインスタのフォロワー増えました！と通知欄のスクショとともに自慢してる人、だいたいコメント誘導アカです。たしかにフォロワー増えるのは嬉しいかもですが、リード獲得の観点からはターゲティング精度の活用から逸脱するので激弱アカになってしまいます。そして事業におけるSNSの活用の99％はリード獲得のためです。エンゲージの歪みが懸念点。上手な人は問題ないが今のところそれも1人しかないない。それ以外はリード獲得の面で激よわです。数字が証明してしまっています。リード獲得ってなに？？ってなる人はそもそも話にすらなりません🥹🥹解説します</p>
+        </article>
+      </div>
+      </section>
+      <section class="cta">
+        <p>最新データに更新したい場合は <code>GOOGLE_APPLICATION_CREDENTIALS=... node scripts/exportCompetitorInsights.js</code> を実行してください。</p>
+        <a href="posts.csv">posts.csv を開く</a>
+      </section>
+    </main>
+  </body>
+</html>

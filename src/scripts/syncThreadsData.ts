@@ -365,7 +365,7 @@ async function main() {
       sheetsThreads.getSheetValues(range(THREADS_SHEET_NAME, 'A1:Z1000')),
       sheetsThreads.getSheetValues(range(THREADS_POST_SHEET_NAME, 'A1:Z2000')),
       sheetsCompetitor.getSheetValues(range(COMPETITOR_TARGETS_SHEET, 'A1:ZZ2000')),
-      sheetsCompetitor.getSheetValues(range(COMPETITOR_ALL_POSTS_SHEET, 'A1:Z2000')),
+      sheetsCompetitor.getSheetValues(range(COMPETITOR_ALL_POSTS_SHEET, 'A1:Z5000')),
     ]);
 
   const threadsMetrics = parseThreadsDailyMetrics(threadsMetricsValues);

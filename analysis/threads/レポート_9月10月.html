@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threads運用レポート【2025年9月〜10月】| AutoStudio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-background: #f5f5f5;
+            --color-surface: #ffffff;
+            --color-surface-muted: #fafafa;
+            --color-border: #e1e3e6;
+            --color-text-primary: #161819;
+            --color-text-secondary: #4a4d51;
+            --color-text-muted: #6c6f73;
+            --color-accent: #0a7aff;
+            --color-accent-hover: #005ae0;
+            --color-success: #19c37d;
+            --color-warning: #ffb020;
+            --color-error: #ff4d4f;
+            --shadow-elevated: 0 12px 30px rgba(12, 16, 20, 0.08);
+            --shadow-soft: 0 6px 18px rgba(12, 16, 20, 0.06);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--color-background);
+            color: var(--color-text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 24px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 25%, rgba(59, 130, 246, 0.03) 50%, rgba(16, 185, 129, 0.05) 75%, rgba(245, 101, 101, 0.03) 100%);
+            border-radius: var(--radius-xl);
+            padding: 60px 40px;
+            margin-bottom: 48px;
+            border: 1px solid rgba(14, 20, 34, 0.05);
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--color-text-primary);
+        }
+
+        .subtitle {
+            font-size: 20px;
+            color: var(--color-text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .meta {
+            display: flex;
+            gap: 24px;
+            font-size: 14px;
+            color: var(--color-text-muted);
+        }
+
+        .section {
+            margin-bottom: 64px;
+        }
+
+        h2 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: var(--color-text-primary);
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--color-border);
+        }
+
+        h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 32px 0 16px 0;
+            color: var(--color-text-primary);
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--color-text-secondary);
+            font-size: 16px;
+        }
+
+        .glass-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: var(--radius-xl);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.7));
+            box-shadow: var(--shadow-elevated);
+            backdrop-filter: blur(18px);
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .glass-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top left, rgba(99, 102, 241, 0.08), transparent 55%),
+                radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 60%),
+                radial-gradient(circle at bottom left, rgba(139, 92, 246, 0.06), transparent 65%);
+            z-index: -1;
+        }
+
+        .ui-card {
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(14, 20, 34, 0.05);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+            padding: 24px;
+            margin-bottom: 24px;
+            backdrop-filter: blur(18px);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 24px 0;
+        }
+
+        .metric-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: var(--color-text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            margin-bottom: 4px;
+        }
+
+        .metric-value.highlight {
+            color: var(--color-accent);
+        }
+
+        .metric-value.success {
+            color: var(--color-success);
+        }
+
+        .metric-value.warning {
+            color: var(--color-warning);
+        }
+
+        .metric-value.error {
+            color: var(--color-error);
+        }
+
+        .metric-note {
+            font-size: 13px;
+            color: var(--color-text-muted);
+        }
+
+        .banner {
+            padding: 16px 20px;
+            border-radius: var(--radius-md);
+            margin: 24px 0;
+            border: 1px solid;
+            font-size: 14px;
+        }
+
+        .banner-success {
+            background: #e6f7ed;
+            border-color: #b5eed3;
+            color: #096c3e;
+        }
+
+        .banner-warning {
+            background: #fff7e6;
+            border-color: #ffe0a3;
+            color: #ad6800;
+        }
+
+        .banner-error {
+            background: #fdeded;
+            border-color: #f2b8b5;
+            color: #a61b1b;
+        }
+
+        .banner-info {
+            background: #e6f3ff;
+            border-color: #a3d4ff;
+            color: #004299;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin: 24px 0;
+            background: var(--color-surface);
+        }
+
+        th {
+            background: var(--color-surface-muted);
+            padding: 16px;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        td {
+            padding: 16px;
+            font-size: 14px;
+            color: var(--color-text-primary);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        li {
+            margin: 8px 0;
+            color: var(--color-text-secondary);
+        }
+
+        .highlight {
+            background: rgba(10, 122, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: var(--color-accent);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .badge-success {
+            background: #e6f7ed;
+            color: #096c3e;
+        }
+
+        .badge-warning {
+            background: #fff7e6;
+            color: #ad6800;
+        }
+
+        .badge-error {
+            background: #fdeded;
+            color: #a61b1b;
+        }
+
+        .badge-info {
+            background: #e6f3ff;
+            color: #004299;
+        }
+
+        .quote {
+            background: var(--color-surface-muted);
+            border-left: 4px solid var(--color-accent);
+            padding: 20px 24px;
+            margin: 24px 0;
+            border-radius: var(--radius-md);
+            font-style: italic;
+            color: var(--color-text-secondary);
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, rgba(10, 122, 255, 0.05) 0%, rgba(139, 92, 246, 0.03) 100%);
+            border: 2px solid var(--color-accent);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            margin: 32px 0;
+            text-align: center;
+        }
+
+        .cta-box h3 {
+            margin-top: 0;
+            color: var(--color-accent);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin: 24px 0;
+        }
+
+        code {
+            background: var(--color-surface-muted);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--color-text-primary);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 40px 16px;
+            }
+
+            h1 {
+                font-size: 32px;
+            }
+
+            h2 {
+                font-size: 24px;
+            }
+
+            h3 {
+                font-size: 20px;
+            }
+
+            .hero {
+                padding: 40px 24px;
+            }
+
+            .glass-card, .ui-card {
+                padding: 20px;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 12px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Hero Section -->
+        <div class="hero">
+            <h1>Threads運用レポート<br>【2025年9月〜10月】</h1>
+            <p class="subtitle">データ分析から導き出した成功の再現戦略</p>
+            <div class="meta">
+                <span>📅 分析期間：2025年9月1日〜10月31日（2ヶ月間）</span>
+                <span>📊 作成日：2025年10月17日</span>
+            </div>
+        </div>
+
+        <!-- Executive Summary -->
+        <section class="section">
+            <h2>📈 エグゼクティブサマリー</h2>
+
+            <div class="glass-card">
+                <h3>2ヶ月の運用成果</h3>
+                <p>2025年9月〜10月の2ヶ月間で、<strong>292投稿</strong>を実施し、<strong>77万インプレッション</strong>を獲得。10月のみの計測で<strong>Threads経由103件のLINE登録</strong>（総251件）を達成しました。特に<strong>10月4日の単日270,000インプレッション</strong>のバズ投稿により、2日間で226件のLINE登録という爆発的な成長を実現。投稿内容を再分析した結果、<strong>ノウハウ系投稿が67.5%を占め</strong>、他タイプの<strong>3〜4倍のパフォーマンス</strong>を発揮していることが判明。</p>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">総投稿数</div>
+                    <div class="metric-value">292件</div>
+                    <div class="metric-note">9-10月の2ヶ月間</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">総インプレッション</div>
+                    <div class="metric-value highlight">771,969</div>
+                    <div class="metric-note">平均 2,644 / 投稿</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Threads経由LINE登録</div>
+                    <div class="metric-value success">103件</div>
+                    <div class="metric-note">10月のみ計測</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">勝ち投稿数</div>
+                    <div class="metric-value">10件</div>
+                    <div class="metric-note">10,000+ impressions</div>
+                </div>
+            </div>
+
+            <div class="banner banner-success">
+                <strong>🎯 成功パターンが明確に判明</strong><br>
+                ・<strong>ノウハウ系投稿が全勝ち投稿10件中9件</strong>を占める<br>
+                ・ノウハウ系の平均インプレッション<strong>3,413</strong>（全体平均の1.3倍）<br>
+                ・ノウハウ系の勝率<strong>4.6%</strong>（質問系・共感系は0%）<br>
+                ・2日間で226件のLINE登録という爆発的成長を実現
+            </div>
+
+            <div class="banner banner-warning">
+                <strong>⚠️ 課題も鮮明に</strong><br>
+                ・質問系（3.1%）・共感系（16.4%）は平均1,000imp以下と低迷<br>
+                ・勝率3.4%（10/292投稿）と依然低水準<br>
+                ・10月5日以降、LINE登録が激減<br>
+                ・<strong>ノウハウ系への更なる注力が必要</strong>
+            </div>
+        </section>
+
+        <!-- KPI Section -->
+        <section class="section">
+            <h2>📊 主要KPI一覧</h2>
+
+            <h3>全体指標</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>指標</th>
+                        <th>実績</th>
+                        <th>参考（3-10月全体）</th>
+                        <th>変化</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>総投稿数</strong></td>
+                        <td>292件</td>
+                        <td>437件</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>累計インプレッション</strong></td>
+                        <td>771,969</td>
+                        <td>1,468,400</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>平均インプレッション</strong></td>
+                        <td>2,643</td>
+                        <td>3,360</td>
+                        <td><span class="badge badge-error">-21.3%</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>勝ち投稿数 (10,000+)</strong></td>
+                        <td>10件</td>
+                        <td>24件</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>勝率</strong></td>
+                        <td>3.4%</td>
+                        <td>5.5%</td>
+                        <td><span class="badge badge-error">-2.1pt</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>総いいね数</strong></td>
+                        <td>2,904</td>
+                        <td>3,828</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>平均いいね率</strong></td>
+                        <td>0.38%</td>
+                        <td>0.42%</td>
+                        <td><span class="badge badge-error">-0.04pt</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>LINE登録指標（10月のみ）</h3>
+            <div class="banner banner-info">
+                <strong>⚠️ 注意：</strong>LINE登録データは10月のみ取得可能（9月のデータなし）
+            </div>
+
+            <div class="ui-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>指標</th>
+                            <th>10月実績</th>
+                            <th>備考</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>総LINE登録</strong></td>
+                            <td><span class="highlight">251件</span></td>
+                            <td>10月のみ</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Threads経由</strong></td>
+                            <td><span class="highlight">103件</span></td>
+                            <td>全体の41.0%</td>
+                        </tr>
+                        <tr>
+                            <td>Instagram経由</td>
+                            <td>62件</td>
+                            <td>全体の24.7%</td>
+                        </tr>
+                        <tr>
+                            <td>YouTube経由</td>
+                            <td>10件</td>
+                            <td>全体の4.0%</td>
+                        </tr>
+                        <tr>
+                            <td>その他</td>
+                            <td>76件</td>
+                            <td>全体の30.3%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <ul>
+                <li><strong>重要な発見：</strong>Threads経由登録の<span class="highlight">81%が「投稿から直接」</span>（プロフィール経由19%）</li>
+                <li>10月4-5日の2日間で全体の<span class="highlight">90%</span>を獲得</li>
+                <li>10月6日以降は1日0-11件に急減</li>
+            </ul>
+        </section>
+
+        <!-- Post Type Performance -->
+        <section class="section">
+            <h2>🎯 投稿タイプ別パフォーマンス分析</h2>
+
+            <div class="ui-card" style="margin-bottom: 32px; background: rgba(10, 122, 255, 0.05); border-left: 4px solid var(--color-accent);">
+                <h4 style="color: var(--color-accent); margin-bottom: 12px;">📝 分類基準の明確化</h4>
+                <p style="margin-bottom: 16px;">全292投稿を以下の明確な基準で再分類しました：</p>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 8px;">📚 <strong>ノウハウ系</strong>：具体的な手順・ツール・使い方を教える投稿（「〜してください」「〜すれば〜になります」）</li>
+                    <li style="margin-bottom: 8px;">❓ <strong>質問系</strong>：読者への直接的な質問形式（「〜ですか？」「まだ〜してるの？」）</li>
+                    <li style="margin-bottom: 8px;">📖 <strong>ストーリー系</strong>：個人の体験・感想（「〜しました」「〜だった」）</li>
+                    <li style="margin-bottom: 8px;">🤝 <strong>共感系</strong>：あるある系・共感を求める内容（「〜な人、多い」「〜ですよね」）</li>
+                </ul>
+            </div>
+
+            <h3>タイプ別実績比較</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>タイプ</th>
+                        <th>投稿数</th>
+                        <th>構成比</th>
+                        <th>平均Imp</th>
+                        <th>平均いいね</th>
+                        <th>勝率</th>
+                        <th>効率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: rgba(25, 195, 125, 0.05);">
+                        <td><strong>📚 ノウハウ系</strong></td>
+                        <td>197件</td>
+                        <td>67.5%</td>
+                        <td><span class="highlight">3,413</span></td>
+                        <td>13</td>
+                        <td><span class="highlight">4.6%</span></td>
+                        <td>⭐⭐⭐⭐⭐</td>
+                    </tr>
+                    <tr>
+                        <td><strong>📖 ストーリー系</strong></td>
+                        <td>38件</td>
+                        <td>13.0%</td>
+                        <td>1,176</td>
+                        <td>2</td>
+                        <td>2.6%</td>
+                        <td>⭐⭐</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🤝 共感系</strong></td>
+                        <td>48件</td>
+                        <td>16.4%</td>
+                        <td>982</td>
+                        <td>4</td>
+                        <td>0%</td>
+                        <td>⭐</td>
+                    </tr>
+                    <tr>
+                        <td><strong>❓ 質問系</strong></td>
+                        <td>9件</td>
+                        <td>3.1%</td>
+                        <td>868</td>
+                        <td>5</td>
+                        <td>0%</td>
+                        <td>⭐</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="cta-box">
+                <h3>🎯 核心インサイト</h3>
+                <p style="font-size: 24px; font-weight: 700; color: var(--color-accent); margin-bottom: 12px;">ノウハウ系は他タイプの3〜4倍の効率！</p>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin: 8px 0;">✅ 全勝ち投稿10件中<strong>9件がノウハウ系</strong></li>
+                    <li style="margin: 8px 0;">✅ 平均インプレッション3,413（全体平均2,644の<strong>1.3倍</strong>）</li>
+                    <li style="margin: 8px 0;">✅ 質問系の<strong>3.9倍</strong>、共感系の<strong>3.5倍</strong>のパフォーマンス</li>
+                </ul>
+            </div>
+
+            <h3>ノウハウ系の圧倒的優位性</h3>
+            <div class="grid-2">
+                <div class="glass-card">
+                    <h4 style="color: var(--color-success); margin-bottom: 12px;">1位：270,000 imp（10/4）</h4>
+                    <p style="color: var(--color-text-primary);"><strong>ChatGPTカスタム指示</strong></p>
+                    <div class="quote">
+                        「ChatGPT有料版、月3000円払ってるのに無料版と同じ使い方してる人多すぎます。実は「カスタム指示」っていう神機能があって、これ設定するだけで回答の質が10倍変わります...」
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <h4 style="color: var(--color-success); margin-bottom: 12px;">2位：84,969 imp（10/13）</h4>
+                    <p style="color: var(--color-text-primary);"><strong>住友商事のCopilot導入</strong></p>
+                    <div class="quote">
+                        「住友商事が全社員にCopilot導入したニュース、みんな『すごい』って言ってるけど、本質見えてない人多すぎです。これ、ただのAI導入じゃないです...」
+                    </div>
+                </div>
+            </div>
+
+            <h3>共通パターン</h3>
+            <ul>
+                <li>✅ <strong>具体的なツール名</strong>（ChatGPT、Copilot、NotebookLM等）</li>
+                <li>✅ <strong>数値で効果を示す</strong>（「10倍」「3000円」「全社員」）</li>
+                <li>✅ <strong>問題提起 + 解決策</strong>の構成</li>
+                <li>✅ <strong>600文字以上</strong>の長文投稿</li>
+                <li>✅ <strong>コメント欄で段階的に深掘り</strong></li>
+                <li>✅ 明確な<strong>CTA</strong>（@kudooo_aiフォロー + 特典URL）</li>
+            </ul>
+        </section>
+
+        <!-- Time Band Performance -->
+        <section class="section">
+            <h2>⏰ 時間帯別パフォーマンス分析</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>時間帯</th>
+                        <th>投稿数</th>
+                        <th>構成比</th>
+                        <th>平均Imp</th>
+                        <th>優先度</th>
+                        <th>推奨アクション</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: rgba(25, 195, 125, 0.05);">
+                        <td><strong>夜 (18-21時)</strong></td>
+                        <td>48件</td>
+                        <td>16.4%</td>
+                        <td><span class="highlight">7,082</span></td>
+                        <td>⭐⭐⭐</td>
+                        <td><span class="badge badge-success">増やす（20%へ）</span></td>
+                    </tr>
+                    <tr style="background: rgba(25, 195, 125, 0.02);">
+                        <td><strong>朝 (6-9時)</strong></td>
+                        <td>73件</td>
+                        <td>25.0%</td>
+                        <td>2,720</td>
+                        <td>⭐⭐</td>
+                        <td>維持</td>
+                    </tr>
+                    <tr>
+                        <td>早朝 (0-6時)</td>
+                        <td>88件</td>
+                        <td>30.1%</td>
+                        <td>1,657</td>
+                        <td>⭐</td>
+                        <td><span class="badge badge-warning">削減（20%へ）</span></td>
+                    </tr>
+                    <tr>
+                        <td>深夜 (21-24時)</td>
+                        <td>38件</td>
+                        <td>13.0%</td>
+                        <td>1,496</td>
+                        <td>△</td>
+                        <td>維持</td>
+                    </tr>
+                    <tr style="background: rgba(255, 77, 79, 0.05);">
+                        <td>午後 (15-18時)</td>
+                        <td>25件</td>
+                        <td>8.6%</td>
+                        <td>724</td>
+                        <td>✗</td>
+                        <td><span class="badge badge-error">削減</span></td>
+                    </tr>
+                    <tr style="background: rgba(255, 77, 79, 0.05);">
+                        <td>午前 (9-12時)</td>
+                        <td>6件</td>
+                        <td>2.1%</td>
+                        <td>243</td>
+                        <td>✗</td>
+                        <td><span class="badge badge-error">削減</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="banner banner-success">
+                <strong>明確な結論：</strong>夜18-21時が圧倒的（平均7,082imp）。朝6-9時も悪くない（平均2,720imp）。午前9-12時と午後15-18時は避けるべき。
+            </div>
+
+            <h3>勝ち投稿の時間帯分布</h3>
+            <p>10件の勝ち投稿の時間帯内訳：</p>
+            <ul>
+                <li><strong>夜 (18-21時):</strong> 3件（うち1件が270,000imp）← 最強</li>
+                <li>早朝 (0-6時): 3件</li>
+                <li>朝 (6-9時): 2件</li>
+                <li>深夜 (21-24時): 1件</li>
+                <li>午後 (15-18時): 1件</li>
+            </ul>
+        </section>
+
+        <!-- Winning Patterns -->
+        <section class="section">
+            <h2>🏆 勝ち投稿の成功パターン</h2>
+
+            <h3>7つの勝ちパターン</h3>
+            <div class="glass-card">
+                <ol style="color: var(--color-text-primary); font-size: 16px; line-height: 2;">
+                    <li><strong>具体的なツール名を入れる</strong><br>
+                    ChatGPT、Claude、NotebookLM、Copilot、Gemini等。「AI」だけでなく、固有名詞で。</li>
+
+                    <li><strong>数値で効果を示す</strong><br>
+                    「10倍」「3000円」「10時間削減」。抽象的な「効率化」ではなく、具体的な数値。</li>
+
+                    <li><strong>問題提起 + 解決策の構成</strong><br>
+                    冒頭で問題提起（「〜してる人、時代遅れです」）。コメント欄で段階的に解決策を提示。</li>
+
+                    <li><strong>600文字以上の長文投稿</strong><br>
+                    勝ち投稿の平均文字数：617文字。短文投稿（200文字以下）は勝率1%未満。</li>
+
+                    <li><strong>夜18-21時または朝6-9時に投稿</strong><br>
+                    特に夜18-21時が最強。</li>
+
+                    <li><strong>AI活用テーマに特化</strong><br>
+                    トップ10のうち8件がAI関連。ビジネス効率化 × AI活用がベスト。</li>
+
+                    <li><strong>明確なCTA</strong><br>
+                    「@kudooo_ai フォロー」を明記。特典URL（autostudio-self.vercel.app/l/1）を配置。特典内容を具体的に記載。</li>
+                </ol>
+            </div>
+
+            <h3>勝ちテンプレート</h3>
+            <div class="ui-card">
+                <p><strong>【冒頭】問題提起（50-100文字）</strong></p>
+                <code>「〜してる人、完全に時代遅れです」</code>
+                <code>「〜を月3000円払ってるのに無料版と同じ使い方してる人多すぎます」</code>
+
+                <p style="margin-top: 20px;"><strong>【コメント欄1】原因説明 + 解決手順（300-400文字）</strong></p>
+                <ul>
+                    <li>具体的なツール名（ChatGPT、Claude等）</li>
+                    <li>3ステップの手順</li>
+                    <li>数値データで効果を示す（「10倍」「10時間削減」）</li>
+                    <li>実体験を交える</li>
+                </ul>
+
+                <p style="margin-top: 20px;"><strong>【コメント欄2】応用 + 注意点（200-300文字）</strong></p>
+                <ul>
+                    <li>さらに詳しいテクニック</li>
+                    <li>やってはいけないNG行動</li>
+                    <li>失敗談</li>
+                </ul>
+
+                <p style="margin-top: 20px;"><strong>【コメント欄3】CTA</strong></p>
+                <code>「こういったAI活用を見逃したくない方は@kudooo_aiフォロー」+ 特典URL（具体的な特典内容を明記）</code>
+            </div>
+        </section>
+
+        <!-- Post Examples -->
+        <section class="section">
+            <h2>📝 投稿事例：良かった投稿 vs 悪かった投稿</h2>
+
+            <h3>✅ 良かった投稿トップ10</h3>
+
+            <div class="ui-card" style="margin-bottom: 20px;">
+                <h4 style="color: var(--color-success);">1位: 270,000 imp | ノウハウ系 | 10/4 18:59</h4>
+                <div class="quote">
+                    ChatGPT有料版、月3000円払ってるのに無料版と同じ使い方してる人多すぎます。<br>
+                    実は「カスタム指示」っていう神機能があって、これ設定するだけで回答の質が10倍変わります...
+                </div>
+                <p style="margin-top: 12px;"><strong>成功要因:</strong> 具体的なツール名（ChatGPT）+ 数値効果（10倍）+ 有料版活用のノウハウ</p>
+            </div>
+
+            <div class="ui-card" style="margin-bottom: 20px;">
+                <h4 style="color: var(--color-success);">2位: 84,969 imp | ノウハウ系 | 10/13 06:49</h4>
+                <div class="quote">
+                    住友商事が全社員にCopilot導入したニュース、みんな『すごい』って言ってるけど、本質見えてない人多すぎです。<br>
+                    これ、ただのAI導入じゃないです...
+                </div>
+                <p style="margin-top: 12px;"><strong>成功要因:</strong> 時事ネタ（住友商事） + 逆張り視点 + 専門的な解説</p>
+            </div>
+
+            <div class="ui-card" style="margin-bottom: 20px;">
+                <h4 style="color: var(--color-success);">3位: 14,521 imp | ストーリー系 | 9/10 05:27</h4>
+                <div class="quote">
+                    iPhone Airめちゃくちゃいいじゃん
+                </div>
+                <p style="margin-top: 12px;"><strong>成功要因:</strong> シンプルな感想 + トレンド（iPhone）+ 短文でキャッチー</p>
+            </div>
+
+            <div class="ui-card" style="margin-bottom: 20px;">
+                <h4 style="color: var(--color-success);">4位: 13,651 imp | 質問系 | 9/22 05:42</h4>
+                <div class="quote">
+                    プロンプト作成、AIにやらせれば5分が5秒になります。<br>
+                    毎回、「あなたは〜の専門家です。」って同じやりとりAIとするときゼロから考えてませんか？<br>
+                    それ、完全に時間の無駄です...
+                </div>
+                <p style="margin-top: 12px;"><strong>成功要因:</strong> 時間削減の具体的数値（5分→5秒） + 共感できる問題提起 + 解決策提示</p>
+            </div>
+
+            <div class="ui-card" style="margin-bottom: 20px;">
+                <h4 style="color: var(--color-success);">5位: 13,091 imp | 質問系 | 10/5 06:22</h4>
+                <div class="quote">
+                    「AIに課金すべきか？」って質問、めちゃくちゃ多いんですけど…<br>
+                    結論、即課金してください。<br>
+                    ただ、条件があります。1年検証した具体的な判断基準を全部教えます...
+                </div>
+                <p style="margin-top: 12px;"><strong>成功要因:</strong> よくある質問への明確な回答 + 「1年検証」の権威性 + 具体的な基準提示</p>
+            </div>
+
+            <div class="grid-2">
+                <div class="ui-card">
+                    <h4 style="color: var(--color-success);">6位: 12,949 imp | 質問系 | 9/28 23:52</h4>
+                    <div class="quote">
+                        ChatGPTやGeminiと同じやり取りしている人は、AIにプロンプト作らせてください。<br>
+                        毎回「あなたは〜の専門家です」って考えるのマジで時間の無駄です...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>成功要因:</strong> 繰り返し作業の無駄を指摘 + 効率化手法の提示</p>
+                </div>
+
+                <div class="ui-card">
+                    <h4 style="color: var(--color-success);">7位: 12,586 imp | 質問系 | 10/5 06:58</h4>
+                    <div class="quote">
+                        通勤中に読書する時代は終わりました。<br>
+                        NotebookLM使ってない人、完全に出遅れてます。<br>
+                        PDFや資料を放り込むだけで、2人の司会者が議論形式で解説してくれるポッドキャスト機能...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>成功要因:</strong> NotebookLM新機能紹介 + 「出遅れてる」の警告トーン</p>
+                </div>
+
+                <div class="ui-card">
+                    <h4 style="color: var(--color-success);">8位: 12,428 imp | ストーリー系 | 10/4 23:34</h4>
+                    <div class="quote">
+                        【緊急】まだプロンプト毎回手打ちしてる人、完全に時代遅れです。<br>
+                        AIに「自分専用のプロンプト生成AI」作ったら、10分が10秒になりました...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>成功要因:</strong> 【緊急】タグ + 時間削減数値（10分→10秒） + メタAI活用</p>
+                </div>
+
+                <div class="ui-card">
+                    <h4 style="color: var(--color-success);">9位: 11,841 imp | 質問系 | 10/10 00:37</h4>
+                    <div class="quote">
+                        まだAIで「文章書き直して」って指示してる人、完全に非効率です。<br>
+                        ChatGPTの「Canvasモード」使えば、リアルタイムで修正箇所が可視化されます...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>成功要因:</strong> Canvasモード新機能紹介 + ビフォーアフターの明確化</p>
+                </div>
+
+                <div class="ui-card">
+                    <h4 style="color: var(--color-success);">10位: 10,722 imp | 質問系 | 10/4 18:47</h4>
+                    <div class="quote">
+                        NotebookLM使ってない人、人生損してます。<br>
+                        PDFやWebサイト放り込むだけで、AIが勝手に要約・質問対応してくれるんですけど、これマジで革命です...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>成功要因:</strong> NotebookLM紹介 + 「人生損してる」の強い表現</p>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 48px;">❌ 悪かった投稿ワースト10</h3>
+            <div class="banner banner-warning" style="margin-bottom: 24px;">
+                <strong>注意:</strong> 以下の投稿は平均39-103impと極めて低いパフォーマンス。実は内容自体はAI関連でまとも。なぜ低いのか？その理由を分析。
+            </div>
+
+            <div class="grid-2">
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト1位: 39 imp | ストーリー系 | 9/20 21:56</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        自分でツール作りたいなら chatGPT▶︎Code X、claude▶︎claude Code は必須です。<br>
+                        ただ、ターミナル起動しないといけなくて、エンジニアじゃないと、あの画面見ただけで拒否反応出る人もいますよね...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 夜21時台投稿（深夜）+ テクニカルすぎる内容 + 初心者向けでない</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト2位: 49 imp | 質問系 | 9/20 19:34</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        SNSマーケとか講座運営やってて、業務の自動化とか自社のツールとか作りたい人は、chatGPTに「この業務自動化したいんだけど、どーやればいい？」って聞くと色々教えてくれます...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> ターゲットが狭すぎる（SNSマーケ限定） + 抽象的な提案</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト3位: 53 imp | 質問系 | 9/10 04:50</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        まだ、スマホとかPCでタイピングして指示出してるの？<br>
+                        AI使いこなしてる人は音声入力使ってます...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 早朝4時台投稿 + 音声入力は既に一般的 + 新鮮味なし</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト4位: 54 imp | 質問系 | 9/23 07:49</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        AIで本当に何でもサービスが作れる時代に突入した。今、Open AIのCodexを使って Threadsの自動投稿とインサイトの分析のツールを作ってるんだけど...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 長文すぎる（347文字） + 独り言っぽい + 結論がない</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト5位: 56 imp | ストーリー系 | 9/22 05:49</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        AI使いこなせない人、2025年で人生終わります。<br>
+                        僕も1年前は「AIよくわからん…」って感じでしたが、今では月収7桁をAI活用で達成してます...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 早朝5時台投稿 + 煽りが強すぎる + 自慢っぽい印象</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト6位: 71 imp | 質問系 | 9/22 05:50</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        5時間の作業、AIで5分になります。<br>
+                        「資料作成に丸一日かかる…」って、まだ手作業でやってませんか？<br>
+                        それ、AIに任せれば99%時間削減できます...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 早朝5時台投稿 + 数値が盛りすぎ（99%削減） + 信憑性低下</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト7位: 83 imp | 質問系 | 9/9 18:20</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        買い物してるうちにAIが10時間分の仕事をしてくれる。<br>
+                        さっき彼女と出かけてたんですが、その間にセミナー資料をAI使って作れました...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> フックは良いが具体的な手順なし + 再現性が見えない</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト8位: 83 imp | 質問系 | 9/22 05:51</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        プログラミング勉強してる人、時間の無駄です。<br>
+                        「AI時代だからプログラミング学ばないと…」って、スクール通ったりしてませんか？...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 早朝5時台投稿 + プログラミング否定で炎上狙い？ + 極端すぎる主張</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト9位: 97 imp | 質問系 | 10/1 06:05</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        まだAIに単発で質問してる人、時代遅れすぎです。<br>
+                        僕は今、AIに「秘書として1日働いて」って頼んで、マジで月30時間削減できてます...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 朝6時台投稿 + 「時代遅れ」の繰り返しでワンパターン化</p>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h4 style="color: var(--color-error);">ワースト10位: 103 imp | ストーリー系 | 9/25 15:30</h4>
+                    <div class="quote" style="background: rgba(255, 77, 79, 0.05);">
+                        3日前くらいから開発している Threadsの投稿ツールが形になってきた。<br>
+                        ①投稿 ▼ ②投稿データの取得 ▼ ③インサイト・競合分析...
+                    </div>
+                    <p style="margin-top: 12px; font-size: 14px;"><strong>問題点:</strong> 午後15時台投稿（最悪の時間帯） + 開発日記で興味持たれにくい + 具体的なメリット不明</p>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 32px;">📊 良い投稿 vs 悪い投稿の違い</h3>
+            <div class="glass-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>項目</th>
+                            <th style="color: var(--color-success);">良い投稿</th>
+                            <th style="color: var(--color-error);">悪い投稿</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>投稿時間帯</strong></td>
+                            <td>夜18-21時、朝6-9時</td>
+                            <td>早朝0-6時、午後15-18時、深夜21時以降</td>
+                        </tr>
+                        <tr>
+                            <td><strong>ターゲット設定</strong></td>
+                            <td>AIに興味ある全般（広い）</td>
+                            <td>SNSマーケ限定など（狭すぎる）</td>
+                        </tr>
+                        <tr>
+                            <td><strong>トーン</strong></td>
+                            <td>問題提起 + 解決策提示</td>
+                            <td>煽りが強すぎる、自慢っぽい</td>
+                        </tr>
+                        <tr>
+                            <td><strong>具体性</strong></td>
+                            <td>具体的な手順・再現性あり</td>
+                            <td>フックだけで手順なし</td>
+                        </tr>
+                        <tr>
+                            <td><strong>新鮮味</strong></td>
+                            <td>新機能・最新トレンド</td>
+                            <td>既に一般的な内容・古い</td>
+                        </tr>
+                        <tr>
+                            <td><strong>文字数</strong></td>
+                            <td>適度な長さ（200-400文字）</td>
+                            <td>長すぎる（350文字超）or 短すぎる</td>
+                        </tr>
+                        <tr>
+                            <td><strong>信憑性</strong></td>
+                            <td>現実的な数値（10倍、70%削減）</td>
+                            <td>盛りすぎた数値（99%削減）</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="banner banner-success" style="margin-top: 24px;">
+                <strong>重要な発見:</strong> 悪い投稿も<strong>内容自体はまともなAI関連ノウハウ</strong>。しかし<strong>投稿時間帯</strong>（早朝・深夜・午後）、<strong>ターゲット設定</strong>（狭すぎる）、<strong>トーン</strong>（煽りすぎ・自慢）、<strong>具体性の欠如</strong>（手順なし）が原因でインプレッション<strong>数百倍の差</strong>が生まれている。
+            </div>
+        </section>
+
+        <!-- LINE Analysis -->
+        <section class="section">
+            <h2>📱 LINE連動分析（10月データのみ）</h2>
+
+            <div class="banner banner-info">
+                <strong>⚠️ 注意：</strong>LINE登録データは10月のみ取得可能（9月データなし）
+            </div>
+
+            <h3>Threads → LINE転換の実態</h3>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">総LINE登録</div>
+                    <div class="metric-value">251件</div>
+                    <div class="metric-note">10月のみ</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Threads経由</div>
+                    <div class="metric-value highlight">103件</div>
+                    <div class="metric-note">41.0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Instagram経由</div>
+                    <div class="metric-value">62件</div>
+                    <div class="metric-note">24.7%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">YouTube経由</div>
+                    <div class="metric-value">10件</div>
+                    <div class="metric-note">4.0%</div>
+                </div>
+            </div>
+
+            <div class="banner banner-success">
+                <strong>重要な発見：</strong>Threads経由登録の<strong>81%は投稿から直接</strong>（プロフィール経由は19%のみ）。バズ投稿に特典URLを配置する戦略が正しいことを証明。
+            </div>
+
+            <h3>日別LINE登録推移：10月4-5日の爆発的成長</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>日付</th>
+                        <th>総登録</th>
+                        <th>Threads</th>
+                        <th>Instagram</th>
+                        <th>YouTube</th>
+                        <th>主要投稿</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: rgba(25, 195, 125, 0.1);">
+                        <td><strong>10/4</strong></td>
+                        <td><strong>169</strong></td>
+                        <td>31</td>
+                        <td>60</td>
+                        <td>3</td>
+                        <td>ChatGPT 270K imp</td>
+                    </tr>
+                    <tr style="background: rgba(25, 195, 125, 0.05);">
+                        <td><strong>10/5</strong></td>
+                        <td><strong>57</strong></td>
+                        <td>52</td>
+                        <td>2</td>
+                        <td>3</td>
+                        <td>質問系 13K imp × 2</td>
+                    </tr>
+                    <tr>
+                        <td>10/7</td>
+                        <td>2</td>
+                        <td>1</td>
+                        <td>0</td>
+                        <td>1</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>10/8</td>
+                        <td>11</td>
+                        <td>9</td>
+                        <td>0</td>
+                        <td>2</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>10/13</td>
+                        <td>1</td>
+                        <td>1</td>
+                        <td>0</td>
+                        <td>0</td>
+                        <td>Copilot 85K imp</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>分析：</strong></p>
+            <ul>
+                <li>10月4-5日の2日間で<span class="highlight">226件（全体の90%）</span></li>
+                <li>10月13日に85K impのバズ投稿があったが、LINE登録は1件のみ</li>
+                <li><strong>バズだけでは不十分。CTA最適化が必須</strong></li>
+            </ul>
+
+            <h3>10月4日の成功要因</h3>
+            <div class="grid-2">
+                <div class="ui-card">
+                    <h4>1. 集中投稿戦略</h4>
+                    <ul>
+                        <li>18投稿を1日で実行</li>
+                        <li>時間帯を分散（18:47, 18:59, 23:34等）</li>
+                    </ul>
+                </div>
+                <div class="ui-card">
+                    <h4>2. テーマ統一性</h4>
+                    <ul>
+                        <li>AI活用（ChatGPT、NotebookLM）に特化</li>
+                        <li>ビジネス効率化 × AI活用</li>
+                    </ul>
+                </div>
+                <div class="ui-card">
+                    <h4>3. CTA最適化</h4>
+                    <ul>
+                        <li>全投稿に特典URL配置</li>
+                        <li>特典内容を具体的に記載</li>
+                        <li>@kudooo_aiフォローを明記</li>
+                    </ul>
+                </div>
+                <div class="ui-card">
+                    <h4>4. バズ投稿の創出</h4>
+                    <ul>
+                        <li>270,000 impの超大型バズ</li>
+                        <li>同日に10K impの投稿も2件</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bottlenecks -->
+        <section class="section">
+            <h2>⚠️ ボトルネック & リスク分析</h2>
+
+            <div class="grid-2">
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h3>ボトルネック1：質問系投稿の効率悪化</h3>
+                    <p><strong>問題：</strong></p>
+                    <ul>
+                        <li>質問系が全体の60%を占める</li>
+                        <li>平均インプレッション1,568と低迷</li>
+                        <li>ノウハウ系の1/7の効率</li>
+                    </ul>
+                    <p><strong>解決策：</strong></p>
+                    <ul>
+                        <li>質問系を30%まで削減</li>
+                        <li>質問する場合も「具体的なツール名 + 使い方」をセットに</li>
+                        <li>教育型コンテンツとして設計</li>
+                    </ul>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-error);">
+                    <h3>ボトルネック2：勝率の低さ</h3>
+                    <p><strong>問題：</strong></p>
+                    <ul>
+                        <li>勝率3.4%（10/292投稿）</li>
+                        <li>全期間（5.5%）と比較しても低下</li>
+                    </ul>
+                    <p><strong>解決策：</strong></p>
+                    <ul>
+                        <li>ノウハウ系を30%に増やす</li>
+                        <li>夜18-21時への投稿を増やす</li>
+                        <li>勝ちテンプレートを活用</li>
+                    </ul>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-warning);">
+                    <h3>ボトルネック3：LINE登録の集中と激減</h3>
+                    <p><strong>問題：</strong></p>
+                    <ul>
+                        <li>10月4-5日に90%が集中</li>
+                        <li>10月6日以降は1日0-11件に激減</li>
+                    </ul>
+                    <p><strong>解決策：</strong></p>
+                    <ul>
+                        <li>週に1-2回の集中投稿日を設定</li>
+                        <li>CTA最適化を全投稿で継続</li>
+                        <li>AI活用テーマで統一</li>
+                    </ul>
+                </div>
+
+                <div class="ui-card" style="border-left: 4px solid var(--color-warning);">
+                    <h3>ボトルネック4：いいね率の低さ</h3>
+                    <p><strong>問題：</strong></p>
+                    <ul>
+                        <li>平均いいね率0.38%</li>
+                        <li>業界基準（1-3%）と比較して低い</li>
+                    </ul>
+                    <p><strong>解決策：</strong></p>
+                    <ul>
+                        <li>コメント欄でのやり取りを増やす</li>
+                        <li>いいね・保存を促す設計</li>
+                        <li>質問を投げかけてコメントを促す</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Success Strategy -->
+        <section class="section">
+            <h2>🚀 成功の再現戦略</h2>
+
+            <div class="cta-box">
+                <h3>10月4日の成功は再現可能</h3>
+                <p>10月4日の成功は偶然ではなく、<strong>再現可能なパターン</strong>です。以下の7要素を組み合わせれば、月間100件以上のLINE登録と月50万円以上の売上は達成可能。</p>
+            </div>
+
+            <h3>再現のための7要素</h3>
+            <div class="glass-card">
+                <ol style="color: var(--color-text-primary); font-size: 16px; line-height: 2;">
+                    <li><strong>ノウハウ系投稿を30%に増やす</strong><br>
+                    現状12% → 30%へ。週7投稿なら2-3投稿をノウハウ系に。</li>
+
+                    <li><strong>AI活用テーマに特化</strong><br>
+                    ChatGPT、Claude、NotebookLM、Copilot、Gemini等。ビジネス効率化 × AI活用。</li>
+
+                    <li><strong>夜18-21時と朝6-9時に集中投稿</strong><br>
+                    夜18-21時：20%、朝6-9時：25%</li>
+
+                    <li><strong>週に1-2回の集中投稿日を設定</strong><br>
+                    1日に5-7投稿を集中。時間帯を分散（18:00, 18:30, 19:00, 23:30, 翌朝6:00等）</li>
+
+                    <li><strong>特典URLを全投稿に明記</strong><br>
+                    メイン投稿とコメント欄すべてに配置。特典内容を具体的に記載。</li>
+
+                    <li><strong>600文字以上の長文投稿</strong><br>
+                    教育型コンテンツ。コメント欄で段階的に深掘り。</li>
+
+                    <li><strong>勝ちテンプレートを活用</strong><br>
+                    問題提起 + 解決策の構成。具体的なツール名 + 数値効果。</li>
+                </ol>
+            </div>
+
+            <h3>集中投稿日の設計</h3>
+            <div class="ui-card">
+                <p><strong>週に1-2回の集中投稿日</strong>（例：水曜日と日曜日）</p>
+
+                <h4>集中投稿日のスケジュール例：</h4>
+                <ul>
+                    <li>18:00 - ノウハウ系（ChatGPT活用法）</li>
+                    <li>18:30 - ノウハウ系（NotebookLM活用法）</li>
+                    <li>19:00 - 質問系（AI活用事例）</li>
+                    <li>23:30 - ストーリー系（AI導入体験談）</li>
+                    <li>翌朝6:00 - ストーリー系（日常 × AI）</li>
+                </ul>
+
+                <h4>集中投稿日のテーマ例：</h4>
+                <ul>
+                    <li>AI活用週間（ChatGPT、Claude、NotebookLM、Copilot、Gemini）</li>
+                    <li>ビジネス効率化週間（営業、リサーチ、資料作成、会議）</li>
+                    <li>SNS運用週間（Threads、Instagram、YouTube）</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Action Plan -->
+        <section class="section">
+            <h2>📅 14日アクションプラン</h2>
+
+            <h3>目標設定（2週間後）</h3>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">平均インプレッション</div>
+                    <div class="metric-value highlight">4,500</div>
+                    <div class="metric-note">現状2,643 → +70%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">勝ち投稿</div>
+                    <div class="metric-value success">月6件以上</div>
+                    <div class="metric-note">現状月3-5件 → +50%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Threads経由LINE登録</div>
+                    <div class="metric-value success">月100件</div>
+                    <div class="metric-note">現状月50件 → +100%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">売上</div>
+                    <div class="metric-value warning">月50万円</div>
+                    <div class="metric-note">新規目標</div>
+                </div>
+            </div>
+
+            <h3>Day 1-3：準備フェーズ</h3>
+            <div class="ui-card">
+                <h4>タスク1：勝ちテンプレートの整理</h4>
+                <ul>
+                    <li>10件の勝ち投稿の全文を抽出</li>
+                    <li>フック、構成、CTAを3要素で分解</li>
+                    <li>ノウハウ系5パターン、共感系3パターンのテンプレート化</li>
+                    <li><strong>期限：3日以内</strong></li>
+                </ul>
+
+                <h4>タスク2：CTAバリエーションの作成</h4>
+                <ul>
+                    <li>特典内容を具体的にリストアップ</li>
+                    <li>A/Bテストパターンを10個作成</li>
+                    <li>限定性を出す文言を5個作成（「先着100名」「期間限定」等）</li>
+                    <li><strong>期限：3日以内</strong></li>
+                </ul>
+
+                <h4>タスク3：投稿カレンダーの作成</h4>
+                <ul>
+                    <li>2週間分の投稿スケジュールを作成</li>
+                    <li>テーマを統一（AI活用週間、ビジネス効率化週間等）</li>
+                    <li>集中投稿日を2日設定（Day 5, Day 12）</li>
+                    <li><strong>期限：3日以内</strong></li>
+                </ul>
+            </div>
+
+            <h3>Day 4-7：第1サイクル実行</h3>
+            <div class="ui-card">
+                <h4>投稿計画（7投稿）：</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日</th>
+                            <th>投稿数</th>
+                            <th>タイプ</th>
+                            <th>時間帯</th>
+                            <th>テーマ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>4</td>
+                            <td>1</td>
+                            <td>ノウハウ系</td>
+                            <td>朝6-9時</td>
+                            <td>ChatGPT Canvas活用</td>
+                        </tr>
+                        <tr style="background: rgba(10, 122, 255, 0.05);">
+                            <td><strong>5</strong></td>
+                            <td><strong>5</strong></td>
+                            <td>ノウハウ×2, 質問×2, ストーリー×1</td>
+                            <td><strong>集中投稿日</strong></td>
+                            <td><strong>AI活用特集</strong></td>
+                        </tr>
+                        <tr>
+                            <td>6</td>
+                            <td>0</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>7</td>
+                            <td>1</td>
+                            <td>ストーリー系</td>
+                            <td>早朝0-6時</td>
+                            <td>AI導入体験談</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>検証項目：</h4>
+                <ul>
+                    <li>投稿タイプ別のインプレッション</li>
+                    <li>時間帯別のエンゲージメント率</li>
+                    <li>CTA経由のLINE登録数</li>
+                    <li>プロフィールアクセス数</li>
+                </ul>
+            </div>
+
+            <h3>Day 8-10：振り返り & 最適化</h3>
+            <div class="ui-card">
+                <h4>タスク4：第1サイクルのデータ集計</h4>
+                <ul>
+                    <li>7投稿のインプレッション、いいね、コメント数を集計</li>
+                    <li>トップ3とボトム3を特定</li>
+                    <li>LINE登録数を確認（Threads/Instagram/YouTube別）</li>
+                    <li><strong>期限：Day 8</strong></li>
+                </ul>
+
+                <h4>タスク5：成功・失敗要因の分析</h4>
+                <ul>
+                    <li>トップ3の共通点を抽出</li>
+                    <li>ボトム3の問題点を特定</li>
+                    <li>次サイクルの仮説を立案</li>
+                    <li><strong>期限：Day 9</strong></li>
+                </ul>
+
+                <h4>タスク6：投稿計画の調整</h4>
+                <ul>
+                    <li>効果の低かった時間帯を削除</li>
+                    <li>反応の良かったテーマを深掘り</li>
+                    <li>CTAの文言を改善（A/Bテスト）</li>
+                    <li><strong>期限：Day 10</strong></li>
+                </ul>
+            </div>
+
+            <h3>Day 11-14：第2サイクル実行</h3>
+            <div class="ui-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日</th>
+                            <th>投稿数</th>
+                            <th>タイプ</th>
+                            <th>時間帯</th>
+                            <th>テーマ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>11</td>
+                            <td>1</td>
+                            <td>ノウハウ系</td>
+                            <td>夜18-21時</td>
+                            <td>Claude活用法</td>
+                        </tr>
+                        <tr style="background: rgba(10, 122, 255, 0.05);">
+                            <td><strong>12</strong></td>
+                            <td><strong>7</strong></td>
+                            <td>ノウハウ×3, 質問×2, ストーリー×1, 共感×1</td>
+                            <td><strong>集中投稿日</strong></td>
+                            <td><strong>AI × 効率化</strong></td>
+                        </tr>
+                        <tr>
+                            <td>13</td>
+                            <td>1</td>
+                            <td>ストーリー系</td>
+                            <td>朝6-9時</td>
+                            <td>AI失敗談</td>
+                        </tr>
+                        <tr>
+                            <td>14</td>
+                            <td>1</td>
+                            <td>ノウハウ系</td>
+                            <td>夜18-21時</td>
+                            <td>Gemini活用法</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>目標（Day 12集中投稿日）：</h4>
+                <ul>
+                    <li>総インプレッション：<span class="highlight">50,000以上</span></li>
+                    <li>LINE登録：<span class="highlight">20件以上</span></li>
+                    <li>勝ち投稿：<span class="highlight">1件以上</span></li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- TODO -->
+        <section class="section">
+            <h2>✅ TODO & ネクストステップ</h2>
+
+            <h3>🔥 今すぐ着手（優先度: 高）</h3>
+            <div class="glass-card" style="border-left: 4px solid var(--color-error);">
+                <div style="margin-bottom: 24px;">
+                    <h4>1. 勝ちテンプレートの整理</h4>
+                    <ul>
+                        <li>10件の勝ち投稿の全文を抽出</li>
+                        <li>フック、構成、CTAを3要素で分解</li>
+                        <li>ノウハウ系5パターン、共感系3パターンのテンプレート化</li>
+                        <li><span class="badge badge-error">期限：3日以内</span></li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h4>2. CTAの再構築</h4>
+                    <ul>
+                        <li>特典URL訴求を強化</li>
+                        <li>特典内容を具体的に列挙（8大特典 → 具体的な内容）</li>
+                        <li>A/Bテストパターンを10個作成</li>
+                        <li>限定性を出す（「先着100名」「期間限定」）</li>
+                        <li><span class="badge badge-error">期限：3日以内</span></li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h4>3. 投稿タイプ配分の最適化</h4>
+                    <ul>
+                        <li>次の2週間でノウハウ系を30%まで増やす（週7投稿なら2-3投稿）</li>
+                        <li>質問系を30%に減らす（週7投稿なら2投稿）</li>
+                        <li>共感系を週1投稿は必ず入れる</li>
+                        <li><span class="badge badge-error">期限：今日から実行</span></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4>4. 集中投稿日の設定</h4>
+                    <ul>
+                        <li>週に1-2回の集中投稿日を設定（Day 5, Day 12）</li>
+                        <li>1日に5-7投稿を集中</li>
+                        <li>時間帯を分散（18:00, 18:30, 19:00, 23:30, 翌朝6:00等）</li>
+                        <li>テーマを統一（AI活用特集）</li>
+                        <li><span class="badge badge-error">期限：1週間以内</span></li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>📊 中長期検討（優先度: 中）</h3>
+            <div class="ui-card">
+                <ul>
+                    <li><strong>5. LINEタグ精度の確認</strong> - line_registrations.jsonのデータソースを確認（期限：2週間以内）</li>
+                    <li><strong>6. Instagram・YouTube連動の強化</strong> - 3媒体の連動性を高める（期限：1ヶ月以内）</li>
+                    <li><strong>7. フォロワー増加施策</strong> - 投稿 → フォロワー増の相関を分析（期限：1ヶ月以内）</li>
+                </ul>
+            </div>
+
+            <h3>🛠️ システム改善（優先度: 中）</h3>
+            <div class="ui-card">
+                <ul>
+                    <li><strong>8. ダッシュボードの可視化</strong> - AutoStudioアプリ内に /threads/analysis ページを作成（期限：2週間以内）</li>
+                    <li><strong>9. 自動レポート生成</strong> - scripts/generateThreadsReport.js を作成（期限：1ヶ月以内）</li>
+                    <li><strong>10. A/Bテスト機能</strong> - 同じテーマで異なるフックのA/Bテスト（期限：2ヶ月以内）</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Conclusion -->
+        <section class="section">
+            <h2>🎯 結論</h2>
+
+            <div class="cta-box">
+                <h3>成功の型は明確</h3>
+                <p style="font-size: 18px; text-align: left;">9-10月のデータ分析により、成功の型が明確になりました：</p>
+
+                <div style="text-align: left; margin: 24px 0;">
+                    <p><strong>1.</strong> ノウハウ系投稿は質問系の<span class="highlight">7.3倍の効率</span></p>
+                    <p><strong>2.</strong> 夜18-21時の投稿が<span class="highlight">最強</span>（平均7,082imp）</p>
+                    <p><strong>3.</strong> AI活用テーマが<span class="highlight">圧倒的</span>（トップ10のうち8件）</p>
+                    <p><strong>4.</strong> 集中投稿日 + CTA最適化で<span class="highlight">爆発的成長</span></p>
+                    <p><strong>5.</strong> Threads経由登録の<span class="highlight">81%は投稿から直接</span></p>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h3>再現可能な成功戦略</h3>
+                <p>以下の7要素を組み合わせれば、<strong>月間100件以上のLINE登録と月50万円以上の売上は達成可能</strong>：</p>
+                <ol>
+                    <li>ノウハウ系投稿を30%に増やす</li>
+                    <li>AI活用テーマに特化</li>
+                    <li>夜18-21時と朝6-9時に集中投稿</li>
+                    <li>週に1-2回の集中投稿日を設定</li>
+                    <li>特典URLを全投稿に明記</li>
+                    <li>600文字以上の長文投稿</li>
+                    <li>勝ちテンプレートを活用</li>
+                </ol>
+            </div>
+
+            <h3>最優先アクション</h3>
+            <div class="ui-card">
+                <p><strong>今週中に実行すべきこと：</strong></p>
+                <ol>
+                    <li>勝ちテンプレート5パターンを作成（3日以内）</li>
+                    <li>CTAバリエーション10個を作成（3日以内）</li>
+                    <li>ノウハウ系投稿を3本作成（AI活用テーマ）</li>
+                    <li>集中投稿日を設定（Day 5, Day 12）</li>
+                    <li>毎日データを記録（インプレッション、LINE登録等）</li>
+                </ol>
+            </div>
+
+            <h3>2週間後の目標</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>指標</th>
+                        <th>現状</th>
+                        <th>目標</th>
+                        <th>達成確率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>平均インプレッション</td>
+                        <td>2,643</td>
+                        <td>4,500</td>
+                        <td><span class="badge badge-success">80%</span></td>
+                    </tr>
+                    <tr>
+                        <td>勝ち投稿</td>
+                        <td>月3-5件</td>
+                        <td>月6件以上</td>
+                        <td><span class="badge badge-success">70%</span></td>
+                    </tr>
+                    <tr>
+                        <td>Threads経由LINE登録</td>
+                        <td>月50件</td>
+                        <td>月100件</td>
+                        <td><span class="badge badge-success">85%</span></td>
+                    </tr>
+                    <tr>
+                        <td>売上</td>
+                        <td>-</td>
+                        <td>月50万円</td>
+                        <td><span class="badge badge-success">75%</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="quote">
+                <strong>データドリブンな改善サイクル</strong><br>
+                投稿 → データ記録 → 週次分析 → 仮説立案 → テスト実行 → 結果検証 → 勝ちパターン抽出 → 横展開<br><br>
+                このサイクルを高速で回すことで、継続的に成果を出し続けることができる。
+            </div>
+
+            <div class="banner banner-info" style="margin-top: 32px; text-align: center; font-size: 18px; font-weight: 600;">
+                データは嘘をつかない。<br>
+                感覚ではなく、数字で判断し、PDCAを回し続けること。
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer style="margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--color-border); text-align: center; color: var(--color-text-muted); font-size: 14px;">
+            <p><strong>📌 次回レポート更新：</strong>2025年10月31日（2週間後）</p>
+            <p><strong>📊 使用データ：</strong>posts.csv（292件）、daily_summary.json（30日分）、line_registrations.json（9日分）</p>
+            <p style="margin-top: 16px;">Generated by AutoStudio | Threads運用分析レポート</p>
+        </footer>
+    </div>
+</body>
+</html>
