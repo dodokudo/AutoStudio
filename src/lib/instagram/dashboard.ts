@@ -60,17 +60,20 @@ export interface InstagramDashboardData {
   scripts: ReelScriptSummary[];
   lineRegistrationCount: number | null;
   lineRegistrationSeries: { date: string; count: number }[];
+  linkClickCount: number | null;
+  linkClickSeries: { date: string; count: number }[];
 }
 
 export async function getInstagramDashboardData(projectId: string): Promise<InstagramDashboardData> {
   const config = loadInstagramConfig();
   const client = createBigQueryClient(projectId, DEFAULT_LOCATION);
 
-  const [followerSeries, reels, stories, scripts] = await Promise.all([
+  const [followerSeries, reels, stories, scripts, linkClickSeries] = await Promise.all([
     fetchFollowerSeries(client, projectId, config.defaultUserId),
     fetchReelHighlights(client, projectId, config.defaultUserId),
     fetchStoryHighlights(client, projectId, config.defaultUserId),
     fetchLatestScripts(client, projectId),
+    fetchLinkClickSeries(client, projectId),
   ]);
 
   const lineRangeEnd = new Date();
@@ -94,6 +97,8 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     console.warn('[instagram/dashboard] Failed to load LINE registration count', lineError);
   }
 
+  const linkClickCount = linkClickSeries.reduce((sum, point) => sum + point.count, 0);
+
   return {
     followerSeries,
     latestFollower: followerSeries[0],
@@ -102,6 +107,8 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     scripts,
     lineRegistrationCount,
     lineRegistrationSeries,
+    linkClickCount,
+    linkClickSeries,
   };
 }
 
@@ -279,6 +286,45 @@ async function fetchLatestScripts(client: BigQuery, projectId: string): Promise<
     }));
   } catch (error) {
     console.warn('[instagram/dashboard] Failed to load scripts', error);
+    return [];
+  }
+}
+
+async function fetchLinkClickSeries(client: BigQuery, projectId: string): Promise<{ date: string; count: number }[]> {
+  const query = `
+    WITH latest_links AS (
+      SELECT
+        id,
+        category,
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) as rn
+      FROM \`${projectId}.autostudio_links.short_links\`
+      WHERE is_active = true
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE(c.clicked_at, 'Asia/Tokyo')) as date,
+      COUNT(*) as click_count
+    FROM \`${projectId}.autostudio_links.click_logs\` c
+    JOIN latest_links s
+      ON c.short_link_id = s.id
+      AND s.rn = 1
+    WHERE s.category = 'instagram'
+      AND DATE(c.clicked_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
+    GROUP BY date
+    ORDER BY date DESC
+  `;
+
+  try {
+    const [rows] = await client.query({
+      query,
+      location: DEFAULT_LOCATION,
+    });
+
+    return rows.map((row) => ({
+      date: String(row.date),
+      count: Number(row.click_count ?? 0),
+    }));
+  } catch (error) {
+    console.warn('[instagram/dashboard] Failed to load link click series', error);
     return [];
   }
 }

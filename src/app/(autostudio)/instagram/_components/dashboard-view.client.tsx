@@ -229,6 +229,20 @@ export function InstagramDashboardView({ data }: Props) {
     }, {});
   }, [data.followerSeries]);
 
+  const followerSeriesWithDelta = useMemo(() => {
+    const sorted = [...data.followerSeries].sort((a, b) => a.date.localeCompare(b.date));
+    return sorted.map((point, index) => {
+      const delta = index === 0
+        ? 0
+        : (point.followers ?? 0) - (sorted[index - 1].followers ?? 0);
+      const followerDelta = Math.max(0, delta); // マイナスの場合は0にする
+      return {
+        ...point,
+        followerDelta,
+      };
+    });
+  }, [data.followerSeries]);
+
   const resolveFollowerCount = useCallback((timestamp?: string | null): number | null => {
     if (!timestamp) return null;
     const date = parseDate(timestamp);
@@ -336,6 +350,16 @@ export function InstagramDashboardView({ data }: Props) {
       lineRegistrations = data.lineRegistrationCount;
     }
 
+    let linkClicks: number | null = null;
+    if (data.linkClickSeries.length > 0) {
+      const linkClickSeriesInRange = useAllRange
+        ? data.linkClickSeries
+        : data.linkClickSeries.filter((point) => isWithinDateRange(point.date, startKey, endKey));
+      linkClicks = linkClickSeriesInRange.reduce((sum, point) => sum + (point.count ?? 0), 0);
+    } else if (data.linkClickCount !== null) {
+      linkClicks = data.linkClickCount;
+    }
+
     return {
       currentFollowers: latestFollowerPoint?.followers ?? 0,
       followerGrowth,
@@ -344,6 +368,7 @@ export function InstagramDashboardView({ data }: Props) {
       totalReels: filteredReels.length,
       totalStories: filteredStories.length,
       lineRegistrations,
+      linkClicks,
     };
   }, [data, dateRange, filteredReels, filteredStories]);
 
@@ -419,7 +444,7 @@ export function InstagramDashboardView({ data }: Props) {
         <>
           <Card className="p-6">
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">アカウント概要</h2>
-            <div className="mt-4 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">フォロワー</p>
                 <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
@@ -440,6 +465,13 @@ export function InstagramDashboardView({ data }: Props) {
                 <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">エンゲージメント</p>
                 <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
                   {summary.latestEngagement.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">期間内合計</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">リンククリック数</p>
+                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
+                  {summary.linkClicks !== null ? summary.linkClicks.toLocaleString() : '—'}
                 </p>
                 <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">期間内合計</p>
               </div>
@@ -465,22 +497,32 @@ export function InstagramDashboardView({ data }: Props) {
               </span>
             </div>
             <div className="mt-4 h-72">
-              {data.followerSeries.length > 0 ? (
+              {followerSeriesWithDelta.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={data.followerSeries.slice().reverse()} margin={{ top: 12, right: 20, left: 24, bottom: 12 }}>
+                  <ComposedChart data={followerSeriesWithDelta} margin={{ top: 12, right: 60, left: 60, bottom: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={{ stroke: '#D1D5DB' }} />
                     <YAxis
                       yAxisId="left"
+                      domain={[0, 'auto']}
                       tick={{ fontSize: 12, fill: '#6B7280' }}
                       axisLine={{ stroke: '#D1D5DB' }}
                       tickFormatter={(value) => value.toLocaleString()}
+                      label={{ value: 'リーチ', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6B7280' } }}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      domain={[0, 'auto']}
+                      tick={{ fontSize: 12, fill: '#6B7280' }}
+                      axisLine={{ stroke: '#D1D5DB' }}
+                      tickFormatter={(value) => value.toLocaleString()}
+                      label={{ value: 'フォロワー増加数', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6B7280' } }}
                     />
                     <Tooltip />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="followers" fill="#8B5CF6" name="フォロワー" />
+                    <Bar yAxisId="right" dataKey="followerDelta" fill="#8B5CF6" name="フォロワー増加数" />
                     <Line yAxisId="left" type="monotone" dataKey="reach" stroke="#10B981" name="リーチ" strokeWidth={2} />
-                    <Line yAxisId="left" type="monotone" dataKey="engagement" stroke="#F59E0B" name="エンゲージメント" strokeWidth={2} />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
