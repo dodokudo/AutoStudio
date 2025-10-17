@@ -4,7 +4,7 @@ const path = require('path');
 
 const ACCOUNT_MAP = {
   monoguchi: '門口 拓也',
-  sugi: 'すぎさん｜インスタアカウント設計士',
+  sugi: 'すぎさん',
 };
 const LOOKBACK_DAYS = 30;
 
@@ -126,9 +126,9 @@ function buildCombinedChart(dailySummary) {
   const hasPositive = maxGain > 0;
   const totalDeltaRange = (hasPositive ? maxGain : 0) + (hasNegative ? maxLoss : 0) || 1;
 
-  const svgHeight = 260;
+  const svgHeight = 360;
   const svgWidth = Math.max(entries.length * 36 + 96, 440);
-  const margin = { top: 32, bottom: 52, left: 68, right: 68 };
+  const margin = { top: 32, bottom: 40, left: 68, right: 68 };
   const plotWidth = svgWidth - margin.left - margin.right;
   const plotHeight = svgHeight - margin.top - margin.bottom;
   const xStep = entries.length > 1 ? plotWidth / (entries.length - 1) : 0;
@@ -215,7 +215,7 @@ function buildCombinedChart(dailySummary) {
         <span>ライン：インプレッション（左軸）／バー：フォロワー増加数（右軸）</span>
       </header>
       <div class="combined-chart">
-        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="260">
+        <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="360">
           <defs>
             <linearGradient id="lineGrad" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stop-color="#60a5fa" />
