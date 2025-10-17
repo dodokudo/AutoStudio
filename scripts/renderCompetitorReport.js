@@ -370,6 +370,20 @@ async function renderReport(slug) {
   const followerEnd = lastFollowersEntry ? lastFollowersEntry.followers : followerStart;
   const followerNet = followerStart !== null && followerEnd !== null ? followerEnd - followerStart : aggregates.followerSummary.totalDelta || 0;
 
+  // 日別フォロワー増加数の統計
+  const dailyDeltas = dailySummary
+    .map((entry) => entry.delta || 0)
+    .filter((delta) => delta !== 0);
+  const avgDailyDelta = dailyDeltas.length > 0
+    ? dailyDeltas.reduce((sum, d) => sum + d, 0) / dailyDeltas.length
+    : 0;
+  const sortedDeltas = [...dailyDeltas].sort((a, b) => a - b);
+  const medianDailyDelta = sortedDeltas.length > 0
+    ? sortedDeltas.length % 2 === 0
+      ? (sortedDeltas[sortedDeltas.length / 2 - 1] + sortedDeltas[sortedDeltas.length / 2]) / 2
+      : sortedDeltas[Math.floor(sortedDeltas.length / 2)]
+    : 0;
+
   const highlights = (() => {
     const items = [];
     const topPost = topPosts[0];
@@ -426,6 +440,11 @@ async function renderReport(slug) {
         <strong>${formatNumber(followerNet)}</strong>
         <small>${formatNumber(followerStart || 0)} → ${formatNumber(followerEnd || 0)}</small>
       </article>
+      <article class="card">
+        <h3>日別フォロワー増加</h3>
+        <strong>${formatSignedNumber(avgDailyDelta)}</strong>
+        <small>平均 / 中央値 ${formatSignedNumber(medianDailyDelta)}</small>
+      </article>
     </section>
   `;
 
@@ -446,7 +465,7 @@ async function renderReport(slug) {
       .hero p { margin: 10px 0 0; opacity: 0.9; font-size: 0.95rem; }
       .container { max-width: 1080px; margin: 0 auto; padding: 32px 32px 64px; }
       h2 { margin: 48px 0 18px; font-size: 1.55rem; color: #0f172a; }
-      .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+      .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
       .card { background: #ffffff; border-radius: 14px; padding: 20px; border: 1px solid rgba(148, 163, 184, 0.25); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08); }
       .card h3 { margin: 0 0 6px; font-size: 0.92rem; color: #64748b; font-weight: 600; }
       .card strong { display: block; font-size: 1.75rem; color: #0f172a; letter-spacing: 0.01em; }
@@ -487,7 +506,7 @@ async function renderReport(slug) {
       .cta { margin-top: 52px; padding: 24px; border-radius: 16px; background: linear-gradient(120deg, rgba(37, 99, 235, 0.12), rgba(99, 102, 241, 0.18)); border: 1px solid rgba(99, 102, 241, 0.28); box-shadow: 0 16px 28px rgba(59, 130, 246, 0.16); }
       .cta p { margin: 0 0 12px; color: #1f2937; }
       .cta a { display: inline-block; padding: 10px 18px; border-radius: 10px; background: rgba(37, 99, 235, 0.14); color: #1d4ed8; text-decoration: none; font-weight: 600; }
-      @media (max-width: 1200px) {
+      @media (max-width: 1280px) {
         .stats-grid { grid-template-columns: repeat(3, 1fr); }
       }
       @media (max-width: 820px) {
