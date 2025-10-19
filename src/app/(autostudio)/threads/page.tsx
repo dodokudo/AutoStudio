@@ -411,6 +411,65 @@ export default async function ThreadsHome({
       },
     ];
 
+    const chartWindowStart = rangeStartDate;
+    const chartWindowEnd = rangeEndDate;
+
+    const sortedDailyMetrics = [...insightsActivity.dailyMetrics].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+
+    const filteredDailyMetrics = sortedDailyMetrics.filter((metric) => {
+      const metricDate = new Date(`${metric.date}T00:00:00Z`);
+      return metricDate.getTime() >= chartWindowStart.getTime() && metricDate.getTime() <= chartWindowEnd.getTime();
+    });
+
+    const dailyMetricsForChart = filteredDailyMetrics.length ? filteredDailyMetrics : sortedDailyMetrics;
+
+    const impressionsByDate = insightsActivity.posts.reduce<Record<string, number>>((acc, post) => {
+      const postedAt = new Date(post.postedAt);
+      if (Number.isNaN(postedAt.getTime())) return acc;
+      const dateKey = postedAt.toISOString().slice(0, 10);
+      acc[dateKey] = (acc[dateKey] ?? 0) + (Number(post.insights?.impressions ?? 0) || 0);
+      return acc;
+    }, {});
+
+    let performanceSeries = dailyMetricsForChart.map((metric, index) => {
+      const previousFollowers = index > 0 ? dailyMetricsForChart[index - 1].followers : metric.followers;
+      const rawFollowerDelta = index === 0 ? 0 : metric.followers - previousFollowers;
+      const followerDelta = rawFollowerDelta > 0 ? rawFollowerDelta : 0;
+      return {
+        date: metric.date,
+        impressions: impressionsByDate[metric.date] ?? 0,
+        followerDelta,
+      };
+    });
+
+    if (performanceSeries.length === 0) {
+      const impressionDates = Object.keys(impressionsByDate)
+        .filter((date) => {
+          const metricDate = new Date(`${date}T00:00:00Z`);
+          return metricDate.getTime() >= chartWindowStart.getTime() && metricDate.getTime() <= chartWindowEnd.getTime();
+        })
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+      performanceSeries = impressionDates.map((date) => ({
+        date,
+        impressions: impressionsByDate[date] ?? 0,
+        followerDelta: 0,
+      }));
+    }
+
+    const trimmedPerformanceSeries = performanceSeries.slice(-30);
+    const maxImpressionsValue = trimmedPerformanceSeries.reduce(
+      (max, item) => Math.max(max, item.impressions),
+      0,
+    );
+    const maxFollowerDeltaValue = trimmedPerformanceSeries.reduce(
+      (max, item) => Math.max(max, item.followerDelta),
+      0,
+    );
+
+
 
     const competitorHighlights: DisplayHighlight[] = (
       insights.competitorHighlights.length ? insights.competitorHighlights : FALLBACK_HIGHLIGHTS
@@ -479,6 +538,9 @@ export default async function ThreadsHome({
             planSummaries={planSummaries}
             templateOptions={templateOptions}
             recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
+            performanceSeries={trimmedPerformanceSeries}
+            maxImpressions={maxImpressionsValue}
+            maxFollowerDelta={maxFollowerDeltaValue}
           />
         ) : activeTab === 'insights' ? (
           <InsightsTab
