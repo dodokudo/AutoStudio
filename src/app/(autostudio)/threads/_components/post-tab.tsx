@@ -25,6 +25,13 @@ type PostTabProps = {
   planSummaries: ThreadPlanSummary[];
   templateOptions: TemplateOption[];
   recentLogs?: Array<Record<string, unknown>>;
+  performanceSeries?: Array<{
+    date: string;
+    impressions: number;
+    followerDelta: number;
+  }>;
+  maxImpressions?: number;
+  maxFollowerDelta?: number;
 };
 
 export function PostTab({
@@ -33,6 +40,9 @@ export function PostTab({
   planSummaries,
   templateOptions,
   recentLogs,
+  performanceSeries,
+  maxImpressions,
+  maxFollowerDelta,
 }: PostTabProps) {
   return (
     <div className="section-stack">
