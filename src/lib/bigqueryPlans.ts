@@ -263,8 +263,16 @@ export async function seedPlansIfNeeded() {
   console.log('[bigqueryPlans] No existing plans found, starting seeding process...');
   const insights = await getThreadsInsights(PROJECT_ID);
   const schedule = buildScheduleSlots(insights.meta.targetPostCount);
-  const now = new Date().toISOString();
-  const generationDate = now.slice(0, 10);
+  const now = new Date();
+  const generationDate = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(now)
+    .replace(/\//g, '-');
+  const nowIso = now.toISOString();
 
   console.log('[bigqueryPlans] Seeding insights:', {
     targetPostCount: insights.meta.targetPostCount,
@@ -306,8 +314,8 @@ export async function seedPlansIfNeeded() {
       status: 'draft' as PlanStatus,
       main_text: mainText,
       comments: JSON.stringify(comments),
-      created_at: now,
-      updated_at: now,
+      created_at: nowIso,
+      updated_at: nowIso,
     };
   });
 
@@ -327,8 +335,8 @@ export async function seedPlansIfNeeded() {
         status: 'draft' as PlanStatus,
         main_text: fallbackMessage,
         comments: JSON.stringify([]),
-        created_at: now,
-        updated_at: now,
+        created_at: nowIso,
+        updated_at: nowIso,
       });
     }
   }
