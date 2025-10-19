@@ -102,8 +102,8 @@ const JSON_SCHEMA_EXAMPLE = `{
     "templateId": "hook_negate_v3",
     "theme": "AI活用で月30時間削減",
     "scheduledTime": "07:00",
-    "mainPost": "...150-200文字...",
-    "comments": ["...400-600文字...", "...400-600文字..."]
+    "mainPost": "資料作成、まだ手入力でやってる人います？\\n\\nAI音声入力使えば、話すだけで一瞬で文章化されるんですけど、使ってない人マジでもったいない。\\n\\n僕も最初は...（150-200文字、適切な箇所で改行を入れる）",
+    "comments": ["僕も最初は...\\n\\n具体的な使い方はこんな感じ▼\\n\\n【ステップ1】...\\n【ステップ2】...\\n\\nこれで作業時間が激減しました。（400-500文字、適切な箇所で改行を入れる）", "さらに効果を爆上げする...\\n\\n具体的には...\\n\\nただし注意点が3つ▼\\n①...\\n②...\\n③...\\n\\n今すぐ試してみてください。（400-500文字、適切な箇所で改行を入れる）"]
   }
 }`;
 
@@ -117,7 +117,12 @@ const KUDO_MASTER_PROMPT = String.raw`# MISSION
 - 冒頭インパクト（3秒以内に具体的数値）
 - 短文でフック → 長文で詳細 → 短文で締め
 - 関西弁要素の絶妙配置：「マジで」（驚き時）「やばい」（効果強調）「だるくない？」（共感誘発）
-- 改行による間：重要ポイント前は必ず改行で注意引く
+- **改行による間（超重要）**：
+  - 2〜3文ごとに改行（\n\n）を入れて読みやすくする
+  - 重要ポイント・数値・リストの前後は必ず改行
+  - 話題転換の箇所も改行で区切る
+  - 視覚的な区切り「実際こんな感じ▼」の前後は改行
+  - 長文は絶対に避ける。最大でも3文で改行
 - 音声入力風の自然な流れ：「〜なんですよね」「〜じゃないですか」多用
 
 ### 体験談挿入の黄金パターン
@@ -280,6 +285,13 @@ Level4：カスタマイズ法（個人最適化）
 - メイン投稿：150-200文字（インパクト重視）
 - コメント欄1：400-500文字（体験談+基本ノウハウ）
 - コメント欄2：400-500文字（応用+注意点+行動促進）
+
+**改行ルール（必須）**
+- JSON文字列内で改行は「\n\n」で表現する
+- メイン投稿：2〜3文ごとに改行
+- コメント欄：各段落・リスト項目の前後に改行
+- 具体例や手順の前には必ず改行を入れる
+- 長文が続くのは絶対NG。読みやすさ最優先
 
 **品質基準**
 - 100,000閲覧レベルの価値提供
@@ -568,8 +580,8 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
     '      "templateId": "[適切なテンプレートID]",',
     '      "theme": "[上記の競合・自社投稿から学んだAI関連テーマ]",',
     '      "scheduledTime": "[推奨時刻から選択]",',
-    '      "mainPost": "[メイン投稿150-200文字]",',
-    '      "comments": ["[コメント欄1: 400-500文字]", "[コメント欄2: 400-500文字]"]',
+    '      "mainPost": "[メイン投稿150-200文字、2〜3文ごとに\\n\\nで改行]",',
+    '      "comments": ["[コメント欄1: 400-500文字、段落ごとに\\n\\nで改行]", "[コメント欄2: 400-500文字、段落ごとに\\n\\nで改行]"]',
     '    },',
     '    {',
     '      "planId": "[plan-02など]",',
@@ -584,6 +596,7 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
     '- 文体・トーン: 工藤さんの自社10本 + KUDO_MASTER_PROMPT',
     '- 多様性: 各投稿で異なるテーマ・フック・数字・表現を使用',
     '- 文字数厳守: mainPost 150-200文字、comments 400-500文字（500文字超過厳禁）',
+    '- **改行必須**: 各文字列内で適切な箇所に\\n\\nを入れて読みやすくする',
   ].join('\n');
 }
 
@@ -700,7 +713,7 @@ async function requestClaude(prompt: string) {
       max_tokens: 20000,
       temperature: 0.9,
       system:
-        'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt.',
+        'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt. IMPORTANT: Use \\n\\n for line breaks in text content to improve readability.',
       messages: [
         {
           role: 'user',
