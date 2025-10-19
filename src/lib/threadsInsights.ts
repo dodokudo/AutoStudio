@@ -55,7 +55,7 @@ export async function getThreadsInsights(
     endDate: options.endDate,
   });
 
-  return {
+  const result = {
     meta: payload.meta,
     accountSummary: payload.accountSummary,
     topSelfPosts: payload.topSelfPosts,
