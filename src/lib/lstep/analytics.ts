@@ -481,36 +481,36 @@ async function getAttributeAnalysis(
   datasetId: string,
   snapshotDate: string,
 ): Promise<AttributeAnalysis> {
-  // 年齢層
+  // 年齢層（アンケート完了者のみ）
   const ageRows = await runQuery<{ age_group: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '20代' AS age_group,
-        SUM(\`20s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`20s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '30代' AS age_group,
-        SUM(\`30s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`30s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '40代' AS age_group,
-        SUM(\`40s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`40s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '50代' AS age_group,
-        SUM(\`50s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`50s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '60代' AS age_group,
-        SUM(\`60s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`60s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       ORDER BY age_group
@@ -525,36 +525,36 @@ async function getAttributeAnalysis(
     percent: totalAge > 0 ? (Number(row.count) / totalAge) * 100 : 0,
   }));
 
-  // 職業
+  // 職業（アンケート完了者のみ）
   const jobRows = await runQuery<{ job_type: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '会社員' AS job_type,
-        SUM(job_employee) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_employee = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         'フリーランス' AS job_type,
-        SUM(job_freelance) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_freelance = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '経営者' AS job_type,
-        SUM(job_business_owner) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_business_owner = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '主婦' AS job_type,
-        SUM(job_housewife) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_housewife = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '学生' AS job_type,
-        SUM(job_student) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_student = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
     `,
@@ -568,48 +568,48 @@ async function getAttributeAnalysis(
     percent: totalJob > 0 ? (Number(row.count) / totalJob) * 100 : 0,
   }));
 
-  // 現在の売上
+  // 現在の売上（アンケート完了者のみ）
   const revenueRows = await runQuery<{ revenue_range: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '0円' AS revenue_range,
-        SUM(revenue_m0yen) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m0yen = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '1-10万' AS revenue_range,
-        SUM(revenue_m1to10man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m1to10man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '10-50万' AS revenue_range,
-        SUM(revenue_m10to50man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m10to50man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '50-100万' AS revenue_range,
-        SUM(revenue_m50to100man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m50to100man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '100-500万' AS revenue_range,
-        SUM(revenue_m100to500man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m100to500man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '500-1000万' AS revenue_range,
-        SUM(revenue_m500to1000man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m500to1000man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '1000万over' AS revenue_range,
-        SUM(revenue_m1000manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m1000manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
     `,
@@ -623,42 +623,42 @@ async function getAttributeAnalysis(
     percent: totalRevenue > 0 ? (Number(row.count) / totalRevenue) * 100 : 0,
   }));
 
-  // 目標売上
+  // 目標売上（アンケート完了者のみ）
   const goalRows = await runQuery<{ goal_range: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '10万over' AS goal_range,
-        SUM(goal_m10manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m10manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '50万over' AS goal_range,
-        SUM(goal_m50manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m50manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '100万over' AS goal_range,
-        SUM(goal_m100manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m100manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '300万over' AS goal_range,
-        SUM(goal_m300manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m300manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '500万over' AS goal_range,
-        SUM(goal_m500manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m500manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
       UNION ALL
       SELECT
         '1000万over' AS goal_range,
-        SUM(goal_m1000manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m1000manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
     `,
@@ -695,12 +695,12 @@ async function getAttributeAnalysisByDateRange(
     ? 'AND DATE(friend_added_at) BETWEEN @startDate AND @endDate'
     : '';
 
-  // 年齢層
+  // 年齢層（アンケート完了者のみ、期間指定）
   const ageRows = await runQuery<{ age_group: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '20代' AS age_group,
-        SUM(\`20s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`20s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -708,7 +708,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '30代' AS age_group,
-        SUM(\`30s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`30s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -716,7 +716,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '40代' AS age_group,
-        SUM(\`40s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`40s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -724,7 +724,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '50代' AS age_group,
-        SUM(\`50s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`50s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -732,7 +732,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '60代' AS age_group,
-        SUM(\`60s\`) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND \`60s\` = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -749,12 +749,12 @@ async function getAttributeAnalysisByDateRange(
     percent: totalAge > 0 ? (Number(row.count) / totalAge) * 100 : 0,
   }));
 
-  // 職業
+  // 職業（アンケート完了者のみ、期間指定）
   const jobRows = await runQuery<{ job_type: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '会社員' AS job_type,
-        SUM(job_employee) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_employee = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -762,7 +762,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         'フリーランス' AS job_type,
-        SUM(job_freelance) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_freelance = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -770,7 +770,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '経営者' AS job_type,
-        SUM(job_business_owner) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_business_owner = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -778,7 +778,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '主婦' AS job_type,
-        SUM(job_housewife) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_housewife = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -786,7 +786,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '学生' AS job_type,
-        SUM(job_student) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND job_student = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -802,12 +802,12 @@ async function getAttributeAnalysisByDateRange(
     percent: totalJob > 0 ? (Number(row.count) / totalJob) * 100 : 0,
   }));
 
-  // 現在の売上
+  // 現在の売上（アンケート完了者のみ、期間指定）
   const revenueRows = await runQuery<{ revenue_range: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '0円' AS revenue_range,
-        SUM(revenue_m0yen) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m0yen = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -815,7 +815,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '1-10万' AS revenue_range,
-        SUM(revenue_m1to10man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m1to10man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -823,7 +823,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '10-50万' AS revenue_range,
-        SUM(revenue_m10to50man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m10to50man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -831,7 +831,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '50-100万' AS revenue_range,
-        SUM(revenue_m50to100man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m50to100man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -839,7 +839,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '100-500万' AS revenue_range,
-        SUM(revenue_m100to500man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m100to500man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -847,7 +847,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '500-1000万' AS revenue_range,
-        SUM(revenue_m500to1000man) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m500to1000man = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -855,7 +855,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '1000万over' AS revenue_range,
-        SUM(revenue_m1000manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND revenue_m1000manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -871,12 +871,12 @@ async function getAttributeAnalysisByDateRange(
     percent: totalRevenue > 0 ? (Number(row.count) / totalRevenue) * 100 : 0,
   }));
 
-  // 目標売上
+  // 目標売上（アンケート完了者のみ、期間指定）
   const goalRows = await runQuery<{ goal_range: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
         '10万over' AS goal_range,
-        SUM(goal_m10manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m10manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -884,7 +884,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '50万over' AS goal_range,
-        SUM(goal_m50manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m50manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -892,7 +892,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '100万over' AS goal_range,
-        SUM(goal_m100manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m100manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -900,7 +900,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '300万over' AS goal_range,
-        SUM(goal_m300manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m300manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -908,7 +908,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '500万over' AS goal_range,
-        SUM(goal_m500manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m500manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
@@ -916,7 +916,7 @@ async function getAttributeAnalysisByDateRange(
       UNION ALL
       SELECT
         '1000万over' AS goal_range,
-        SUM(goal_m1000manover) AS count
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND goal_m1000manover = 1 THEN id END) AS count
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL

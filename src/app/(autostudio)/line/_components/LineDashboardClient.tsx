@@ -251,26 +251,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       surveyCompletedCVR: surveyEnteredEstimate > 0 ? (surveyCompletedValue / surveyEnteredEstimate) * 100 : 0,
     };
 
-    const scaleAttributeCount = (count: number) => Math.round(count * registrationRatio);
-
-    const attributes = {
-      age: initialData.attributes.age.map((item) => ({
-        ...item,
-        count: dateRange === 'all' ? item.count : scaleAttributeCount(item.count),
-      })),
-      job: initialData.attributes.job.map((item) => ({
-        ...item,
-        count: dateRange === 'all' ? item.count : scaleAttributeCount(item.count),
-      })),
-      currentRevenue: initialData.attributes.currentRevenue.map((item) => ({
-        ...item,
-        count: dateRange === 'all' ? item.count : scaleAttributeCount(item.count),
-      })),
-      goalRevenue: initialData.attributes.goalRevenue.map((item) => ({
-        ...item,
-        count: dateRange === 'all' ? item.count : scaleAttributeCount(item.count),
-      })),
-    };
+    const attributes = initialData.attributes;
 
     return {
       ...initialData,
