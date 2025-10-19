@@ -135,7 +135,7 @@ export function PostTab({
                 <Tooltip
                   formatter={(value, name) => [
                     numberFormatter.format(value as number),
-                    name === 'impressions' ? 'インプレッション' : 'フォロワー増加',
+                    name,
                   ]}
                   labelFormatter={(_, payload) => {
                     const originalDate = payload?.[0]?.payload?.date;
