@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 import { dashboardCardClass } from '@/components/dashboard/styles';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 import type { LstepAnalyticsData } from '@/lib/lstep/analytics';
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
 
@@ -30,6 +31,13 @@ const LINE_TABS = [
 ] as const;
 
 type LineTabKey = (typeof LINE_TABS)[number]['id'];
+
+const LINE_TAB_SKELETON_SECTIONS: Record<LineTabKey, number> = {
+  main: 3,
+  funnel: 2,
+};
+
+const TAB_SKELETON_DELAY_MS = 240;
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 const percentFormatter = new Intl.NumberFormat('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -99,6 +107,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [sourcesLoading, setSourcesLoading] = useState(false);
   const [sourcesError, setSourcesError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LineTabKey>('main');
+  const [pendingTab, setPendingTab] = useState<LineTabKey | null>(null);
+  const [isTabLoading, setIsTabLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     let aborted = false;
@@ -181,6 +192,17 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       controller.abort();
     };
   }, [customEndDate, customStartDate, dateRange, initialData.sources]);
+
+  useEffect(() => {
+    if (!isPending && isTabLoading) {
+      const timer = window.setTimeout(() => {
+        setIsTabLoading(false);
+        setPendingTab(null);
+      }, TAB_SKELETON_DELAY_MS);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [isPending, isTabLoading]);
 
   const filteredAnalytics = useMemo(() => {
     let dailyDataInRange = initialData.dailyRegistrations;
@@ -368,13 +390,23 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     setDateRange('custom');
   };
 
+  const currentTabForSkeleton: LineTabKey = pendingTab ?? activeTab;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <DashboardTabsInteractive
           items={LINE_TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
           value={activeTab}
-          onChange={(next) => setActiveTab(next as LineTabKey)}
+          onChange={(next) => {
+            if (next === activeTab) return;
+            const nextTab = next as LineTabKey;
+            setPendingTab(nextTab);
+            setIsTabLoading(true);
+            startTransition(() => {
+              setActiveTab(nextTab);
+            });
+          }}
           className="flex-1 min-w-[240px]"
         />
         <DashboardDateRangePicker
@@ -389,113 +421,119 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
         />
       </div>
 
-      {activeTab === 'main' ? (
-        <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {summaryCards.map((card) => (
-              <Card key={card.label} className={dashboardCardClass}>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
-                <p className="mt-3 text-xl font-semibold text-[color:var(--color-text-primary)]">{card.primary}</p>
-                {card.secondary ? (
-                  <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.secondary}</p>
-                ) : null}
+      {isTabLoading ? (
+        <PageSkeleton sections={LINE_TAB_SKELETON_SECTIONS[currentTabForSkeleton]} showFilters={false} />
+      ) : (
+        <>
+          {activeTab === 'main' ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {summaryCards.map((card) => (
+                  <Card key={card.label} className={dashboardCardClass}>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
+                    <p className="mt-3 text-xl font-semibold text-[color:var(--color-text-primary)]">{card.primary}</p>
+                    {card.secondary ? (
+                      <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.secondary}</p>
+                    ) : null}
+                  </Card>
+                ))}
+              </div>
+
+              <Card className="p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日別登録数</h2>
+                    <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                      LSTEPの登録数とアンケート完了数を日別に確認できます。
+                    </p>
+                  </div>
+                  <span className="text-xs text-[color:var(--color-text-muted)]">
+                    直近 {filteredAnalytics.dailyRegistrations.length} 日
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
+                </div>
               </Card>
-            ))}
-          </div>
 
-          <Card className="p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日別登録数</h2>
-                <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                  LSTEPの登録数とアンケート完了数を日別に確認できます。
-                </p>
-              </div>
-              <span className="text-xs text-[color:var(--color-text-muted)]">
-                直近 {filteredAnalytics.dailyRegistrations.length} 日
-              </span>
-            </div>
-            <div className="mt-4">
-              <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">流入経路</h2>
-              {sourcesLoading ? (
-                <span className="text-xs text-[color:var(--color-text-muted)]">最新の流入データを取得しています…</span>
-              ) : null}
-            </div>
-            {sourcesError ? (
-              <p className="mt-3 text-xs text-[color:var(--color-danger)]">{sourcesError}</p>
-            ) : null}
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {sourceEntries.map((source) => (
-                <div
-                  key={source.key}
-                  className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 text-center shadow-[var(--shadow-soft)]"
-                >
-                  <p className="text-sm font-medium text-[color:var(--color-text-secondary)]">{source.label}</p>
-                  <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                    {formatNumber(source.count)}
-                  </p>
-                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{formatPercent(source.percent)}</p>
+              <Card className="p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">流入経路</h2>
+                  {sourcesLoading ? (
+                    <span className="text-xs text-[color:var(--color-text-muted)]">最新の流入データを取得しています…</span>
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">属性分析</h2>
-            <div className="mt-6 grid gap-6 lg:grid-cols-2">
-              {attributeGroups.map((group) => (
-                <div key={group.title} className="space-y-3">
-                  <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{group.title}</h3>
-                  {group.items.length === 0 ? (
-                    <p className="text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
-                  ) : (
-                    group.items.map((item) => (
-                      <div key={item.label} className="flex items-center gap-3">
-                        <div className="w-28 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
-                        <div className="flex-1 h-6 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)]">
-                          <div
-                            className="h-full rounded-[var(--radius-sm)] bg-[color:var(--color-accent)] transition-all duration-300"
-                            style={{ width: `${Math.min(100, Math.max(0, item.percent))}%` }}
-                          />
-                        </div>
-                        <div className="min-w-[110px] text-right text-xs text-[color:var(--color-text-secondary)]">
-                          {formatNumber(item.count)}人 ({formatPercent(item.percent)})
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      ) : null}
-
-      {activeTab === 'funnel' ? (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル分析</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {funnelCards.map((card) => (
-              <div
-                key={card.label}
-                className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-soft)]"
-              >
-                <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">{card.label}</p>
-                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
-                {card.helper ? (
-                  <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{card.helper}</p>
+                {sourcesError ? (
+                  <p className="mt-3 text-xs text-[color:var(--color-danger)]">{sourcesError}</p>
                 ) : null}
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  {sourceEntries.map((source) => (
+                    <div
+                      key={source.key}
+                      className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 text-center shadow-[var(--shadow-soft)]"
+                    >
+                      <p className="text-sm font-medium text-[color:var(--color-text-secondary)]">{source.label}</p>
+                      <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
+                        {formatNumber(source.count)}
+                      </p>
+                      <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{formatPercent(source.percent)}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">属性分析</h2>
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  {attributeGroups.map((group) => (
+                    <div key={group.title} className="space-y-3">
+                      <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{group.title}</h3>
+                      {group.items.length === 0 ? (
+                        <p className="text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
+                      ) : (
+                        group.items.map((item) => (
+                          <div key={item.label} className="flex items-center gap-3">
+                            <div className="w-28 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
+                            <div className="flex-1 h-6 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)]">
+                              <div
+                                className="h-full rounded-[var(--radius-sm)] bg-[color:var(--color-accent)] transition-all duration-300"
+                                style={{ width: `${Math.min(100, Math.max(0, item.percent))}%` }}
+                              />
+                            </div>
+                            <div className="min-w-[110px] text-right text-xs text-[color:var(--color-text-secondary)]">
+                              {formatNumber(item.count)}人 ({formatPercent(item.percent)})
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          ) : null}
+
+          {activeTab === 'funnel' ? (
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル分析</h2>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {funnelCards.map((card) => (
+                  <div
+                    key={card.label}
+                    className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-soft)]"
+                  >
+                    <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">{card.label}</p>
+                    <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
+                    {card.helper ? (
+                      <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{card.helper}</p>
+                    ) : null}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
+            </Card>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

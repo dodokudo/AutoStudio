@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import type { InstagramDashboardData } from '@/lib/instagram/dashboard';
 import LoadingScreen from '@/components/LoadingScreen';
 import { useDateRange, DatePreset } from '@/lib/dateRangeStore';
@@ -19,10 +19,22 @@ import {
 } from 'recharts';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 
 interface Props {
   data: InstagramDashboardData;
 }
+
+type InstagramTabKey = 'dashboard' | 'reels' | 'stories' | 'scripts';
+
+const TAB_SKELETON_SECTIONS: Record<InstagramTabKey, number> = {
+  dashboard: 4,
+  reels: 3,
+  stories: 3,
+  scripts: 2,
+};
+
+const TAB_SKELETON_DELAY_MS = 240;
 
 const presetLabels: Record<DatePreset, string> = {
   yesterday: '昨日',
@@ -136,7 +148,10 @@ const resolveMediaUrl = (...urls: Array<string | null | undefined>): string | nu
 
 export function InstagramDashboardView({ data }: Props) {
   const { dateRange, updatePreset } = useDateRange();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'reels' | 'stories' | 'scripts'>('dashboard');
+  const [activeTab, setActiveTab] = useState<InstagramTabKey>('dashboard');
+  const [pendingTab, setPendingTab] = useState<InstagramTabKey | null>(null);
+  const [isTabLoading, setIsTabLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [customStartDate, setCustomStartDate] = useState(() => formatDateForInput(dateRange.start));
   const [customEndDate, setCustomEndDate] = useState(() => formatDateForInput(dateRange.end));
   const [mounted, setMounted] = useState(false);
@@ -153,6 +168,17 @@ export function InstagramDashboardView({ data }: Props) {
     setCustomStartDate(formatDateForInput(dateRange.start));
     setCustomEndDate(formatDateForInput(dateRange.end));
   }, [dateRange.start, dateRange.end, dateRange.preset]);
+
+  useEffect(() => {
+    if (!isPending && isTabLoading) {
+      const timer = window.setTimeout(() => {
+        setIsTabLoading(false);
+        setPendingTab(null);
+      }, TAB_SKELETON_DELAY_MS);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [isPending, isTabLoading]);
 
   const filteredReels = useMemo(() => {
     if (dateRange.preset === 'all') return data.reels;
@@ -416,6 +442,8 @@ export function InstagramDashboardView({ data }: Props) {
 
   const latestLabel = dateRange.preset === 'custom' ? rangeSummary : undefined;
 
+  const currentTabForSkeleton: InstagramTabKey = pendingTab ?? activeTab;
+
   if (!mounted) {
     return <LoadingScreen />;
   }
@@ -426,7 +454,15 @@ export function InstagramDashboardView({ data }: Props) {
         <DashboardTabsInteractive
           items={tabItems.map((tab) => ({ id: tab.value, label: tab.label }))}
           value={activeTab}
-          onChange={(next) => setActiveTab(next as typeof activeTab)}
+          onChange={(next) => {
+            if (next === activeTab) return;
+            const nextTab = next as InstagramTabKey;
+            setPendingTab(nextTab);
+            setIsTabLoading(true);
+            startTransition(() => {
+              setActiveTab(nextTab);
+            });
+          }}
         />
         <DashboardDateRangePicker
           options={datePickerOptions}
@@ -440,6 +476,10 @@ export function InstagramDashboardView({ data }: Props) {
         />
       </div>
 
+      {isTabLoading ? (
+        <PageSkeleton sections={TAB_SKELETON_SECTIONS[currentTabForSkeleton]} showFilters={false} />
+      ) : (
+        <>
       {activeTab === 'dashboard' && (
         <>
           <Card className="p-6">
@@ -874,7 +914,8 @@ export function InstagramDashboardView({ data }: Props) {
           )}
         </Card>
       )}
-
+        </>
+      )}
     </div>
   );
 }

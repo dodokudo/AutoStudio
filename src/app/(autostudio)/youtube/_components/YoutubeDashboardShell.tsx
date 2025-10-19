@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Table } from '@/components/ui/table';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
@@ -43,6 +44,14 @@ const TABS: { id: TabKey; label: string }[] = [
   { id: 'own', label: '自社データ' },
   { id: 'competitors', label: '競合データ' },
 ];
+
+const TAB_SKELETON_SECTIONS: Record<TabKey, number> = {
+  own: 3,
+  scripts: 2,
+  competitors: 2,
+};
+
+const TAB_SKELETON_DELAY_MS = 240;
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 const percentFormatter = new Intl.NumberFormat('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -94,6 +103,9 @@ export function YoutubeDashboardShell({
   lineRegistrationCount,
 }: YoutubeDashboardShellProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('own');
+  const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
+  const [isTabLoading, setIsTabLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [selectedRange, setSelectedRange] = useState<string>('7d');
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(topVideos[0]?.videoId ?? null);
 
@@ -104,6 +116,17 @@ export function YoutubeDashboardShell({
     }
     setSelectedVideoId((current) => current ?? topVideos[0]?.videoId ?? null);
   }, [topVideos]);
+
+  useEffect(() => {
+    if (!isPending && isTabLoading) {
+      const timer = window.setTimeout(() => {
+        setIsTabLoading(false);
+        setPendingTab(null);
+      }, TAB_SKELETON_DELAY_MS);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [isPending, isTabLoading]);
 
   const selectedVideo = selectedVideoId ? topVideos.find((video) => video.videoId === selectedVideoId) : undefined;
 
@@ -513,13 +536,23 @@ export function YoutubeDashboardShell({
     </div>
   );
 
+  const currentTabForSkeleton: TabKey = pendingTab ?? activeTab;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <DashboardTabsInteractive
           items={TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
           value={activeTab}
-          onChange={(next) => setActiveTab(next as TabKey)}
+          onChange={(next) => {
+            if (next === activeTab) return;
+            const nextTab = next as TabKey;
+            setPendingTab(nextTab);
+            setIsTabLoading(true);
+            startTransition(() => {
+              setActiveTab(nextTab);
+            });
+          }}
           className="flex-1 min-w-[240px]"
         />
         <DashboardDateRangePicker
@@ -531,9 +564,15 @@ export function YoutubeDashboardShell({
         />
       </div>
 
-      {activeTab === 'own' ? ownTabContent : null}
-      {activeTab === 'scripts' ? scriptTabContent : null}
-      {activeTab === 'competitors' ? competitorTabContent : null}
+      {isTabLoading ? (
+        <PageSkeleton sections={TAB_SKELETON_SECTIONS[currentTabForSkeleton]} showFilters={false} />
+      ) : (
+        <>
+          {activeTab === 'own' ? ownTabContent : null}
+          {activeTab === 'scripts' ? scriptTabContent : null}
+          {activeTab === 'competitors' ? competitorTabContent : null}
+        </>
+      )}
     </div>
   );
 }

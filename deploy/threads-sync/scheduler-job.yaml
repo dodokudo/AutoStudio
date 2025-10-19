@@ -1,4 +1,4 @@
-schedule: '0 7 * * *'
+schedule: '10 3 * * *'
 timeZone: 'Asia/Tokyo'
 httpTarget:
   uri: https://REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/PROJECT_ID/services/autostudio-threads-sync:run
