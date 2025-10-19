@@ -210,8 +210,8 @@ async function getFunnelAnalysis(
     query: `
       SELECT
         COUNT(DISTINCT id) AS total_users,
-        SUM(survey_form_inflow) AS survey_entered,
-        SUM(survey_completed) AS survey_completed
+        COUNT(DISTINCT CASE WHEN survey_form_inflow = 1 THEN id END) AS survey_entered,
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END) AS survey_completed
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
     `,
@@ -254,8 +254,8 @@ async function getFunnelAnalysisByDateRange(
     query: `
       SELECT
         COUNT(DISTINCT id) AS total_users,
-        SUM(survey_form_inflow) AS survey_entered,
-        SUM(survey_completed) AS survey_completed
+        COUNT(DISTINCT CASE WHEN survey_form_inflow = 1 THEN id END) AS survey_entered,
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END) AS survey_completed
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
