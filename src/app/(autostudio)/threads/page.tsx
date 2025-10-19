@@ -6,11 +6,11 @@ import { resolveProjectId } from "@/lib/bigquery";
 import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { CompetitorTab } from "./_components/competitor-tab";
-import { DashboardTabs } from '@/components/dashboard/DashboardTabs';
-import { InsightsRangeSelector } from './_components/insights-range-selector';
+import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getThreadsLinkClicksByRange } from "@/lib/links/analytics";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
+import { ThreadsTabShell } from "./_components/threads-tab-shell";
 
 const PROJECT_ID = resolveProjectId();
 
@@ -460,18 +460,18 @@ export default async function ThreadsHome({
     });
 
     return (
-      <div className="section-stack">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <DashboardTabs items={tabItems} value={activeTab} className="flex-1 min-w-[240px]" />
+      <ThreadsTabShell
+        tabItems={tabItems}
+        activeTab={activeTab}
+        rangeSelector={
           <InsightsRangeSelector
             options={rangeSelectorOptions}
             value={selectedRangeValue}
             customStart={customStart}
             customEnd={customEnd}
           />
-        </div>
-
-        {/* Tab Content */}
+        }
+      >
         {activeTab === 'post' ? (
           <PostTab
             stats={stats}
@@ -494,7 +494,7 @@ export default async function ThreadsHome({
         ) : (
           <CompetitorTab highlights={competitorHighlights} trendingTopics={trendingTopics} />
         )}
-      </div>
+      </ThreadsTabShell>
     );
   } catch (error) {
     console.error('[threads/page] Error occurred:', error);
