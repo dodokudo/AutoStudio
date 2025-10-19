@@ -41,19 +41,27 @@ export function InsightsRangeSelector({ options, value, customStart, customEnd }
   };
 
   const handleCustomChange = (start: string, end: string) => {
-    if (!isValidDate(start) || !isValidDate(end)) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('range', 'custom');
 
     let normalizedStart = start;
     let normalizedEnd = end;
-    if (start && end && start > end) {
+    if (isValidDate(start) && isValidDate(end) && start > end) {
       normalizedStart = end;
       normalizedEnd = start;
     }
 
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('range', 'custom');
-    params.set('start', normalizedStart);
-    params.set('end', normalizedEnd);
+    if (isValidDate(normalizedStart)) {
+      params.set('start', normalizedStart);
+    } else {
+      params.delete('start');
+    }
+    if (isValidDate(normalizedEnd)) {
+      params.set('end', normalizedEnd);
+    } else {
+      params.delete('end');
+    }
+
     updateQuery(params);
   };
 

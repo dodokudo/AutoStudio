@@ -31,6 +31,12 @@ export interface ThreadsInsightsActivity {
 const client: BigQuery = createBigQueryClient(PROJECT_ID);
 let cachedActivity: ThreadsInsightsActivity | null = null;
 let cachedFetchedAt = 0;
+let cachedOptionKey = '';
+
+export interface ThreadsInsightsDataOptions {
+  startDate?: string;
+  endDate?: string;
+}
 
 function toPlain(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -65,29 +71,55 @@ function toDateOnly(value: string): string {
   return value.slice(0, 10);
 }
 
-export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity> {
+export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions = {}): Promise<ThreadsInsightsActivity> {
   const now = Date.now();
-  if (cachedActivity && now - cachedFetchedAt < CACHE_TTL_MS) {
+  const optionKey = JSON.stringify({
+    startDate: options.startDate ?? null,
+    endDate: options.endDate ?? null,
+  });
+  if (cachedActivity && now - cachedFetchedAt < CACHE_TTL_MS && cachedOptionKey === optionKey) {
     return cachedActivity;
   }
 
   let posts: PostInsight[] = [];
   try {
+    const queryConditions: string[] = [
+      'post_id IS NOT NULL',
+      "post_id != ''",
+    ];
+    const params: Record<string, unknown> = {};
+    if (options.startDate) {
+      queryConditions.push('DATE(posted_at) >= @startDate');
+      params.startDate = options.startDate;
+    }
+    if (options.endDate) {
+      queryConditions.push('DATE(posted_at) <= @endDate');
+      params.endDate = options.endDate;
+    }
+
+    let limitClause = '';
+    if (!options.startDate && !options.endDate) {
+      limitClause = 'LIMIT @limit';
+      params.limit = POSTS_LIMIT;
+    }
+
+    const query = `
+      SELECT
+        post_id,
+        posted_at,
+        updated_at,
+        content,
+        impressions_total,
+        likes_total
+      FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
+      WHERE ${queryConditions.join(' AND ')}
+      ORDER BY posted_at DESC NULLS LAST, updated_at DESC NULLS LAST
+      ${limitClause}
+    `;
+
     const [rows] = await client.query({
-      query: `
-        SELECT
-          post_id,
-          posted_at,
-          updated_at,
-          content,
-          impressions_total,
-          likes_total
-        FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
-        WHERE post_id IS NOT NULL AND post_id != ''
-        ORDER BY posted_at DESC NULLS LAST, updated_at DESC NULLS LAST
-        LIMIT @limit
-      `,
-      params: { limit: POSTS_LIMIT },
+      query,
+      params,
     });
 
     posts = rows
@@ -158,5 +190,6 @@ export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity>
     dailyMetrics,
   };
   cachedFetchedAt = now;
+  cachedOptionKey = optionKey;
   return cachedActivity;
 }

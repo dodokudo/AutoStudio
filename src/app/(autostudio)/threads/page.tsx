@@ -150,21 +150,27 @@ export default async function ThreadsHome({
 
   let insightsOptions: ThreadsInsightsOptions = { rangeDays: selectedPreset.days };
 
-  if (rangeParam === "custom" && customStart && customEnd) {
-    const parsedStart = new Date(`${customStart}T00:00:00Z`);
-    const parsedEnd = new Date(`${customEnd}T00:00:00Z`);
-    if (!Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime())) {
-      let normalizedStart = parsedStart;
-      let normalizedEnd = parsedEnd;
-      if (parsedStart > parsedEnd) {
-        normalizedStart = parsedEnd;
-        normalizedEnd = parsedStart;
+  if (rangeParam === "custom") {
+    selectedRangeValue = "custom";
+    if (customStart && customEnd) {
+      const parsedStart = new Date(`${customStart}T00:00:00Z`);
+      const parsedEnd = new Date(`${customEnd}T00:00:00Z`);
+      if (!Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime())) {
+        let normalizedStart = parsedStart;
+        let normalizedEnd = parsedEnd;
+        if (parsedStart > parsedEnd) {
+          normalizedStart = parsedEnd;
+          normalizedEnd = parsedStart;
+        }
+        customStart = normalizedStart.toISOString().slice(0, 10);
+        customEnd = normalizedEnd.toISOString().slice(0, 10);
+        insightsOptions = { startDate: customStart, endDate: customEnd };
+        noteText = `レポート期間: ${customStart} 〜 ${customEnd}`;
+      } else {
+        noteText = 'レポート期間: カスタム日付を正しく入力してください';
       }
-      customStart = normalizedStart.toISOString().slice(0, 10);
-      customEnd = normalizedEnd.toISOString().slice(0, 10);
-      insightsOptions = { startDate: customStart, endDate: customEnd };
-      selectedRangeValue = "custom";
-      noteText = `レポート期間: ${customStart} 〜 ${customEnd}`;
+    } else {
+      noteText = 'レポート期間: カスタム日付を入力してください';
     }
   }
 
@@ -196,6 +202,8 @@ export default async function ThreadsHome({
     const durationMs = Math.max(rangeEndDate.getTime() - rangeStartDate.getTime(), DAY_MS);
     const previousRangeEnd = new Date(rangeStartDate.getTime() - 1);
     const previousRangeStart = new Date(previousRangeEnd.getTime() - durationMs);
+    const postsQueryStartKey = formatDateKey(previousRangeStart);
+    const postsQueryEndKey = formatDateKey(rangeEndDate);
 
     const [insights, planSummaries, dashboard, insightsActivity, currentClicks, previousClicks] = await Promise.all([
       getThreadsInsights(PROJECT_ID, insightsOptions),
@@ -204,7 +212,10 @@ export default async function ThreadsHome({
         return listPlanSummaries();
       })(),
       getThreadsDashboard(),
-      getThreadsInsightsData(),
+      getThreadsInsightsData({
+        startDate: postsQueryStartKey,
+        endDate: postsQueryEndKey,
+      }),
       getThreadsLinkClicksByRange(rangeStartDate, rangeEndDate),
       getThreadsLinkClicksByRange(previousRangeStart, previousRangeEnd),
     ]);
