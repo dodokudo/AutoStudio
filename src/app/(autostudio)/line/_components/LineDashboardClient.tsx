@@ -106,6 +106,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [sourceStats, setSourceStats] = useState(initialData.sources);
   const [sourcesLoading, setSourcesLoading] = useState(false);
   const [sourcesError, setSourcesError] = useState<string | null>(null);
+  const [attributeStats, setAttributeStats] = useState(initialData.attributes);
+  const [attributesLoading, setAttributesLoading] = useState(false);
+  const [attributesError, setAttributesError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LineTabKey>('main');
   const [pendingTab, setPendingTab] = useState<LineTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
@@ -194,6 +197,69 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   }, [customEndDate, customStartDate, dateRange, initialData.sources]);
 
   useEffect(() => {
+    let aborted = false;
+
+    if (dateRange === 'all') {
+      setAttributeStats(initialData.attributes);
+      setAttributesLoading(false);
+      setAttributesError(null);
+      return () => {
+        aborted = true;
+      };
+    }
+
+    let range: { start: string; end: string } | null;
+    if (dateRange === 'custom') {
+      if (!customStartDate || !customEndDate) {
+        return () => {
+          aborted = true;
+        };
+      }
+      range = normalizeCustomRange(customStartDate, customEndDate);
+    } else {
+      range = calculatePresetRange(dateRange);
+    }
+
+    if (!range) {
+      return () => {
+        aborted = true;
+      };
+    }
+
+    const controller = new AbortController();
+    setAttributesLoading(true);
+    setAttributesError(null);
+
+    fetch(`/api/line/attributes?start=${range.start}&end=${range.end}`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch attributes (${response.status})`);
+        }
+        return response.json() as Promise<{
+          attributes: typeof initialData.attributes;
+        }>;
+      })
+      .then((data) => {
+        if (aborted) return;
+        setAttributeStats(data.attributes);
+      })
+      .catch((error) => {
+        if (aborted || error.name === 'AbortError') return;
+        setAttributesError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!aborted) {
+          setAttributesLoading(false);
+        }
+      });
+
+    return () => {
+      aborted = true;
+      controller.abort();
+    };
+  }, [customEndDate, customStartDate, dateRange, initialData.attributes]);
+
+  useEffect(() => {
     if (!isPending && isTabLoading) {
       const timer = window.setTimeout(() => {
         setIsTabLoading(false);
@@ -251,16 +317,14 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       surveyCompletedCVR: surveyEnteredEstimate > 0 ? (surveyCompletedValue / surveyEnteredEstimate) * 100 : 0,
     };
 
-    const attributes = initialData.attributes;
-
     return {
       ...initialData,
       funnel,
       dailyRegistrations: dailyDataInRange,
       sources: sourceStats,
-      attributes,
+      attributes: attributeStats,
     };
-  }, [customEndDate, customStartDate, dateRange, initialData, sourceStats]);
+  }, [customEndDate, customStartDate, dateRange, initialData, sourceStats, attributeStats]);
 
   const summaryCards = useMemo(() => {
     const days = filteredAnalytics.dailyRegistrations.length;
