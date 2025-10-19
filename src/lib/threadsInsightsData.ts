@@ -4,6 +4,8 @@ import type { ThreadInsights } from './threadsApi';
 
 const DATASET = 'autostudio_threads';
 const PROJECT_ID = resolveProjectId();
+const POSTS_LIMIT = 120;
+const CACHE_TTL_MS = 1000 * 60 * 5;
 
 export interface PostInsight {
   planId: string;
@@ -27,6 +29,8 @@ export interface ThreadsInsightsActivity {
 }
 
 const client: BigQuery = createBigQueryClient(PROJECT_ID);
+let cachedActivity: ThreadsInsightsActivity | null = null;
+let cachedFetchedAt = 0;
 
 function toPlain(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -62,7 +66,10 @@ function toDateOnly(value: string): string {
 }
 
 export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity> {
-  console.log('[threadsInsightsData] Fetching insights data from BigQuery (threads_posts + daily metrics)...');
+  const now = Date.now();
+  if (cachedActivity && now - cachedFetchedAt < CACHE_TTL_MS) {
+    return cachedActivity;
+  }
 
   let posts: PostInsight[] = [];
   try {
@@ -78,8 +85,9 @@ export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity>
         FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
         WHERE post_id IS NOT NULL AND post_id != ''
         ORDER BY posted_at DESC NULLS LAST, updated_at DESC NULLS LAST
-        LIMIT 300
+        LIMIT @limit
       `,
+      params: { limit: POSTS_LIMIT },
     });
 
     posts = rows
@@ -101,7 +109,7 @@ export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity>
           postedAt,
           templateId: 'unknown',
           theme: 'Threads投稿',
-          mainText: toPlain(row.content ?? ''),
+          mainText: toPlain(row.content ?? '').slice(0, 600),
           comments: [],
           insights: {
             impressions,
@@ -145,11 +153,10 @@ export async function getThreadsInsightsData(): Promise<ThreadsInsightsActivity>
     console.error('[threadsInsightsData] Failed to read threads_daily_metrics', error);
   }
 
-  console.log('[threadsInsightsData] Loaded posts:', posts.length);
-  console.log('[threadsInsightsData] Loaded daily metrics:', dailyMetrics.length);
-
-  return {
+  cachedActivity = {
     posts,
     dailyMetrics,
   };
+  cachedFetchedAt = now;
+  return cachedActivity;
 }
