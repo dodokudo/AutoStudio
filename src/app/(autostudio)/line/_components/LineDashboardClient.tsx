@@ -9,6 +9,8 @@ import { dashboardCardClass } from '@/components/dashboard/styles';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import type { LstepAnalyticsData } from '@/lib/lstep/analytics';
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
+import { FunnelAnalysis } from './FunnelAnalysis';
+import type { FunnelAnalysisResult } from '@/lib/lstep/funnel';
 
 interface LineDashboardClientProps {
   initialData: LstepAnalyticsData;
@@ -28,6 +30,7 @@ const RANGE_PRESETS: Array<{ id: Exclude<DateRangeFilter, 'custom'>; label: stri
 const LINE_TABS = [
   { id: 'main', label: 'メイン' },
   { id: 'funnel', label: 'ファネル分析' },
+  { id: 'custom_funnel', label: 'カスタムファネル' },
 ] as const;
 
 type LineTabKey = (typeof LINE_TABS)[number]['id'];
@@ -35,6 +38,7 @@ type LineTabKey = (typeof LINE_TABS)[number]['id'];
 const LINE_TAB_SKELETON_SECTIONS: Record<LineTabKey, number> = {
   main: 3,
   funnel: 2,
+  custom_funnel: 1,
 };
 
 const TAB_SKELETON_DELAY_MS = 240;
@@ -109,6 +113,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [attributeStats, setAttributeStats] = useState(initialData.attributes);
   const [attributesLoading, setAttributesLoading] = useState(false);
   const [attributesError, setAttributesError] = useState<string | null>(null);
+  const [funnelData, setFunnelData] = useState<FunnelAnalysisResult | null>(null);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+  const [funnelError, setFunnelError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LineTabKey>('main');
   const [pendingTab, setPendingTab] = useState<LineTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
@@ -258,6 +265,66 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       controller.abort();
     };
   }, [customEndDate, customStartDate, dateRange, initialData.attributes]);
+
+  useEffect(() => {
+    // custom_funnelタブがアクティブ、またはタブが切り替わった時のみフェッチ
+    if (activeTab !== 'custom_funnel') {
+      return () => {};
+    }
+
+    let aborted = false;
+    const controller = new AbortController();
+    setFunnelLoading(true);
+    setFunnelError(null);
+
+    let range: { start: string; end: string } | null = null;
+    if (dateRange === 'custom') {
+      if (customStartDate && customEndDate) {
+        range = normalizeCustomRange(customStartDate, customEndDate);
+      }
+    } else if (dateRange !== 'all') {
+      range = calculatePresetRange(dateRange);
+    }
+
+    const body = range
+      ? {
+          preset: 'igln',
+          startDate: range.start,
+          endDate: range.end,
+        }
+      : { preset: 'igln' };
+
+    fetch('/api/line/funnel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch funnel (${response.status})`);
+        }
+        return response.json() as Promise<FunnelAnalysisResult>;
+      })
+      .then((data) => {
+        if (aborted) return;
+        setFunnelData(data);
+      })
+      .catch((error) => {
+        if (aborted || error.name === 'AbortError') return;
+        setFunnelError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!aborted) {
+          setFunnelLoading(false);
+        }
+      });
+
+    return () => {
+      aborted = true;
+      controller.abort();
+    };
+  }, [activeTab, customEndDate, customStartDate, dateRange]);
 
   useEffect(() => {
     if (!isPending && isTabLoading) {
@@ -576,6 +643,32 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                 ))}
               </div>
             </Card>
+          ) : null}
+
+          {activeTab === 'custom_funnel' ? (
+            <div className="space-y-6">
+              {funnelLoading ? (
+                <Card className="p-6">
+                  <p className="text-sm text-[color:var(--color-text-secondary)]">
+                    ファネル分析データを読み込んでいます...
+                  </p>
+                </Card>
+              ) : funnelError ? (
+                <Card className="p-6">
+                  <p className="text-sm text-[color:var(--color-danger)]">
+                    エラーが発生しました: {funnelError}
+                  </p>
+                </Card>
+              ) : funnelData ? (
+                <FunnelAnalysis data={funnelData} />
+              ) : (
+                <Card className="p-6">
+                  <p className="text-sm text-[color:var(--color-text-secondary)]">
+                    ファネルデータがありません。
+                  </p>
+                </Card>
+              )}
+            </div>
           ) : null}
         </>
       )}
