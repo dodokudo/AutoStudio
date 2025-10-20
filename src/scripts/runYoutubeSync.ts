@@ -89,7 +89,7 @@ async function main() {
     const endDate = new Date();
     endDate.setDate(endDate.getDate() - 1);
     const startDate = new Date(endDate.getTime());
-    startDate.setDate(startDate.getDate() - 7);
+    startDate.setDate(startDate.getDate() - 30);
 
     const analyticsRows = await fetchYoutubeAnalytics(config, {
       startDate: startDate.toISOString().slice(0, 10),
