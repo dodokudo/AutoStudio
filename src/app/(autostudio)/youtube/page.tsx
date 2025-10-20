@@ -10,6 +10,7 @@ import { Banner } from '@/components/ui/banner';
 import { YoutubeDashboardShell } from './_components/YoutubeDashboardShell';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Allow up to 60 seconds for BigQuery queries
 
 export default async function YoutubeDashboardPage() {
   try {
