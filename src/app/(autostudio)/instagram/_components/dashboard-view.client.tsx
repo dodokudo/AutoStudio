@@ -257,17 +257,26 @@ export function InstagramDashboardView({ data }: Props) {
 
   const followerSeriesWithDelta = useMemo(() => {
     const sorted = [...data.followerSeries].sort((a, b) => a.date.localeCompare(b.date));
+
+    // LINE登録数データをマップに変換
+    const lineRegistrationMap = new Map<string, number>();
+    data.lineRegistrationSeries.forEach((point) => {
+      lineRegistrationMap.set(point.date, point.count);
+    });
+
     return sorted.map((point, index) => {
       const delta = index === 0
         ? 0
         : (point.followers ?? 0) - (sorted[index - 1].followers ?? 0);
       const followerDelta = Math.max(0, delta); // マイナスの場合は0にする
+      const lineRegistrations = lineRegistrationMap.get(point.date) ?? 0;
       return {
         ...point,
         followerDelta,
+        lineRegistrations,
       };
     });
-  }, [data.followerSeries]);
+  }, [data.followerSeries, data.lineRegistrationSeries]);
 
   const resolveFollowerCount = useCallback((timestamp?: string | null): number | null => {
     if (!timestamp) return null;
@@ -557,11 +566,12 @@ export function InstagramDashboardView({ data }: Props) {
                       tick={{ fontSize: 12, fill: '#6B7280' }}
                       axisLine={{ stroke: '#D1D5DB' }}
                       tickFormatter={(value) => value.toLocaleString()}
-                      label={{ value: 'フォロワー増加数', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6B7280' } }}
+                      label={{ value: 'フォロワー増加数 / LINE登録', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6B7280' } }}
                     />
                     <Tooltip />
                     <Legend />
                     <Bar yAxisId="right" dataKey="followerDelta" fill="#8B5CF6" name="フォロワー増加数" />
+                    <Bar yAxisId="right" dataKey="lineRegistrations" fill="#F59E0B" name="LINE登録数" />
                     <Line yAxisId="left" type="monotone" dataKey="reach" stroke="#10B981" name="リーチ" strokeWidth={2} />
                   </ComposedChart>
                 </ResponsiveContainer>

@@ -40,6 +40,7 @@ type PostTabProps = {
     date: string;
     impressions: number;
     followerDelta: number;
+    lineRegistrations?: number;
   }>;
   maxImpressions?: number;
   maxFollowerDelta?: number;
@@ -99,7 +100,7 @@ export function PostTab({
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">インプレッション & フォロワー推移</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              日別のインプレッション（折れ線）とフォロワー増加数（棒グラフ）を直近30日で確認できます。
+              日別のインプレッション（折れ線）、フォロワー増加数とLINE登録数（棒グラフ）を直近30日で確認できます。
             </p>
           </div>
         </div>
@@ -151,6 +152,14 @@ export function PostTab({
                   name="フォロワー増加"
                   fill="var(--color-accent)"
                   opacity={0.6}
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  yAxisId="right"
+                  dataKey="lineRegistrations"
+                  name="LINE登録数"
+                  fill="#F59E0B"
+                  opacity={0.7}
                   radius={[4, 4, 0, 0]}
                 />
                 <Line

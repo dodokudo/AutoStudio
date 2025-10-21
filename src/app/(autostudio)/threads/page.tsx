@@ -7,7 +7,7 @@ import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { CompetitorTab } from "./_components/competitor-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
-import { countLineSourceRegistrations } from "@/lib/lstep/dashboard";
+import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getThreadsLinkClicksByRange } from "@/lib/links/analytics";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
@@ -444,6 +444,22 @@ export default async function ThreadsHome({
       return acc;
     }, {});
 
+    // Threads経由のLINE登録数を日別で取得
+    let lineRegistrationsByDate: Record<string, number> = {};
+    try {
+      const lineRegistrationSeries = await listLineSourceRegistrations(PROJECT_ID, {
+        sourceName: 'Threads',
+        startDate: formatDateKey(chartWindowStart),
+        endDate: formatDateKey(chartWindowEnd),
+      });
+      lineRegistrationsByDate = lineRegistrationSeries.reduce<Record<string, number>>((acc, point) => {
+        acc[point.date] = point.count;
+        return acc;
+      }, {});
+    } catch (lineError) {
+      console.error('[threads/page] Failed to load LINE registration series:', lineError);
+    }
+
     let performanceSeries = dailyMetricsForChart.map((metric, index) => {
       const previousFollowers = index > 0 ? dailyMetricsForChart[index - 1].followers : metric.followers;
       const rawFollowerDelta = index === 0 ? 0 : metric.followers - previousFollowers;
@@ -452,6 +468,7 @@ export default async function ThreadsHome({
         date: metric.date,
         impressions: impressionsByDate[metric.date] ?? 0,
         followerDelta,
+        lineRegistrations: lineRegistrationsByDate[metric.date] ?? 0,
       };
     });
 
@@ -467,6 +484,7 @@ export default async function ThreadsHome({
         date,
         impressions: impressionsByDate[date] ?? 0,
         followerDelta: 0,
+        lineRegistrations: lineRegistrationsByDate[date] ?? 0,
       }));
     }
 
