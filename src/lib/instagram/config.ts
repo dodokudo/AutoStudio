@@ -49,6 +49,10 @@ export function loadInstagramConfig(): InstagramConfig {
   const projectId = resolveProjectId(process.env.IG_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID);
   const dataset = process.env.IG_BQ_DATASET ?? 'autostudio_instagram';
   const location = process.env.IG_GCP_LOCATION ?? process.env.LSTEP_BQ_LOCATION ?? 'asia-northeast1';
+  const defaultUserId = process.env.IG_DEFAULT_USER_ID ?? 'kudooo_ai';
+
+  console.log('[instagram/config] IG_DEFAULT_USER_ID env var:', process.env.IG_DEFAULT_USER_ID);
+  console.log('[instagram/config] Using defaultUserId:', defaultUserId);
 
   return {
     driveFolderIds: parseList(requireEnv('IG_COMPETITOR_DRIVE_FOLDER_ID')),
@@ -66,6 +70,6 @@ export function loadInstagramConfig(): InstagramConfig {
     location,
     threadsAccountId: process.env.IG_THREADS_ACCOUNT_ID,
     threadsToken: process.env.IG_THREADS_TOKEN,
-    defaultUserId: process.env.IG_DEFAULT_USER_ID ?? 'kudo',
+    defaultUserId,
   };
 }
