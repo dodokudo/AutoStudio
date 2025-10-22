@@ -113,6 +113,7 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
 }
 
 async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: string): Promise<FollowerPoint[]> {
+  console.log('[instagram/dashboard] fetchFollowerSeries called with userId:', userId);
   const query = `
     SELECT
       FORMAT_DATE('%Y-%m-%d', DATE(date)) AS date,
@@ -132,6 +133,7 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: 
       location: DEFAULT_LOCATION,
     });
 
+    console.log('[instagram/dashboard] fetchFollowerSeries returned', rows.length, 'rows');
     return rows.map((row) => ({
       date: String(row.date),
       followers: Number(row.followers ?? 0),
@@ -139,7 +141,9 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: 
       engagement: Number(row.engagement ?? 0),
     }));
   } catch (error) {
-    console.warn('[instagram/dashboard] Failed to load follower series', error);
+    console.error('[instagram/dashboard] Failed to load follower series for userId:', userId);
+    console.error('[instagram/dashboard] Error details:', error);
+    console.error('[instagram/dashboard] Error message:', error instanceof Error ? error.message : String(error));
     return [];
   }
 }
@@ -194,7 +198,8 @@ async function fetchReelHighlights(client: BigQuery, projectId: string, userId: 
       timestamp: row.timestamp ? String(row.timestamp) : null,
     }));
   } catch (error) {
-    console.warn('[instagram/dashboard] Failed to load reel highlights', error);
+    console.error('[instagram/dashboard] Failed to load reel highlights for userId:', userId);
+    console.error('[instagram/dashboard] Reel error:', error instanceof Error ? error.message : String(error));
     return [];
   }
 }
@@ -245,7 +250,8 @@ async function fetchStoryHighlights(client: BigQuery, projectId: string, userId:
       timestamp: row.timestamp ? String(row.timestamp) : null,
     }));
   } catch (error) {
-    console.warn('[instagram/dashboard] Failed to load story highlights', error);
+    console.error('[instagram/dashboard] Failed to load story highlights for userId:', userId);
+    console.error('[instagram/dashboard] Story error:', error instanceof Error ? error.message : String(error));
     return [];
   }
 }
