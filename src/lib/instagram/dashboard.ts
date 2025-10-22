@@ -132,6 +132,7 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: 
   `;
 
   try {
+    console.log('[instagram/dashboard] Executing BigQuery query with params:', { user_id: userId, projectId, dataset: DEFAULT_DATASET, location: DEFAULT_LOCATION });
     const [rows] = await client.query({
       query,
       params: { user_id: userId },
@@ -139,6 +140,10 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: 
     });
 
     console.log('[instagram/dashboard] fetchFollowerSeries returned', rows.length, 'rows');
+    if (rows.length === 0) {
+      console.warn('[instagram/dashboard] No follower data found for userId:', userId);
+      console.warn('[instagram/dashboard] This may indicate user_id mismatch or missing data in BigQuery');
+    }
     return rows.map((row) => ({
       date: String(row.date),
       followers: Number(row.followers ?? 0),
