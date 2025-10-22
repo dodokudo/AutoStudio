@@ -149,7 +149,10 @@ async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: 
     console.error('[instagram/dashboard] Failed to load follower series for userId:', userId);
     console.error('[instagram/dashboard] Error details:', error);
     console.error('[instagram/dashboard] Error message:', error instanceof Error ? error.message : String(error));
-    return [];
+    if (error instanceof Error && error.message.includes('Permission denied')) {
+      throw new Error(`BigQuery permission error: ${error.message}`);
+    }
+    throw error;
   }
 }
 
