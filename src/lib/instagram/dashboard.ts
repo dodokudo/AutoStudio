@@ -65,8 +65,11 @@ export interface InstagramDashboardData {
 }
 
 export async function getInstagramDashboardData(projectId: string): Promise<InstagramDashboardData> {
+  console.log('[instagram/dashboard] getInstagramDashboardData called with projectId:', projectId);
   const config = loadInstagramConfig();
+  console.log('[instagram/dashboard] Config loaded, defaultUserId:', config.defaultUserId);
   const client = createBigQueryClient(projectId, DEFAULT_LOCATION);
+  console.log('[instagram/dashboard] BigQuery client created');
 
   const [followerSeries, reels, stories, scripts, linkClickSeries] = await Promise.all([
     fetchFollowerSeries(client, projectId, config.defaultUserId),
@@ -75,6 +78,8 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     fetchLatestScripts(client, projectId),
     fetchLinkClickSeries(client, projectId),
   ]);
+
+  console.log('[instagram/dashboard] Data fetched - followerSeries:', followerSeries.length, 'reels:', reels.length, 'stories:', stories.length);
 
   const lineRangeEnd = new Date();
   const lineRangeStart = new Date(lineRangeEnd.getTime());
