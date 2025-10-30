@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getShortLinkByCode, logClick } from '@/lib/links/bigquery';
 import { headers } from 'next/headers';
+import RedirectClient from './redirect-client';
 
 interface PageProps {
   params: Promise<{ code: string }>;
@@ -15,6 +16,24 @@ function getDeviceType(userAgent: string): string {
     return 'Tablet';
   }
   return 'Desktop';
+}
+
+// SNSクローラーかどうかを判定
+function isSNSCrawler(userAgent: string): boolean {
+  const ua = userAgent.toLowerCase();
+  const crawlers = [
+    'facebookexternalhit',
+    'twitterbot',
+    'linkedinbot',
+    'slackbot',
+    'telegrambot',
+    'whatsapp',
+    'discordbot',
+    'threads', // Threadsのクローラー
+    'barcelona', // ThreadsのUA
+    'instagram',
+  ];
+  return crawlers.some(crawler => ua.includes(crawler));
 }
 
 export default async function ShortLinkRedirect({ params }: PageProps) {
@@ -44,8 +63,20 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
     console.error('Failed to log click:', error);
   });
 
-  // リダイレクト
-  redirect(shortLink.destinationUrl);
+  // SNSクローラーの場合は何も返さない（generateMetadataだけが使われる）
+  if (isSNSCrawler(userAgent)) {
+    return (
+      <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+        <p>リダイレクト中...</p>
+        <noscript>
+          <meta httpEquiv="refresh" content={`0;url=${shortLink.destinationUrl}`} />
+        </noscript>
+      </div>
+    );
+  }
+
+  // 通常のブラウザの場合はクライアントサイドリダイレクト
+  return <RedirectClient destinationUrl={shortLink.destinationUrl} />;
 }
 
 // OGPメタデータ生成
