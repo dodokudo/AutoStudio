@@ -18,24 +18,6 @@ function getDeviceType(userAgent: string): string {
   return 'Desktop';
 }
 
-// SNSクローラーかどうかを判定
-function isSNSCrawler(userAgent: string): boolean {
-  const ua = userAgent.toLowerCase();
-  const crawlers = [
-    'facebookexternalhit',
-    'twitterbot',
-    'linkedinbot',
-    'slackbot',
-    'telegrambot',
-    'whatsapp',
-    'discordbot',
-    'threads', // Threadsのクローラー
-    'barcelona', // ThreadsのUA
-    'instagram',
-  ];
-  return crawlers.some(crawler => ua.includes(crawler));
-}
-
 export default async function ShortLinkRedirect({ params }: PageProps) {
   const { code } = await params;
 
@@ -50,7 +32,6 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
   const headersList = await headers();
   const userAgent = headersList.get('user-agent') || '';
   const referrer = headersList.get('referer') || undefined;
-  const secFetchUser = headersList.get('sec-fetch-user');
   const forwardedFor = headersList.get('x-forwarded-for');
   const ipAddress = forwardedFor ? forwardedFor.split(',')[0] : undefined;
 
@@ -63,21 +44,6 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
   }).catch((error) => {
     console.error('Failed to log click:', error);
   });
-
-  const isUserNavigation = secFetchUser === '?1';
-  const shouldServeCrawlerView = !isUserNavigation && isSNSCrawler(userAgent);
-
-  // SNSクローラーの場合は何も返さない（generateMetadataだけが使われる）
-  if (shouldServeCrawlerView) {
-    return (
-      <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-        <p>リダイレクト中...</p>
-        <noscript>
-          <meta httpEquiv="refresh" content={`0;url=${shortLink.destinationUrl}`} />
-        </noscript>
-      </div>
-    );
-  }
 
   // 通常のブラウザの場合はクライアントサイドリダイレクト
   return <RedirectClient destinationUrl={shortLink.destinationUrl} />;

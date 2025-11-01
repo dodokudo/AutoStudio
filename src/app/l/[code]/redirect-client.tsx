@@ -15,6 +15,9 @@ export default function RedirectClient({ destinationUrl }: RedirectClientProps) 
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
       <p>リダイレクト中...</p>
+      <noscript>
+        <meta httpEquiv="refresh" content={`0;url=${destinationUrl}`} />
+      </noscript>
     </div>
   );
 }
