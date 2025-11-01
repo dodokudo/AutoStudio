@@ -50,6 +50,7 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
   const headersList = await headers();
   const userAgent = headersList.get('user-agent') || '';
   const referrer = headersList.get('referer') || undefined;
+  const secFetchUser = headersList.get('sec-fetch-user');
   const forwardedFor = headersList.get('x-forwarded-for');
   const ipAddress = forwardedFor ? forwardedFor.split(',')[0] : undefined;
 
@@ -63,8 +64,11 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
     console.error('Failed to log click:', error);
   });
 
+  const isUserNavigation = secFetchUser === '?1';
+  const shouldServeCrawlerView = !isUserNavigation && isSNSCrawler(userAgent);
+
   // SNSクローラーの場合は何も返さない（generateMetadataだけが使われる）
-  if (isSNSCrawler(userAgent)) {
+  if (shouldServeCrawlerView) {
     return (
       <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
         <p>リダイレクト中...</p>
