@@ -51,3 +51,30 @@ export interface UpdateShortLinkRequest {
   managementName?: string;
   category?: 'threads' | 'instagram' | 'youtube' | 'ad';
 }
+
+export interface LinkInsightsSummary {
+  periodStart: string;
+  periodEnd: string;
+  periodDays: number;
+  totalClicks: number;
+  lifetimeClicks: number;
+  totalLinks: number;
+  byCategory: Array<{ category: string; clicks: number }>;
+}
+
+export interface LinkInsightItem {
+  id: string;
+  shortCode: string;
+  destinationUrl: string;
+  managementName?: string;
+  category?: string | null;
+  createdAt: string;
+  periodClicks: number;
+  lifetimeClicks: number;
+  lastClickedAt?: string | null;
+}
+
+export interface LinkInsightsOverview {
+  summary: LinkInsightsSummary;
+  links: LinkInsightItem[];
+}

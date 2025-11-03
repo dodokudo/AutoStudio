@@ -1,6 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
-import type { ShortLink, ClickLog, LinkStats, CreateShortLinkRequest, UpdateShortLinkRequest } from './types';
+import type {
+  ShortLink,
+  ClickLog,
+  LinkStats,
+  CreateShortLinkRequest,
+  UpdateShortLinkRequest,
+  LinkInsightsOverview,
+  LinkInsightItem,
+} from './types';
 
 const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
@@ -100,6 +108,141 @@ export async function getAllShortLinks(): Promise<ShortLink[]> {
 
   const [rows] = await bigquery.query({ query });
   return rows as ShortLink[];
+}
+
+function toPlainTimestamp(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+    const inner = (value as { value?: unknown }).value;
+    if (!inner) return null;
+    if (typeof inner === 'string') return inner;
+    if (inner instanceof Date) return inner.toISOString();
+    return String(inner);
+  }
+  return String(value);
+}
+
+function calculatePeriodDays(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T00:00:00+09:00`);
+  const end = new Date(`${endDate}T00:00:00+09:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return 1;
+  }
+  const diff = Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  return diff >= 0 ? diff + 1 : 1;
+}
+
+export async function getLinkInsightsOverview(params: { startDate: string; endDate: string }): Promise<LinkInsightsOverview> {
+  let { startDate, endDate } = params;
+  if (startDate > endDate) {
+    [startDate, endDate] = [endDate, startDate];
+  }
+
+  const baseLatestLinksCte = `
+    WITH latest_links AS (
+      SELECT
+        id,
+        short_code,
+        destination_url,
+        management_name,
+        category,
+        created_at,
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) AS rn
+      FROM \`${projectId}.${dataset}.short_links\`
+      WHERE is_active = TRUE
+    )
+  `;
+
+  const queryParams = { startDate, endDate };
+
+  const [summaryRows] = await bigquery.query({
+    query: `
+      ${baseLatestLinksCte}
+      SELECT
+        COUNT(DISTINCT ll.id) AS link_count,
+        COUNTIF(DATE(cl.clicked_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS period_clicks,
+        COUNT(cl.id) AS lifetime_clicks
+      FROM latest_links ll
+      LEFT JOIN \`${projectId}.${dataset}.click_logs\` cl
+        ON cl.short_link_id = ll.id
+      WHERE ll.rn = 1
+    `,
+    params: queryParams,
+  });
+
+  const [categoryRows] = await bigquery.query({
+    query: `
+      ${baseLatestLinksCte}
+      SELECT
+        COALESCE(ll.category, 'uncategorized') AS category,
+        COUNTIF(DATE(cl.clicked_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS clicks
+      FROM latest_links ll
+      LEFT JOIN \`${projectId}.${dataset}.click_logs\` cl
+        ON cl.short_link_id = ll.id
+      WHERE ll.rn = 1
+      GROUP BY category
+      ORDER BY clicks DESC
+    `,
+    params: queryParams,
+  });
+
+  const [linkRows] = await bigquery.query({
+    query: `
+      ${baseLatestLinksCte}
+      SELECT
+        ll.id,
+        ll.short_code AS short_code,
+        ll.destination_url AS destination_url,
+        ll.management_name AS management_name,
+        ll.category AS category,
+        CAST(ll.created_at AS STRING) AS created_at,
+        COUNTIF(DATE(cl.clicked_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS period_clicks,
+        COUNT(cl.id) AS lifetime_clicks,
+        MAX(cl.clicked_at) AS last_clicked_at
+      FROM latest_links ll
+      LEFT JOIN \`${projectId}.${dataset}.click_logs\` cl
+        ON cl.short_link_id = ll.id
+      WHERE ll.rn = 1
+      GROUP BY ll.id, short_code, destination_url, management_name, category, created_at
+      ORDER BY last_clicked_at DESC NULLS LAST, period_clicks DESC, created_at DESC
+    `,
+    params: queryParams,
+  });
+
+  const summaryRow = (summaryRows?.[0] ?? {}) as Record<string, unknown>;
+  const periodDays = calculatePeriodDays(startDate, endDate);
+
+  const links: LinkInsightItem[] = (linkRows as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    shortCode: String(row.short_code),
+    destinationUrl: String(row.destination_url),
+    managementName: row.management_name ? String(row.management_name) : undefined,
+    category: row.category ? String(row.category) : null,
+    createdAt: String(row.created_at),
+    periodClicks: Number(row.period_clicks ?? 0),
+    lifetimeClicks: Number(row.lifetime_clicks ?? 0),
+    lastClickedAt: toPlainTimestamp(row.last_clicked_at),
+  }));
+
+  return {
+    summary: {
+      periodStart: startDate,
+      periodEnd: endDate,
+      periodDays,
+      totalClicks: Number(summaryRow.period_clicks ?? 0),
+      lifetimeClicks: Number(summaryRow.lifetime_clicks ?? 0),
+      totalLinks: Number(summaryRow.link_count ?? 0),
+      byCategory: (categoryRows as Array<Record<string, unknown>>)
+        .map((row) => ({
+          category: String(row.category ?? 'uncategorized'),
+          clicks: Number(row.clicks ?? 0),
+        }))
+        .filter((item) => item.clicks > 0),
+    },
+    links,
+  };
 }
 
 export async function logClick(shortLinkId: string, metadata: Partial<ClickLog>): Promise<void> {
