@@ -180,24 +180,23 @@ function mapSteps(rawSteps: unknown): LinkFunnelStep[] {
   if (!Array.isArray(rawSteps)) {
     return [];
   }
-  return rawSteps
-    .map((item) => {
-      if (!item) return null;
-      const record = item as Record<string, unknown>;
-      const stepId = String(record.step_id ?? record.stepId ?? '');
-      if (!stepId) return null;
-      return {
-        stepId,
-        order: Number(record.step_order ?? record.stepOrder ?? 0),
-        label: String(record.step_label ?? record.stepLabel ?? ''),
-        type: String(record.step_type ?? record.stepType ?? 'short_link') as LinkFunnelStep['type'],
-        shortLinkId: record.short_link_id ? String(record.short_link_id) : undefined,
-        lineSource: record.line_source ? String(record.line_source) : undefined,
-        lineTag: record.line_tag ? String(record.line_tag) : undefined,
-      };
-    })
-    .filter((value): value is LinkFunnelStep => value !== null)
-    .sort((a, b) => a.order - b.order);
+  const mapped: LinkFunnelStep[] = [];
+  for (const item of rawSteps) {
+    if (!item) continue;
+    const record = item as Record<string, unknown>;
+    const stepId = String(record.step_id ?? record.stepId ?? '');
+    if (!stepId) continue;
+    mapped.push({
+      stepId,
+      order: Number(record.step_order ?? record.stepOrder ?? 0),
+      label: String(record.step_label ?? record.stepLabel ?? ''),
+      type: String(record.step_type ?? record.stepType ?? 'short_link') as LinkFunnelStep['type'],
+      shortLinkId: record.short_link_id ? String(record.short_link_id) : undefined,
+      lineSource: record.line_source ? String(record.line_source) : undefined,
+      lineTag: record.line_tag ? String(record.line_tag) : undefined,
+    });
+  }
+  return mapped.sort((a, b) => a.order - b.order);
 }
 
 function mapFunnelRow(row: Record<string, unknown>): LinkFunnel {
