@@ -261,7 +261,7 @@ export function LinkFunnelsManager({ startDate, endDate }: LinkFunnelsManagerPro
         <Card className="space-y-4 p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-[color:var(--color-text-primary)]">ファネル一覧</h2>
-            <Button size="sm" onClick={onCreate} disabled={!!editingFunnel}>
+            <Button onClick={onCreate} disabled={!!editingFunnel}>
               新規作成
             </Button>
           </div>
@@ -306,12 +306,11 @@ export function LinkFunnelsManager({ startDate, endDate }: LinkFunnelsManagerPro
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="secondary" onClick={() => onEdit(selectedFunnel)} disabled={!!editingFunnel}>
+                <Button variant="secondary" onClick={() => onEdit(selectedFunnel)} disabled={!!editingFunnel}>
                   編集
                 </Button>
                 <Button
-                  size="sm"
-                  variant="ghost"
+                  variant="secondary"
                   onClick={() => handleDelete(selectedFunnel.id)}
                   disabled={deleteBusy}
                 >
@@ -376,10 +375,10 @@ export function LinkFunnelsManager({ startDate, endDate }: LinkFunnelsManagerPro
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">ステップ定義</h3>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => addStep('short_link')}>
+                  <Button variant="secondary" onClick={() => addStep('short_link')}>
                     ステップを追加（リンク）
                   </Button>
-                  <Button size="sm" variant="secondary" onClick={() => addStep('line_registration')}>
+                  <Button variant="secondary" onClick={() => addStep('line_registration')}>
                     LINE登録ステップを追加
                   </Button>
                 </div>
@@ -393,20 +392,18 @@ export function LinkFunnelsManager({ startDate, endDate }: LinkFunnelsManagerPro
                         ステップ {index + 1}
                       </h4>
                       <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => moveStep(index, -1)} disabled={index === 0}>
+                        <Button variant="secondary" onClick={() => moveStep(index, -1)} disabled={index === 0}>
                           ↑
                         </Button>
                         <Button
-                          size="sm"
-                          variant="ghost"
+                          variant="secondary"
                           onClick={() => moveStep(index, 1)}
                           disabled={index === editingFunnel.steps.length - 1}
                         >
                           ↓
                         </Button>
                         <Button
-                          size="sm"
-                          variant="ghost"
+                          variant="secondary"
                           onClick={() => removeStep(index)}
                           disabled={editingFunnel.steps.length === 1}
                         >
@@ -508,7 +505,7 @@ export function LinkFunnelsManager({ startDate, endDate }: LinkFunnelsManagerPro
             </div>
 
             <div className="flex items-center justify-end gap-3">
-              <Button variant="ghost" onClick={resetEditingState} disabled={isSaving}>
+              <Button variant="secondary" onClick={resetEditingState} disabled={isSaving}>
                 キャンセル
               </Button>
               <Button onClick={saveFunnel} disabled={isSaving}>
