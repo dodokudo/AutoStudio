@@ -4,6 +4,7 @@ import { CreateLinkForm } from './_components/create-link-form';
 import { LinksTabShell, type LinksTabKey } from './_components/links-tab-shell';
 import { LinksInsightsDashboard } from './_components/links-insights-dashboard';
 import { LinksRangeSelector } from './_components/links-range-selector';
+import { LinkFunnelsManager } from './_components/link-funnels-manager';
 
 type RangeValue = 'yesterday' | '3d' | '7d' | 'month' | 'custom';
 
@@ -90,28 +91,30 @@ function resolveRangeDates(range: RangeValue, customStart?: string, customEnd?: 
 export const dynamic = 'force-dynamic';
 
 interface LinksPageProps {
-  searchParams?: { tab?: string; range?: string; start?: string; end?: string };
+  searchParams?: Promise<Record<string, string>>;
 }
 
 export default async function LinksPage({ searchParams }: LinksPageProps) {
-  const tabParam = typeof searchParams?.tab === 'string' ? (searchParams?.tab as LinksTabKey) : undefined;
-  const allowedTabs: LinksTabKey[] = ['manage', 'insights'];
+  const resolvedParams = (await searchParams) ?? {};
+
+  const tabParam = typeof resolvedParams.tab === 'string' ? (resolvedParams.tab as LinksTabKey) : undefined;
+  const allowedTabs: LinksTabKey[] = ['manage', 'insights', 'funnels'];
   const defaultTab: LinksTabKey = 'manage';
   const activeTab: LinksTabKey =
     tabParam && allowedTabs.includes(tabParam) ? tabParam : defaultTab;
 
   const tabItems = allowedTabs.map((tab) => ({
     id: tab,
-    label: tab === 'manage' ? 'リンク管理' : 'インサイト',
+    label: tab === 'manage' ? 'リンク管理' : tab === 'insights' ? 'インサイト' : 'ファネル',
     href: `?tab=${tab}`,
   }));
 
-  const rangeParam = typeof searchParams?.range === 'string' ? (searchParams?.range as RangeValue) : undefined;
+  const rangeParam = typeof resolvedParams.range === 'string' ? (resolvedParams.range as RangeValue) : undefined;
   const allowedRangeValues = RANGE_OPTIONS.map((option) => option.value);
   const rangeValue: RangeValue = rangeParam && allowedRangeValues.includes(rangeParam) ? rangeParam : DEFAULT_RANGE;
 
-  let customStart = isValidDate(searchParams?.start) ? searchParams?.start : undefined;
-  let customEnd = isValidDate(searchParams?.end) ? searchParams?.end : undefined;
+  let customStart = isValidDate(resolvedParams.start) ? resolvedParams.start : undefined;
+  let customEnd = isValidDate(resolvedParams.end) ? resolvedParams.end : undefined;
   if (customStart && customEnd && customStart > customEnd) {
     [customStart, customEnd] = [customEnd, customStart];
   }
@@ -119,14 +122,15 @@ export default async function LinksPage({ searchParams }: LinksPageProps) {
   const { startDate, endDate } = resolveRangeDates(rangeValue, customStart, customEnd);
   const periodLabel = `${startDate} 〜 ${endDate}`;
 
-  const insights = activeTab === 'insights' ? await getLinkInsightsOverview({ startDate, endDate }) : null;
+  const needInsights = activeTab === 'insights';
+  const insights = needInsights ? await getLinkInsightsOverview({ startDate, endDate }) : null;
 
   return (
     <LinksTabShell
       tabItems={tabItems}
       activeTab={activeTab}
       toolbar={
-        activeTab === 'insights' ? (
+        activeTab !== 'manage' ? (
           <LinksRangeSelector
             options={RANGE_OPTIONS}
             value={rangeValue}
@@ -148,12 +152,16 @@ export default async function LinksPage({ searchParams }: LinksPageProps) {
           <CreateLinkForm />
           <LinksList />
         </div>
-      ) : insights ? (
+      ) : activeTab === 'insights' ? (
+        insights ? (
         <LinksInsightsDashboard summary={insights.summary} links={insights.links} />
+        ) : (
+          <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-6 text-sm text-[color:var(--color-text-secondary)]">
+            インサイトの読み込みに失敗しました。時間をおいて再度お試しください。
+          </div>
+        )
       ) : (
-        <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-6 text-sm text-[color:var(--color-text-secondary)]">
-          インサイトの読み込みに失敗しました。時間をおいて再度お試しください。
-        </div>
+        <LinkFunnelsManager startDate={startDate} endDate={endDate} />
       )}
     </LinksTabShell>
   );

@@ -78,3 +78,41 @@ export interface LinkInsightsOverview {
   summary: LinkInsightsSummary;
   links: LinkInsightItem[];
 }
+
+export type LinkFunnelStepType = 'short_link' | 'line_registration';
+
+export interface LinkFunnelStep {
+  stepId: string;
+  order: number;
+  label: string;
+  type: LinkFunnelStepType;
+  shortLinkId?: string;
+  lineSource?: string;
+  lineTag?: string;
+}
+
+export interface LinkFunnel {
+  id: string;
+  name: string;
+  description?: string;
+  steps: LinkFunnelStep[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LinkFunnelMetricsStep {
+  stepId: string;
+  label: string;
+  type: LinkFunnelStepType;
+  count: number;
+  conversionRate: number;
+  cumulativeRate: number;
+}
+
+export interface LinkFunnelMetrics {
+  funnel: LinkFunnel;
+  startDate: string;
+  endDate: string;
+  steps: LinkFunnelMetricsStep[];
+  totalCount: number;
+}

@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useState, useTransition } from 'react';
 import { classNames } from '@/lib/classNames';
 
-export type LinksTabKey = 'manage' | 'insights';
+export type LinksTabKey = 'manage' | 'insights' | 'funnels';
 
 interface TabItem {
   id: LinksTabKey;

@@ -8,12 +8,41 @@ import type {
   UpdateShortLinkRequest,
   LinkInsightsOverview,
   LinkInsightItem,
+  LinkFunnel,
+  LinkFunnelStep,
+  LinkFunnelMetrics,
 } from './types';
 
 const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
+const FUNNEL_TABLE = 'link_funnels';
+const FUNNEL_STEP_TABLE = 'link_funnel_steps';
 
 const bigquery = createBigQueryClient(projectId);
+const lstepDataset = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
+
+function resolveLstepProjectId(): string {
+  const candidate =
+    process.env.LSTEP_BQ_PROJECT_ID
+    ?? process.env.BQ_PROJECT_ID
+    ?? process.env.NEXT_PUBLIC_GCP_PROJECT_ID
+    ?? process.env.GCP_PROJECT_ID
+    ?? process.env.GOOGLE_CLOUD_PROJECT;
+  if (!candidate) {
+    throw new Error('LSTEP_BQ_PROJECT_ID もしくは関連するProject IDが設定されていません');
+  }
+  return resolveProjectId(candidate);
+}
+
+let lstepClientCache: ReturnType<typeof createBigQueryClient> | null = null;
+
+function getLstepClient() {
+  if (!lstepClientCache) {
+    const lstepProjectId = resolveLstepProjectId();
+    lstepClientCache = createBigQueryClient(lstepProjectId, process.env.LSTEP_BQ_LOCATION);
+  }
+  return lstepClientCache;
+}
 
 export async function createShortLink(req: CreateShortLinkRequest): Promise<ShortLink> {
   const id = uuidv4();
@@ -110,6 +139,236 @@ export async function getAllShortLinks(): Promise<ShortLink[]> {
   return rows as ShortLink[];
 }
 
+async function ensureLinkFunnelTables() {
+  const datasetRef = bigquery.dataset(dataset);
+  const funnelTable = datasetRef.table(FUNNEL_TABLE);
+  const stepTable = datasetRef.table(FUNNEL_STEP_TABLE);
+
+  const [funnelExists] = await funnelTable.exists();
+  if (!funnelExists) {
+    await datasetRef.createTable(FUNNEL_TABLE, {
+      schema: [
+        { name: 'funnel_id', type: 'STRING' },
+        { name: 'name', type: 'STRING' },
+        { name: 'description', type: 'STRING' },
+        { name: 'created_at', type: 'TIMESTAMP' },
+        { name: 'updated_at', type: 'TIMESTAMP' },
+      ],
+    });
+  }
+
+  const [stepExists] = await stepTable.exists();
+  if (!stepExists) {
+    await datasetRef.createTable(FUNNEL_STEP_TABLE, {
+      schema: [
+        { name: 'funnel_id', type: 'STRING' },
+        { name: 'step_id', type: 'STRING' },
+        { name: 'step_order', type: 'INT64' },
+        { name: 'step_label', type: 'STRING' },
+        { name: 'step_type', type: 'STRING' },
+        { name: 'short_link_id', type: 'STRING' },
+        { name: 'line_source', type: 'STRING' },
+        { name: 'line_tag', type: 'STRING' },
+        { name: 'created_at', type: 'TIMESTAMP' },
+        { name: 'updated_at', type: 'TIMESTAMP' },
+      ],
+    });
+  }
+}
+
+function mapSteps(rawSteps: unknown): LinkFunnelStep[] {
+  if (!Array.isArray(rawSteps)) {
+    return [];
+  }
+  return rawSteps
+    .map((item) => {
+      if (!item) return null;
+      const record = item as Record<string, unknown>;
+      const stepId = String(record.step_id ?? record.stepId ?? '');
+      if (!stepId) return null;
+      return {
+        stepId,
+        order: Number(record.step_order ?? record.stepOrder ?? 0),
+        label: String(record.step_label ?? record.stepLabel ?? ''),
+        type: String(record.step_type ?? record.stepType ?? 'short_link') as LinkFunnelStep['type'],
+        shortLinkId: record.short_link_id ? String(record.short_link_id) : undefined,
+        lineSource: record.line_source ? String(record.line_source) : undefined,
+        lineTag: record.line_tag ? String(record.line_tag) : undefined,
+      };
+    })
+    .filter((value): value is LinkFunnelStep => value !== null)
+    .sort((a, b) => a.order - b.order);
+}
+
+function mapFunnelRow(row: Record<string, unknown>): LinkFunnel {
+  return {
+    id: String(row.funnel_id),
+    name: String(row.name ?? ''),
+    description: row.description ? String(row.description) : undefined,
+    createdAt: toPlainTimestamp(row.created_at ?? row.createdAt ?? null) ?? undefined,
+    updatedAt: toPlainTimestamp(row.updated_at ?? row.updatedAt ?? null) ?? undefined,
+    steps: mapSteps((row.steps ?? []) as unknown),
+  };
+}
+
+export async function listLinkFunnels(): Promise<LinkFunnel[]> {
+  await ensureLinkFunnelTables();
+  const [rows] = await bigquery.query({
+    query: `
+      SELECT
+        f.funnel_id,
+        f.name,
+        f.description,
+        f.created_at,
+        f.updated_at,
+        ARRAY_AGG(
+          IF(
+            s.step_id IS NULL,
+            NULL,
+            STRUCT(
+              s.step_id AS step_id,
+              s.step_order AS step_order,
+              s.step_label AS step_label,
+              s.step_type AS step_type,
+              s.short_link_id AS short_link_id,
+              s.line_source AS line_source,
+              s.line_tag AS line_tag
+            )
+          )
+          IGNORE NULLS
+          ORDER BY s.step_order
+        ) AS steps
+      FROM \`${projectId}.${dataset}.${FUNNEL_TABLE}\` f
+      LEFT JOIN \`${projectId}.${dataset}.${FUNNEL_STEP_TABLE}\` s
+        ON f.funnel_id = s.funnel_id
+      GROUP BY f.funnel_id, f.name, f.description, f.created_at, f.updated_at
+      ORDER BY f.updated_at DESC
+    `,
+  });
+
+  return (rows as Array<Record<string, unknown>>).map(mapFunnelRow);
+}
+
+export async function getLinkFunnel(funnelId: string): Promise<LinkFunnel | null> {
+  if (!funnelId) return null;
+  await ensureLinkFunnelTables();
+  const [rows] = await bigquery.query({
+    query: `
+      SELECT
+        f.funnel_id,
+        f.name,
+        f.description,
+        f.created_at,
+        f.updated_at,
+        ARRAY_AGG(
+          IF(
+            s.step_id IS NULL,
+            NULL,
+            STRUCT(
+              s.step_id AS step_id,
+              s.step_order AS step_order,
+              s.step_label AS step_label,
+              s.step_type AS step_type,
+              s.short_link_id AS short_link_id,
+              s.line_source AS line_source,
+              s.line_tag AS line_tag
+            )
+          )
+          IGNORE NULLS
+          ORDER BY s.step_order
+        ) AS steps
+      FROM \`${projectId}.${dataset}.${FUNNEL_TABLE}\` f
+      LEFT JOIN \`${projectId}.${dataset}.${FUNNEL_STEP_TABLE}\` s
+        ON f.funnel_id = s.funnel_id
+      WHERE f.funnel_id = @funnelId
+      GROUP BY f.funnel_id, f.name, f.description, f.created_at, f.updated_at
+      LIMIT 1
+    `,
+    params: { funnelId },
+  });
+
+  if (!rows.length) {
+    return null;
+  }
+  return mapFunnelRow(rows[0] as Record<string, unknown>);
+}
+
+export async function deleteLinkFunnel(funnelId: string): Promise<void> {
+  if (!funnelId) return;
+  await ensureLinkFunnelTables();
+  await bigquery.query({
+    query: `
+      DELETE FROM \`${projectId}.${dataset}.${FUNNEL_STEP_TABLE}\`
+      WHERE funnel_id = @funnelId
+    `,
+    params: { funnelId },
+  });
+
+  await bigquery.query({
+    query: `
+      DELETE FROM \`${projectId}.${dataset}.${FUNNEL_TABLE}\`
+      WHERE funnel_id = @funnelId
+    `,
+    params: { funnelId },
+  });
+}
+
+export async function upsertLinkFunnel(funnel: LinkFunnel): Promise<LinkFunnel> {
+  await ensureLinkFunnelTables();
+  const nowIso = new Date().toISOString();
+
+  await bigquery.query({
+    query: `
+      MERGE \`${projectId}.${dataset}.${FUNNEL_TABLE}\` T
+      USING (SELECT @funnelId AS funnel_id) S
+      ON T.funnel_id = S.funnel_id
+      WHEN MATCHED THEN
+        UPDATE SET
+          name = @name,
+          description = NULLIF(@description, ''),
+          updated_at = CURRENT_TIMESTAMP()
+      WHEN NOT MATCHED THEN
+        INSERT (funnel_id, name, description, created_at, updated_at)
+        VALUES (@funnelId, @name, NULLIF(@description, ''), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+    `,
+    params: {
+      funnelId: funnel.id,
+      name: funnel.name,
+      description: funnel.description ?? '',
+    },
+  });
+
+  await bigquery.query({
+    query: `
+      DELETE FROM \`${projectId}.${dataset}.${FUNNEL_STEP_TABLE}\`
+      WHERE funnel_id = @funnelId
+    `,
+    params: { funnelId: funnel.id },
+  });
+
+  if (funnel.steps.length > 0) {
+    const rows = funnel.steps.map((step) => ({
+      funnel_id: funnel.id,
+      step_id: step.stepId,
+      step_order: Number(step.order),
+      step_label: step.label,
+      step_type: step.type,
+      short_link_id: step.shortLinkId ?? null,
+      line_source: step.lineSource ?? null,
+      line_tag: step.lineTag ?? null,
+      created_at: nowIso,
+      updated_at: nowIso,
+    }));
+    await bigquery.dataset(dataset).table(FUNNEL_STEP_TABLE).insert(rows);
+  }
+
+  const latest = await getLinkFunnel(funnel.id);
+  if (!latest) {
+    throw new Error('Failed to fetch funnel after upsert');
+  }
+  return latest;
+}
+
 function toPlainTimestamp(value: unknown): string | null {
   if (!value) return null;
   if (typeof value === 'string') return value;
@@ -162,7 +421,7 @@ export async function getLinkInsightsOverview(params: { startDate: string; endDa
       ${baseLatestLinksCte}
       SELECT
         COUNT(DISTINCT ll.id) AS link_count,
-        COUNTIF(DATE(cl.clicked_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS period_clicks,
+        COUNTIF(DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS period_clicks,
         COUNT(cl.id) AS lifetime_clicks
       FROM latest_links ll
       LEFT JOIN \`${projectId}.${dataset}.click_logs\` cl
@@ -177,7 +436,7 @@ export async function getLinkInsightsOverview(params: { startDate: string; endDa
       ${baseLatestLinksCte}
       SELECT
         COALESCE(ll.category, 'uncategorized') AS category,
-        COUNTIF(DATE(cl.clicked_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS clicks
+        COUNTIF(DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS clicks
       FROM latest_links ll
       LEFT JOIN \`${projectId}.${dataset}.click_logs\` cl
         ON cl.short_link_id = ll.id
@@ -198,7 +457,7 @@ export async function getLinkInsightsOverview(params: { startDate: string; endDa
         ll.management_name AS management_name,
         ll.category AS category,
         CAST(ll.created_at AS STRING) AS created_at,
-        COUNTIF(DATE(cl.clicked_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS period_clicks,
+        COUNTIF(DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate) AS period_clicks,
         COUNT(cl.id) AS lifetime_clicks,
         MAX(cl.clicked_at) AS last_clicked_at
       FROM latest_links ll
@@ -383,6 +642,128 @@ export async function getLinkStats(shortLinkId: string): Promise<LinkStats> {
       deviceType: String(row.deviceType),
       clicks: parseInt(String(row.clicks)),
     })),
+  };
+}
+
+async function countShortLinkClicks(shortLinkId: string, startDate: string, endDate: string): Promise<number> {
+  if (!shortLinkId) return 0;
+  const [rows] = await bigquery.query({
+    query: `
+      SELECT COUNT(*) AS clicks
+      FROM \`${projectId}.${dataset}.click_logs\`
+      WHERE short_link_id = @shortLinkId
+        AND DATE(TIMESTAMP(clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    `,
+    params: { shortLinkId, startDate, endDate },
+  });
+  const row = rows[0] as Record<string, unknown> | undefined;
+  return Number(row?.clicks ?? 0);
+}
+
+async function countLineRegistrations(
+  startDate: string,
+  endDate: string,
+  options: { lineSource?: string; lineTag?: string },
+): Promise<number> {
+  const client = getLstepClient();
+  const lstepProjectId = resolveLstepProjectId();
+
+  const joins: string[] = [];
+  const conditions: string[] = [];
+  const params: Record<string, string> = { startDate, endDate };
+
+  if (options.lineSource) {
+    joins.push(`
+      INNER JOIN \`${lstepProjectId}.${lstepDataset}.user_sources\` sources
+        ON core.user_id = sources.user_id
+        AND core.snapshot_date = sources.snapshot_date
+    `);
+    conditions.push('sources.source_flag = 1', 'sources.source_name = @lineSource');
+    params.lineSource = options.lineSource;
+  }
+
+  if (options.lineTag) {
+    joins.push(`
+      INNER JOIN \`${lstepProjectId}.${lstepDataset}.user_tags\` tags
+        ON core.user_id = tags.user_id
+        AND core.snapshot_date = tags.snapshot_date
+    `);
+    conditions.push('tags.tag_flag = 1', 'tags.tag_name = @lineTag');
+    params.lineTag = options.lineTag;
+  }
+
+  const joinClause = joins.join('\n');
+  const conditionClause = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+
+  const [rows] = await client.query({
+    query: `
+      WITH registered AS (
+        SELECT DISTINCT core.user_id
+        FROM \`${lstepProjectId}.${lstepDataset}.user_core\` core
+        ${joinClause}
+        WHERE DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+        ${conditionClause}
+      )
+      SELECT COUNT(*) AS registrations FROM registered
+    `,
+    params,
+  });
+
+  const row = rows[0] as Record<string, unknown> | undefined;
+  return Number(row?.registrations ?? 0);
+}
+
+export async function getLinkFunnelMetrics(
+  funnelId: string,
+  params: { startDate: string; endDate: string },
+): Promise<LinkFunnelMetrics> {
+  const funnel = await getLinkFunnel(funnelId);
+  if (!funnel) {
+    throw new Error(`Funnel ${funnelId} not found`);
+  }
+
+  let { startDate, endDate } = params;
+  if (startDate > endDate) {
+    [startDate, endDate] = [endDate, startDate];
+  }
+
+  const counts: number[] = [];
+  for (const step of funnel.steps) {
+    let count = 0;
+    if (step.type === 'short_link') {
+      count = await countShortLinkClicks(step.shortLinkId ?? '', startDate, endDate);
+    } else if (step.type === 'line_registration') {
+      count = await countLineRegistrations(startDate, endDate, {
+        lineSource: step.lineSource,
+        lineTag: step.lineTag,
+      });
+    }
+    counts.push(count);
+  }
+
+  const baseCount = counts[0] ?? 0;
+
+  const metricsSteps = funnel.steps.map((step, index) => {
+    const count = counts[index] ?? 0;
+    const previousCount = index === 0 ? baseCount : counts[index - 1] ?? 0;
+    const conversionRate = previousCount > 0 ? (count / previousCount) * 100 : 0;
+    const cumulativeRate = baseCount > 0 ? (count / baseCount) * 100 : 0;
+    return {
+      stepId: step.stepId,
+      label: step.label,
+      type: step.type,
+      count,
+      conversionRate,
+      cumulativeRate,
+    };
+  });
+
+  return {
+    funnel,
+    startDate,
+    endDate,
+    steps: metricsSteps,
+    totalCount: baseCount,
   };
 }
 
