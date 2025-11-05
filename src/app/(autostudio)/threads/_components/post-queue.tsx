@@ -229,7 +229,7 @@ export function PostQueue({
                     </button>
                   </div>
                   <textarea
-                    className="w-full max-w-full min-w-0 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] break-words"
+                    className="w-full max-w-full min-w-0 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] break-words min-h-[18rem] md:min-h-[12rem]"
                     rows={4}
                     value={comment.text}
                     onChange={(event) => {

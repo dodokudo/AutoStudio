@@ -318,6 +318,52 @@ function sanitizeString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function escapeUnescapedJsonNewlines(input: string): string {
+  let result = '';
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+
+    if (isEscaped) {
+      result += char;
+      isEscaped = false;
+      continue;
+    }
+
+    if (inString) {
+      if (char === '\\') {
+        result += char;
+        isEscaped = true;
+      } else if (char === '"') {
+        result += char;
+        inString = false;
+      } else if (char === '\r') {
+        if (input[i + 1] === '\n') {
+          result += '\\n';
+          i += 1;
+        } else {
+          result += '\\n';
+        }
+      } else if (char === '\n') {
+        result += '\\n';
+      } else {
+        result += char;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+        result += char;
+      } else {
+        result += char;
+      }
+    }
+  }
+
+  return result;
+}
+
 function enforceAiTheme(rawTheme: string, payload: ThreadsPromptPayload): string {
   const trimmed = rawTheme.trim();
   if (!trimmed) {
@@ -756,8 +802,13 @@ async function requestClaude(prompt: string) {
   console.log('[claude] Clean content length:', cleanContent.length);
   console.log('[claude] Clean content preview:', cleanContent.slice(0, 300));
 
+  const normalizedContent = escapeUnescapedJsonNewlines(cleanContent);
+  if (normalizedContent !== cleanContent) {
+    console.log('[claude] Normalized unescaped newlines inside JSON string values');
+  }
+
   try {
-    const parsed = JSON.parse(cleanContent) as unknown;
+    const parsed = JSON.parse(normalizedContent) as unknown;
     console.log('[claude] Successfully parsed JSON:', {
       type: typeof parsed,
       hasPost: parsed && typeof parsed === 'object' && 'post' in parsed,
@@ -767,7 +818,7 @@ async function requestClaude(prompt: string) {
     return parsed;
   } catch (firstError) {
     console.log('[claude] First JSON parse failed, attempting repair...');
-    let sanitized = cleanContent
+    let sanitized = normalizedContent
       // normalize smart quotes to regular quotes
       .replace(/[\u201C\u201D]/g, '"')
       .replace(/[\u2018\u2019]/g, "'")
@@ -822,6 +873,8 @@ async function requestClaude(prompt: string) {
       return `"${key}": "${value}"`;
     });
 
+    sanitized = escapeUnescapedJsonNewlines(sanitized);
+
     console.log('[claude] Sanitized content length:', sanitized.length);
     console.log('[claude] Sanitized content preview:', sanitized.slice(0, 300));
     console.log('[claude] Sanitized content suffix:', sanitized.slice(-300));
@@ -839,6 +892,7 @@ async function requestClaude(prompt: string) {
       console.error('[claude] Failed to parse JSON after all repairs');
       console.error('[claude] Raw Claude response:', textContent);
       console.error('[claude] Cleaned content:', cleanContent);
+      console.error('[claude] Normalized content:', normalizedContent);
       console.error('[claude] Sanitized content:', sanitized);
       console.error('[claude] First error:', firstError);
       console.error('[claude] Second error:', secondError);

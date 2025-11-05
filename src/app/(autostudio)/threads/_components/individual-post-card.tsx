@@ -188,8 +188,7 @@ export function IndividualPostCard() {
                   <label key={comment.order} className="text-sm font-medium text-[color:var(--color-text-primary)] min-w-0 block">
                     コメント {comment.order}
                     <textarea
-                      className="mt-2 w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-                      rows={4}
+                      className="mt-2 w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] h-72 md:h-48"
                       value={comment.text}
                       onChange={(event) =>
                         setEditableContent((current) =>
