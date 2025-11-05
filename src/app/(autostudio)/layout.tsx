@@ -14,10 +14,10 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
           <div className="page-container flex h-16 items-center justify-between gap-3">
             <Link
               href="/home"
-              className="flex items-center gap-2 text-base font-semibold text-[color:var(--color-text-primary)]"
+              className="flex flex-col items-start text-base font-semibold text-[color:var(--color-text-primary)]"
             >
               <span className="text-base">AutoStudio</span>
-              <span className="text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
+              <span className="mt-0.5 text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
                 Autopilot System
               </span>
             </Link>
@@ -31,7 +31,7 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
             <div className="flex h-full flex-col gap-6 px-6 py-8">
               <Link
                 href="/home"
-                className="flex items-center gap-3 text-lg font-semibold text-[color:var(--color-text-primary)]"
+                className="flex flex-col items-start gap-1 text-lg font-semibold text-[color:var(--color-text-primary)]"
               >
                 <span>AutoStudio</span>
                 <span className="text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">

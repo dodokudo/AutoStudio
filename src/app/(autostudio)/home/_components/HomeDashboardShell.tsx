@@ -8,6 +8,7 @@ import { Table } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
+import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import type { HomeDashboardData, HomeHighlight } from '@/lib/home/dashboard';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
@@ -41,8 +42,11 @@ type TopCard = {
   description?: string | null;
 };
 
+const HOME_TAB_ITEMS = [{ id: 'home', label: 'ホーム' }];
+const NOOP = () => {};
+
 export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDashboardShellProps) {
-  const { followerBreakdown, highlights, tasks, lineFunnel, lineRegistrationBySource, clickSummary } = data;
+  const { followerBreakdown, highlights, tasks, lineFunnel, lineRegistrationBySource, clickSummary, platformSummaries } = data;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -83,19 +87,13 @@ export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDa
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {topCards.map((card) => (
-            <Card key={card.key} className={dashboardCardClass}>
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
-              <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
-              {card.delta ? <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.delta}</p> : null}
-              {card.description ? (
-                <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.description}</p>
-              ) : null}
-            </Card>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <DashboardTabsInteractive
+          items={HOME_TAB_ITEMS}
+          value="home"
+          onChange={NOOP}
+          className="flex-1 min-w-[160px]"
+        />
         <DashboardDateRangePicker
           options={rangeOptions}
           value={selectedRange}
@@ -104,6 +102,55 @@ export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDa
           latestLabel={`最新 ${data.period.end}`}
         />
       </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {topCards.map((card) => (
+          <Card key={card.key} className={dashboardCardClass}>
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
+            <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
+            {card.delta ? <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.delta}</p> : null}
+            {card.description ? (
+              <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.description}</p>
+            ) : null}
+          </Card>
+        ))}
+      </div>
+
+      {platformSummaries?.length ? (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">媒体別ファネル分析</h2>
+              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">Threads / Instagram / YouTube の主要指標サマリー。</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4">
+            {platformSummaries.map((platform) => (
+              <div
+                key={platform.key}
+                className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-5 py-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-[160px]">
+                    <p className="text-base font-semibold text-[color:var(--color-text-primary)]">{platform.title}</p>
+                  </div>
+                  <dl className="flex flex-1 flex-wrap items-start gap-x-8 gap-y-4 text-sm text-[color:var(--color-text-secondary)]">
+                    {platform.metrics.map((metric) => (
+                      <div key={`${platform.key}-${metric.label}`} className="min-w-[140px]">
+                        <dt className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{metric.label}</dt>
+                        <dd className="mt-1 text-lg font-semibold text-[color:var(--color-text-primary)]">{metric.value}</dd>
+                        {metric.helper ? (
+                          <p className="mt-0.5 text-xs text-[color:var(--color-text-secondary)]">{metric.helper}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
         <Card className="p-6">

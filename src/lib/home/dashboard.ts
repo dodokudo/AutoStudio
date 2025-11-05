@@ -43,6 +43,16 @@ export interface HomeHighlight {
   permalink?: string | null;
 }
 
+export interface HomePlatformSummary {
+  key: 'threads' | 'instagram' | 'youtube';
+  title: string;
+  metrics: Array<{
+    label: string;
+    value: string;
+    helper?: string | null;
+  }>;
+}
+
 export interface HomeDashboardData {
   period: {
     start: string;
@@ -63,6 +73,7 @@ export interface HomeDashboardData {
   youtubeTopVideo?: YoutubeVideoSummary;
   instagramTopReel?: ReelHighlight;
   threadsTopPost?: PostInsight;
+  platformSummaries: HomePlatformSummary[];
 }
 
 function toDateKey(date: Date): string {
@@ -72,7 +83,6 @@ function toDateKey(date: Date): string {
 function formatNumberIntl(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);
 }
-
 async function fetchLineAudienceTotal(projectId: string): Promise<number | null> {
   try {
     const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
@@ -298,6 +308,57 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
     }),
   );
 
+  const lineRegistrationMap = new Map(lineRegistrationBySource.map((item) => [item.source, item.registrations]));
+
+  const threadsImpressionsTotal = threadsInsights.posts.reduce<number>((sum, post) => {
+    const impressions = Number(post.insights?.impressions ?? 0);
+    return sum + (Number.isFinite(impressions) ? impressions : 0);
+  }, 0);
+  const threadsLinkClicks = linkClicksByCategory.get('threads') ?? 0;
+  const threadsLineRegistrations = lineRegistrationMap.get('Threads') ?? 0;
+
+  const instagramLatestReach = instagramData.latestFollower?.reach ?? 0;
+  const instagramLinkClicks = linkClicksByCategory.get('instagram') ?? 0;
+  const instagramLineRegistrations = lineRegistrationMap.get('Instagram') ?? 0;
+
+  const youtubeTotalSubscribers = youtubeSubscriberLatest ?? 0;
+  const youtubeTotalViews = youtubeData.channelSummary?.viewCount ?? 0;
+  const youtubeLinkClicks = linkClicksByCategory.get('youtube');
+  const youtubeLineRegistrations = lineRegistrationMap.get('YouTube') ?? (youtubeData.lineRegistrationCount ?? 0);
+
+  const platformSummaries: HomePlatformSummary[] = [
+    {
+      key: 'threads',
+      title: 'Threads',
+      metrics: [
+        { label: 'フォロワー', value: `${formatNumberIntl(threadsFollowerLatest)} 人` },
+        { label: 'インプレッション', value: `${formatNumberIntl(threadsImpressionsTotal)} 回` },
+        { label: 'リンククリック', value: `${formatNumberIntl(threadsLinkClicks)} 件` },
+        { label: 'LINE登録', value: `${formatNumberIntl(threadsLineRegistrations)} 人` },
+      ],
+    },
+    {
+      key: 'instagram',
+      title: 'Instagram',
+      metrics: [
+        { label: 'フォロワー', value: `${formatNumberIntl(instagramFollowerLatest)} 人` },
+        { label: 'リーチ', value: `${formatNumberIntl(instagramLatestReach)} 件` },
+        { label: 'リンククリック', value: `${formatNumberIntl(instagramLinkClicks)} 件` },
+        { label: 'LINE登録', value: `${formatNumberIntl(instagramLineRegistrations)} 人` },
+      ],
+    },
+    {
+      key: 'youtube',
+      title: 'YouTube',
+      metrics: [
+        { label: '登録者', value: `${formatNumberIntl(youtubeTotalSubscribers)} 人` },
+        { label: '再生回数', value: `${formatNumberIntl(Math.round(youtubeTotalViews))} 回` },
+        { label: 'リンククリック', value: '〇', helper: youtubeLinkClicks ? `既存クリック ${formatNumberIntl(youtubeLinkClicks)} 件` : 'データ取得準備中' },
+        { label: 'LINE登録', value: `${formatNumberIntl(youtubeLineRegistrations)} 人` },
+      ],
+    },
+  ];
+
   return {
     period: {
       start: toDateKey(periodStart),
@@ -315,5 +376,6 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
     youtubeTopVideo: youtubeHighlightVideo,
     instagramTopReel: instagramHighlightReel,
     threadsTopPost: threadsHighlightPost,
+    platformSummaries,
   };
 }
