@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { classNames } from '@/lib/classNames';
 
 const navItems = [
   { id: 'home', href: '/home', label: 'Home' },
@@ -16,18 +17,20 @@ export function NavigationTabs() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-2 text-sm overflow-x-auto md:flex-wrap scrollbar-hide">
+    <nav className="flex items-center gap-2 overflow-x-auto text-sm scrollbar-hide md:flex-col md:items-stretch md:gap-1 md:overflow-visible">
       {navItems.map((item) => {
         const isActive = pathname?.startsWith(item.href);
         return (
           <Link
             key={item.id}
             href={item.href}
-            className={
-              isActive
-                ? 'inline-flex h-10 items-center rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-text-primary)] px-4 font-medium text-white transition-colors whitespace-nowrap flex-shrink-0'
-                : 'inline-flex h-10 items-center rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2] whitespace-nowrap flex-shrink-0'
-            }
+            className={classNames(
+              'inline-flex h-10 items-center whitespace-nowrap rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2] flex-shrink-0',
+              'md:h-10 md:w-full md:justify-start md:px-3 md:text-sm',
+              isActive &&
+                'border-[color:var(--color-accent)] bg-[color:var(--color-text-primary)] text-white hover:bg-[color:var(--color-text-primary)]',
+              isActive && 'md:bg-[color:var(--color-accent-muted)] md:text-[color:var(--color-accent-dark)] md:shadow-[var(--shadow-soft)]'
+            )}
           >
             {item.label}
           </Link>
