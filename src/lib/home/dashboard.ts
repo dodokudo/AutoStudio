@@ -322,7 +322,7 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
   const instagramLineRegistrations = lineRegistrationMap.get('Instagram') ?? 0;
 
   const youtubeTotalSubscribers = youtubeSubscriberLatest ?? 0;
-  const youtubeTotalViews = youtubeData.channelSummary?.viewCount ?? 0;
+  const youtubeViewsInRange = sumValuesWithinRange(youtubeData.overviewSeries, periodStartKey, periodEndKey, (point) => Number(point.views ?? 0));
   const youtubeLinkClicks = linkClicksByCategory.get('youtube');
   const youtubeLineRegistrations = lineRegistrationMap.get('YouTube') ?? (youtubeData.lineRegistrationCount ?? 0);
 
@@ -352,7 +352,7 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
       title: 'YouTube',
       metrics: [
         { label: '登録者', value: `${formatNumberIntl(youtubeTotalSubscribers)} 人` },
-        { label: '再生回数', value: `${formatNumberIntl(Math.round(youtubeTotalViews))} 回` },
+        { label: '再生回数', value: `${formatNumberIntl(Math.round(youtubeViewsInRange))} 回` },
         { label: 'リンククリック', value: '〇', helper: youtubeLinkClicks ? `既存クリック ${formatNumberIntl(youtubeLinkClicks)} 件` : 'データ取得準備中' },
         { label: 'LINE登録', value: `${formatNumberIntl(youtubeLineRegistrations)} 人` },
       ],

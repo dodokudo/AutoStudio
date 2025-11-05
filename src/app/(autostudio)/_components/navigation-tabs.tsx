@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { classNames } from '@/lib/classNames';
 
 const navItems = [
-  { id: 'home', href: '/home', label: 'Home' },
+  { id: 'top', href: '/home', label: 'Top' },
   { id: 'threads', href: '/threads', label: 'Threads' },
   { id: 'instagram', href: '/instagram', label: 'Instagram' },
   { id: 'ads', href: '/ads', label: 'Ads' },
