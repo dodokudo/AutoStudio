@@ -745,160 +745,201 @@ function validateSinglePost(payload: ThreadsPromptPayload, raw: unknown, index: 
   return result;
 }
 
-async function requestClaude(prompt: string) {
-  console.log('[claude] Sending request to Claude API...');
-  const response = await fetch(CLAUDE_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': CLAUDE_API_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 20000,
-      temperature: 0.9,
-      system:
-        'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt. IMPORTANT: Use \\n\\n for line breaks in text content to improve readability.',
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    }),
-  });
+async function requestClaude(prompt: string, retryCount = 0): Promise<unknown> {
+  const MAX_RETRIES = 3;
+  const TIMEOUT_MS = 90000; // 90 seconds
+  const RETRY_DELAY_MS = 2000; // 2 seconds base delay
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.error('[claude] API error:', response.status, response.statusText, text);
-    throw new Error('Claude API error: ' + response.status + ' ' + response.statusText + ' ' + text);
-  }
+  console.log('[claude] Sending request to Claude API... (attempt ' + (retryCount + 1) + '/' + (MAX_RETRIES + 1) + ')');
 
-  const data = await response.json();
-  console.log('[claude] Raw API response structure:', {
-    hasContent: !!data?.content,
-    contentLength: data?.content?.length,
-    firstContentType: data?.content?.[0]?.type
-  });
-
-  const textContent = data?.content?.[0]?.text;
-  if (!textContent || typeof textContent !== 'string') {
-    console.error('[claude] Unexpected response format:', data);
-    throw new Error('Unexpected Claude response format');
-  }
-
-  console.log('[claude] Raw text content length:', textContent.length);
-  console.log('[claude] Raw text content preview:', textContent.slice(0, 300));
-
-  // Remove markdown code blocks
-  let cleanContent = textContent;
-  const fenceToken = String.fromCharCode(96).repeat(3);
-  const jsonFenceToken = fenceToken + 'json';
-  cleanContent = cleanContent.split(jsonFenceToken).join('');
-  cleanContent = cleanContent.split(fenceToken).join('');
-  cleanContent = cleanContent.trim();
-
-  console.log('[claude] Clean content length:', cleanContent.length);
-  console.log('[claude] Clean content preview:', cleanContent.slice(0, 300));
-
-  const normalizedContent = escapeUnescapedJsonNewlines(cleanContent);
-  if (normalizedContent !== cleanContent) {
-    console.log('[claude] Normalized unescaped newlines inside JSON string values');
-  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const parsed = JSON.parse(normalizedContent) as unknown;
-    console.log('[claude] Successfully parsed JSON:', {
-      type: typeof parsed,
-      hasPost: parsed && typeof parsed === 'object' && 'post' in parsed,
-      hasPosts: parsed && typeof parsed === 'object' && 'posts' in parsed,
-      keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : []
-    });
-    return parsed;
-  } catch (firstError) {
-    console.log('[claude] First JSON parse failed, attempting repair...');
-    let sanitized = normalizedContent
-      // normalize smart quotes to regular quotes
-      .replace(/[\u201C\u201D]/g, '"')
-      .replace(/[\u2018\u2019]/g, "'")
-      // strip zero-width / non-breaking spaces
-      .replace(/[\u00A0\u200B\u200C\u200D]/g, '')
-      // remove trailing commas before ] or }
-      .replace(/,\s*([\]}])/g, '$1')
-      // fix double commas
-      .replace(/,\s*,/g, ',');
-
-    // Fix unclosed strings - find strings that don't have closing quotes
-    // Match pattern: "key": "value that doesn't close properly
-    sanitized = sanitized.replace(/"([^"]*?)"\s*:\s*"([^"]*?)(\n|$)(?!")/g, (match, key, value, ending) => {
-      // If the value doesn't end with a quote, add one
-      if (!value.endsWith('"')) {
-        return `"${key}": "${value}"${ending}`;
-      }
-      return match;
+    const response = await fetch(CLAUDE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY!,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 20000,
+        temperature: 0.9,
+        system:
+          'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt. IMPORTANT: Use \\n\\n for line breaks in text content to improve readability.',
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      }),
+      signal: controller.signal,
     });
 
-    // Fix unclosed arrays - if we have [ without matching ]
-    const openBrackets = (sanitized.match(/\[/g) || []).length;
-    const closeBrackets = (sanitized.match(/\]/g) || []).length;
-    if (openBrackets > closeBrackets) {
-      console.log('[claude] Detected unclosed arrays, adding missing ] brackets');
-      sanitized = sanitized.trimEnd();
-      // Remove any trailing comma or incomplete text
-      sanitized = sanitized.replace(/,\s*$/, '');
-      // Add missing closing brackets
-      for (let i = 0; i < openBrackets - closeBrackets; i++) {
-        sanitized += '\n]';
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[claude] API error:', response.status, response.statusText, text);
+
+      // Retry on 502, 503, 504 errors (server/gateway issues)
+      if ((response.status === 502 || response.status === 503 || response.status === 504) && retryCount < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * Math.pow(2, retryCount);
+        console.log('[claude] Retrying after ' + delay + 'ms due to ' + response.status + ' error...');
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return requestClaude(prompt, retryCount + 1);
       }
+
+      throw new Error('Claude API error: ' + response.status + ' ' + response.statusText + ' ' + text);
     }
 
-    // Fix unclosed objects - if we have { without matching }
-    const openBraces = (sanitized.match(/\{/g) || []).length;
-    const closeBraces = (sanitized.match(/\}/g) || []).length;
-    if (openBraces > closeBraces) {
-      console.log('[claude] Detected unclosed objects, adding missing } braces');
-      sanitized = sanitized.trimEnd();
-      // Remove any trailing comma or incomplete text
-      sanitized = sanitized.replace(/,\s*$/, '');
-      // Add missing closing braces
-      for (let i = 0; i < openBraces - closeBraces; i++) {
-        sanitized += '\n}';
-      }
-    }
-
-    // Try to fix incomplete string values at the end
-    // Match pattern where a string value is not closed before a newline or end
-    sanitized = sanitized.replace(/"([^"]*?)"\s*:\s*"([^"]*?)$/gm, (match, key, value) => {
-      return `"${key}": "${value}"`;
+    const data = await response.json();
+    console.log('[claude] Raw API response structure:', {
+      hasContent: !!data?.content,
+      contentLength: data?.content?.length,
+      firstContentType: data?.content?.[0]?.type
     });
 
-    sanitized = escapeUnescapedJsonNewlines(sanitized);
+    const textContent = data?.content?.[0]?.text;
+    if (!textContent || typeof textContent !== 'string') {
+      console.error('[claude] Unexpected response format:', data);
+      throw new Error('Unexpected Claude response format');
+    }
 
-    console.log('[claude] Sanitized content length:', sanitized.length);
-    console.log('[claude] Sanitized content preview:', sanitized.slice(0, 300));
-    console.log('[claude] Sanitized content suffix:', sanitized.slice(-300));
+    console.log('[claude] Raw text content length:', textContent.length);
+    console.log('[claude] Raw text content preview:', textContent.slice(0, 300));
+
+    // Remove markdown code blocks
+    let cleanContent = textContent;
+    const fenceToken = String.fromCharCode(96).repeat(3);
+    const jsonFenceToken = fenceToken + 'json';
+    cleanContent = cleanContent.split(jsonFenceToken).join('');
+    cleanContent = cleanContent.split(fenceToken).join('');
+    cleanContent = cleanContent.trim();
+
+    console.log('[claude] Clean content length:', cleanContent.length);
+    console.log('[claude] Clean content preview:', cleanContent.slice(0, 300));
+
+    const normalizedContent = escapeUnescapedJsonNewlines(cleanContent);
+    if (normalizedContent !== cleanContent) {
+      console.log('[claude] Normalized unescaped newlines inside JSON string values');
+    }
 
     try {
-      const parsed = JSON.parse(sanitized) as unknown;
-      console.log('[claude] Successfully parsed sanitized JSON:', {
+      const parsed = JSON.parse(normalizedContent) as unknown;
+      console.log('[claude] Successfully parsed JSON:', {
         type: typeof parsed,
         hasPost: parsed && typeof parsed === 'object' && 'post' in parsed,
         hasPosts: parsed && typeof parsed === 'object' && 'posts' in parsed,
         keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : []
       });
       return parsed;
-    } catch (secondError) {
-      console.error('[claude] Failed to parse JSON after all repairs');
-      console.error('[claude] Raw Claude response:', textContent);
-      console.error('[claude] Cleaned content:', cleanContent);
-      console.error('[claude] Normalized content:', normalizedContent);
-      console.error('[claude] Sanitized content:', sanitized);
-      console.error('[claude] First error:', firstError);
-      console.error('[claude] Second error:', secondError);
-      const preview = sanitized.slice(0, 200).replace(/\s+/g, ' ');
-      throw new Error('Failed to parse Claude JSON response after repair: ' + (secondError as Error).message + '. snippet=' + preview);
+    } catch (firstError) {
+      console.log('[claude] First JSON parse failed, attempting repair...');
+      let sanitized = normalizedContent
+        // normalize smart quotes to regular quotes
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2018\u2019]/g, "'")
+        // strip zero-width / non-breaking spaces
+        .replace(/[\u00A0\u200B\u200C\u200D]/g, '')
+        // remove trailing commas before ] or }
+        .replace(/,\s*([\]}])/g, '$1')
+        // fix double commas
+        .replace(/,\s*,/g, ',');
+
+      // Fix unclosed strings - find strings that don't have closing quotes
+      // Match pattern: "key": "value that doesn't close properly
+      sanitized = sanitized.replace(/"([^"]*?)"\s*:\s*"([^"]*?)(\n|$)(?!")/g, (match, key, value, ending) => {
+        // If the value doesn't end with a quote, add one
+        if (!value.endsWith('"')) {
+          return `"${key}": "${value}"${ending}`;
+        }
+        return match;
+      });
+
+      // Fix unclosed arrays - if we have [ without matching ]
+      const openBrackets = (sanitized.match(/\[/g) || []).length;
+      const closeBrackets = (sanitized.match(/\]/g) || []).length;
+      if (openBrackets > closeBrackets) {
+        console.log('[claude] Detected unclosed arrays, adding missing ] brackets');
+        sanitized = sanitized.trimEnd();
+        // Remove any trailing comma or incomplete text
+        sanitized = sanitized.replace(/,\s*$/, '');
+        // Add missing closing brackets
+        for (let i = 0; i < openBrackets - closeBrackets; i++) {
+          sanitized += '\n]';
+        }
+      }
+
+      // Fix unclosed objects - if we have { without matching }
+      const openBraces = (sanitized.match(/\{/g) || []).length;
+      const closeBraces = (sanitized.match(/\}/g) || []).length;
+      if (openBraces > closeBraces) {
+        console.log('[claude] Detected unclosed objects, adding missing } braces');
+        sanitized = sanitized.trimEnd();
+        // Remove any trailing comma or incomplete text
+        sanitized = sanitized.replace(/,\s*$/, '');
+        // Add missing closing braces
+        for (let i = 0; i < openBraces - closeBraces; i++) {
+          sanitized += '\n}';
+        }
+      }
+
+      // Try to fix incomplete string values at the end
+      // Match pattern where a string value is not closed before a newline or end
+      sanitized = sanitized.replace(/"([^"]*?)"\s*:\s*"([^"]*?)$/gm, (match, key, value) => {
+        return `"${key}": "${value}"`;
+      });
+
+      sanitized = escapeUnescapedJsonNewlines(sanitized);
+
+      console.log('[claude] Sanitized content length:', sanitized.length);
+      console.log('[claude] Sanitized content preview:', sanitized.slice(0, 300));
+      console.log('[claude] Sanitized content suffix:', sanitized.slice(-300));
+
+      try {
+        const parsed = JSON.parse(sanitized) as unknown;
+        console.log('[claude] Successfully parsed sanitized JSON:', {
+          type: typeof parsed,
+          hasPost: parsed && typeof parsed === 'object' && 'post' in parsed,
+          hasPosts: parsed && typeof parsed === 'object' && 'posts' in parsed,
+          keys: parsed && typeof parsed === 'object' ? Object.keys(parsed) : []
+        });
+        return parsed;
+      } catch (secondError) {
+        console.error('[claude] Failed to parse JSON after all repairs');
+        console.error('[claude] Raw Claude response:', textContent);
+        console.error('[claude] Cleaned content:', cleanContent);
+        console.error('[claude] Normalized content:', normalizedContent);
+        console.error('[claude] Sanitized content:', sanitized);
+        console.error('[claude] First error:', firstError);
+        console.error('[claude] Second error:', secondError);
+        const preview = sanitized.slice(0, 200).replace(/\s+/g, ' ');
+        throw new Error('Failed to parse Claude JSON response after repair: ' + (secondError as Error).message + '. snippet=' + preview);
+      }
     }
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    // Handle timeout errors
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[claude] Request timeout after ' + TIMEOUT_MS + 'ms');
+
+      // Retry on timeout
+      if (retryCount < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * Math.pow(2, retryCount);
+        console.log('[claude] Retrying after ' + delay + 'ms due to timeout...');
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return requestClaude(prompt, retryCount + 1);
+      }
+
+      throw new Error('Claude API request timeout after ' + TIMEOUT_MS + 'ms and ' + MAX_RETRIES + ' retries');
+    }
+
+    throw error;
   }
 }
 
