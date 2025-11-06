@@ -747,7 +747,7 @@ function validateSinglePost(payload: ThreadsPromptPayload, raw: unknown, index: 
 
 async function requestClaude(prompt: string, retryCount = 0): Promise<unknown> {
   const MAX_RETRIES = 3;
-  const TIMEOUT_MS = 90000; // 90 seconds
+  const TIMEOUT_MS = 150000; // 150 seconds
   const RETRY_DELAY_MS = 2000; // 2 seconds base delay
 
   console.log('[claude] Sending request to Claude API... (attempt ' + (retryCount + 1) + '/' + (MAX_RETRIES + 1) + ')');
