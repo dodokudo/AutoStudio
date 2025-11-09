@@ -41,11 +41,28 @@ function toPlainText(value: string | Date | undefined | null): string {
 
 function sanitizeLearningSummary(summary: string | null | undefined): string {
   if (!summary) return '';
-  const trimmed = summary.trim();
+  let trimmed = summary.trim();
+
+  // Remove all emojis and other pictographic characters
+  // This regex matches emoji ranges and other Unicode symbols
+  trimmed = trimmed.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{231A}\u{231B}\u{2328}\u{23CF}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}]/gu, '');
+
   if (trimmed.length <= LEARNING_SUMMARY_MAX_LENGTH) {
     return trimmed;
   }
-  return `${trimmed.slice(0, LEARNING_SUMMARY_MAX_LENGTH - 1)}…`;
+
+  // Safely truncate without breaking surrogate pairs
+  let truncated = trimmed.slice(0, LEARNING_SUMMARY_MAX_LENGTH - 1);
+
+  // Check if we cut in the middle of a surrogate pair
+  // High surrogate range: 0xD800-0xDBFF
+  const lastCharCode = truncated.charCodeAt(truncated.length - 1);
+  if (lastCharCode >= 0xD800 && lastCharCode <= 0xDBFF) {
+    // Remove the orphaned high surrogate
+    truncated = truncated.slice(0, -1);
+  }
+
+  return `${truncated}…`;
 }
 
 async function fetchLatestLearnings(): Promise<LearningResult | null> {
@@ -110,6 +127,10 @@ const JSON_SCHEMA_EXAMPLE = `{
 const KUDO_MASTER_PROMPT = String.raw`# MISSION
 あなたは工藤さんのThreads投稿を完璧に再現するプロのAIマーケティングライターです。
 以下の全要素を統合し、10万閲覧レベルの投稿を生成してください。
+
+**【絶対禁止】絵文字の使用厳禁**
+- 投稿本文・コメント欄に絵文字は一切使用しないこと
+- 記号（▼、■など）や数字は使用可能
 
 ## 工藤さんの文体DNA【完全解析】
 
@@ -489,7 +510,7 @@ function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
   }
 
   const sections: string[] = [];
-  sections.push('### 🌟 門口さん（@mon_guchi）- 文章構成の達人');
+  sections.push('### 門口さん（@mon_guchi）- 文章構成の達人');
   sections.push(`ティアS/Aから上位5本を特別抽出。文章構成・フック・展開方法を学習。固定ポスト誘導手法も参考に。`);
   sections.push('');
 
@@ -516,7 +537,7 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
     const learnings = await fetchLatestLearnings();
     if (learnings && learnings.sampleCount >= 5 && learnings.learningSummary) {
       const summary = learnings.learningSummary.trim();
-      learningLines.push('## 📊 ユーザー編集パターン学習（優先度：最高）');
+      learningLines.push('## ユーザー編集パターン学習（優先度：最高）');
       learningLines.push(summary);
       learningLines.push('上記のパターンに従って生成してください。特に繰り返し削除される表現は使わず、追加される表現は最初から含めること。');
       learningLines.push('');
@@ -526,10 +547,10 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
   }
 
   const webResearchSection = payload.webResearch ? [
-    '## 🔥 最新AI情報（Tavily検索結果）',
+    '## 最新AI情報（Tavily検索結果）',
     `取得日時: ${new Date(payload.webResearch.searchedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`,
     '',
-    '### 📰 最新リリース・アップデート（投稿の2本で活用）',
+    '### 最新リリース・アップデート（投稿の2本で活用）',
     '最も新しいAIニュースを優先して参考にしてください。',
     ...payload.webResearch.latestNews.map((item, index) => {
       const dateStr = item.extractedDate
@@ -543,7 +564,7 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
       ].join('\n');
     }),
     '',
-    '### 💡 実践的HowTo・活用事例（投稿の8本で活用）',
+    '### 実践的HowTo・活用事例（投稿の8本で活用）',
     '具体的な業務効率化や時短テクニックを参考にしてください。',
     ...payload.webResearch.practicalHowTo.map((item, index) => {
       const dateStr = item.extractedDate
@@ -597,7 +618,7 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
     payload.writingChecklist.reminders.map((item) => `- ${item}`).join('\n'),
     '',
     '## 生成指示',
-    '1. 🌟 門口さんの投稿から文章構成・フック・展開方法を学習',
+    '1. 門口さんの投稿から文章構成・フック・展開方法を学習',
     '   - 文章の組み立て方、読者の引き込み方',
     '   - 補足：固定ポスト誘導手法も参考にする',
     '',
@@ -770,7 +791,7 @@ async function requestClaude(prompt: string, retryCount = 0): Promise<unknown> {
         max_tokens: 20000,
         temperature: 0.9,
         system:
-          'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt. IMPORTANT: Use \\n\\n for line breaks in text content to improve readability.',
+          'You are an expert Japanese social media planner who outputs strict JSON only. Never use markdown code blocks or explanations. Respect all constraints from the user prompt. IMPORTANT: Use \\n\\n for line breaks in text content to improve readability. CRITICAL: Never use emojis in any generated content.',
         messages: [
           {
             role: 'user',
