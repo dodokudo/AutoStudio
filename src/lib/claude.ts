@@ -39,30 +39,42 @@ function toPlainText(value: string | Date | undefined | null): string {
   return String(value);
 }
 
-function sanitizeLearningSummary(summary: string | null | undefined): string {
-  if (!summary) return '';
-  let trimmed = summary.trim();
+function removeEmojis(text: string): string {
+  // Remove all emojis and pictographic characters
+  return text.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{231A}\u{231B}\u{2328}\u{23CF}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}]/gu, '');
+}
 
-  // Remove all emojis and other pictographic characters
-  // This regex matches emoji ranges and other Unicode symbols
-  trimmed = trimmed.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{231A}\u{231B}\u{2328}\u{23CF}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}]/gu, '');
-
-  if (trimmed.length <= LEARNING_SUMMARY_MAX_LENGTH) {
-    return trimmed;
+function safeSlice(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) {
+    return text;
   }
 
-  // Safely truncate without breaking surrogate pairs
-  let truncated = trimmed.slice(0, LEARNING_SUMMARY_MAX_LENGTH - 1);
+  // Remove emojis first
+  let cleaned = removeEmojis(text);
+
+  // Then truncate safely
+  let truncated = cleaned.slice(0, maxLength);
 
   // Check if we cut in the middle of a surrogate pair
-  // High surrogate range: 0xD800-0xDBFF
   const lastCharCode = truncated.charCodeAt(truncated.length - 1);
   if (lastCharCode >= 0xD800 && lastCharCode <= 0xDBFF) {
     // Remove the orphaned high surrogate
     truncated = truncated.slice(0, -1);
   }
 
-  return `${truncated}…`;
+  return truncated;
+}
+
+function sanitizeLearningSummary(summary: string | null | undefined): string {
+  if (!summary) return '';
+  const trimmed = summary.trim();
+
+  if (trimmed.length <= LEARNING_SUMMARY_MAX_LENGTH) {
+    return removeEmojis(trimmed);
+  }
+
+  // Use safeSlice which handles both emoji removal and surrogate pairs
+  return safeSlice(trimmed, LEARNING_SUMMARY_MAX_LENGTH - 1) + '…';
 }
 
 async function fetchLatestLearnings(): Promise<LearningResult | null> {
@@ -457,7 +469,7 @@ function formatCompetitorSelected(payload: ThreadsPromptPayload): string {
       sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
       sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
       sections.push(`   - 評価: ${post.evaluation} / ティア: ${post.tier}`);
-      sections.push(`   - 本文: ${post.content.slice(0, 500)}`);
+      sections.push(`   - 本文: ${safeSlice(post.content, 500)}`);
     });
   }
 
@@ -468,7 +480,7 @@ function formatCompetitorSelected(payload: ThreadsPromptPayload): string {
       sections.push(`${idx + 1}. @${post.username} (${post.genre})`);
       sections.push(`   - スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
       sections.push(`   - 評価: ${post.evaluation} / ティア: ${post.tier}`);
-      sections.push(`   - 本文: ${post.content.slice(0, 500)}`);
+      sections.push(`   - 本文: ${safeSlice(post.content, 500)}`);
     });
   }
 
@@ -487,7 +499,7 @@ function formatOwnWinningPosts(payload: ThreadsPromptPayload): string {
   topPosts.forEach((post, idx) => {
     sections.push(`${idx + 1}. スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions_total.toLocaleString()} / フォロワー増(2日): +${post.followers_delta_2d}`);
     sections.push(`   - 評価: ${post.evaluation}`);
-    sections.push(`   - 本文: ${post.content.slice(0, 500)}`);
+    sections.push(`   - 本文: ${safeSlice(post.content, 500)}`);
   });
 
   const evalCounts = payload.ownWinningPosts.reduce((acc, post) => {
@@ -518,7 +530,7 @@ function formatMonguchiPosts(payload: ThreadsPromptPayload): string {
     sections.push(`${idx + 1}. スコア: ${post.score.toFixed(1)} / インプ: ${post.impressions.toLocaleString()} / フォロワー増: +${post.followers_delta}`);
     sections.push(`   - ティア: ${post.tier}`);
     sections.push(`   - 投稿日: ${post.post_date}`);
-    sections.push(`   - 全文: ${post.content}`);
+    sections.push(`   - 全文: ${removeEmojis(post.content)}`);
     sections.push('');
   });
 
