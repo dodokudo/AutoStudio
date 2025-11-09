@@ -50,7 +50,7 @@ function safeSlice(text: string, maxLength: number): string {
   }
 
   // Remove emojis first
-  let cleaned = removeEmojis(text);
+  const cleaned = removeEmojis(text);
 
   // Then truncate safely
   let truncated = cleaned.slice(0, maxLength);
