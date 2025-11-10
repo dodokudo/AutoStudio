@@ -36,10 +36,13 @@ function formatEta(seconds: number) {
   return secs === 0 ? `残り約${minutes}分` : `残り約${minutes}分${secs}秒`;
 }
 
+type PostType = 'ai-tips' | 'threads-operation';
+
 export function RegenerateButton() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
+  const [postType, setPostType] = useState<PostType>('ai-tips');
   const [modalState, setModalState] = useState<ModalState>('hidden');
   const [stageMessage, setStageMessage] = useState('生成準備中…');
   const [progressState, setProgressState] = useState<ProgressState>({ current: 0, total: 0 });
@@ -113,7 +116,11 @@ export function RegenerateButton() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/threads/generate', { method: 'POST' });
+      const apiEndpoint = postType === 'ai-tips'
+        ? '/api/threads/generate'
+        : '/api/threads/generate-operation';
+
+      const res = await fetch(apiEndpoint, { method: 'POST' });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || '生成APIが失敗しました');
@@ -181,6 +188,30 @@ export function RegenerateButton() {
 
   return (
     <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1">
+        <button
+          onClick={() => setPostType('ai-tips')}
+          disabled={loading || isPending}
+          className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+            postType === 'ai-tips'
+              ? 'bg-[color:var(--color-accent)] text-white'
+              : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+          } disabled:opacity-50`}
+        >
+          AI活用系
+        </button>
+        <button
+          onClick={() => setPostType('threads-operation')}
+          disabled={loading || isPending}
+          className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+            postType === 'threads-operation'
+              ? 'bg-[color:var(--color-accent)] text-white'
+              : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+          } disabled:opacity-50`}
+        >
+          Threads運用系
+        </button>
+      </div>
       <Button onClick={handleClick} disabled={loading || isPending}>
         {loading || isPending ? '生成中…' : '投稿案を再生成'}
       </Button>
