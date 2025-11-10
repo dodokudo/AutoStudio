@@ -1,9 +1,11 @@
-import { resolveProjectId } from '@/lib/bigquery';
+import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
 import { replaceTodayPlans } from '@/lib/bigqueryPlans';
 import { THREADS_OPERATION_PROMPT } from '@/lib/threadsOperationPrompt';
 import type { PlanStatus, ThreadPlanSummary } from '@/types/threadPlan';
+import type { BigQuery } from '@google-cloud/bigquery';
 
 const PROJECT_ID = resolveProjectId();
+const DATASET = 'autostudio_threads';
 
 type StreamEvent =
   | { type: 'stage'; stage: string; message: string }
@@ -157,10 +159,146 @@ function applyHookToTheme(theme: string, hookTemplate: string): string {
   return hookTemplate.replace('{theme}', theme);
 }
 
+interface MonguchiPost {
+  account_name: string;
+  username: string;
+  post_date: string;
+  content: string;
+  impressions: number;
+  likes: number;
+  followers: number;
+  followers_delta: number;
+  tier: 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C';
+  score: number;
+}
+
+function toPlainString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+    const inner = (value as Record<string, unknown>).value;
+    return typeof inner === 'string' ? inner : null;
+  }
+  return String(value);
+}
+
+async function runQuery<T = Record<string, unknown>>(
+  client: BigQuery,
+  sql: string,
+  params?: Record<string, unknown>,
+): Promise<T[]> {
+  const [rows] = await client.query({ query: sql, params });
+  return rows as T[];
+}
+
+async function fetchMonguchiPostsForOperation(
+  client: BigQuery,
+  projectId: string,
+): Promise<MonguchiPost[]> {
+  const sql = `
+WITH max_post AS (
+  SELECT MAX(DATE(post_date)) AS latest_date
+  FROM \`${projectId}.${DATASET}.competitor_posts_raw\`
+),
+latest_genre AS (
+  SELECT
+    username,
+    ARRAY_AGG(STRUCT(date, genre) ORDER BY date DESC LIMIT 1)[OFFSET(0)].genre AS genre
+  FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+  GROUP BY username
+),
+daily AS (
+  SELECT
+    username,
+    date AS daily_date,
+    followers,
+    CASE
+      WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) IS NULL THEN 0
+      WHEN LAG(followers) OVER (PARTITION BY username ORDER BY date) = 0 THEN 0
+      ELSE followers - LAG(followers) OVER (PARTITION BY username ORDER BY date)
+    END AS followers_delta
+  FROM \`${projectId}.${DATASET}.competitor_account_daily\`
+  WHERE followers > 0
+),
+joined AS (
+  SELECT
+    p.account_name,
+    p.username,
+    DATE(p.post_date) AS post_date,
+    p.content,
+    p.impressions,
+    p.likes,
+    g.genre,
+    d.followers,
+    COALESCE(d.followers_delta, 0) AS followers_delta,
+    CASE
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_win"
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) BETWEEN 15 AND 39 THEN "pattern_niche_hit"
+      WHEN p.impressions BETWEEN 10000 AND 29999 AND COALESCE(d.followers_delta,0) >= 15 THEN "pattern_niche_hit"
+      WHEN p.impressions < 30000 AND COALESCE(d.followers_delta,0) >= 40 THEN "pattern_hidden_gem"
+      ELSE "pattern_other"
+    END AS evaluation,
+    CASE
+      WHEN p.impressions >= 30000 AND COALESCE(d.followers_delta,0) >= 100 THEN "tier_S"
+      WHEN (p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 50)
+           OR (p.impressions < 20000 AND COALESCE(d.followers_delta,0) >= 80) THEN "tier_A"
+      WHEN p.impressions >= 20000 AND COALESCE(d.followers_delta,0) >= 30 THEN "tier_B"
+      ELSE "tier_C"
+    END AS tier,
+    (COALESCE(d.followers_delta,0) * 12.0) + (p.impressions / 2000.0) AS score
+  FROM \`${projectId}.${DATASET}.competitor_posts_raw\` p
+  CROSS JOIN max_post m
+  LEFT JOIN latest_genre g ON p.username = g.username
+  LEFT JOIN daily d ON p.username = d.username AND DATE(p.post_date) = d.daily_date
+  WHERE DATE(p.post_date) BETWEEN DATE_SUB(m.latest_date, INTERVAL 30 DAY) AND m.latest_date
+    AND p.username = 'mon_guchi'
+    AND LENGTH(p.content) > 500
+)
+SELECT *
+FROM joined
+WHERE evaluation IN ("pattern_win","pattern_niche_hit","pattern_hidden_gem")
+  AND tier IN ('tier_S', 'tier_A')
+ORDER BY RAND()
+LIMIT 20
+  `;
+
+  type Row = {
+    account_name?: string;
+    username?: string;
+    post_date?: string;
+    content?: string;
+    impressions?: number;
+    likes?: number;
+    followers?: number;
+    followers_delta?: number;
+    tier?: string;
+    score?: number;
+  };
+
+  const rows = await runQuery<Row>(client, sql);
+  return rows.map((row) => ({
+    account_name: row.account_name ?? '',
+    username: row.username ?? '',
+    post_date: toPlainString(row.post_date) ?? '',
+    content: row.content ?? '',
+    impressions: Number(row.impressions ?? 0),
+    likes: Number(row.likes ?? 0),
+    followers: Number(row.followers ?? 0),
+    followers_delta: Number(row.followers_delta ?? 0),
+    tier: (row.tier ?? 'tier_C') as 'tier_S' | 'tier_A' | 'tier_B' | 'tier_C',
+    score: Number(row.score ?? 0),
+  }));
+}
+
 async function generateThreadsOperationPosts(): Promise<ClaudePost[]> {
   if (!CLAUDE_API_KEY) {
     throw new Error('CLAUDE_API_KEY is not configured');
   }
+
+  // 門口さんの投稿を20件取得
+  const client = createBigQueryClient(PROJECT_ID);
+  const monguchiPosts = await fetchMonguchiPostsForOperation(client, PROJECT_ID);
 
   const selectedThemes = selectRandomThemes(5); // 5個のテーマを選択
   const posts: ClaudePost[] = [];
@@ -170,7 +308,25 @@ async function generateThreadsOperationPosts(): Promise<ClaudePost[]> {
     const hook = selectHookPattern();
     const finalTheme = applyHookToTheme(theme, hook.template);
 
+    // 門口さんの投稿例をプロンプトに追加
+    const monguchiExamples = monguchiPosts.map((post, idx) => {
+      return `### 参考例${idx + 1}（${post.impressions.toLocaleString()}imp / フォロワー増${post.followers_delta}名 / ${post.tier}）\n${post.content}\n`;
+    }).join('\n');
+
     const prompt = `${THREADS_OPERATION_PROMPT}
+
+# 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿20件）
+以下の投稿の構成・文体・リズム・表現を完全にトレースしてThreads運用系の投稿を作成してください。
+特に以下の要素を真似る:
+- フックの作り方
+- 体験談の入れ方
+- 数値の見せ方
+- 箇条書きの使い方
+- 改行のリズム
+- 関西弁のトーン
+- Before→Afterの訴求方法
+
+${monguchiExamples}
 
 # 今回の生成依頼
 ## テーマ
@@ -250,6 +406,7 @@ export async function POST() {
     const startTime = Date.now();
     try {
       await send({ type: 'stage', stage: 'initializing', message: 'Threads運用系投稿を準備しています…' });
+      await send({ type: 'stage', stage: 'fetching', message: '門口さんの高パフォーマンス投稿20件を取得中…' });
 
       const total = 5;
       await send({ type: 'start', total });
