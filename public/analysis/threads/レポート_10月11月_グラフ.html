@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threads運用レポート【2025年10月〜11月前半】データ分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Hiragino Sans', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #333; line-height: 1.8; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 30px; }
+        header { text-align: center; color: #fff; margin-bottom: 60px; }
+        h1 { font-size: 48px; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .subtitle { font-size: 24px; margin-bottom: 20px; opacity: 0.95; }
+        .meta { font-size: 16px; opacity: 0.9; }
+        section { background: #fff; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
+        h2 { font-size: 32px; color: #667eea; margin-bottom: 30px; border-bottom: 3px solid #667eea; padding-bottom: 10px; }
+        h3 { font-size: 24px; color: #764ba2; margin: 30px 0 15px 0; }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin: 30px 0; }
+        .metric-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 25px; border-radius: 15px; text-align: center; box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3); }
+        .metric-label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; }
+        .metric-value { font-size: 36px; font-weight: bold; margin-bottom: 5px; }
+        .metric-sub { font-size: 12px; opacity: 0.8; }
+        .chart-container { position: relative; height: 400px; margin: 30px 0; }
+        .table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .table th, .table td { padding: 15px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+        .table th { background: #f5f5f5; color: #667eea; font-weight: bold; }
+        .table tr:hover { background: #f9f9f9; }
+        .highlight { background: linear-gradient(transparent 60%, #ffd700 60%); font-weight: bold; }
+        .success-box { background: #d4edda; border-left: 5px solid #28a745; padding: 20px; margin: 20px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Threads運用レポート</h1>
+            <div class="subtitle">【2025年10月〜11月前半】</div>
+            <div class="subtitle">データ分析 & パフォーマンス可視化</div>
+            <div class="meta">分析期間：2025年10月1日〜11月10日（41日間）<br>作成日：2025年11月10日</div>
+        </header>
+
+        <section>
+            <h2>📊 サマリー</h2>
+            <div class="metrics">
+                <div class="metric-card"><div class="metric-label">総投稿数</div><div class="metric-value">498件</div></div>
+                <div class="metric-card"><div class="metric-label">総インプレッション</div><div class="metric-value">124万</div></div>
+                <div class="metric-card"><div class="metric-label">平均imp</div><div class="metric-value">2,500</div></div>
+                <div class="metric-card"><div class="metric-label">勝ち投稿（10,000+）</div><div class="metric-value">14件</div><div class="metric-sub">勝率 2.8%</div></div>
+                <div class="metric-card"><div class="metric-label">フォロワー増加</div><div class="metric-value">1,988人</div></div>
+                <div class="metric-card"><div class="metric-label">LINE登録（Threads経由）</div><div class="metric-value">160件</div></div>
+            </div>
+        </section>
+
+        <section>
+            <h2>📈 日別推移（インプレッション・フォロワー・LINE登録）</h2>
+            <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+            <p style="font-size: 14px; color: #666; margin-top: 10px;">📌 10月4日に大型バズ（318,170imp）+ フォロワー303人増 + LINE登録31件（Threads経由）を記録</p>
+        </section>
+
+        <section>
+            <h2>📊 投稿タイプ別パフォーマンス</h2>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ 分類ロジック修正完了</h3>
+                <p style="margin-bottom: 10px;"><strong>改善後の分類ルール：</strong></p>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>ノウハウ系</strong>: 「方法」「手順」「教えます」「解説」「コツ」「使い分け」などを含む → <span style="color: #28a745; font-weight: bold;">82.7%</span></li>
+                    <li><strong>ストーリー系</strong>: 体験談・事例紹介など → <span style="color: #6c757d; font-weight: bold;">13.1%</span></li>
+                    <li><strong>質問系</strong>: 本当に質問を投げかけているもののみ → <span style="color: #007bff; font-weight: bold;">3.8%</span></li>
+                    <li><strong>共感系</strong>: 「分かる」「共感」などを含む → 0.4%</li>
+                </ul>
+                <p style="margin-top: 15px; font-weight: bold; color: #155724;">✅ 判定順序を変更し、「？」が含まれていてもノウハウ提供している投稿は正しく「ノウハウ系」に分類されるようになりました。<br>実態通り、<span class="highlight">ノウハウ系が82.7%</span>を占めています。</p>
+            </div>
+
+            <div class="chart-container"><canvas id="typeChart"></canvas></div>
+            <h3>詳細データ</h3>
+            <table class="table">
+                <thead><tr><th>タイプ</th><th>投稿数</th><th>比率</th><th>平均imp</th><th>総imp</th><th>勝ち投稿</th></tr></thead>
+                <tbody id="typeTableBody"></tbody>
+            </table>
+            <p style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-left: 4px solid #667eea; border-radius: 5px;"><strong>重要な発見：</strong><br><span class="highlight">すでにノウハウ系が82.7%を占めている</span><br>平均2,774impで安定した成果を出している。勝ち投稿14件中13件がノウハウ系（92.9%）</p>
+        </section>
+
+        <section>
+            <h2>⏰ 時間帯別パフォーマンス</h2>
+            <div class="chart-container"><canvas id="timeBandChart"></canvas></div>
+            <h3>詳細データ</h3>
+            <table class="table">
+                <thead><tr><th>時間帯</th><th>投稿数</th><th>比率</th><th>平均imp</th><th>総imp</th><th>勝ち投稿</th></tr></thead>
+                <tbody id="timeBandTableBody"></tbody>
+            </table>
+            <p style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-left: 4px solid #667eea; border-radius: 5px;"><strong>重要な発見：</strong><br>勝ち投稿の時間帯分布： <span class="highlight">朝6-9時が最多（6件/14件 = 43%）</span><br>夜18-21時は平均impが最高だが、投稿数が少ない（26%）→ 40%まで増やすべき。</p>
+        </section>
+
+        <section>
+            <h2>🎯 データサマリー</h2>
+            <h3>成功パターン（再確認）</h3>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li><strong>ノウハウ系投稿がすでに82.7%</strong> - 正しい戦略を実行できている</li>
+                <li><strong>夜18-21時</strong>が平均impで最強、<strong>朝6-9時</strong>が勝ち投稿最多</li>
+                <li><strong>10月4日</strong>の成功は再現可能（318,170imp + フォロワー303人増 + LINE登録31件）</li>
+                <li><strong>勝ち投稿の92.9%がノウハウ系</strong> - ノウハウ系が圧倒的に強い</li>
+            </ul>
+            <h3>課題</h3>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li>⚠️ 勝率が2.8%と低い（498投稿中14件のみ）</li>
+                <li>⚠️ 夜18-21時の投稿が26%と少ない（40%まで増やすべき）</li>
+                <li>⚠️ ストーリー系が勝ち投稿0件（13.1%の投稿が効果薄）</li>
+            </ul>
+            <h3>改善アクション</h3>
+            <div style="margin-top: 20px; padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-radius: 15px;">
+                <ul style="list-style: none; padding-left: 0;">
+                    <li style="padding: 10px 0; position: relative; padding-left: 30px;"><span style="position: absolute; left: 0; font-size: 20px;">✓</span><strong>夜18-21時の投稿を40%に増やす</strong>（現状26% → 40%）</li>
+                    <li style="padding: 10px 0; position: relative; padding-left: 30px;"><span style="position: absolute; left: 0; font-size: 20px;">✓</span><strong>ストーリー系を削減してノウハウ系に振り分ける</strong>（ストーリー系は効果薄）</li>
+                    <li style="padding: 10px 0; position: relative; padding-left: 30px;"><span style="position: absolute; left: 0; font-size: 20px;">✓</span><strong>集中投稿日を週2日に設定</strong>（1日15-20投稿）</li>
+                    <li style="padding: 10px 0; position: relative; padding-left: 30px;"><span style="position: absolute; left: 0; font-size: 20px;">✓</span><strong>構造化タグと強い言葉を必ず使う</strong></li>
+                </ul>
+            </div>
+        </section>
+    </div>
+    <script>
+const reportData = {
+  "dailySummary": [
+    {
+      "date": "2025-10-01",
+      "postsCount": 22,
+      "winnerCount": 0,
+      "totalImpressions": 19023,
+      "totalLikes": 115,
+      "averageImpressions": 864.6818181818181,
+      "averageLikeRate": 0.004547437746526491,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17845029822579633",
+        "17960661647987995",
+        "17871861927437485",
+        "17915784057191399",
+        "17914212903068996",
+        "18092077426763956",
+        "18288290158262180",
+        "18057954341181474",
+        "18028480730720680",
+        "17881116036394759",
+        "18072363470176732",
+        "18042766391419623",
+        "18066211430360292",
+        "18537842134054785",
+        "18022615868572054",
+        "18086659688308762",
+        "18002802002812292",
+        "18073871423129813",
+        "17921248551079882",
+        "17948815014041245",
+        "17909588211230328",
+        "17920599909080846"
+      ]
+    },
+    {
+      "date": "2025-10-02",
+      "postsCount": 6,
+      "winnerCount": 0,
+      "totalImpressions": 7233,
+      "totalLikes": 40,
+      "averageImpressions": 1205.5,
+      "averageLikeRate": 0.005250414972177604,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17935894130961311",
+        "18184093330326425",
+        "17925185094013046",
+        "18091374565793904",
+        "18090016678881512",
+        "18086926661502602"
+      ]
+    },
+    {
+      "date": "2025-10-03",
+      "postsCount": 7,
+      "winnerCount": 0,
+      "totalImpressions": 9990,
+      "totalLikes": 56,
+      "averageImpressions": 1427.142857142857,
+      "averageLikeRate": 0.006187143924032218,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18060352724124579",
+        "18062395046529668",
+        "18134206129455003",
+        "18043432688409071",
+        "17922785802151273",
+        "18299992258301832",
+        "18096825850604621"
+      ]
+    },
+    {
+      "date": "2025-10-04",
+      "postsCount": 18,
+      "winnerCount": 3,
+      "totalImpressions": 318170,
+      "totalLikes": 1269,
+      "averageImpressions": 17676.11111111111,
+      "averageLikeRate": 0.004502615081872403,
+      "lineTotalNew": 169,
+      "lineThreads": 31,
+      "lineThreadsProfile": 9,
+      "lineThreadsPost": 23,
+      "lineThreadsGeneral": 31,
+      "lineInstagram": 60,
+      "lineYoutube": 3,
+      "postIds": [
+        "18066643631588005",
+        "18087949642809995",
+        "18048405995645216",
+        "18099282904645308",
+        "18076843031117816",
+        "18178216294344177",
+        "18386546842125735",
+        "17957055437861638",
+        "17898075273167603",
+        "18089890504887615",
+        "17938404036081665",
+        "18169723603322747",
+        "18415378216113880",
+        "18067136021206073",
+        "18290335870283563",
+        "18070727867227961",
+        "18081053615294589",
+        "18105825721594136"
+      ]
+    },
+    {
+      "date": "2025-10-05",
+      "postsCount": 16,
+      "winnerCount": 2,
+      "totalImpressions": 62244,
+      "totalLikes": 215,
+      "averageImpressions": 3890.25,
+      "averageLikeRate": 0.003958213503355161,
+      "lineTotalNew": 57,
+      "lineThreads": 52,
+      "lineThreadsProfile": 7,
+      "lineThreadsPost": 46,
+      "lineThreadsGeneral": 52,
+      "lineInstagram": 2,
+      "lineYoutube": 3,
+      "postIds": [
+        "17864576292412877",
+        "18201887851313053",
+        "17943149588934555",
+        "17879430069407426",
+        "18531277393027172",
+        "18074009093467630",
+        "18176756443346868",
+        "17981061560870327",
+        "17892970944198767",
+        "17859825099508924",
+        "18021661073576956",
+        "18028987316726789",
+        "18324700213213126",
+        "18059437868622126",
+        "18141105763434029",
+        "18059892263148563"
+      ]
+    },
+    {
+      "date": "2025-10-06",
+      "postsCount": 3,
+      "winnerCount": 0,
+      "totalImpressions": 2858,
+      "totalLikes": 4,
+      "averageImpressions": 952.6666666666666,
+      "averageLikeRate": 0.0011960649235902324,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18059341565629287",
+        "18085797509483783",
+        "17927705595126365"
+      ]
+    },
+    {
+      "date": "2025-10-07",
+      "postsCount": 22,
+      "winnerCount": 0,
+      "totalImpressions": 57158,
+      "totalLikes": 238,
+      "averageImpressions": 2598.090909090909,
+      "averageLikeRate": 0.0043011444927826695,
+      "lineTotalNew": 2,
+      "lineThreads": 1,
+      "lineThreadsProfile": 1,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 1,
+      "lineInstagram": 0,
+      "lineYoutube": 1,
+      "postIds": [
+        "17852532693512464",
+        "18068757365250462",
+        "18089097367671518",
+        "18107068090600131",
+        "18530446669016077",
+        "18066160601588180",
+        "18026661287534237",
+        "18058326626450298",
+        "18186236158333693",
+        "17848492122573553",
+        "17862276177492099",
+        "18427759930102706",
+        "17927264679129781",
+        "18015424598790694",
+        "18027763847741095",
+        "18195104620319494",
+        "18110099773873393",
+        "18059017319170812",
+        "18084153613940783",
+        "18098976814639082",
+        "18344019952166012",
+        "17848377312575276"
+      ]
+    },
+    {
+      "date": "2025-10-08",
+      "postsCount": 22,
+      "winnerCount": 0,
+      "totalImpressions": 22507,
+      "totalLikes": 133,
+      "averageImpressions": 1023.0454545454545,
+      "averageLikeRate": 0.0062864442709134405,
+      "lineTotalNew": 11,
+      "lineThreads": 9,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 9,
+      "lineThreadsGeneral": 9,
+      "lineInstagram": 0,
+      "lineYoutube": 2,
+      "postIds": [
+        "18389330644123635",
+        "17858699016518678",
+        "18129504325466797",
+        "17999479037822897",
+        "18075940955122617",
+        "17945273226050460",
+        "18078854404844017",
+        "18023792939685093",
+        "18059735660410746",
+        "17992111385850211",
+        "17884672326258669",
+        "18089592130841755",
+        "17985032579889366",
+        "17936031561087725",
+        "18060071981386886",
+        "18078133223089887",
+        "18071045855267935",
+        "18288811921287164",
+        "18323695495211820",
+        "18056837267530729",
+        "18018759206786598",
+        "18084972158503436"
+      ]
+    },
+    {
+      "date": "2025-10-09",
+      "postsCount": 14,
+      "winnerCount": 0,
+      "totalImpressions": 17777,
+      "totalLikes": 61,
+      "averageImpressions": 1269.7857142857142,
+      "averageLikeRate": 0.003381258939276723,
+      "lineTotalNew": 1,
+      "lineThreads": 1,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 1,
+      "lineThreadsGeneral": 1,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18080456042002145",
+        "18085663666934202",
+        "18066171590261589",
+        "18359027878088762",
+        "18088126258733687",
+        "18095047993682871",
+        "18106593157592406",
+        "18135154597456326",
+        "18082681174789234",
+        "18405762103187124",
+        "18155174269395261",
+        "18114447790535375",
+        "18041541974463574",
+        "18080536004283426"
+      ]
+    },
+    {
+      "date": "2025-10-10",
+      "postsCount": 18,
+      "winnerCount": 1,
+      "totalImpressions": 28532,
+      "totalLikes": 110,
+      "averageImpressions": 1585.111111111111,
+      "averageLikeRate": 0.0038753451406592287,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17932724510982849",
+        "18093144661811985",
+        "17845149444586427",
+        "17958022043861926",
+        "18080200390822968",
+        "17861850474497126",
+        "18096994192665894",
+        "1.80965E+16",
+        "18148770130410935",
+        "17941229121076214",
+        "18357422872095613",
+        "18078769754042265",
+        "17865343650470016",
+        "18106806931592735",
+        "18077343433881115",
+        "18083967910763288",
+        "17986601798895054",
+        "18081102727952549"
+      ]
+    },
+    {
+      "date": "2025-10-11",
+      "postsCount": 8,
+      "winnerCount": 0,
+      "totalImpressions": 10325,
+      "totalLikes": 50,
+      "averageImpressions": 1290.625,
+      "averageLikeRate": 0.004581165911777105,
+      "lineTotalNew": 6,
+      "lineThreads": 4,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 4,
+      "lineThreadsGeneral": 4,
+      "lineInstagram": 0,
+      "lineYoutube": 1,
+      "postIds": [
+        "18146399113422552",
+        "18093299092814328",
+        "17904896061125305",
+        "18086388595907790",
+        "18388656430123397",
+        "18035965112699726",
+        "17895979617325412",
+        "18082356649968206"
+      ]
+    },
+    {
+      "date": "2025-10-12",
+      "postsCount": 13,
+      "winnerCount": 0,
+      "totalImpressions": 9398,
+      "totalLikes": 30,
+      "averageImpressions": 722.9230769230769,
+      "averageLikeRate": 0.0033985455427159284,
+      "lineTotalNew": 2,
+      "lineThreads": 2,
+      "lineThreadsProfile": 1,
+      "lineThreadsPost": 1,
+      "lineThreadsGeneral": 2,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17973783335933072",
+        "18059682674172212",
+        "18308756296220978",
+        "18059092301532035",
+        "18074145823897553",
+        "18083136553787999",
+        "18083514578485452",
+        "18113512822554167",
+        "18082393627802866",
+        "17885616735379656",
+        "18082051225803625",
+        "17952306416985870",
+        "18094930087624545"
+      ]
+    },
+    {
+      "date": "2025-10-13",
+      "postsCount": 21,
+      "winnerCount": 1,
+      "totalImpressions": 106257,
+      "totalLikes": 222,
+      "averageImpressions": 5059.857142857143,
+      "averageLikeRate": 0.003587096158535066,
+      "lineTotalNew": 1,
+      "lineThreads": 1,
+      "lineThreadsProfile": 1,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 1,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18082726339788559",
+        "18018840113775578",
+        "18404844775187894",
+        "18240094534294774",
+        "18187774033332830",
+        "18014235602790822",
+        "18297306808265196",
+        "1.80778E+16",
+        "18068592983337714",
+        "17881210602403732",
+        "18081933548093833",
+        "17844563472590944",
+        "18083122295474351",
+        "18084925127502595",
+        "18061462487131263",
+        "18059948546412417",
+        "17969348999796563",
+        "18532577926050468",
+        "18083956895295865",
+        "17946372228051728",
+        "17890536237221938"
+      ]
+    },
+    {
+      "date": "2025-10-14",
+      "postsCount": 11,
+      "winnerCount": 0,
+      "totalImpressions": 9177,
+      "totalLikes": 43,
+      "averageImpressions": 834.2727272727273,
+      "averageLikeRate": 0.004548746846442012,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18038632928705552",
+        "18084032329771346",
+        "18132725602471409",
+        "18060362345625638",
+        "18076513493035714",
+        "18058297595446234",
+        "18315053737172915",
+        "18078418160099317",
+        "18005110976805880",
+        "18539902285054646",
+        "18090571255894757"
+      ]
+    },
+    {
+      "date": "2025-10-15",
+      "postsCount": 13,
+      "winnerCount": 0,
+      "totalImpressions": 7304,
+      "totalLikes": 34,
+      "averageImpressions": 561.8461538461538,
+      "averageLikeRate": 0.003983694064576064,
+      "lineTotalNew": 2,
+      "lineThreads": 2,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 2,
+      "lineThreadsGeneral": 2,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17976114371931365",
+        "18332086006237790",
+        "18063540467617177",
+        "17864157624473716",
+        "17919229155049547",
+        "17944497018059242",
+        "1.80231E+16",
+        "18087978130909180",
+        "18141814771435909",
+        "18066277712581660",
+        "18004116587657194",
+        "18082187791946694",
+        "17863755735481032"
+      ]
+    },
+    {
+      "date": "2025-10-16",
+      "postsCount": 5,
+      "winnerCount": 0,
+      "totalImpressions": 5128,
+      "totalLikes": 24,
+      "averageImpressions": 1025.6,
+      "averageLikeRate": 0.006093804405398197,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18088091876509651",
+        "18079767349858959",
+        "18077511146116548",
+        "18069660479206805",
+        "18206725603312004"
+      ]
+    },
+    {
+      "date": "2025-10-17",
+      "postsCount": 14,
+      "winnerCount": 0,
+      "totalImpressions": 16846,
+      "totalLikes": 60,
+      "averageImpressions": 1203.2857142857142,
+      "averageLikeRate": 0.004275172626607658,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18099291229639453",
+        "17896207923185780",
+        "17929145598000799",
+        "17851162722566921",
+        "18086648467929787",
+        "18073190186267495",
+        "18087685738902187",
+        "18055676540235011",
+        "18084002587786430",
+        "18082269682789073",
+        "18077056088126322",
+        "17934977790067289",
+        "18099961153632773",
+        "18176203672361075"
+      ]
+    },
+    {
+      "date": "2025-10-18",
+      "postsCount": 6,
+      "winnerCount": 0,
+      "totalImpressions": 3702,
+      "totalLikes": 7,
+      "averageImpressions": 617,
+      "averageLikeRate": 0.0029756915772199163,
+      "lineTotalNew": 4,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 4,
+      "lineYoutube": 0,
+      "postIds": [
+        "17858417820465765",
+        "18076242395170761",
+        "18081306332492241",
+        "18061951370381825",
+        "17901800772280354",
+        "18072798524242175"
+      ]
+    },
+    {
+      "date": "2025-10-19",
+      "postsCount": 4,
+      "winnerCount": 0,
+      "totalImpressions": 5267,
+      "totalLikes": 15,
+      "averageImpressions": 1316.75,
+      "averageLikeRate": 0.0028192591149447488,
+      "lineTotalNew": 6,
+      "lineThreads": 4,
+      "lineThreadsProfile": 2,
+      "lineThreadsPost": 2,
+      "lineThreadsGeneral": 4,
+      "lineInstagram": 1,
+      "lineYoutube": 1,
+      "postIds": [
+        "17876287845330745",
+        "18048164732371432",
+        "17882521308396994",
+        "17879040597302766"
+      ]
+    },
+    {
+      "date": "2025-10-20",
+      "postsCount": 20,
+      "winnerCount": 1,
+      "totalImpressions": 33768,
+      "totalLikes": 96,
+      "averageImpressions": 1688.4,
+      "averageLikeRate": 0.002841414780650929,
+      "lineTotalNew": 2,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 1,
+      "lineYoutube": 0,
+      "postIds": [
+        "18082889425970318",
+        "17942447037063791",
+        "18060580169178338",
+        "18072325976464778",
+        "18089623681703882",
+        "17992123643845490",
+        "18529858447029409",
+        "18427094542108793",
+        "1.81001E+16",
+        "18126581521488218",
+        "18620916091032170",
+        "18084038035804692",
+        "17979416285766424",
+        "18096625867688145",
+        "17849071992547512",
+        "17986216949907391",
+        "17987610704906472",
+        "18092032672864387",
+        "18045694316689651",
+        "18003603296662488"
+      ]
+    },
+    {
+      "date": "2025-10-21",
+      "postsCount": 17,
+      "winnerCount": 0,
+      "totalImpressions": 25957,
+      "totalLikes": 86,
+      "averageImpressions": 1526.8823529411766,
+      "averageLikeRate": 0.0021803889398074026,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17847082272588249",
+        "18108141262526019",
+        "17856060669544294",
+        "18030070442524707",
+        "18030888455734729",
+        "18312926983223269",
+        "18331759438229045",
+        "18066430646378726",
+        "18187522597332533",
+        "17873815974350340",
+        "18048719555342335",
+        "17946772754915717",
+        "18083175289971150",
+        "17950663260043234",
+        "17984794655909762",
+        "18071843708183284",
+        "18018244835606396"
+      ]
+    },
+    {
+      "date": "2025-10-22",
+      "postsCount": 6,
+      "winnerCount": 0,
+      "totalImpressions": 12806,
+      "totalLikes": 46,
+      "averageImpressions": 2134.3333333333335,
+      "averageLikeRate": 0.003428362227195111,
+      "lineTotalNew": 15,
+      "lineThreads": 9,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 9,
+      "lineThreadsGeneral": 9,
+      "lineInstagram": 4,
+      "lineYoutube": 0,
+      "postIds": [
+        "17920797465196225",
+        "18084854827780824",
+        "18182073604348228",
+        "18066335870066197",
+        "18066816593059165",
+        "17978812568771466"
+      ]
+    },
+    {
+      "date": "2025-10-23",
+      "postsCount": 4,
+      "winnerCount": 0,
+      "totalImpressions": 5897,
+      "totalLikes": 19,
+      "averageImpressions": 1474.25,
+      "averageLikeRate": 0.0019159238313166348,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18073982470955069",
+        "18007893686804653",
+        "17873680575356417",
+        "18512176252066506"
+      ]
+    },
+    {
+      "date": "2025-10-25",
+      "postsCount": 14,
+      "winnerCount": 0,
+      "totalImpressions": 15764,
+      "totalLikes": 64,
+      "averageImpressions": 1126,
+      "averageLikeRate": 0.002884453127534322,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18044873441444594",
+        "18066842780592312",
+        "18105116569722277",
+        "18042393944686342",
+        "17871726303446206",
+        "18043705751680691",
+        "18084538450949509",
+        "17898871332320664",
+        "18416521216115231",
+        "18198238549316804",
+        "17950313819907888",
+        "18081130535018450",
+        "17906484405257467",
+        "18538083508031934"
+      ]
+    },
+    {
+      "date": "2025-10-26",
+      "postsCount": 18,
+      "winnerCount": 0,
+      "totalImpressions": 33013,
+      "totalLikes": 118,
+      "averageImpressions": 1834.0555555555557,
+      "averageLikeRate": 0.003389300370383715,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17897376336182504",
+        "17959102403865208",
+        "18063287474573591",
+        "17995851875838425",
+        "17982625517878744",
+        "18061605665627431",
+        "18095199490870715",
+        "18112028860603959",
+        "18004701548810828",
+        "18054908954295020",
+        "18484550815077854",
+        "18208399873311883",
+        "17910835788248163",
+        "18099117643666028",
+        "18121226359509462",
+        "18155432578403671",
+        "18144035653430227",
+        "18290045170276313"
+      ]
+    },
+    {
+      "date": "2025-10-27",
+      "postsCount": 6,
+      "winnerCount": 0,
+      "totalImpressions": 8620,
+      "totalLikes": 37,
+      "averageImpressions": 1436.6666666666667,
+      "averageLikeRate": 0.003100804615477961,
+      "lineTotalNew": 2,
+      "lineThreads": 2,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 2,
+      "lineThreadsGeneral": 2,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18062323355423503",
+        "18021248864595326",
+        "17842366308605251",
+        "18146778040425666",
+        "18101042491598131",
+        "18488480137077080"
+      ]
+    },
+    {
+      "date": "2025-10-28",
+      "postsCount": 9,
+      "winnerCount": 1,
+      "totalImpressions": 45773,
+      "totalLikes": 87,
+      "averageImpressions": 5085.888888888889,
+      "averageLikeRate": 0.002497864533149017,
+      "lineTotalNew": 3,
+      "lineThreads": 2,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 2,
+      "lineThreadsGeneral": 2,
+      "lineInstagram": 0,
+      "lineYoutube": 1,
+      "postIds": [
+        "18054013283312137",
+        "17854377429557707",
+        "18091290817867058",
+        "18144793888384797",
+        "17898291999313778",
+        "18002141306824105",
+        "18536154181019036",
+        "17915214951206757",
+        "18071767811248158"
+      ]
+    },
+    {
+      "date": "2025-10-29",
+      "postsCount": 2,
+      "winnerCount": 0,
+      "totalImpressions": 2999,
+      "totalLikes": 19,
+      "averageImpressions": 1499.5,
+      "averageLikeRate": 0.006808657474040745,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18074918584964766",
+        "17986712402882844"
+      ]
+    },
+    {
+      "date": "2025-10-30",
+      "postsCount": 6,
+      "winnerCount": 1,
+      "totalImpressions": 24955,
+      "totalLikes": 71,
+      "averageImpressions": 4159.166666666667,
+      "averageLikeRate": 0.0039654718910291,
+      "lineTotalNew": 1,
+      "lineThreads": 1,
+      "lineThreadsProfile": 1,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 1,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18531075928037394",
+        "17874334278352090",
+        "18143715562435288",
+        "18090605644917213",
+        "18045952349406628",
+        "17969296229813470"
+      ]
+    },
+    {
+      "date": "2025-10-31",
+      "postsCount": 10,
+      "winnerCount": 0,
+      "totalImpressions": 9299,
+      "totalLikes": 53,
+      "averageImpressions": 929.9,
+      "averageLikeRate": 0.006502071739667462,
+      "lineTotalNew": 1,
+      "lineThreads": 1,
+      "lineThreadsProfile": 1,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 1,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18014472905619867",
+        "18176708620318339",
+        "18070420532595540",
+        "18092167567885787",
+        "18102568996726186",
+        "18082413853995288",
+        "18029782202734078",
+        "18102900310713276",
+        "18062355833393995",
+        "18078316919153890"
+      ]
+    },
+    {
+      "date": "2025-11-01",
+      "postsCount": 17,
+      "winnerCount": 0,
+      "totalImpressions": 20592,
+      "totalLikes": 0,
+      "averageImpressions": 1211.2941176470588,
+      "averageLikeRate": 0,
+      "lineTotalNew": 1,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 1,
+      "lineYoutube": 0,
+      "postIds": [
+        "18075978983141726",
+        "1.79153E+16",
+        "18066374276599491",
+        "18089098837941128",
+        "18542830204043039",
+        "18083950051818917",
+        "18084609463804715",
+        "18074633125972419",
+        "17970535151799057",
+        "18083158397473756",
+        "18084042226819858",
+        "17985968201743291",
+        "17926109298156991",
+        "17947439780916699",
+        "17877326658426015",
+        "17868049167395635",
+        "18008389772642572"
+      ]
+    },
+    {
+      "date": "2025-11-02",
+      "postsCount": 9,
+      "winnerCount": 0,
+      "totalImpressions": 10530,
+      "totalLikes": 0,
+      "averageImpressions": 1170,
+      "averageLikeRate": 0,
+      "lineTotalNew": 1,
+      "lineThreads": 1,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 1,
+      "lineThreadsGeneral": 1,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18200079331317726",
+        "18141228892449785",
+        "18073889818970902",
+        "17934175287099683",
+        "17965747787981338",
+        "18070522619343315",
+        "17877525054328521",
+        "18326712418242449",
+        "18111661615584829"
+      ]
+    },
+    {
+      "date": "2025-11-03",
+      "postsCount": 7,
+      "winnerCount": 0,
+      "totalImpressions": 7358,
+      "totalLikes": 0,
+      "averageImpressions": 1051.142857142857,
+      "averageLikeRate": 0,
+      "lineTotalNew": 3,
+      "lineThreads": 2,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 2,
+      "lineThreadsGeneral": 2,
+      "lineInstagram": 1,
+      "lineYoutube": 0,
+      "postIds": [
+        "18542939572030829",
+        "17971963982951120",
+        "18009781565803508",
+        "17983501547755560",
+        "18106056547721665",
+        "18095928157643827",
+        "17865023400489869"
+      ]
+    },
+    {
+      "date": "2025-11-04",
+      "postsCount": 15,
+      "winnerCount": 1,
+      "totalImpressions": 27456,
+      "totalLikes": 0,
+      "averageImpressions": 1830.4,
+      "averageLikeRate": 0,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18074151872188969",
+        "18031654952735940",
+        "18065176655123502",
+        "17889611586242819",
+        "17975385734937389",
+        "17968340975970188",
+        "17871570303378896",
+        "18080081975098872",
+        "18244603153292038",
+        "18099058627739662",
+        "17889567282374059",
+        "18055287740636532",
+        "17852264373571018",
+        "18132083650470017",
+        "18212942821308563"
+      ]
+    },
+    {
+      "date": "2025-11-05",
+      "postsCount": 6,
+      "winnerCount": 0,
+      "totalImpressions": 12485,
+      "totalLikes": 0,
+      "averageImpressions": 2080.8333333333335,
+      "averageLikeRate": 0,
+      "lineTotalNew": 6,
+      "lineThreads": 5,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 5,
+      "lineThreadsGeneral": 5,
+      "lineInstagram": 0,
+      "lineYoutube": 1,
+      "postIds": [
+        "18337782763228370",
+        "18099142048707196",
+        "17910698505249260",
+        "18089883187914110",
+        "18002426531819627",
+        "18048145025376669"
+      ]
+    },
+    {
+      "date": "2025-11-06",
+      "postsCount": 6,
+      "winnerCount": 0,
+      "totalImpressions": 11628,
+      "totalLikes": 0,
+      "averageImpressions": 1938,
+      "averageLikeRate": 0,
+      "lineTotalNew": 3,
+      "lineThreads": 3,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 3,
+      "lineThreadsGeneral": 3,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17908206813253195",
+        "17958626318871818",
+        "18133929871463233",
+        "18008473316811985",
+        "17856470703555334",
+        "18248334040295083"
+      ]
+    },
+    {
+      "date": "2025-11-07",
+      "postsCount": 24,
+      "winnerCount": 2,
+      "totalImpressions": 67101,
+      "totalLikes": 203,
+      "averageImpressions": 2795.875,
+      "averageLikeRate": 0.0013431597112364664,
+      "lineTotalNew": 4,
+      "lineThreads": 4,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 4,
+      "lineThreadsGeneral": 4,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "17924683944032298",
+        "17980278554924138",
+        "17932379538108272",
+        "18077661650177504",
+        "18063020066413235",
+        "18426489718128554",
+        "18084702487826357",
+        "17935027805980309",
+        "18297194824280369",
+        "17894177412358376",
+        "18056056976288917",
+        "18089390351499988",
+        "18075059174242697",
+        "18076978708912580",
+        "17896625100355189",
+        "17884882914399742",
+        "18150143323424420",
+        "18100807483669267",
+        "17924336064157097",
+        "18110624230599709",
+        "17874971175352201",
+        "18088958353738781",
+        "17895005337347514",
+        "18061557134170830"
+      ]
+    },
+    {
+      "date": "2025-11-08",
+      "postsCount": 30,
+      "winnerCount": 0,
+      "totalImpressions": 48249,
+      "totalLikes": 186,
+      "averageImpressions": 1608.3,
+      "averageLikeRate": 0.0029539292272457787,
+      "lineTotalNew": 0,
+      "lineThreads": 0,
+      "lineThreadsProfile": 0,
+      "lineThreadsPost": 0,
+      "lineThreadsGeneral": 0,
+      "lineInstagram": 0,
+      "lineYoutube": 0,
+      "postIds": [
+        "18082450949084857",
+        "17898516276181733",
+        "18416547703112778",
+        "18023433866773528",
+        "18081054926025172",
+        "18182274283356608",
+        "17989667090886721",
+        "17888408775371922",
+        "18091477808495176",
+        "17995950227845038",
+        "18096977476775789",
+        "17985674339746861",
+        "18542373832024291",
+        "18056282321288778",
+        "17965060713002532",
+        "18408956041189024",
+        "17973145823952199",
+        "18026603336777092",
+        "18078906893326265",
+        "17924700759173464",
+        "18182238796346222",
+        "17968791173977402",
+        "18011975597799810",
+        "17877990066329516",
+        "18064538132383317",
+        "17968790045975380",
+        "17900849355315731",
+        "18428361508106568",
+        "18268152235304846",
+        "17909562393255885"
+      ]
+    },
+    {
+      "date": "2025-11-09",
+      "postsCount": 29,
+      "winnerCount": 1,
+      "totalImpressions": 101833,
+      "totalLikes": 206,
+      "averageImpressions": 3511.4827586206898,
+      "averageLikeRate": 0.001962976405983973,
+      "lineTotalNew": 14,
+      "lineThreads": 13,
+      "lineThreadsProfile": 7,
+      "lineThreadsPost": 6,
+      "lineThreadsGeneral": 13,
+      "lineInstagram": 1,
+      "lineYoutube": 0,
+      "postIds": [
+        "18095466568692014",
+        "18069320240525020",
+        "18049748723672322",
+        "18187281808339482",
+        "17873366853447889",
+        "18148494331418476",
+        "17889030159382725",
+        "18024923237777348",
+        "18085277087478910",
+        "18088464341481174",
+        "17861110977532330",
+        "18123127927516901",
+        "18067028435454223",
+        "18058989305245104",
+        "18048822146385146",
+        "17852944815572968",
+        "18407558677186167",
+        "18027858806560258",
+        "18366036046086564",
+        "17929045236137354",
+        "18150244693422230",
+        "18536077726017805",
+        "18049721384691251",
+        "17890159764371884",
+        "18305690965268770",
+        "18544149280012512",
+        "18062838323177857",
+        "18114507583565160",
+        "18110552467581531"
+      ]
+    },
+    {
+      "date": "2025-11-10",
+      "postsCount": 0,
+      "winnerCount": 0,
+      "totalImpressions": 0,
+      "totalLikes": 0,
+      "averageImpressions": 0,
+      "averageLikeRate": 0,
+      "lineTotalNew": 13,
+      "lineThreads": 10,
+      "lineThreadsProfile": 1,
+      "lineThreadsPost": 9,
+      "lineThreadsGeneral": 10,
+      "lineInstagram": 1,
+      "lineYoutube": 2,
+      "postIds": []
+    }
+  ],
+  "followers": [
+    {
+      "date": "2025-10-01",
+      "followers": 833,
+      "followersDelta": 37,
+      "profileViews": 10293,
+      "postIds": [
+        "17845029822579633",
+        "17960661647987995",
+        "17871861927437485",
+        "17915784057191399",
+        "17914212903068996",
+        "18092077426763956",
+        "18288290158262180",
+        "18057954341181474",
+        "18028480730720680",
+        "17881116036394759",
+        "18072363470176732",
+        "18042766391419623",
+        "18066211430360292",
+        "18537842134054785",
+        "18022615868572054",
+        "18086659688308762",
+        "18002802002812292",
+        "18073871423129813",
+        "17921248551079882",
+        "17948815014041245",
+        "17909588211230328",
+        "17920599909080846"
+      ],
+      "postImpressionsTotal": 19023
+    },
+    {
+      "date": "2025-10-02",
+      "followers": 861,
+      "followersDelta": 28,
+      "profileViews": 4023,
+      "postIds": [
+        "17935894130961311",
+        "18184093330326425",
+        "17925185094013046",
+        "18091374565793904",
+        "18090016678881512",
+        "18086926661502602"
+      ],
+      "postImpressionsTotal": 7233
+    },
+    {
+      "date": "2025-10-03",
+      "followers": 888,
+      "followersDelta": 27,
+      "profileViews": 4835,
+      "postIds": [
+        "18060352724124579",
+        "18062395046529668",
+        "18134206129455003",
+        "18043432688409071",
+        "17922785802151273",
+        "18299992258301832",
+        "18096825850604621"
+      ],
+      "postImpressionsTotal": 9990
+    },
+    {
+      "date": "2025-10-04",
+      "followers": 1191,
+      "followersDelta": 303,
+      "profileViews": 146122,
+      "postIds": [
+        "18066643631588005",
+        "18087949642809995",
+        "18048405995645216",
+        "18099282904645308",
+        "18076843031117816",
+        "18178216294344177",
+        "18386546842125735",
+        "17957055437861638",
+        "17898075273167603",
+        "18089890504887615",
+        "17938404036081665",
+        "18169723603322747",
+        "18415378216113880",
+        "18067136021206073",
+        "18290335870283563",
+        "18070727867227961",
+        "18081053615294589",
+        "18105825721594136"
+      ],
+      "postImpressionsTotal": 318170
+    },
+    {
+      "date": "2025-10-05",
+      "followers": 1946,
+      "followersDelta": 755,
+      "profileViews": 67170,
+      "postIds": [
+        "17864576292412877",
+        "18201887851313053",
+        "17943149588934555",
+        "17879430069407426",
+        "18531277393027172",
+        "18074009093467630",
+        "18176756443346868",
+        "17981061560870327",
+        "17892970944198767",
+        "17859825099508924",
+        "18021661073576956",
+        "18028987316726789",
+        "18324700213213126",
+        "18059437868622126",
+        "18141105763434029",
+        "18059892263148563"
+      ],
+      "postImpressionsTotal": 62244
+    },
+    {
+      "date": "2025-10-06",
+      "followers": 1968,
+      "followersDelta": 22,
+      "profileViews": 9570,
+      "postIds": [
+        "18059341565629287",
+        "18085797509483783",
+        "17927705595126365"
+      ],
+      "postImpressionsTotal": 2858
+    },
+    {
+      "date": "2025-10-07",
+      "followers": 2056,
+      "followersDelta": 88,
+      "profileViews": 16405,
+      "postIds": [
+        "17852532693512464",
+        "18068757365250462",
+        "18089097367671518",
+        "18107068090600131",
+        "18530446669016077",
+        "18066160601588180",
+        "18026661287534237",
+        "18058326626450298",
+        "18186236158333693",
+        "17848492122573553",
+        "17862276177492099",
+        "18427759930102706",
+        "17927264679129781",
+        "18015424598790694",
+        "18027763847741095",
+        "18195104620319494",
+        "18110099773873393",
+        "18059017319170812",
+        "18084153613940783",
+        "18098976814639082",
+        "18344019952166012",
+        "17848377312575276"
+      ],
+      "postImpressionsTotal": 57158
+    },
+    {
+      "date": "2025-10-08",
+      "followers": 2073,
+      "followersDelta": 17,
+      "profileViews": 8401,
+      "postIds": [
+        "18389330644123635",
+        "17858699016518678",
+        "18129504325466797",
+        "17999479037822897",
+        "18075940955122617",
+        "17945273226050460",
+        "18078854404844017",
+        "18023792939685093",
+        "18059735660410746",
+        "17992111385850211",
+        "17884672326258669",
+        "18089592130841755",
+        "17985032579889366",
+        "17936031561087725",
+        "18060071981386886",
+        "18078133223089887",
+        "18071045855267935",
+        "18288811921287164",
+        "18323695495211820",
+        "18056837267530729",
+        "18018759206786598",
+        "18084972158503436"
+      ],
+      "postImpressionsTotal": 22507
+    },
+    {
+      "date": "2025-10-09",
+      "followers": 2084,
+      "followersDelta": 11,
+      "profileViews": 22088,
+      "postIds": [
+        "18080456042002145",
+        "18085663666934202",
+        "18066171590261589",
+        "18359027878088762",
+        "18088126258733687",
+        "18095047993682871",
+        "18106593157592406",
+        "18135154597456326",
+        "18082681174789234",
+        "18405762103187124",
+        "18155174269395261",
+        "18114447790535375",
+        "18041541974463574",
+        "18080536004283426"
+      ],
+      "postImpressionsTotal": 17777
+    },
+    {
+      "date": "2025-10-10",
+      "followers": 2119,
+      "followersDelta": 35,
+      "profileViews": 8966,
+      "postIds": [
+        "17932724510982849",
+        "18093144661811985",
+        "17845149444586427",
+        "17958022043861926",
+        "18080200390822968",
+        "17861850474497126",
+        "18096994192665894",
+        "1.80965E+16",
+        "18148770130410935",
+        "17941229121076214",
+        "18357422872095613",
+        "18078769754042265",
+        "17865343650470016",
+        "18106806931592735",
+        "18077343433881115",
+        "18083967910763288",
+        "17986601798895054",
+        "18081102727952549"
+      ],
+      "postImpressionsTotal": 28532
+    },
+    {
+      "date": "2025-10-11",
+      "followers": 2125,
+      "followersDelta": 6,
+      "profileViews": 3699,
+      "postIds": [
+        "18146399113422552",
+        "18093299092814328",
+        "17904896061125305",
+        "18086388595907790",
+        "18388656430123397",
+        "18035965112699726",
+        "17895979617325412",
+        "18082356649968206"
+      ],
+      "postImpressionsTotal": 10325
+    },
+    {
+      "date": "2025-10-12",
+      "followers": 2129,
+      "followersDelta": 4,
+      "profileViews": 7044,
+      "postIds": [
+        "17973783335933072",
+        "18059682674172212",
+        "18308756296220978",
+        "18059092301532035",
+        "18074145823897553",
+        "18083136553787999",
+        "18083514578485452",
+        "18113512822554167",
+        "18082393627802866",
+        "17885616735379656",
+        "18082051225803625",
+        "17952306416985870",
+        "18094930087624545"
+      ],
+      "postImpressionsTotal": 9398
+    },
+    {
+      "date": "2025-10-13",
+      "followers": 2164,
+      "followersDelta": 35,
+      "profileViews": 72690,
+      "postIds": [
+        "18082726339788559",
+        "18018840113775578",
+        "18404844775187894",
+        "18240094534294774",
+        "18187774033332830",
+        "18014235602790822",
+        "18297306808265196",
+        "1.80778E+16",
+        "18068592983337714",
+        "17881210602403732",
+        "18081933548093833",
+        "17844563472590944",
+        "18083122295474351",
+        "18084925127502595",
+        "18061462487131263",
+        "18059948546412417",
+        "17969348999796563",
+        "18532577926050468",
+        "18083956895295865",
+        "17946372228051728",
+        "17890536237221938"
+      ],
+      "postImpressionsTotal": 106257
+    },
+    {
+      "date": "2025-10-14",
+      "followers": 2180,
+      "followersDelta": 16,
+      "profileViews": 6069,
+      "postIds": [
+        "18038632928705552",
+        "18084032329771346",
+        "18132725602471409",
+        "18060362345625638",
+        "18076513493035714",
+        "18058297595446234",
+        "18315053737172915",
+        "18078418160099317",
+        "18005110976805880",
+        "18539902285054646",
+        "18090571255894757"
+      ],
+      "postImpressionsTotal": 9177
+    },
+    {
+      "date": "2025-10-15",
+      "followers": 2180,
+      "followersDelta": 0,
+      "profileViews": 2972,
+      "postIds": [
+        "17976114371931365",
+        "18332086006237790",
+        "18063540467617177",
+        "17864157624473716",
+        "17919229155049547",
+        "17944497018059242",
+        "1.80231E+16",
+        "18087978130909180",
+        "18141814771435909",
+        "18066277712581660",
+        "18004116587657194",
+        "18082187791946694",
+        "17863755735481032"
+      ],
+      "postImpressionsTotal": 7304
+    },
+    {
+      "date": "2025-10-16",
+      "followers": 2185,
+      "followersDelta": 5,
+      "profileViews": 4721,
+      "postIds": [
+        "18088091876509651",
+        "18079767349858959",
+        "18077511146116548",
+        "18069660479206805",
+        "18206725603312004"
+      ],
+      "postImpressionsTotal": 5128
+    },
+    {
+      "date": "2025-10-17",
+      "followers": 2202,
+      "followersDelta": 17,
+      "profileViews": 8390,
+      "postIds": [
+        "18099291229639453",
+        "17896207923185780",
+        "17929145598000799",
+        "17851162722566921",
+        "18086648467929787",
+        "18073190186267495",
+        "18087685738902187",
+        "18055676540235011",
+        "18084002587786430",
+        "18082269682789073",
+        "18077056088126322",
+        "17934977790067289",
+        "18099961153632773",
+        "18176203672361075"
+      ],
+      "postImpressionsTotal": 16846
+    },
+    {
+      "date": "2025-10-18",
+      "followers": 2204,
+      "followersDelta": 2,
+      "profileViews": 3948,
+      "postIds": [
+        "17858417820465765",
+        "18076242395170761",
+        "18081306332492241",
+        "18061951370381825",
+        "17901800772280354",
+        "18072798524242175"
+      ],
+      "postImpressionsTotal": 3702
+    },
+    {
+      "date": "2025-10-19",
+      "followers": 2208,
+      "followersDelta": 4,
+      "profileViews": 2620,
+      "postIds": [
+        "17876287845330745",
+        "18048164732371432",
+        "17882521308396994",
+        "17879040597302766"
+      ],
+      "postImpressionsTotal": 5267
+    },
+    {
+      "date": "2025-10-20",
+      "followers": 2237,
+      "followersDelta": 29,
+      "profileViews": 11148,
+      "postIds": [
+        "18082889425970318",
+        "17942447037063791",
+        "18060580169178338",
+        "18072325976464778",
+        "18089623681703882",
+        "17992123643845490",
+        "18529858447029409",
+        "18427094542108793",
+        "1.81001E+16",
+        "18126581521488218",
+        "18620916091032170",
+        "18084038035804692",
+        "17979416285766424",
+        "18096625867688145",
+        "17849071992547512",
+        "17986216949907391",
+        "17987610704906472",
+        "18092032672864387",
+        "18045694316689651",
+        "18003603296662488"
+      ],
+      "postImpressionsTotal": 33768
+    },
+    {
+      "date": "2025-10-21",
+      "followers": 2260,
+      "followersDelta": 23,
+      "profileViews": 12660,
+      "postIds": [
+        "17847082272588249",
+        "18108141262526019",
+        "17856060669544294",
+        "18030070442524707",
+        "18030888455734729",
+        "18312926983223269",
+        "18331759438229045",
+        "18066430646378726",
+        "18187522597332533",
+        "17873815974350340",
+        "18048719555342335",
+        "17946772754915717",
+        "18083175289971150",
+        "17950663260043234",
+        "17984794655909762",
+        "18071843708183284",
+        "18018244835606396"
+      ],
+      "postImpressionsTotal": 25957
+    },
+    {
+      "date": "2025-10-22",
+      "followers": 2268,
+      "followersDelta": 8,
+      "profileViews": 5228,
+      "postIds": [
+        "17920797465196225",
+        "18084854827780824",
+        "18182073604348228",
+        "18066335870066197",
+        "18066816593059165",
+        "17978812568771466"
+      ],
+      "postImpressionsTotal": 12806
+    },
+    {
+      "date": "2025-10-23",
+      "followers": 2272,
+      "followersDelta": 4,
+      "profileViews": 6650,
+      "postIds": [
+        "18073982470955069",
+        "18007893686804653",
+        "17873680575356417",
+        "18512176252066506"
+      ],
+      "postImpressionsTotal": 5897
+    },
+    {
+      "date": "2025-10-24",
+      "followers": 2274,
+      "followersDelta": 2,
+      "profileViews": 974,
+      "postIds": [],
+      "postImpressionsTotal": 0
+    },
+    {
+      "date": "2025-10-25",
+      "followers": 2274,
+      "followersDelta": 0,
+      "profileViews": 10955,
+      "postIds": [
+        "18044873441444594",
+        "18066842780592312",
+        "18105116569722277",
+        "18042393944686342",
+        "17871726303446206",
+        "18043705751680691",
+        "18084538450949509",
+        "17898871332320664",
+        "18416521216115231",
+        "18198238549316804",
+        "17950313819907888",
+        "18081130535018450",
+        "17906484405257467",
+        "18538083508031934"
+      ],
+      "postImpressionsTotal": 15764
+    },
+    {
+      "date": "2025-10-26",
+      "followers": 2309,
+      "followersDelta": 35,
+      "profileViews": 20495,
+      "postIds": [
+        "17897376336182504",
+        "17959102403865208",
+        "18063287474573591",
+        "17995851875838425",
+        "17982625517878744",
+        "18061605665627431",
+        "18095199490870715",
+        "18112028860603959",
+        "18004701548810828",
+        "18054908954295020",
+        "18484550815077854",
+        "18208399873311883",
+        "17910835788248163",
+        "18099117643666028",
+        "18121226359509462",
+        "18155432578403671",
+        "18144035653430227",
+        "18290045170276313"
+      ],
+      "postImpressionsTotal": 33013
+    },
+    {
+      "date": "2025-10-27",
+      "followers": 2321,
+      "followersDelta": 12,
+      "profileViews": 3061,
+      "postIds": [
+        "18062323355423503",
+        "18021248864595326",
+        "17842366308605251",
+        "18146778040425666",
+        "18101042491598131",
+        "18488480137077080"
+      ],
+      "postImpressionsTotal": 8620
+    },
+    {
+      "date": "2025-10-28",
+      "followers": 2336,
+      "followersDelta": 15,
+      "profileViews": 6574,
+      "postIds": [
+        "18054013283312137",
+        "17854377429557707",
+        "18091290817867058",
+        "18144793888384797",
+        "17898291999313778",
+        "18002141306824105",
+        "18536154181019036",
+        "17915214951206757",
+        "18071767811248158"
+      ],
+      "postImpressionsTotal": 45773
+    },
+    {
+      "date": "2025-10-29",
+      "followers": 2331,
+      "followersDelta": -5,
+      "profileViews": 3365,
+      "postIds": [
+        "18074918584964766",
+        "17986712402882844"
+      ],
+      "postImpressionsTotal": 2999
+    },
+    {
+      "date": "2025-10-30",
+      "followers": 2348,
+      "followersDelta": 17,
+      "profileViews": 15168,
+      "postIds": [
+        "18531075928037394",
+        "17874334278352090",
+        "18143715562435288",
+        "18090605644917213",
+        "18045952349406628",
+        "17969296229813470"
+      ],
+      "postImpressionsTotal": 24955
+    },
+    {
+      "date": "2025-10-31",
+      "followers": 2353,
+      "followersDelta": 5,
+      "profileViews": 4541,
+      "postIds": [
+        "18014472905619867",
+        "18176708620318339",
+        "18070420532595540",
+        "18092167567885787",
+        "18102568996726186",
+        "18082413853995288",
+        "18029782202734078",
+        "18102900310713276",
+        "18062355833393995",
+        "18078316919153890"
+      ],
+      "postImpressionsTotal": 9299
+    },
+    {
+      "date": "2025-11-01",
+      "followers": 2385,
+      "followersDelta": 32,
+      "profileViews": 18536,
+      "postIds": [
+        "18075978983141726",
+        "1.79153E+16",
+        "18066374276599491",
+        "18089098837941128",
+        "18542830204043039",
+        "18083950051818917",
+        "18084609463804715",
+        "18074633125972419",
+        "17970535151799057",
+        "18083158397473756",
+        "18084042226819858",
+        "17985968201743291",
+        "17926109298156991",
+        "17947439780916699",
+        "17877326658426015",
+        "17868049167395635",
+        "18008389772642572"
+      ],
+      "postImpressionsTotal": 20592
+    },
+    {
+      "date": "2025-11-02",
+      "followers": 2401,
+      "followersDelta": 16,
+      "profileViews": 3069,
+      "postIds": [
+        "18200079331317726",
+        "18141228892449785",
+        "18073889818970902",
+        "17934175287099683",
+        "17965747787981338",
+        "18070522619343315",
+        "17877525054328521",
+        "18326712418242449",
+        "18111661615584829"
+      ],
+      "postImpressionsTotal": 10530
+    },
+    {
+      "date": "2025-11-03",
+      "followers": 2411,
+      "followersDelta": 10,
+      "profileViews": 7036,
+      "postIds": [
+        "18542939572030829",
+        "17971963982951120",
+        "18009781565803508",
+        "17983501547755560",
+        "18106056547721665",
+        "18095928157643827",
+        "17865023400489869"
+      ],
+      "postImpressionsTotal": 7358
+    },
+    {
+      "date": "2025-11-04",
+      "followers": 2449,
+      "followersDelta": 38,
+      "profileViews": 6570,
+      "postIds": [
+        "18074151872188969",
+        "18031654952735940",
+        "18065176655123502",
+        "17889611586242819",
+        "17975385734937389",
+        "17968340975970188",
+        "17871570303378896",
+        "18080081975098872",
+        "18244603153292038",
+        "18099058627739662",
+        "17889567282374059",
+        "18055287740636532",
+        "17852264373571018",
+        "18132083650470017",
+        "18212942821308563"
+      ],
+      "postImpressionsTotal": 27456
+    },
+    {
+      "date": "2025-11-05",
+      "followers": 2461,
+      "followersDelta": 12,
+      "profileViews": 4981,
+      "postIds": [
+        "18337782763228370",
+        "18099142048707196",
+        "17910698505249260",
+        "18089883187914110",
+        "18002426531819627",
+        "18048145025376669"
+      ],
+      "postImpressionsTotal": 12485
+    },
+    {
+      "date": "2025-11-06",
+      "followers": 2485,
+      "followersDelta": 24,
+      "profileViews": 7652,
+      "postIds": [
+        "17908206813253195",
+        "17958626318871818",
+        "18133929871463233",
+        "18008473316811985",
+        "17856470703555334",
+        "18248334040295083"
+      ],
+      "postImpressionsTotal": 11628
+    },
+    {
+      "date": "2025-11-07",
+      "followers": 2553,
+      "followersDelta": 68,
+      "profileViews": 20516,
+      "postIds": [
+        "17924683944032298",
+        "17980278554924138",
+        "17932379538108272",
+        "18077661650177504",
+        "18063020066413235",
+        "18426489718128554",
+        "18084702487826357",
+        "17935027805980309",
+        "18297194824280369",
+        "17894177412358376",
+        "18056056976288917",
+        "18089390351499988",
+        "18075059174242697",
+        "18076978708912580",
+        "17896625100355189",
+        "17884882914399742",
+        "18150143323424420",
+        "18100807483669267",
+        "17924336064157097",
+        "18110624230599709",
+        "17874971175352201",
+        "18088958353738781",
+        "17895005337347514",
+        "18061557134170830"
+      ],
+      "postImpressionsTotal": 67101
+    },
+    {
+      "date": "2025-11-08",
+      "followers": 2630,
+      "followersDelta": 77,
+      "profileViews": 41427,
+      "postIds": [
+        "18082450949084857",
+        "17898516276181733",
+        "18416547703112778",
+        "18023433866773528",
+        "18081054926025172",
+        "18182274283356608",
+        "17989667090886721",
+        "17888408775371922",
+        "18091477808495176",
+        "17995950227845038",
+        "18096977476775789",
+        "17985674339746861",
+        "18542373832024291",
+        "18056282321288778",
+        "17965060713002532",
+        "18408956041189024",
+        "17973145823952199",
+        "18026603336777092",
+        "18078906893326265",
+        "17924700759173464",
+        "18182238796346222",
+        "17968791173977402",
+        "18011975597799810",
+        "17877990066329516",
+        "18064538132383317",
+        "17968790045975380",
+        "17900849355315731",
+        "18428361508106568",
+        "18268152235304846",
+        "17909562393255885"
+      ],
+      "postImpressionsTotal": 48249
+    },
+    {
+      "date": "2025-11-09",
+      "followers": 2779,
+      "followersDelta": 149,
+      "profileViews": 137176,
+      "postIds": [
+        "18095466568692014",
+        "18069320240525020",
+        "18049748723672322",
+        "18187281808339482",
+        "17873366853447889",
+        "18148494331418476",
+        "17889030159382725",
+        "18024923237777348",
+        "18085277087478910",
+        "18088464341481174",
+        "17861110977532330",
+        "18123127927516901",
+        "18067028435454223",
+        "18058989305245104",
+        "18048822146385146",
+        "17852944815572968",
+        "18407558677186167",
+        "18027858806560258",
+        "18366036046086564",
+        "17929045236137354",
+        "18150244693422230",
+        "18536077726017805",
+        "18049721384691251",
+        "17890159764371884",
+        "18305690965268770",
+        "18544149280012512",
+        "18062838323177857",
+        "18114507583565160",
+        "18110552467581531"
+      ],
+      "postImpressionsTotal": 101833
+    }
+  ],
+  "typeStats": {
+    "ノウハウ系": {
+      "count": 412,
+      "totalImpressions": 1142689,
+      "totalLikes": 3819,
+      "winners": 13,
+      "avgImpressions": 2774,
+      "avgLikes": "9.3",
+      "percentage": "82.7"
+    },
+    "ストーリー系": {
+      "count": 65,
+      "totalImpressions": 67478,
+      "totalLikes": 160,
+      "winners": 0,
+      "avgImpressions": 1038,
+      "avgLikes": "2.5",
+      "percentage": "13.1"
+    },
+    "質問系": {
+      "count": 19,
+      "totalImpressions": 34104,
+      "totalLikes": 36,
+      "winners": 1,
+      "avgImpressions": 1795,
+      "avgLikes": "1.9",
+      "percentage": "3.8"
+    },
+    "共感系": {
+      "count": 2,
+      "totalImpressions": 708,
+      "totalLikes": 2,
+      "winners": 0,
+      "avgImpressions": 354,
+      "avgLikes": "1.0",
+      "percentage": "0.4"
+    }
+  },
+  "timeBandStats": {
+    "朝(6-9時)": {
+      "count": 119,
+      "totalImpressions": 317163,
+      "totalLikes": 849,
+      "winners": 6,
+      "avgImpressions": 2665,
+      "avgLikes": "7.1",
+      "percentage": "23.9"
+    },
+    "昼(12-15時)": {
+      "count": 19,
+      "totalImpressions": 35818,
+      "totalLikes": 142,
+      "winners": 1,
+      "avgImpressions": 1885,
+      "avgLikes": "7.5",
+      "percentage": "3.8"
+    },
+    "午後(15-18時)": {
+      "count": 31,
+      "totalImpressions": 24328,
+      "totalLikes": 82,
+      "winners": 0,
+      "avgImpressions": 785,
+      "avgLikes": "2.6",
+      "percentage": "6.2"
+    },
+    "夜(18-21時)": {
+      "count": 131,
+      "totalImpressions": 517819,
+      "totalLikes": 1749,
+      "winners": 3,
+      "avgImpressions": 3953,
+      "avgLikes": "13.4",
+      "percentage": "26.3"
+    },
+    "早朝(0-6時)": {
+      "count": 135,
+      "totalImpressions": 255390,
+      "totalLikes": 857,
+      "winners": 3,
+      "avgImpressions": 1892,
+      "avgLikes": "6.3",
+      "percentage": "27.1"
+    },
+    "深夜(21-24時)": {
+      "count": 61,
+      "totalImpressions": 94053,
+      "totalLikes": 336,
+      "winners": 1,
+      "avgImpressions": 1542,
+      "avgLikes": "5.5",
+      "percentage": "12.2"
+    },
+    "午前(9-12時)": {
+      "count": 2,
+      "totalImpressions": 408,
+      "totalLikes": 2,
+      "winners": 0,
+      "avgImpressions": 204,
+      "avgLikes": "1.0",
+      "percentage": "0.4"
+    }
+  },
+  "summary": {
+    "totalPosts": 498,
+    "totalImpressions": 1244979,
+    "avgImpressions": 2500,
+    "winners": 14,
+    "totalFollowerIncrease": 1988,
+    "totalLineThreads": 160
+  }
+};
+const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+const dailyLabels = reportData.dailySummary.map(d => { const date = new Date(d.date); return `${date.getMonth() + 1}/${date.getDate()}`; });
+const dailyImpressions = reportData.dailySummary.map(d => d.totalImpressions);
+const dailyFollowerDeltas = reportData.followers.map(f => Math.max(0, f.followersDelta || 0));
+const dailyLineRegistrations = reportData.dailySummary.map(d => d.lineThreads || 0);
+new Chart(dailyCtx, {
+    type: 'bar',
+    data: {
+        labels: dailyLabels,
+        datasets: [
+            { label: 'インプレッション', data: dailyImpressions, type: 'line', borderColor: '#667eea', backgroundColor: 'rgba(102, 126, 234, 0.1)', borderWidth: 2, yAxisID: 'y', tension: 0.3 },
+            { label: 'フォロワー増加', data: dailyFollowerDeltas, backgroundColor: 'rgba(118, 75, 162, 0.6)', yAxisID: 'y1' },
+            { label: 'LINE登録（Threads経由）', data: dailyLineRegistrations, backgroundColor: 'rgba(255, 193, 7, 0.7)', yAxisID: 'y1' }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+            y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'インプレッション' } },
+            y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'フォロワー増加 / LINE登録' }, grid: { drawOnChartArea: false } }
+        }
+    }
+});
+
+const typeCtx = document.getElementById('typeChart').getContext('2d');
+const typeLabels = Object.keys(reportData.typeStats).sort((a,b) => reportData.typeStats[b].count - reportData.typeStats[a].count);
+const typeImpressions = typeLabels.map(t => reportData.typeStats[t].avgImpressions);
+new Chart(typeCtx, {
+    type: 'bar',
+    data: { labels: typeLabels, datasets: [{ label: '平均インプレッション', data: typeImpressions, backgroundColor: ['rgba(255, 99, 132, 0.7)', 'rgba(75, 192, 192, 0.7)', 'rgba(102, 126, 234, 0.7)', 'rgba(255, 159, 64, 0.7)'], borderWidth: 0 }] },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: function(context) { const type = context.label; const stats = reportData.typeStats[type]; return [`投稿数: ${stats.count}件 (${stats.percentage}%)`, `総imp: ${stats.totalImpressions.toLocaleString()}`]; } } } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: '平均インプレッション' } } }
+    }
+});
+
+const timeBandCtx = document.getElementById('timeBandChart').getContext('2d');
+const timeBandOrder = ['早朝(0-6時)', '朝(6-9時)', '午前(9-12時)', '昼(12-15時)', '午後(15-18時)', '夜(18-21時)', '深夜(21-24時)'];
+const timeBandLabels = timeBandOrder.filter(t => reportData.timeBandStats[t]);
+const timeBandImpressions = timeBandLabels.map(t => reportData.timeBandStats[t].avgImpressions);
+new Chart(timeBandCtx, {
+    type: 'bar',
+    data: { labels: timeBandLabels, datasets: [{ label: '平均インプレッション', data: timeBandImpressions, backgroundColor: 'rgba(118, 75, 162, 0.7)', borderWidth: 0 }] },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: function(context) { const band = context.label; const stats = reportData.timeBandStats[band]; return [`投稿数: ${stats.count}件 (${stats.percentage}%)`, `総imp: ${stats.totalImpressions.toLocaleString()}`, `勝ち投稿: ${stats.winners}件`]; } } } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: '平均インプレッション' } } }
+    }
+});
+
+const typeTableBody = document.getElementById('typeTableBody');
+typeLabels.forEach(type => {
+    const stats = reportData.typeStats[type];
+    const row = document.createElement('tr');
+    row.innerHTML = `<td><strong>${type}</strong></td><td>${stats.count}件</td><td><strong>${stats.percentage}%</strong></td><td style="font-weight: bold; color: #667eea;">${stats.avgImpressions.toLocaleString()}</td><td>${stats.totalImpressions.toLocaleString()}</td><td>${stats.winners}件</td>`;
+    typeTableBody.appendChild(row);
+});
+
+const timeBandTableBody = document.getElementById('timeBandTableBody');
+timeBandLabels.forEach(band => {
+    const stats = reportData.timeBandStats[band];
+    const row = document.createElement('tr');
+    row.innerHTML = `<td><strong>${band}</strong></td><td>${stats.count}件</td><td><strong>${stats.percentage}%</strong></td><td style="font-weight: bold; color: #667eea;">${stats.avgImpressions.toLocaleString()}</td><td>${stats.totalImpressions.toLocaleString()}</td><td>${stats.winners}件</td>`;
+    timeBandTableBody.appendChild(row);
+});
+    </script>
+</body>
+</html>

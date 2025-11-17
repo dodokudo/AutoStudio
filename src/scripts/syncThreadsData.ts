@@ -360,19 +360,30 @@ async function main() {
   const sheetsThreads = new SheetsClient({ spreadsheetId: THREADS_SPREADSHEET_ID });
   const sheetsCompetitor = new SheetsClient({ spreadsheetId: COMPETITOR_SPREADSHEET_ID });
 
+  console.log('[sync] Fetching data from spreadsheets...');
   const [threadsMetricsValues, threadsPostsValues, competitorTargetsValues, competitorAllPostsValues] =
     await Promise.all([
       sheetsThreads.getSheetValues(range(THREADS_SHEET_NAME, 'A1:Z1000')),
-      sheetsThreads.getSheetValues(range(THREADS_POST_SHEET_NAME, 'A1:Z2000')),
-      sheetsCompetitor.getSheetValues(range(COMPETITOR_TARGETS_SHEET, 'A1:ZZ2000')),
-      sheetsCompetitor.getSheetValues(range(COMPETITOR_ALL_POSTS_SHEET, 'A1:Z5000')),
+      sheetsThreads.getSheetValues(range(THREADS_POST_SHEET_NAME, 'A1:Z3000')),
+      sheetsCompetitor.getSheetValues(range(COMPETITOR_TARGETS_SHEET, 'A1:ZZ3000')),
+      sheetsCompetitor.getSheetValues(range(COMPETITOR_ALL_POSTS_SHEET, 'A1:Z10000')),
     ]);
+
+  console.log(`[sync] Fetched ${threadsMetricsValues.length} rows from Threads metrics`);
+  console.log(`[sync] Fetched ${threadsPostsValues.length} rows from Threads posts`);
+  console.log(`[sync] Fetched ${competitorTargetsValues.length} rows from competitor targets`);
+  console.log(`[sync] Fetched ${competitorAllPostsValues.length} rows from competitor posts`);
 
   const threadsMetrics = parseThreadsDailyMetrics(threadsMetricsValues);
   const threadsPosts = parseThreadsPosts(threadsPostsValues);
   const competitorAccountMap = buildCompetitorAccountMap(competitorTargetsValues);
   const competitorPosts = parseCompetitorPosts(competitorAllPostsValues, competitorAccountMap);
   const competitorDailyMetrics = parseCompetitorDailyMetrics(competitorTargetsValues, competitorAccountMap);
+
+  console.log(`[sync] Parsed ${threadsMetrics.length} threads metrics`);
+  console.log(`[sync] Parsed ${threadsPosts.length} threads posts`);
+  console.log(`[sync] Parsed ${competitorPosts.length} competitor posts`);
+  console.log(`[sync] Parsed ${competitorDailyMetrics.length} competitor daily metrics`);
 
   const bigQueryClient = createBigQueryClient(PROJECT_ID);
 

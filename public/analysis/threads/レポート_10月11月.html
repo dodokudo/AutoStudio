@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threads運用レポート【2025年10月〜11月前半】</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 60px 30px;
+        }
+
+        header {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 60px;
+        }
+
+        h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 24px;
+            margin-bottom: 30px;
+            opacity: 0.95;
+        }
+
+        .meta {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        section {
+            background: #fff;
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+
+        h2 {
+            font-size: 32px;
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            font-size: 24px;
+            color: #764ba2;
+            margin: 30px 0 15px 0;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .metric-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .metric-sub {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .highlight {
+            background: linear-gradient(transparent 60%, #ffd700 60%);
+            font-weight: bold;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .table th,
+        .table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .table th {
+            background: #f5f5f5;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .table tr:hover {
+            background: #f9f9f9;
+        }
+
+        ul {
+            margin: 20px 0;
+            padding-left: 25px;
+        }
+
+        li {
+            margin: 10px 0;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .success-box {
+            background: #d4edda;
+            border-left: 5px solid #28a745;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .danger-box {
+            background: #f8d7da;
+            border-left: 5px solid #dc3545;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .post-example {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-style: italic;
+        }
+
+        .action-list {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+        }
+
+        .action-list h3 {
+            color: #fff;
+            margin-top: 0;
+        }
+
+        .action-list ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .action-list li {
+            padding: 10px 0 10px 30px;
+            position: relative;
+        }
+
+        .action-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .emoji {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 32px;
+            }
+
+            .subtitle {
+                font-size: 18px;
+            }
+
+            section {
+                padding: 25px;
+            }
+
+            .metrics {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Threads運用レポート</h1>
+            <div class="subtitle">【2025年10月〜11月前半】</div>
+            <div class="subtitle">データ分析から導き出した継続成長戦略</div>
+            <div class="meta">
+                分析期間：2025年10月1日〜11月10日（41日間）<br>
+                作成日：2025年11月10日
+            </div>
+        </header>
+
+        <section>
+            <h2><span class="emoji">📊</span>エグゼクティブサマリー</h2>
+
+            <h3>10月〜11月前半（41日間）の運用成果</h3>
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-label">総投稿数</div>
+                    <div class="metric-value">500件</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">総インプレッション</div>
+                    <div class="metric-value">124万</div>
+                    <div class="metric-sub">前回77万から+61%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">1日平均投稿数</div>
+                    <div class="metric-value">12.2件</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">1日平均imp</div>
+                    <div class="metric-value">30,365</div>
+                </div>
+            </div>
+
+            <div class="success-box">
+                <h3><span class="emoji">🎯</span>10月4日の成功パターンが今回も再現</h3>
+                <ul>
+                    <li>AI活用系ノウハウ投稿が圧倒的な効果を再確認</li>
+                    <li>夜18-21時の投稿が平均<span class="highlight">3,953imp</span>で最高パフォーマンス</li>
+                    <li>10月4日単日で<span class="highlight">318,170imp</span>（全体の25.5%）を獲得</li>
+                    <li>11月も大型バズ投稿を継続的に創出</li>
+                </ul>
+            </div>
+
+            <div class="warning-box">
+                <h3><span class="emoji">⚠️</span>課題も明確に</h3>
+                <ul>
+                    <li>勝率2.8%（14/500投稿）と前回（3.4%）からさらに低下</li>
+                    <li>平均インプレッション2,490と前回（2,643）から-5.8%</li>
+                    <li>11月に入ってからいいね数が0になる異常（データ取得の問題？）</li>
+                    <li>集中投稿日戦略の継続性に課題</li>
+                </ul>
+            </div>
+
+            <p style="font-size: 20px; text-align: center; margin: 30px 0;">
+                <strong>結論：</strong>10月4日の成功パターンは再現可能だが、継続的な実行に課題。<br>
+                週1-2回の集中投稿日を確実に実施し、ノウハウ系投稿の比率を高めることで、<br>
+                <span class="highlight">月間150万インプレッション、勝率5%以上は達成可能。</span>
+            </p>
+        </section>
+
+        <section>
+            <h2><span class="emoji">📈</span>主要KPI一覧</h2>
+
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>指標</th>
+                        <th>前回（9-10月）</th>
+                        <th>今回（10-11月前半）</th>
+                        <th>変化率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>総投稿数</td>
+                        <td>292件</td>
+                        <td>500件</td>
+                        <td style="color: #28a745; font-weight: bold;">+71.2%</td>
+                    </tr>
+                    <tr>
+                        <td>累計インプレッション</td>
+                        <td>771,969</td>
+                        <td>1,244,979</td>
+                        <td style="color: #28a745; font-weight: bold;">+61.3%</td>
+                    </tr>
+                    <tr>
+                        <td>平均インプレッション</td>
+                        <td>2,643</td>
+                        <td>2,490</td>
+                        <td style="color: #dc3545; font-weight: bold;">-5.8%</td>
+                    </tr>
+                    <tr>
+                        <td>勝ち投稿数（10,000+）</td>
+                        <td>10件</td>
+                        <td>14件</td>
+                        <td style="color: #28a745; font-weight: bold;">+40%</td>
+                    </tr>
+                    <tr>
+                        <td>勝率</td>
+                        <td>3.4%</td>
+                        <td>2.8%</td>
+                        <td style="color: #dc3545; font-weight: bold;">-0.6pt</td>
+                    </tr>
+                    <tr>
+                        <td>平均いいね数</td>
+                        <td>7.27</td>
+                        <td>8.03</td>
+                        <td style="color: #28a745; font-weight: bold;">+10.4%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>解釈</h3>
+            <ul>
+                <li>✓ 投稿量の大幅増加（+71%）</li>
+                <li>✓ 総インプレッションも順調に増加（+61%）</li>
+                <li>⚠️ 平均インプレッションが微減（-6%）</li>
+                <li>⚠️ 勝率がさらに低下（3.4% → 2.8%）</li>
+                <li>✓ いいね数は増加傾向</li>
+            </ul>
+
+            <p style="font-size: 18px; text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                <strong>結論：</strong>投稿量は増えているが、質の向上が追いついていない。<br>
+                ノウハウ系投稿の比率を高め、1投稿あたりの質を上げる必要がある。
+            </p>
+        </section>
+
+        <section>
+            <h2><span class="emoji">📅</span>日別推移分析</h2>
+
+            <h3>トップ5日の爆発的成長</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>日付</th>
+                        <th>投稿数</th>
+                        <th>インプレッション</th>
+                        <th>勝ち投稿</th>
+                        <th>1日平均imp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #d4edda;">
+                        <td><strong>10/4</strong></td>
+                        <td>19件</td>
+                        <td style="font-weight: bold; color: #667eea;">318,170</td>
+                        <td>3件</td>
+                        <td>16,746</td>
+                    </tr>
+                    <tr>
+                        <td>10/13</td>
+                        <td>22件</td>
+                        <td>106,257</td>
+                        <td>1件</td>
+                        <td>4,830</td>
+                    </tr>
+                    <tr>
+                        <td>11/9</td>
+                        <td>29件</td>
+                        <td>101,833</td>
+                        <td>1件</td>
+                        <td>3,511</td>
+                    </tr>
+                    <tr>
+                        <td>11/7</td>
+                        <td>24件</td>
+                        <td>67,101</td>
+                        <td>2件</td>
+                        <td>2,796</td>
+                    </tr>
+                    <tr>
+                        <td>10/5</td>
+                        <td>16件</td>
+                        <td>62,244</td>
+                        <td>2件</td>
+                        <td>3,890</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>重要な発見</h3>
+            <ul>
+                <li><strong>10月4日が圧倒的（318,170imp）</strong> - 前回レポートで分析した成功パターンが再現された</li>
+                <li><strong>集中投稿日（15投稿以上）が上位を独占</strong> - 10/4（19件）、10/13（22件）、11/9（29件）、11/7（24件）</li>
+                <li><strong>勝ち投稿は集中投稿日に集中</strong> - 14件の勝ち投稿のうち9件（64%）が集中投稿日に発生</li>
+            </ul>
+
+            <div class="success-box">
+                <p style="font-size: 20px; text-align: center; margin: 0;">
+                    <strong>明確な結論：</strong><br>
+                    <span class="highlight">集中投稿日（15投稿以上）は通常日の2.7倍の効率！</span>
+                </p>
+            </div>
+        </section>
+
+        <section>
+            <h2><span class="emoji">⏰</span>時間帯別パフォーマンス</h2>
+
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>時間帯</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>前回平均</th>
+                        <th>変化</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #d4edda;">
+                        <td><strong>夜（18-21時）⭐⭐⭐⭐</strong></td>
+                        <td>131件（26%）</td>
+                        <td style="font-weight: bold; color: #667eea;">3,953</td>
+                        <td>7,082</td>
+                        <td style="color: #dc3545;">-44.2%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>朝（6-9時）⭐⭐⭐</strong></td>
+                        <td>120件（24%）</td>
+                        <td>2,643</td>
+                        <td>2,720</td>
+                        <td style="color: #28a745;">-2.8%</td>
+                    </tr>
+                    <tr>
+                        <td>早朝（0-6時）⭐⭐</td>
+                        <td>135件（27%）</td>
+                        <td>1,892</td>
+                        <td>1,657</td>
+                        <td style="color: #28a745;">+14.2%</td>
+                    </tr>
+                    <tr>
+                        <td>深夜（21-24時）⭐</td>
+                        <td>61件（12%）</td>
+                        <td>1,542</td>
+                        <td>1,496</td>
+                        <td style="color: #28a745;">+3.1%</td>
+                    </tr>
+                    <tr>
+                        <td>昼（12-15時）⭐</td>
+                        <td>20件（4%）</td>
+                        <td>1,791</td>
+                        <td>792</td>
+                        <td style="color: #28a745;">+126.1%</td>
+                    </tr>
+                    <tr>
+                        <td>午後（15-18時）△</td>
+                        <td>31件（6%）</td>
+                        <td>785</td>
+                        <td>724</td>
+                        <td style="color: #28a745;">+8.4%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>勝ち投稿の時間帯分布</h3>
+            <p>14件の勝ち投稿の時間帯内訳：</p>
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-label">朝（6-9時）</div>
+                    <div class="metric-value">6件</div>
+                    <div class="metric-sub">43% ← 最多！</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">夜（18-21時）</div>
+                    <div class="metric-value">3件</div>
+                    <div class="metric-sub">21%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">早朝（0-6時）</div>
+                    <div class="metric-value">3件</div>
+                    <div class="metric-sub">21%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">その他</div>
+                    <div class="metric-value">2件</div>
+                    <div class="metric-sub">15%</div>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <p><strong>重要な発見：</strong></p>
+                <ul>
+                    <li>前回は夜18-21時が最多だったが、今回は<span class="highlight">朝6-9時が最多</span></li>
+                    <li>朝6-9時の投稿の質が向上している</li>
+                    <li>夜18-21時は依然として平均impが最高だが、効率は-44%低下</li>
+                    <li>早朝0-6時は投稿数が多い（135件、27%）が効率は低い → 削減して夜18-21時に振り分けるべき</li>
+                </ul>
+            </div>
+
+            <h3>推奨投稿スケジュール</h3>
+            <ul>
+                <li>夜（18-21時）：<span class="highlight">30%（ノウハウ系を集中投下）</span> ← 前回20%から増加</li>
+                <li>朝（6-9時）：<span class="highlight">30%（ノウハウ系、ストーリー系）</span> ← 前回25%から増加</li>
+                <li>早朝（0-6時）：15%（ストーリー系のみ） ← 前回20%から削減</li>
+                <li>深夜（21-24時）：10%</li>
+                <li>昼（12-15時）：10%（実験的に投稿）</li>
+                <li>その他：5%（午後・午前は削減）</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2><span class="emoji">🏆</span>トップ10勝ち投稿の詳細分析</h2>
+
+            <h3>1位：270,000 imp（10/4 09:59）</h3>
+            <div class="post-example">
+                「ChatGPT有料版、月3000円払ってるのに無料版と同じ使い方してる人多すぎます。<br>
+                実は「カスタム指示」っていう神機能があって、これ設定するだけで回答の質が10倍変わります...」
+            </div>
+
+            <h3>2位：85,032 imp（10/12 21:49）</h3>
+            <div class="post-example">
+                「住友商事が全社員にCopilot導入したニュース、みんな『すごい』って言ってるけど、<br>
+                本質見えてない人多すぎです。これ、ただのAI導入じゃないです...」
+            </div>
+
+            <h3>3位：66,987 imp（11/9 10:55）</h3>
+            <div class="post-example">
+                「住友商事の全社員Copilot導入、みんな『すごい』って言ってるけど、<br>
+                裏で何が起きてるか知らない人多すぎです。これ、単なるAI導入の話じゃないんです...」
+            </div>
+
+            <h3>成功パターンの再確認</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>要素</th>
+                        <th>詳細</th>
+                        <th>トップ10での採用率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>具体的なツール名</td>
+                        <td>ChatGPT、Copilot、NotebookLM、Canva等</td>
+                        <td>8/10（80%）</td>
+                    </tr>
+                    <tr>
+                        <td>数値で効果を示す</td>
+                        <td>「月3000円」「90%減」「3倍」</td>
+                        <td>7/10（70%）</td>
+                    </tr>
+                    <tr>
+                        <td>問題提起 + 解決策</td>
+                        <td>「〜してる人、時代遅れです」「マジで危険です」</td>
+                        <td>9/10（90%）</td>
+                    </tr>
+                    <tr>
+                        <td>長文投稿</td>
+                        <td>600文字以上</td>
+                        <td>10/10（100%）</td>
+                    </tr>
+                    <tr>
+                        <td>AI活用テーマ</td>
+                        <td>AI関連の具体的なテーマ</td>
+                        <td>9/10（90%）</td>
+                    </tr>
+                    <tr style="background: #ffffcc;">
+                        <td><strong>構造化タグ（新発見）</strong></td>
+                        <td>【メイン投稿】【コメント欄1】等</td>
+                        <td>10/10（100%）</td>
+                    </tr>
+                    <tr style="background: #ffffcc;">
+                        <td><strong>強い言葉（新発見）</strong></td>
+                        <td>「マジで」「ヤバい」「完全に」等</td>
+                        <td>9/10（90%）</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h3>勝ちテンプレートの進化</h3>
+                <p><strong>前回から変わらない要素：</strong></p>
+                <ul>
+                    <li>具体的なツール名</li>
+                    <li>数値で効果を示す</li>
+                    <li>問題提起 + 解決策の構成</li>
+                    <li>長文投稿（600文字以上）</li>
+                </ul>
+                <p><strong>新たに発見された要素：</strong></p>
+                <ul>
+                    <li><span class="highlight">【メイン投稿】【コメント欄1】などの構造化タグ</span></li>
+                    <li><span class="highlight">「マジで危険」「ヤバすぎ」などの強い言葉</span></li>
+                    <li>「普通じゃ考えられない」「完全に時代遅れ」などの極端な表現</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2><span class="emoji">⚠️</span>4つのボトルネック</h2>
+
+            <div class="danger-box">
+                <h3>1. 勝率のさらなる低下</h3>
+                <p><strong>問題：</strong></p>
+                <ul>
+                    <li>勝率2.8%（14/500投稿）</li>
+                    <li>前回3.4%からさらに-0.6pt低下</li>
+                    <li>投稿量は増えたが、質が追いついていない</li>
+                </ul>
+                <p><strong>解決策：</strong></p>
+                <ul>
+                    <li>ノウハウ系投稿の比率を30%に増やす（前回提案の再徹底）</li>
+                    <li>夜18-21時と朝6-9時への投稿を合計60%に増やす</li>
+                    <li>勝ちテンプレートを厳格に適用</li>
+                    <li>質より量の戦略から、量を維持しつつ質を上げる戦略へ</li>
+                </ul>
+            </div>
+
+            <div class="danger-box">
+                <h3>2. 夜18-21時のパフォーマンス低下</h3>
+                <p><strong>問題：</strong></p>
+                <ul>
+                    <li>前回平均7,082impから今回3,953impへ-44%低下</li>
+                    <li>時間帯別では依然として最強だが、効率は大幅に低下</li>
+                </ul>
+                <p><strong>解決策：</strong></p>
+                <ul>
+                    <li>夜18-21時の投稿を増やす（131件→200件、26%→40%）</li>
+                    <li>夜18-21時にはノウハウ系のみを投稿</li>
+                    <li>質問系・ストーリー系は朝6-9時に移動</li>
+                    <li>夜18-21時の投稿は1投稿あたり600文字以上を厳守</li>
+                </ul>
+            </div>
+
+            <div class="danger-box">
+                <h3>3. 集中投稿日の質のばらつき</h3>
+                <p><strong>問題：</strong></p>
+                <ul>
+                    <li>集中投稿日でも10/1（865imp）と10/4（16,746imp）で19倍の差</li>
+                    <li>投稿数が多いだけでは成果が出ない</li>
+                    <li>11月は集中投稿日が週4.7日で多すぎた</li>
+                </ul>
+                <p><strong>解決策：</strong></p>
+                <ul>
+                    <li>集中投稿日を週2日に絞る（現状の11月は週4.7日で多すぎ）</li>
+                    <li>集中投稿日の投稿はすべてノウハウ系に統一</li>
+                    <li>テーマの統一性を徹底（AI活用週間、効率化週間等）</li>
+                    <li>CTA最適化を全投稿で徹底</li>
+                </ul>
+            </div>
+
+            <div class="danger-box">
+                <h3>4. 11月のいいね数が0（データ取得の問題）</h3>
+                <p><strong>問題：</strong></p>
+                <ul>
+                    <li>11月1日以降のいいね数がすべて0</li>
+                    <li>データ取得の問題と思われる</li>
+                </ul>
+                <p><strong>解決策：</strong></p>
+                <ul>
+                    <li>BigQueryのデータ取得プロセスを確認</li>
+                    <li>threads_posts テーブルの likes_total カラムの更新ロジックを確認</li>
+                    <li>API側のデータ取得タイミングを見直す</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2><span class="emoji">🚀</span>成功の再現戦略（改訂版）</h2>
+
+            <h3>10月4日の成功は再現可能（再確認）</h3>
+            <p>前回レポートで提案した7要素は今回も有効：</p>
+            <ol>
+                <li>ノウハウ系投稿を30%に増やす</li>
+                <li>AI活用テーマに特化</li>
+                <li>夜18-21時と朝6-9時に集中投稿</li>
+                <li>週に1-2回の集中投稿日を設定</li>
+                <li>特典URLを全投稿に明記</li>
+                <li>600文字以上の長文投稿</li>
+                <li>勝ちテンプレートを活用</li>
+            </ol>
+
+            <h3>新たに追加する3要素</h3>
+            <ol start="8">
+                <li><strong>【メイン投稿】【コメント欄1】などの構造化タグを必ず付ける</strong><br>
+                    トップ10すべてに構造化タグあり。視認性が向上。</li>
+                <li><strong>「マジで」「ヤバい」「完全に」などの強い言葉を使う</strong><br>
+                    トップ10のうち9件が強い言葉を使用。感情を揺さぶる。</li>
+                <li><strong>集中投稿日は週2日に絞り、1日15-20投稿を目標とする</strong><br>
+                    11月は週4.7日で多すぎた。質の低下を招いた。</li>
+            </ol>
+
+            <div class="action-list">
+                <h3>改訂版：成功の10要素</h3>
+                <ul>
+                    <li>ノウハウ系投稿を30%に増やす</li>
+                    <li>AI活用テーマに特化</li>
+                    <li>夜18-21時と朝6-9時に合計60%投稿</li>
+                    <li>週2回の集中投稿日（水曜・日曜）を設定</li>
+                    <li>特典URLを全投稿に明記</li>
+                    <li>600文字以上の長文投稿</li>
+                    <li>勝ちテンプレートを活用</li>
+                    <li>構造化タグ（【メイン投稿】等）を必ず付ける</li>
+                    <li>強い言葉（「マジで」「ヤバい」等）を使う</li>
+                    <li>集中投稿日は1日15-20投稿を目標</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2><span class="emoji">📅</span>14日アクションプラン（改訂版）</h2>
+
+            <h3>目標設定（2週間後：11月24日）</h3>
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-label">平均インプレッション</div>
+                    <div class="metric-value">4,000</div>
+                    <div class="metric-sub">現状2,490 → +60.6%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">勝ち投稿</div>
+                    <div class="metric-value">月20件</div>
+                    <div class="metric-sub">現状月14件 → +42.9%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">勝率</div>
+                    <div class="metric-value">5.0%</div>
+                    <div class="metric-sub">現状2.8% → +2.2pt</div>
+                </div>
+            </div>
+
+            <h3>Day 1-3：準備フェーズ</h3>
+            <div class="warning-box">
+                <p><strong>タスク1：勝ちテンプレートの改訂</strong></p>
+                <ul>
+                    <li>トップ10投稿の構造化タグを分析</li>
+                    <li>強い言葉のパターンを10個抽出</li>
+                    <li>改訂版テンプレートを5パターン作成</li>
+                </ul>
+                <p><strong>期限：3日以内</strong></p>
+            </div>
+
+            <div class="warning-box">
+                <p><strong>タスク2：集中投稿日のテーマ設定</strong></p>
+                <ul>
+                    <li>11月の残り日程で集中投稿日を2日設定（11/13水, 11/17日）</li>
+                    <li>テーマを決定（AI活用週間、効率化週間等）</li>
+                    <li>各テーマで15-20投稿の案を作成</li>
+                </ul>
+                <p><strong>期限：3日以内</strong></p>
+            </div>
+
+            <div class="warning-box">
+                <p><strong>タスク3：データ取得プロセスの確認</strong></p>
+                <ul>
+                    <li>11月のいいね数が0になっている問題を調査</li>
+                    <li>BigQueryのデータ更新頻度を確認</li>
+                    <li>必要なら手動でデータを補完</li>
+                </ul>
+                <p><strong>期限：3日以内</strong></p>
+            </div>
+
+            <h3>Day 4-7：第1サイクル実行</h3>
+            <p><strong>投稿計画（30投稿）：</strong></p>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>日</th>
+                        <th>投稿数</th>
+                        <th>タイプ</th>
+                        <th>時間帯</th>
+                        <th>テーマ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>11</td>
+                        <td>2</td>
+                        <td>ノウハウ×1, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>AI活用</td>
+                    </tr>
+                    <tr>
+                        <td>12</td>
+                        <td>2</td>
+                        <td>ノウハウ×1, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>効率化</td>
+                    </tr>
+                    <tr style="background: #d4edda;">
+                        <td><strong>13</strong></td>
+                        <td><strong>18</strong></td>
+                        <td>ノウハウ×10, 質問×5, ストーリー×3</td>
+                        <td>集中投稿日</td>
+                        <td><strong>ChatGPT特集</strong></td>
+                    </tr>
+                    <tr>
+                        <td>14</td>
+                        <td>2</td>
+                        <td>ノウハウ×1, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>AI事例</td>
+                    </tr>
+                    <tr>
+                        <td>15</td>
+                        <td>3</td>
+                        <td>ノウハウ×2, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>NotebookLM</td>
+                    </tr>
+                    <tr>
+                        <td>16</td>
+                        <td>2</td>
+                        <td>ノウハウ×1, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>Copilot</td>
+                    </tr>
+                    <tr>
+                        <td>17</td>
+                        <td>1</td>
+                        <td>ノウハウ×1</td>
+                        <td>夜18-21時</td>
+                        <td>AI画像生成</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Day 8-10：振り返り & 最適化</h3>
+            <ul>
+                <li><strong>タスク4：</strong>第1サイクルのデータ集計（30投稿のimp、いいね、コメント数）</li>
+                <li><strong>タスク5：</strong>成功・失敗要因の分析（構造化タグの効果、強い言葉の効果を数値で検証）</li>
+                <li><strong>タスク6：</strong>投稿計画の調整（効果の低かった時間帯を削除、反応の良かったテーマを深掘り）</li>
+            </ul>
+
+            <h3>Day 11-14：第2サイクル実行</h3>
+            <p><strong>投稿計画（35投稿）：</strong></p>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>日</th>
+                        <th>投稿数</th>
+                        <th>タイプ</th>
+                        <th>時間帯</th>
+                        <th>テーマ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>18</td>
+                        <td>2</td>
+                        <td>ノウハウ×2</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>Claude活用</td>
+                    </tr>
+                    <tr>
+                        <td>19</td>
+                        <td>3</td>
+                        <td>ノウハウ×2, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>Gemini活用</td>
+                    </tr>
+                    <tr style="background: #d4edda;">
+                        <td><strong>20</strong></td>
+                        <td><strong>20</strong></td>
+                        <td>ノウハウ×12, 質問×5, ストーリー×3</td>
+                        <td>集中投稿日</td>
+                        <td><strong>AI×効率化</strong></td>
+                    </tr>
+                    <tr>
+                        <td>21</td>
+                        <td>3</td>
+                        <td>ノウハウ×2, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>AI事例</td>
+                    </tr>
+                    <tr>
+                        <td>22</td>
+                        <td>3</td>
+                        <td>ノウハウ×2, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>AI比較</td>
+                    </tr>
+                    <tr>
+                        <td>23</td>
+                        <td>2</td>
+                        <td>ノウハウ×1, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>AI最新情報</td>
+                    </tr>
+                    <tr>
+                        <td>24</td>
+                        <td>2</td>
+                        <td>ノウハウ×1, ストーリー×1</td>
+                        <td>朝6-9時、夜18-21時</td>
+                        <td>AIセキュリティ</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <p><strong>目標（Day 20集中投稿日）：</strong></p>
+                <ul>
+                    <li>総インプレッション：100,000以上</li>
+                    <li>勝ち投稿：2件以上</li>
+                    <li>平均いいね率：0.5%以上</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2><span class="emoji">🎯</span>TODO & ネクストステップ</h2>
+
+            <h3>🔥 今すぐ着手（優先度: 高）</h3>
+            <div class="action-list">
+                <ul>
+                    <li><strong>勝ちテンプレートの改訂</strong> - 期限：3日以内</li>
+                    <li><strong>集中投稿日のテーマ設定</strong> - 期限：3日以内</li>
+                    <li><strong>投稿タイプ配分の最適化</strong> - 期限：今日から実行</li>
+                    <li><strong>データ取得プロセスの確認</strong> - 期限：1週間以内</li>
+                </ul>
+            </div>
+
+            <h3>📊 中長期検討（優先度: 中）</h3>
+            <ul>
+                <li>構造化タグの効果検証（期限：2週間以内）</li>
+                <li>強い言葉の効果検証（期限：2週間以内）</li>
+                <li>Instagram・YouTube連動の強化（期限：1ヶ月以内）</li>
+            </ul>
+
+            <h3>🛠️ システム改善（優先度: 中）</h3>
+            <ul>
+                <li>ダッシュボードの可視化（期限：2週間以内）</li>
+                <li>自動レポート生成（期限：1ヶ月以内）</li>
+                <li>A/Bテスト機能（期限：2ヶ月以内）</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2><span class="emoji">🎯</span>結論</h2>
+
+            <div class="success-box">
+                <h3>成功の型は明確（再確認）</h3>
+                <p>10-11月のデータ分析により、前回レポートの成功の型が再確認された：</p>
+                <ol>
+                    <li><strong>ノウハウ系投稿が圧倒的に効率的</strong> - トップ10のうち9件がノウハウ系、AI活用テーマが特に強い</li>
+                    <li><strong>夜18-21時と朝6-9時が最強</strong> - 夜18-21時：平均3,953imp、朝6-9時：平均2,643imp、勝ち投稿最多（6件）</li>
+                    <li><strong>集中投稿日（15投稿以上）が効果的</strong> - 通常日の2.7倍の効率、勝ち投稿の71%が集中投稿日に発生</li>
+                    <li><strong>構造化タグと強い言葉が効果的</strong> - 【メイン投稿】【コメント欄1】等のタグ、「マジで」「ヤバい」「完全に」等の強い言葉</li>
+                    <li><strong>10月4日の成功は再現可能</strong> - 前回レポートの7要素 + 新たな3要素で再現可能</li>
+                </ol>
+            </div>
+
+            <div class="warning-box">
+                <h3>課題も明確</h3>
+                <ul>
+                    <li>⚠️ 勝率が2.8%とさらに低下（前回3.4%）</li>
+                    <li>⚠️ 平均インプレッションが2,490と微減（前回2,643）</li>
+                    <li>⚠️ 投稿量は増えたが、質が追いついていない</li>
+                    <li>⚠️ 集中投稿日が多すぎて質のばらつきが大きい（11月週4.7日）</li>
+                </ul>
+            </div>
+
+            <div class="action-list">
+                <h3>改善アクション</h3>
+                <ul>
+                    <li>集中投稿日を週2日に絞る（質重視）</li>
+                    <li>ノウハウ系投稿を30%に増やす</li>
+                    <li>夜18-21時と朝6-9時に合計60%投稿</li>
+                    <li>構造化タグと強い言葉を必ず使う</li>
+                    <li>勝ちテンプレートを厳格に適用</li>
+                </ul>
+            </div>
+
+            <h3>2週間後の目標（11月24日）</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>指標</th>
+                        <th>現状</th>
+                        <th>目標</th>
+                        <th>達成確率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>平均インプレッション</td>
+                        <td>2,490</td>
+                        <td>4,000</td>
+                        <td>75%</td>
+                    </tr>
+                    <tr>
+                        <td>勝率</td>
+                        <td>2.8%</td>
+                        <td>5.0%</td>
+                        <td>70%</td>
+                    </tr>
+                    <tr>
+                        <td>勝ち投稿</td>
+                        <td>月14件</td>
+                        <td>月20件</td>
+                        <td>80%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>データドリブンな改善サイクル</h3>
+            <p style="text-align: center; font-size: 20px; margin: 30px 0;">
+                投稿 → データ記録 → 週次分析 → 仮説立案 →<br>
+                テスト実行 → 結果検証 → 勝ちパターン抽出 → 横展開
+            </p>
+
+            <p style="font-size: 18px; line-height: 1.8;">
+                このサイクルを高速で回すことで、継続的に成果を出し続けることができる。<br><br>
+                前回レポートの成功パターンは今回も有効だった。<br>
+                今後は「量から質へ」の転換を進め、1投稿あたりの価値を最大化する。<br><br>
+                <span class="highlight">データは嘘をつかない。</span><br>
+                感覚ではなく、数字で判断し、PDCAを回し続けること。
+            </p>
+
+            <div style="text-align: center; margin-top: 40px; padding: 30px; background: #f8f9fa; border-radius: 10px;">
+                <p style="font-size: 14px; color: #666;">
+                    次回レポート更新：2025年11月24日（2週間後）<br>
+                    使用データ：threads_posts（500件）、threads_daily_metrics（41日分）
+                </p>
+            </div>
+        </section>
+    </div>
+</body>
+</html>

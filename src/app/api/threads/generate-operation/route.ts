@@ -1,6 +1,7 @@
 import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
 import { replaceTodayPlans } from '@/lib/bigqueryPlans';
 import { THREADS_OPERATION_PROMPT } from '@/lib/threadsOperationPrompt';
+import { searchMultipleTopics } from '@/lib/tavily/client';
 import type { PlanStatus, ThreadPlanSummary } from '@/types/threadPlan';
 import type { BigQuery } from '@google-cloud/bigquery';
 
@@ -34,7 +35,7 @@ const CLAUDE_API_URL = process.env.CLAUDE_API_URL?.trim() ?? 'https://api.anthro
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY?.trim();
 const CLAUDE_MODEL = 'claude-sonnet-4-5-20250929';
 
-// Threads運用テーマリスト（50個）
+// Threads運用テーマリスト（130個 = 既存50個 + 新規80個）
 const THREADS_THEMES = [
   // バズる投稿の書き方（10個）
   'Threadsでバズる投稿の書き方、完全公開します',
@@ -95,40 +96,180 @@ const THREADS_THEMES = [
   'Threadsの月曜朝投稿、今週から試すモチベーションに最適',
   'Threadsの深夜投稿、0-6時は効率が悪いデータ',
   'Threadsの投稿予約、計画的に最適時間を狙う戦略',
+
+  // プロフィール最適化（10個）
+  'Threadsプロフィールの自己紹介文、3行で完結させる書き方',
+  'Threadsのアイコン画像、反応率が3倍変わる選び方',
+  'Threadsプロフィールの実績の書き方、信頼性を高める3つの型',
+  'ThreadsのCTA設計、LINE登録率を高める記号活用術',
+  'Threadsの名前設定、一瞬で専門性を伝える公式',
+  'Threadsプロフィールで避けるべきNGワード集',
+  'Threadsの肩書き作成、差別化する組み合わせ術',
+  'Threadsプロフィール、実績がない場合の書き方',
+  'Threadsのリンク設置、クリック率を3倍にする導線設計',
+  'Threadsプロフィール、ターゲットを明確にする書き方',
+
+  // フック作成術（10個）
+  'Threadsの質問投げかけ型フック、エンゲージメントを高める書き方',
+  'Threadsの「引用」型フック、共感を生む活用法',
+  'Threadsの記号強調型フック、視覚的インパクトの作り方',
+  'Threadsのフック、ターゲットを明確にする「〇〇してる人」パターン',
+  'Threadsのフック、損失回避を活用する心理テクニック',
+  'Threadsのフック、具体的な金額を入れる効果',
+  'Threadsのフック、緊急性を演出する言葉選び',
+  'Threadsのフック、意外性とギャップを作る方法',
+  'Threadsのフック、弱いパターンから強いパターンへの改善法',
+  'Threadsのフック組み合わせ戦略、警告型×数字使用型',
+
+  // コンテンツタイプ別戦略（10個）
+  'Threadsのよくある間違い系投稿の作り方',
+  'Threadsの比較・使い分け系投稿、表形式活用術',
+  'ThreadsのBefore→After訴求、数値で示す効果的な書き方',
+  'Threadsのステップバイステップ投稿、再現性を高める方法',
+  'Threadsの企業事例活用法、信頼性を高める書き方',
+  'Threadsの「パクって実践」系投稿の作り方',
+  'Threadsの結論先出し型投稿、読者を引き込む構成',
+  'Threadsのストーリー系投稿、避けるべき理由',
+  'Threadsの質問系投稿、エンゲージメント率が低い理由',
+  'Threadsの共感系投稿、売上につながらない理由',
+
+  // 投稿構造・デザイン（10個）
+  'Threadsの番号付きリスト、平均インプレッションを高める使い方',
+  'Threadsの箇条書き活用法、視認性を高めるテクニック',
+  'Threadsの【】記号の使い方、セクションを明確にする方法',
+  'Threadsの→ここでのポイント、補足情報の効果的な書き方',
+  'Threadsの絵文字使用戦略、使いすぎを避ける基準',
+  'Threadsの中長文最適化、400-600字に収める編集術',
+  'Threadsの視覚的インパクト、タイムラインで目立つ構造',
+  'Threadsの段落分け、スマホで読みやすい改行ポイント',
+  'Threadsの長文投稿と短文投稿、見込み客の質の違い',
+  'Threadsの投稿構造テンプレート、コピペで使える型',
+
+  // 時間帯・投稿頻度戦略追加（10個）
+  'Threadsの昼12-15時投稿戦略',
+  'Threadsの早朝0-6時、投稿を避けるべき理由',
+  'Threadsの土曜日投稿戦略、週末のリラックスタイム活用法',
+  'Threadsの日曜日夜投稿、「明日から」系が強い理由',
+  'Threadsの月曜朝投稿、通勤時間を狙う戦略',
+  'Threadsのゴールデンタイム集中戦略、65%配分の実践法',
+  'Threadsの1日12.5件投稿、最低限のスケジュール組み方',
+  'Threadsの投稿タイミング、競合が少ない時間帯の見つけ方',
+  'Threadsの週末投稿比率、36%を活用する方法',
+  'Threadsの死の時間帯、午後15-18時と午前9-12時を避ける理由',
+
+  // データ分析・改善（10個）
+  'Threadsの勝ち投稿分析、10,000imp以上を出す7つの法則',
+  'Threadsの失敗投稿分析、1,000imp未満の3大パターン',
+  'Threadsのインプレッション分布、勝率2.8%の意味',
+  'Threadsの平均インプレッション、2,500から3,500に上げる方法',
+  'Threadsのフックパターン別勝率、データに基づく選び方',
+  'Threadsのサブタイプ別平均imp、8倍の差がつく理由',
+  'Threadsの文字数最適化、201-400字が最強の理由',
+  'Threadsの投稿後分析、改善すべきポイントの見つけ方',
+  'Threadsの競合分析シート、5つのアカウントから勝ちパターンを抽出する方法',
+  'Threadsの4週間プログラム、段階的に改善するロードマップ',
+
+  // エンゲージメント向上追加（10個）
+  'ThreadsのCTA設計、フォロー促進の書き方',
+  'Threadsのコメント返信戦略、エンゲージメント率を高める方法',
+  'Threadsの保存されやすい投稿、ロードマップ系が強い理由',
+  'Threadsのシェアされやすい投稿、実用性を高める書き方',
+  'Threadsのいいね周り、効果的なタイミングと方法',
+  'Threadsのフォロー返し戦略、質の高いフォロワーの見分け方',
+  'Threadsのリプライ活用、滞在時間を延ばすテクニック',
+  'ThreadsのLINE誘導、CVR 0.013%を高める特典設計',
+  'Threadsの投稿削除判断、シャドウバンを避ける基準',
+  'Threadsのアカウント評価、エンゲージメント率を重視する理由',
+
+  // ジャンル別応用（10個）
+  'Threadsの美容系投稿、薬機法を守りながら訴求する方法',
+  'Threadsの料理系投稿、時短レシピで反応を得るコツ',
+  'Threadsのビジネス系投稿、月○万円訴求の効果的な書き方',
+  'Threadsの育児系投稿、具体的な褒め方・叱り方の書き方',
+  'Threadsの恋愛系投稿、マッチングアプリ攻略ネタの作り方',
+  'Threadsの趣味系投稿、初心者向けロードマップの構成',
+  'Threadsのジャンル変換ワークシート、AI系から他ジャンルへの変換法',
+  'Threadsのネタ切れ対策、マトリクス法で無限にネタを出す方法',
+  'Threadsのジャンル別NGパターン、避けるべき表現集',
+  'Threadsの差別化ポイント、競合と被らないテーマの見つけ方',
 ];
 
-// フックパターン（実データの勝率に基づく）
-type HookPattern = 'warning' | 'number' | 'title';
+// フックパターン（門口さん・スギさんの分析を反映した7パターン）
+type HookPattern = 'warning' | 'number' | 'title' | 'emotion' | 'story' | 'authority' | 'contrast';
 
 const HOOK_PATTERNS: Array<{ type: HookPattern; weight: number; templates: string[] }> = [
   {
     type: 'warning',
-    weight: 50, // 50%の確率（平均10,691imp、勝率18.2%）
+    weight: 35, // 35%の確率（門口さんパターン: 警告型65%を反映）
     templates: [
       '{theme}、9割の人が間違ってます',
       '{theme}、完全に時代遅れです',
       '{theme}、知らない人多すぎて損してます',
       '{theme}、やってない人マジでもったいないです',
+      '{theme}してる人、アカウント伸びません',
+      '{theme}、今すぐやめないと終わります',
     ],
   },
   {
     type: 'number',
-    weight: 30, // 30%の確率（平均4,282imp、勝率3.4%）
+    weight: 20, // 20%の確率（スギさんパターン: データ型35%を反映）
     templates: [
       '{theme}、1ヶ月でフォロワー1600名増えました',
       '{theme}、126万インプレッション達成した方法',
       '{theme}、498件のデータ分析で判明しました',
       '{theme}、平均インプレッションが7.3倍になった話',
+      '{theme}、4ヶ月で1万人達成した全手法',
+    ],
+  },
+  {
+    type: 'authority',
+    weight: 15, // 15%の確率（門口さんパターン: 権威型20%を反映）
+    templates: [
+      'Threadsの公式発表によると、{theme}',
+      'Meta最新アップデート、{theme}',
+      'Threads運用者必見、{theme}が変わります',
+      '【公式情報】{theme}',
+    ],
+  },
+  {
+    type: 'emotion',
+    weight: 10, // 10%の確率（スギさんパターン: 感情型15%を反映）
+    templates: [
+      '私が絶対やらない{theme}',
+      '正直、{theme}は大嫌いです',
+      'すんごい嫌いな{theme}があって',
+      '{theme}、イライラする人多すぎ',
     ],
   },
   {
     type: 'title',
-    weight: 20, // 20%の確率（平均2,171imp、勝率3.3%）
+    weight: 10, // 10%の確率
     templates: [
       '【緊急】{theme}',
       '【知らないとヤバい】{theme}',
       '【完全保存版】{theme}',
       '【実証済み】{theme}',
+      '【超重要】{theme}',
+    ],
+  },
+  {
+    type: 'story',
+    weight: 5, // 5%の確率（スギさんパターン: ストーリー型5%を反映）
+    templates: [
+      '私のThreads運用、{theme}で変わりました',
+      'フォロワー100人の頃、{theme}を知らなかった',
+      '{theme}を実践したら、人生変わった',
+      'Threads始めて3ヶ月、{theme}に気づいた',
+    ],
+  },
+  {
+    type: 'contrast',
+    weight: 5, // 5%の確率（スギさんパターン: 対比型5%を反映）
+    templates: [
+      '{theme}じゃない、実は〇〇です',
+      'みんな{theme}と思ってるけど、違います',
+      '{theme}、実は逆効果でした',
+      '{theme}は間違い、本当は〇〇',
     ],
   },
 ];
@@ -291,7 +432,7 @@ LIMIT 20
   }));
 }
 
-async function generateThreadsOperationPosts(): Promise<ClaudePost[]> {
+async function generateThreadsOperationPosts(latestUpdates: string): Promise<ClaudePost[]> {
   if (!CLAUDE_API_KEY) {
     throw new Error('CLAUDE_API_KEY is not configured');
   }
@@ -300,12 +441,27 @@ async function generateThreadsOperationPosts(): Promise<ClaudePost[]> {
   const client = createBigQueryClient(PROJECT_ID);
   const monguchiPosts = await fetchMonguchiPostsForOperation(client, PROJECT_ID);
 
-  const selectedThemes = selectRandomThemes(5); // 5個のテーマを選択
+  const selectedThemes = selectRandomThemes(10); // 10個のテーマを選択
   const posts: ClaudePost[] = [];
 
   for (let i = 0; i < selectedThemes.length; i++) {
     const theme = selectedThemes[i];
-    const hook = selectHookPattern();
+
+    // 最初の3投稿は強制的にauthority型（Web検索結果活用）
+    let hook;
+    if (i < 3) {
+      const authorityTemplates = [
+        'Threadsの公式発表によると、{theme}',
+        'Meta最新アップデート、{theme}',
+        'Threads運用者必見、{theme}が変わります',
+        '【公式情報】{theme}',
+      ];
+      const template = authorityTemplates[Math.floor(Math.random() * authorityTemplates.length)];
+      hook = { type: 'authority' as HookPattern, template };
+    } else {
+      hook = selectHookPattern();
+    }
+
     const finalTheme = applyHookToTheme(theme, hook.template);
 
     // 門口さんの投稿例をプロンプトに追加
@@ -313,9 +469,19 @@ async function generateThreadsOperationPosts(): Promise<ClaudePost[]> {
       return `### 参考例${idx + 1}（${post.impressions.toLocaleString()}imp / フォロワー増${post.followers_delta}名 / ${post.tier}）\n${post.content}\n`;
     }).join('\n');
 
+    const latestUpdatesSection = latestUpdates
+      ? `# Threadsの最新アップデート情報
+以下の最新情報を参考に、タイムリーでトレンド性のあるコンテンツを作成してください。
+特に「権威型」フック（公式発表、最新情報）として活用できます。
+
+${latestUpdates}
+
+`
+      : '';
+
     const prompt = `${THREADS_OPERATION_PROMPT}
 
-# 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿20件）
+${latestUpdatesSection}# 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿20件）
 以下の投稿の構成・文体・リズム・表現を完全にトレースしてThreads運用系の投稿を作成してください。
 特に以下の要素を真似る:
 - フックの作り方
@@ -406,14 +572,41 @@ export async function POST() {
     const startTime = Date.now();
     try {
       await send({ type: 'stage', stage: 'initializing', message: 'Threads運用系投稿を準備しています…' });
+
+      // Web検索を実行（Threads最新情報）
+      await send({ type: 'stage', stage: 'searching', message: 'Threadsの最新情報を検索中…' });
+      let threadsLatestUpdates = '';
+      try {
+        const today = new Date();
+        const thisMonth = `${today.getFullYear()}年${today.getMonth() + 1}月`;
+
+        const updateTopics = [
+          `Threads 新機能 ${thisMonth}`,
+          `Threads アルゴリズム 変更 最新`,
+          `Meta Threads アップデート 公式発表`,
+        ];
+
+        const searchResults = await searchMultipleTopics(updateTopics);
+
+        if (searchResults.length > 0) {
+          threadsLatestUpdates = searchResults
+            .slice(0, 3)
+            .map((r, idx) => `### 最新情報${idx + 1}: ${r.title}\n${r.content.slice(0, 200)}\nURL: ${r.url}\n`)
+            .join('\n');
+        }
+      } catch (error) {
+        console.error('[threads/generate-operation] Tavily search failed:', error);
+        // Web検索失敗してもプロンプト生成は継続
+      }
+
       await send({ type: 'stage', stage: 'fetching', message: '門口さんの高パフォーマンス投稿20件を取得中…' });
 
-      const total = 5;
+      const total = 10;
       await send({ type: 'start', total });
       await send({ type: 'stage', stage: 'generating', message: `Claudeで投稿を生成中… (${total}件)` });
 
       const generationStartedAt = Date.now();
-      const claudePosts = await generateThreadsOperationPosts();
+      const claudePosts = await generateThreadsOperationPosts(threadsLatestUpdates);
 
       await send({
         type: 'progress',
@@ -423,7 +616,7 @@ export async function POST() {
         elapsedMs: Date.now() - generationStartedAt,
       });
 
-      const fallbackSchedule = ['07:00', '12:00', '15:00', '19:00', '21:00'];
+      const fallbackSchedule = ['07:00', '08:30', '10:00', '12:00', '14:00', '16:00', '18:00', '19:30', '21:00', '22:00'];
       const generatedPlans = claudePosts.map((post, index) => {
         const planId = `threads-op-${index + 1}`;
         const scheduledTime = fallbackSchedule[index] || '07:00';

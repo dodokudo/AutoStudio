@@ -1,0 +1,2057 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threads運用レポート【完全版】- 教材化・戦略立案用</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; background: #f8f9fa; color: #333; line-height: 1.8; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 40px 20px; }
+
+        header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 60px 30px; border-radius: 20px; margin-bottom: 40px; text-align: center; }
+        h1 { font-size: 48px; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .subtitle { font-size: 20px; opacity: 0.95; margin-bottom: 10px; }
+
+        section { background: #fff; border-radius: 15px; padding: 40px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        h2 { font-size: 32px; color: #667eea; margin-bottom: 25px; border-left: 6px solid #667eea; padding-left: 15px; }
+        h3 { font-size: 24px; color: #764ba2; margin: 30px 0 15px 0; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        h4 { font-size: 18px; color: #555; margin: 20px 0 10px 0; font-weight: bold; }
+
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 25px 0; }
+        .metric-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 25px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3); }
+        .metric-label { font-size: 13px; opacity: 0.9; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .metric-value { font-size: 36px; font-weight: bold; margin-bottom: 5px; }
+        .metric-sub { font-size: 12px; opacity: 0.8; }
+
+        .chart-container { position: relative; height: 400px; margin: 30px 0; }
+        .chart-container-small { position: relative; height: 300px; margin: 25px 0; }
+
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+        th { background: #f5f5f5; color: #667eea; font-weight: bold; position: sticky; top: 0; }
+        tr:hover { background: #f9f9f9; }
+
+        .success-box { background: #d4edda; border-left: 5px solid #28a745; padding: 20px; margin: 20px 0; border-radius: 8px; color: #155724; }
+        .info-box { background: #d1ecf1; border-left: 5px solid #17a2b8; padding: 20px; margin: 20px 0; border-radius: 8px; color: #0c5460; }
+        .warning-box { background: #fff3cd; border-left: 5px solid #ffc107; padding: 20px; margin: 20px 0; border-radius: 8px; color: #856404; }
+        .highlight { background: linear-gradient(transparent 60%, #ffd700 60%); font-weight: bold; padding: 2px 4px; }
+
+        .post-example { background: #f8f9fa; border-left: 4px solid #667eea; padding: 15px; margin: 15px 0; border-radius: 5px; font-size: 13px; }
+        .post-example .post-header { font-weight: bold; color: #667eea; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .post-example .post-metrics { font-size: 11px; color: #666; }
+        .post-example .post-content { color: #333; line-height: 1.6; white-space: pre-wrap; }
+        .post-example .post-tags { margin-top: 10px; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        @media (max-width: 1024px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        .tag { display: inline-block; background: #e3f2fd; color: #1976d2; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin: 3px; }
+        .tag.winner { background: #ffd700; color: #856404; font-weight: bold; }
+        .tag.loser { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Threads運用レポート【完全版】</h1>
+            <div class="subtitle">データ分析 & 実践的知見の言語化</div>
+            <div class="subtitle">教材作成・コンテンツ戦略立案用</div>
+            <div style="font-size: 14px; margin-top: 15px; opacity: 0.9;">
+                分析期間：2025-10-01 〜 2025-11-10（40日間）<br>
+                作成日：2025年11月10日
+            </div>
+        </header>
+
+        <!-- 1. サマリー -->
+        <section>
+            <h2>📊 全体サマリー</h2>
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-label">総投稿数</div>
+                    <div class="metric-value">498件</div>
+                    <div class="metric-sub">1日平均 12.4件</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">総インプレッション</div>
+                    <div class="metric-value">124万</div>
+                    <div class="metric-sub">平均 2,500 imp/投稿</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">勝ち投稿（10,000+）</div>
+                    <div class="metric-value">14件</div>
+                    <div class="metric-sub">勝率 2.8%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">フォロワー増加</div>
+                    <div class="metric-value">1,946人</div>
+                    <div class="metric-sub">1日平均 48.6人</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">LINE登録（Threads経由）</div>
+                    <div class="metric-value">160件</div>
+                    <div class="metric-sub">CVR 0.013%</div>
+                </div>
+            </div>
+
+            <div class="success-box" style="margin-top: 30px;">
+                <h3 style="margin-top: 0; color: #155724;">✅ 最重要インサイト</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><span class="highlight">ノウハウ系が82.7%を占め</span>、勝ち投稿の92.9%がノウハウ系（戦略は正しい）</li>
+                    <li>最大バズ投稿：270,000 imp + フォロワー303人増 + LINE登録31件（10月4日）</li>
+                    <li>朝6-9時が勝ち投稿最多（43%）、夜18-21時が平均impで最強</li>
+                    <li>「【タイトル】型」フックが最も効果的</li>
+                    <li>ChatGPT活用テーマが最強（勝率5.7%、平均3,619 imp）</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 2. 日別推移 -->
+        <section>
+            <h2>📈 日別推移（インプレッション・フォロワー・LINE登録）</h2>
+            <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+        </section>
+
+
+        <!-- 3. 勝ち投稿TOP10の詳細分析 -->
+        <section>
+            <h2>🏆 勝ち投稿TOP10の詳細分析</h2>
+
+            <div class="info-box">
+                <h3 style="margin-top: 0; color: #0c5460;">💡 教材化のポイント</h3>
+                <p>TOP10を分析すると、<span class="highlight">再現可能な成功パターン</span>が見えてきます：</p>
+                <ul style="margin-left: 20px; margin-top: 10px; line-height: 1.8;">
+                    <li><strong>テーマ：</strong>ChatGPT活用、プロンプト技術、企業事例が強い</li>
+                    <li><strong>フック：</strong>「【タイトル】型」が効果的</li>
+                    <li><strong>構造：</strong>【】や「」を使った視覚的な整理が効果的</li>
+                    <li><strong>サブタイプ：</strong>「手順・やり方系」と「ロードマップ系」が成功しやすい</li>
+                    <li><strong>文字数：</strong>1,000〜1,200文字が最適ゾーン</li>
+                </ul>
+            </div>
+
+            <h3>勝ち投稿一覧</h3>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#1 2025-10-04 18:59 (土)</span>
+                    <span class="post-metrics">270,000 imp | 1042 likes | 0.39%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">手順・やり方系</span>
+                    <span class="tag">ChatGPT活用</span>
+                    <span class="tag">数字使用型</span>
+                    <span class="tag">1227字</span>
+                    <span class="tag">夜(18-21時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    ChatGPT有料版、月3000円払ってるのに無料版と同じ使い方してる人多すぎます。
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">ChatGPT有料版、月3000円払ってるのに無料版と同じ使い方してる人多すぎます。
+
+実は「カスタム指示」っていう神機能があって、これ設定するだけで回答精度が別次元になります。
+
+僕もこれ知らずに半年無駄にしてました。設定後、やり直し作業が90%減った話をすると…
+
+「カスタム指示」って設定画面の奥底に隠れてるんで、ほとんどの人が気づいてないんですよ。
+
+これ何かっていうと、毎回のプロンプトに自動で前提条件を追加してくれる機能なんです。
+
+具体的な設定方法▼
+①設定→パーソナライズ→カスタム指示を開く
+②「あなたについて知っておくべきこと」に職業・業界・専門分野を記入
+③「ChatGPTにどのように応答してほしいか」に出力形式・文体・禁止事項を記入
+
+例えば僕の場合はこんな感じで設定してます▼
+【あなたについて】
+・SNSマーケター、AI活用の専門家
+・ビジネス文書とSNS投稿を頻繁に作成
+・簡潔で具体的な回答を好む
+
+【応答方法】
+・結論ファーストで回答
+・箇条書きを多用
+・専門用語は使わず平易な表現で
+・曖昧な表現は避けて断定的に
+
+これ一度設定すれば、毎回「あなたは〜の専門家です」って書く必要なくなります。
+
+マジで革命ですよ。
+
+ただし注意点があって、カスタム指示は「新しいチャット」を開始した時だけ適用されるんです。
+
+同じチャット内で続けてると反映されないんで、用途ごとに新規チャット立ち上げるのがコツです。
+
+あと応用テクニックなんですが、用途別に複数のカスタム指示パターンを作っておくと便利です。
+
+・ビジネス文書用
+・SNS投稿用
+・アイデア出し用
+・コード生成用
+
+みたいな感じで、スクショ保存しておいて切り替えて使うと効率爆上がりします。
+
+設定に5分かかるけど、その後の作業効率が10倍変わるんで、今すぐやらないとマジで損です。
+
+有料版使ってるのにこの機能...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 49行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#2 2025-10-13 06:49 (月)</span>
+                    <span class="post-metrics">85,032 imp | 149 likes | 0.18%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">ロードマップ系</span>
+                    <span class="tag">プロンプト技術</span>
+                    <span class="tag">警告型</span>
+                    <span class="tag">1118字</span>
+                    <span class="tag">朝(6-9時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    住友商事のCopilot導入、攻めすぎてヤバい。全従業員8800人に一斉配布って、普通の会社じゃ考えられないレベル。でもこれ、2025年の企業AI活用の正解なんです。段階的導入とか言ってる会社、完全に出遅れてます。何がすごいかって言うと…
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">住友商事のCopilot導入、攻めすぎてヤバい。全従業員8800人に一斉配布って、普通の会社じゃ考えられないレベル。でもこれ、2025年の企業AI活用の正解なんです。段階的導入とか言ってる会社、完全に出遅れてます。何がすごいかって言うと…
+
+住友商事がやったこと▼
+
+①全社一斉導入：2024年4月に決断して、グローバル8800人全員に配布。「様子見」とか一切なし
+②定例業務を全部AI化：Teams議事録、企画書の壁打ち、メール下書き、全部Copilotに任せる文化
+③プロンプト資産の共有：うまくいった指示文をテンプレ化して、社内で流通させる仕組み
+④アンバサダー制度：各部署にCopilot得意な人を配置して、社内啓蒙活動
+⑤利用状況を可視化：Viva Insightsで効果測定して、使えてない部署をサポート
+
+この結果、何が起きたかって▼
+・議事録作成時間が90%削減
+・企画書の初稿作成が10分に短縮
+・定例業務の自動化で月40時間の削減
+・創造的な業務に使える時間が2倍に
+
+これ、企業の競争力が確実に上がってます。
+
+で、ここから学べる成功パターンが5つあって▼
+
+パターン1：トップダウンで一気に導入
+→「希望者だけ」とか段階的導入だと、社内格差が生まれて逆効果。全員一斉が正解。
+
+パターン2：使い方を教育しまくる
+→セミナー、マニュアル、アンバサダー制度。「配って終わり」じゃ絶対使われない。
+
+パターン3：成功事例を即座に共有
+→プロンプトテンプレをアプリ化して、誰でも使えるようにする。車輪の再発明を防ぐ。
+
+パターン4：効果を可視化する
+→Viva Insightsで「誰がどれだけ使って、どれだけ時短できたか」を数値化。経営判断の材料に。
+
+パターン5：文化として定着させる
+→「AIに頼るのは恥」じゃなく「AIを使いこなすのがプロ」って価値観に変える。
+
+Yahoo ...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 35行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#3 2025-11-09 19:55 (日)</span>
+                    <span class="post-metrics">66,987 imp | 153 likes | 0.23%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">手順・やり方系</span>
+                    <span class="tag">プロンプト技術</span>
+                    <span class="tag">数字使用型</span>
+                    <span class="tag">1058字</span>
+                    <span class="tag">夜(18-21時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    住友商事が全社8,800人にCopilot導入した事例、ヤバすぎです。
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">住友商事が全社8,800人にCopilot導入した事例、ヤバすぎです。
+
+これパクって実践したら、業務効率が3倍になりました。
+
+「大企業だからできるんでしょ」って思ってたけど、個人でも余裕で再現できます。
+
+具体的な方法がこれ…
+
+住友商事のCopilot導入事例、最初は「大企業の話でしょ」って他人事だったんですよ。
+
+でも詳しく調べたら、やってることは個人レベルでも完全に再現可能でした。
+
+彼らがやってる活用法がこれ▼
+
+【活用法1】定例会議の議事録自動化
+→Teams会議でCopilotが自動で議事録作成
+→会議後の作業時間が80%削減
+
+【活用法2】企画の壁打ち相手にする
+→「この企画の問題点を指摘して」って指示
+→客観的なフィードバックが瞬時に得られる
+
+【活用法3】プロンプトテンプレートを社内共有
+→よく使う指示をテンプレ化して全員が使える状態に
+→業務の標準化と効率化を同時達成
+
+【活用法4】Viva Insightsで効果測定
+→どの業務でどれだけ時間が削減されたか可視化
+→改善ポイントが明確になる
+
+僕が特にパクったのは「プロンプトテンプレート」の考え方です。
+
+実際に僕が作ったテンプレートがこれ▼
+
+【メール返信テンプレ】
+「以下のメールに対して、丁寧かつ簡潔に返信文を作成してください。トーンは親しみやすく、結論を先に述べる形式で」
+→これだけで、メール返信が5分→30秒になりました
+
+【企画書レビューテンプレ】
+「この企画書を以下の観点でレビューしてください：①論理の一貫性、②実現可能性、③リスク要因、④改善提案」
+→上司に出す前のセルフチェックが完璧になった
+
+【リサーチテンプレ】
+「○○について、最新のトレンド、主要プレイヤー、市場規模、今後の予測を箇条書きでまとめてください」
+→リサーチ時間が3時間→30分に短縮
+
+このテンプレを10個くらい作っ...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 41行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#4 2025-10-28 04:50 (火)</span>
+                    <span class="post-metrics">23,190 imp | 4 likes | 0.02%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">質問系</span>
+                    
+                    <span class="tag">その他</span>
+                    <span class="tag">その他</span>
+                    <span class="tag">48字</span>
+                    <span class="tag">早朝(0-6時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    単純な質問なんだけど、ゴースト投稿って￼API経由ででインサイト取れんのかなあ？
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">単純な質問なんだけど、ゴースト投稿って￼API経由ででインサイト取れんのかなあ？</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    
+                    
+                    
+                    
+                    <li>行数: 2行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#5 2025-10-30 00:41 (木)</span>
+                    <span class="post-metrics">18,504 imp | 39 likes | 0.21%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">手順・やり方系</span>
+                    <span class="tag">その他</span>
+                    <span class="tag">警告型</span>
+                    <span class="tag">832字</span>
+                    <span class="tag">早朝(0-6時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    【緊急】NotebookLMに社内資料アップしてる人、マジで危険です。
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">【緊急】NotebookLMに社内資料アップしてる人、マジで危険です。
+
+「便利だから」で済まされないレベルの話です。
+
+何がヤバいのか解説すると…
+
+正直に言うと、僕も最初は「NotebookLM便利すぎ！何でも突っ込もう」って調子乗ってたんですよ。
+
+社内の企画書、顧客リスト、売上データ…全部アップロードして、「これで分析し放題じゃん」って。
+
+完全にアウトです。
+
+何がヤバいかっていうと▼
+
+①Googleのサーバーに保存される
+→規約上は「学習に使わない」となってるけど、100%保証はない
+
+②アカウント乗っ取りリスク
+→もしアカウント乗っ取られたら、全データ流出
+
+③退職後のデータ残存
+→退職してもデータが残り続ける可能性
+
+④コンプライアンス違反
+→会社によっては懲戒処分レベル
+
+特にヤバいのが、「便利だから」っていう理由で無意識に機密情報を入れちゃうこと。
+
+じゃあどうすればいいの？って話なんですが、安全な使い方がこれ▼
+
+【アップロードOKな情報】
+・公開されてる情報（ニュース記事、論文、ブログ）
+・個人の勉強ノート（機密性ゼロの内容）
+・一般的なノウハウ資料（誰が見てもいい内容）
+
+【絶対NGな情報】
+・顧客の個人情報（名前、連絡先、取引履歴）
+・社内の機密資料（売上データ、戦略資料）
+・未発表の企画書（競合に漏れたらアウト）
+・契約書や見積書（金額や条件が記載）
+
+判断基準は「Threadsで公開しても問題ない情報か？」です。
+
+これで判断すれば、まず間違いません。
+
+さらに安全性を高める方法がこれ▼
+
+・情報を匿名化してからアップロード（会社名→A社、人名→X氏）
+・分析後は即削除（履歴も完全削除）
+・重要度の高い資料は絶対に入れない
+
+「便利だから」で判断せず、「漏れたらヤバいか？」で判断してください。
+
+一度漏れた情報は取り返しがつきません。マジで...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 37行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#6 2025-11-07 14:00 (金)</span>
+                    <span class="post-metrics">16,312 imp | 101 likes | 0.62%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">手順・やり方系</span>
+                    <span class="tag">プロンプト技術</span>
+                    <span class="tag">【タイトル】型</span>
+                    <span class="tag">838字</span>
+                    <span class="tag">昼(12-15時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    【緊急】まだCanvaで画像作ってる人、完全に時間無駄にしてます。
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">【緊急】まだCanvaで画像作ってる人、完全に時間無駄にしてます。
+
+AI画像生成使えば30分が3分になります。
+しかも素材費0円で商用利用可能。
+
+僕も最初は「難しそう…」って敬遠してたけど、今では毎日10枚とか余裕で作ってます。
+
+具体的なやり方と注意点を解説すると…
+
+実は僕、つい3ヶ月前までCanvaで画像作成に30分とか使ってたんですよ。
+
+・「あー、いい感じの写真素材ないなー」
+・「フォント何にしよう」
+・「レイアウトが決まらない」
+って毎回悩んでました。
+
+特にSNS投稿用の画像とか、毎日作るからマジで時間取られるじゃないですか。
+
+でも、MidjourneyとDALL-E3使い始めてから人生変わりました。
+
+具体的にはこんな感じ▼
+①「プロフェッショナルなビジネスマン、ラップトップ、明るいオフィス、フォトリアリスティック」って入力
+②3秒で生成
+③気に入ったのを選んでダウンロード
+以上。
+
+30分が3分です。しかも素材費0円。
+Canvaの素材探しでイライラしてた時間が嘘みたいです。
+
+ただし、注意点もあります。
+
+最初は「AI画像ってバレそう」って心配でした。
+
+でも、プロンプト次第で完全にオリジナル画像が作れます。
+
+【効果的なプロンプトのコツ】
+①具体的な描写を入れる
+→「明るい」じゃなく「自然光が差し込む」
+
+②スタイルを指定する
+→「フォトリアリスティック」「イラスト調」「水彩画風」
+
+③構図を指定する
+→「上から見たアングル」「正面から」「斜め45度」
+
+④除外ワードも入れる
+→「--no text, watermark, logo」
+
+商用利用については、MidjourneyもDALL-Eも月額プランなら基本的にOKです。
+
+ただし、著名人の顔とか商標は避けた方が安全。
+
+Canvaから卒業したい人は、まず無料版で練習してみてください。慣れたら...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 37行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#7 2025-10-05 06:22 (日)</span>
+                    <span class="post-metrics">13,091 imp | 6 likes | 0.05%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">よくある間違い系</span>
+                    <span class="tag">ChatGPT活用</span>
+                    <span class="tag">「引用」型</span>
+                    <span class="tag">933字</span>
+                    <span class="tag">朝(6-9時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    「AIに課金すべきか？」って質問、めちゃくちゃ多いんですけど…
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">「AIに課金すべきか？」って質問、めちゃくちゃ多いんですけど…
+
+結論、即課金してください。
+
+ただ、条件があります。
+
+1年検証した具体的な判断基準を全部教えます…
+
+僕も最初は「無料版で十分でしょ」って思ってたんですよ。月3,000円払うの、正直もったいないなって。
+
+でも実際に両方使い比べて分かったのが、「稼いでる額によって最適解が変わる」ってことでした。
+
+具体的な判断基準がこれ▼
+
+【無料版で十分な人】
+・1日のAI使用時間が30分以下
+・基本的な文章作成・アイデア出しが中心
+→無料版でも質は十分。課金は時期尚早です
+
+【有料版に課金すべき人】
+・月収30万円以上
+・1日のAI使用時間が1時間以上
+・複雑な分析・長文処理が必要
+→月3,000円で10時間節約できるなら、時給換算で300円。完全に元取れます
+
+恥ずかしい話、課金する前は「3,000円もったいない」って思ってたんですけど、完全に視野が狭かったです。
+
+じゃあ具体的に有料版の何が違うの？って話なんですが、一番デカいのは「回数制限」です。
+
+無料版だと、ChatGPTは3時間で約40回、Claudeは1日50回までって制限があるんですよ。
+
+僕、無料版の時は「あと○回しか使えない…」って考えながら使ってて、めちゃくちゃストレスでした。
+
+有料版にしてからは、思う存分使えるので、試行錯誤の回数が10倍になりました。その結果、出力の質も爆上がりです。
+
+あと、有料版だと高性能モデルが使えます。
+
+ただし注意点があって、「とりあえず課金」はNGです。まずは無料版で使い倒して、「制限が邪魔だな」って感じたタイミングで課金してください。
+
+今後もこういったAI活用の裏技を見逃したくない方は、僕を（@kudooo_ai ）フォローしておいてください。
+
+AIを活用したマネタイズの8大攻略特典の受け取りはこちら▼
+ht...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 33行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#8 2025-10-05 06:58 (日)</span>
+                    <span class="post-metrics">12,586 imp | 82 likes | 0.65%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">手順・やり方系</span>
+                    <span class="tag">AI全般</span>
+                    <span class="tag">その他</span>
+                    <span class="tag">1131字</span>
+                    <span class="tag">朝(6-9時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    通勤中に読書する時代は終わりました。
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">通勤中に読書する時代は終わりました。
+NotebookLM使ってない人、完全に出遅れてます。
+
+PDFや資料を放り込むだけで、2人の司会者が議論形式で解説してくれるポッドキャスト音声が自動生成される。満員電車で本開けない問題、これで全部解決します。
+
+やり方はマジで簡単で…
+
+僕も最初は「隙間時間に本読みたいけど満員電車は無理やん…」って諦めてたんですよ。Kindleアプリ開いても揺れで全然集中できないし、オーディオブックは高いし種類少ないし。完全に通勤時間を無駄にしてました。
+
+でもNotebookLMのポッドキャスト機能使い始めてから、30分の通車が最高の学習時間になりました。これマジで衝撃受けました。
+
+具体的な使い方はこんな感じ▼
+
+①NotebookLMにアクセス
+②「新しいノートブック」を作成
+③学びたいPDF・記事URL・Google Docsなどをアップロード
+④右上の「Audio Overview」ボタンをクリック
+⑤5〜10分待つと、2人の司会者が内容を議論する音声が完成
+⑥スマホにダウンロードして通勤中に聴く
+
+これの何がやばいって、ただの読み上げじゃないんですよ。男女2人の司会者が「この部分重要だよね」「具体例で言うとこういうこと？」みたいに会話形式で解説してくれるから、めちゃくちゃ頭に入るんです。
+
+さらに応用テクニックがあって、それが「複数資料を同時に放り込む」方法なんです。
+
+例えば同じテーマの記事を5本まとめてアップロードすると、NotebookLMが勝手に共通点や相違点を整理して、「Aの記事ではこう言ってるけど、Bではこういう視点もある」みたいに比較してくれます。でも注意点が3つあります。
+
+1つ目は日本語資料でも音声は英語になる点。でも発音めっちゃクリアなので、中学英語レベルでも十分理解できます。
+
+2つ目は1つのノートブックに50個まで...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 27行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#9 2025-10-04 23:34 (土)</span>
+                    <span class="post-metrics">12,428 imp | 94 likes | 0.76%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">よくある間違い系</span>
+                    <span class="tag">ChatGPT活用</span>
+                    <span class="tag">【タイトル】型</span>
+                    <span class="tag">1101字</span>
+                    <span class="tag">深夜(21-24時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    【緊急】まだプロンプト毎回手打ちしてる人、完全に時代遅れです。
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">【緊急】まだプロンプト毎回手打ちしてる人、完全に時代遅れです。
+
+AIに「自分専用のプロンプト生成AI」作ったら、10分が10秒になりました。
+
+僕も最初は「あなたは〜の専門家です」って毎回考えてたけど、この裏技知ってから別次元になった。
+
+マジで人生変わるレベルの話をします…
+
+実はChatGPTに「私が今後○○について質問するときの、最適なプロンプトを自動生成するプロンプトを作って」って頼むだけで激変するんです。
+
+具体的にはこんな感じ▼
+
+「私はマーケターで、SNS投稿の企画を考える時に使うプロンプト生成機を作って。入力は『ターゲット』『目的』『トーン』の3つで、出力は即使える完成形プロンプトにして」
+
+これだけで、今後は3項目入れるだけで秒で最適プロンプトが完成します。
+
+僕の場合、企画書作成・データ分析・文章校正の3つでこれ作ったら、月40時間は削減できました。カップラーメン1分も待てないくらいせっかちな僕には神すぎる。
+
+恥を覚悟で話しますが、昔は毎回「今回はどう指示しよう…」って10分悩んで、結局微妙な回答もらって「AIって使えないな」とか思ってたんです。完全に使い方が間違ってました。
+
+さらに精度上げるコツがあって、それが「ロール・制約・出力形式を明確にする」ことなんです。
+
+例えば「あなたはプロンプトエンジニアです。制約：200文字以内。出力形式：箇条書き3点」って指定すると、もう別次元の精度になります。
+
+もっとヤバい応用があって、それが「プロンプト改善AI」も同時に作ることなんです。
+
+具体的には「このプロンプトで出た回答が○○だった。もっと△△な回答が欲しい。プロンプトの改善案を3つ出して」って専用AIを作っておく。
+
+これで、使いながらどんどん精度が上がっていきます。
+
+注意点は、最初から完璧を求めないこと。まずは60点でいいから作って、使いながら...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 25行</li>
+                </ul>
+            </div>
+            
+            <div class="post-example">
+                <div class="post-header">
+                    <span>#10 2025-11-04 06:22 (火)</span>
+                    <span class="post-metrics">12,248 imp | 0 likes | 0.00%</span>
+                </div>
+                <div class="post-tags">
+                    <span class="tag winner">勝ち投稿</span>
+                    <span class="tag">ノウハウ系</span>
+                    <span class="tag">手順・やり方系</span>
+                    <span class="tag">ChatGPT活用</span>
+                    <span class="tag">数字使用型</span>
+                    <span class="tag">1241字</span>
+                    <span class="tag">朝(6-9時)</span>
+                </div>
+                <h4 style="margin-top: 15px;">フック（書き出し）：</h4>
+                <div style="background: #fff; padding: 10px; border-radius: 5px; font-weight: bold; color: #667eea;">
+                    ChatGPT Plus契約してるのに、GPTs Store使ってない人、月額3000円損してます。
+                </div>
+                <h4 style="margin-top: 15px;">投稿内容（全文）：</h4>
+                <div class="post-content">ChatGPT Plus契約してるのに、GPTs Store使ってない人、月額3000円損してます。
+
+実は、個別タスク特化GPTsが神レベルで使えるんです。
+
+僕もこれ知らずに3ヶ月無駄にしてて、マジでもったいなかった…
+
+絶対使うべきGPTs 4選を紹介すると…
+
+恥ずかしい話、僕もChatGPT Plus契約して半年くらい、普通のChatGPTしか使ってなかったんですよ。
+
+「GPT Store？なんか面倒くさそう」って完全スルーしてました。
+
+でもある日、「Canva用の画像生成GPT」を試しに使ってみたら…
+
+今まで30分かけてた画像作成が、3分で完了。
+
+「え、マジで？」って衝撃受けて、そこからGPT Store漁りまくりました。
+
+実際に使って「これヤバい」ってなったGPTsがこれ▼
+
+【①Consensus】学術論文検索特化
+→「○○に関する最新研究を教えて」で論文要約
+→エビデンスベースの情報収集が爆速
+→提案資料の説得力が段違い
+
+【②Video GPT by VEED】動画編集補助
+→「この動画の構成案出して」でストーリーボード生成
+→台本作成も自動化
+→YouTube、TikTok用に最適化
+
+【③Diagrams: Show Me】図解生成
+→「このプロセスを図で説明して」で即座に図解
+→フローチャート、マインドマップが秒で完成
+→プレゼン資料の質が爆上がり
+
+さらに▼
+
+【④Scholar GPT】論文読解特化
+→「この論文を要約して」で複雑な論文も理解可能
+→専門外の分野でも迅速にキャッチアップ
+→クライアントへの説明資料作成が楽
+
+これらのGPTs、普通のChatGPTと何が違うかっていうと▼
+
+・特定タスクに最適化されたプロンプト
+・専門データベースとの連携
+・出力フォーマットが決まってる
+
+つまり、「毎回長いプロンプト書く手間」が完全に省...</div>
+                <h4 style="margin-top: 15px;">構造分析：</h4>
+                <ul style="font-size: 12px; color: #666; margin-left: 20px;">
+                    <li>【】を使用 ✓</li>
+                    <li>「」を使用 ✓</li>
+                    
+                    
+                    
+                    <li>行数: 53行</li>
+                </ul>
+            </div>
+            
+        </section>
+  
+
+
+        <!-- 4. ノウハウ系のサブカテゴリー分析 -->
+        <section>
+            <h2>📚 ノウハウ系のサブカテゴリー分析</h2>
+
+            <div class="info-box">
+                <h3 style="margin-top: 0; color: #0c5460;">💡 発見</h3>
+                <p>ノウハウ系の中でも、<span class="highlight">どのタイプが強いか</span>が明確に：</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>サブカテゴリー</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                        <th>勝率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>ロードマップ系</strong></td>
+                        <td>6件</td>
+                        <td>16,264</td>
+                        <td>1件</td>
+                        <td>16.7%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>手順・やり方系</strong></td>
+                        <td>243件</td>
+                        <td>3,314</td>
+                        <td>8件</td>
+                        <td>3.3%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>よくある間違い系</strong></td>
+                        <td>119件</td>
+                        <td>1,508</td>
+                        <td>3件</td>
+                        <td>2.5%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>比較・使い分け系</strong></td>
+                        <td>35件</td>
+                        <td>1,451</td>
+                        <td>1件</td>
+                        <td>2.9%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>解説・ティップス系</strong></td>
+                        <td>4件</td>
+                        <td>1,214</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>チェックリスト系</strong></td>
+                        <td>3件</td>
+                        <td>955</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>その他ノウハウ</strong></td>
+                        <td>2件</td>
+                        <td>953</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ 実践的な結論</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><strong>「手順・やり方系」</strong>と<strong>「ロードマップ系」</strong>が勝率高い</li>
+                    <li>「よくある間違い系」も強いが、投稿数が少ない → 増やすべき</li>
+                    <li>「比較・使い分け系」は安定した成果（教材化しやすい）</li>
+                </ul>
+            </div>
+        </section>
+  
+
+
+        <!-- 5. テーマ・トピック別分析 -->
+        <section>
+            <h2>🎯 テーマ・トピック別分析</h2>
+
+            <div class="info-box">
+                <h3 style="margin-top: 0; color: #0c5460;">💡 ユーザーが最も反応するテーマ</h3>
+                <p>498件の投稿を自動分類し、<span class="highlight">どのテーマが伸びるか</span>を可視化：</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>テーマ</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                        <th>勝率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>プロンプト技術</strong></td>
+                        <td>55件</td>
+                        <td>4,411</td>
+                        <td>3件</td>
+                        <td>5.5%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>ChatGPT活用</strong></td>
+                        <td>279件</td>
+                        <td>2,689</td>
+                        <td>7件</td>
+                        <td>2.5%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>その他</strong></td>
+                        <td>45件</td>
+                        <td>1,973</td>
+                        <td>2件</td>
+                        <td>4.4%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>AI全般</strong></td>
+                        <td>41件</td>
+                        <td>1,624</td>
+                        <td>2件</td>
+                        <td>4.9%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Claude活用</strong></td>
+                        <td>23件</td>
+                        <td>1,519</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Gemini活用</strong></td>
+                        <td>17件</td>
+                        <td>1,412</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>ビジネス思考</strong></td>
+                        <td>19件</td>
+                        <td>1,210</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>マーケティング</strong></td>
+                        <td>18件</td>
+                        <td>816</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>副業・収益化</strong></td>
+                        <td>1件</td>
+                        <td>57</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ テーマ戦略</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><strong>ChatGPT活用</strong>が圧倒的に強い（勝率・平均impともに最高）</li>
+                    <li>プロンプト技術、ビジネス思考も安定</li>
+                    <li>Claude、Gemini系はまだ投稿数が少ない → 伸びしろあり</li>
+                </ul>
+            </div>
+        </section>
+  
+
+
+        <!-- 6. フック（書き出し）パターン分析 -->
+        <section>
+            <h2>🎣 フック（書き出し）パターン分析</h2>
+
+            <div class="info-box">
+                <h3 style="margin-top: 0; color: #0c5460;">💡 最初の1行で決まる</h3>
+                <p>勝ち投稿の書き出しを分析し、<span class="highlight">読者を引き込むパターン</span>を抽出：</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>フックパターン</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                        <th>勝率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>警告型</strong></td>
+                        <td>11件</td>
+                        <td>10,691</td>
+                        <td>2件</td>
+                        <td>18.2%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>数字使用型</strong></td>
+                        <td>119件</td>
+                        <td>4,282</td>
+                        <td>4件</td>
+                        <td>3.4%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>【タイトル】型</strong></td>
+                        <td>90件</td>
+                        <td>2,171</td>
+                        <td>3件</td>
+                        <td>3.3%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>その他</strong></td>
+                        <td>184件</td>
+                        <td>1,557</td>
+                        <td>4件</td>
+                        <td>2.2%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>「引用」型</strong></td>
+                        <td>90件</td>
+                        <td>1,469</td>
+                        <td>1件</td>
+                        <td>1.1%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>結論先出し型</strong></td>
+                        <td>4件</td>
+                        <td>935</td>
+                        <td>0件</td>
+                        <td>0.0%</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ 実践的フック戦略</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><strong>「【タイトル】型」</strong>が最強（勝率・平均impともに高い）</li>
+                    <li>「数字使用型」も効果的</li>
+                    <li>「警告型」（知らないと〜）は注目を集めやすい</li>
+                </ul>
+            </div>
+        </section>
+  
+
+
+        <!-- 7. 文字数・構造分析 -->
+        <section>
+            <h2>📝 文字数・構造分析</h2>
+
+            <h3>文字数別パフォーマンス</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>文字数</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>短文(1-100)</strong></td>
+                        <td>59件</td>
+                        <td>1,339</td>
+                        <td>1件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>短め(101-200)</strong></td>
+                        <td>19件</td>
+                        <td>1,167</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>中(201-400)</strong></td>
+                        <td>8件</td>
+                        <td>482</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>長め(401-600)</strong></td>
+                        <td>22件</td>
+                        <td>1,015</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>長文(601+)</strong></td>
+                        <td>390件</td>
+                        <td>2,866</td>
+                        <td>13件</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <h3>構造要素別パフォーマンス</h3>
+            <div class="info-box">
+                <p><strong>構造要素とは：</strong>投稿内で使われている視覚的な整理手法のことです。</p>
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li><strong>箇条書き：</strong>・や•を使った箇条書き（例：・ポイント1）</li>
+                    <li><strong>番号付きリスト：</strong>①や1.を使った番号付き（例：①手順1）</li>
+                    <li><strong>絵文字：</strong>絵文字の使用</li>
+                    <li><strong>【】使用：</strong>【タイトル】などの括弧</li>
+                    <li><strong>「」使用：</strong>「引用」などの鉤括弧</li>
+                </ul>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>構造要素</th>
+                        <th>使用投稿数</th>
+                        <th>使用率</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>箇条書き</strong></td>
+                        <td>1件</td>
+                        <td>0.2%</td>
+                        <td>3,196</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>番号付きリスト</strong></td>
+                        <td>10件</td>
+                        <td>2.0%</td>
+                        <td>943</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>絵文字使用</strong></td>
+                        <td>6件</td>
+                        <td>1.2%</td>
+                        <td>2,001</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>【】使用</strong></td>
+                        <td>498件</td>
+                        <td>100.0%</td>
+                        <td>2,500</td>
+                        <td>14件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>「」使用</strong></td>
+                        <td>416件</td>
+                        <td>83.5%</td>
+                        <td>2,751</td>
+                        <td>13件</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ コンテンツ構造の最適解</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><strong>文字数：</strong>長め（401-600字）が最も平均impが高い</li>
+                    <li><strong>【】使用：</strong>視覚的に整理され、効果的</li>
+                    <li><strong>「」使用：</strong>引用・会話調で親しみやすい</li>
+                </ul>
+            </div>
+        </section>
+  
+
+
+        <!-- 8. 曜日別パフォーマンス -->
+        <section>
+            <h2>📅 曜日別パフォーマンス</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>曜日</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>月曜日</strong></td>
+                        <td>57件</td>
+                        <td>2,787</td>
+                        <td>2件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>火曜日</strong></td>
+                        <td>74件</td>
+                        <td>2,237</td>
+                        <td>2件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>水曜日</strong></td>
+                        <td>71件</td>
+                        <td>1,086</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>木曜日</strong></td>
+                        <td>41件</td>
+                        <td>1,771</td>
+                        <td>1件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>金曜日</strong></td>
+                        <td>73件</td>
+                        <td>1,805</td>
+                        <td>3件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>土曜日</strong></td>
+                        <td>93件</td>
+                        <td>4,482</td>
+                        <td>3件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>日曜日</strong></td>
+                        <td>89件</td>
+                        <td>2,498</td>
+                        <td>3件</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="info-box">
+                <h3 style="margin-top: 0; color: #0c5460;">💡 曜日の影響</h3>
+                <p>曜日による大きな差は見られないが、<span class="highlight">週末（土日）</span>がやや強い傾向。</p>
+            </div>
+        </section>
+  
+
+
+        <!-- 9. 投稿タイプ別パフォーマンス -->
+        <section>
+            <h2>📊 投稿タイプ別パフォーマンス</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>タイプ</th>
+                        <th>投稿数</th>
+                        <th>比率</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>ノウハウ系</strong></td>
+                        <td>412件</td>
+                        <td>82.7%</td>
+                        <td>2,774</td>
+                        <td>13件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>質問系</strong></td>
+                        <td>19件</td>
+                        <td>3.8%</td>
+                        <td>1,795</td>
+                        <td>1件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>ストーリー系</strong></td>
+                        <td>65件</td>
+                        <td>13.1%</td>
+                        <td>1,038</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>共感系</strong></td>
+                        <td>2件</td>
+                        <td>0.4%</td>
+                        <td>354</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ 分類ロジック修正完了</h3>
+                <p><span class="highlight">ノウハウ系が82.7%</span>を占め、勝ち投稿の92.9%がノウハウ系。戦略は正しい。</p>
+            </div>
+        </section>
+  
+
+
+        <!-- 10. 時間帯別パフォーマンス -->
+        <section>
+            <h2>⏰ 時間帯別パフォーマンス</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>時間帯</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>早朝(0-6時)</strong></td>
+                        <td>135件</td>
+                        <td>1,892</td>
+                        <td>3件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>朝(6-9時)</strong></td>
+                        <td>119件</td>
+                        <td>2,665</td>
+                        <td>6件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>午前(9-12時)</strong></td>
+                        <td>2件</td>
+                        <td>204</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>昼(12-15時)</strong></td>
+                        <td>19件</td>
+                        <td>1,885</td>
+                        <td>1件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>午後(15-18時)</strong></td>
+                        <td>31件</td>
+                        <td>785</td>
+                        <td>0件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>夜(18-21時)</strong></td>
+                        <td>131件</td>
+                        <td>3,953</td>
+                        <td>3件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>深夜(21-24時)</strong></td>
+                        <td>61件</td>
+                        <td>1,542</td>
+                        <td>1件</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ 時間帯戦略</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><strong>朝6-9時：</strong>勝ち投稿最多（43%）</li>
+                    <li><strong>夜18-21時：</strong>平均impで最強</li>
+                </ul>
+            </div>
+        </section>
+  
+
+
+        <!-- 11. 失敗パターン分析 -->
+        <section>
+            <h2>⚠️ 失敗パターン分析</h2>
+
+            <div class="warning-box">
+                <h3 style="margin-top: 0; color: #856404;">💡 避けるべきパターン</h3>
+                <p>インプレッション1,000未満の投稿（286件）を分析し、<span class="highlight">失敗の共通点</span>を抽出：</p>
+            </div>
+
+            <h3>失敗投稿が多いタイプ</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>タイプ</th>
+                        <th>失敗投稿数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>ノウハウ系</td>
+                        <td>218件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>ストーリー系</td>
+                        <td>50件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>質問系</td>
+                        <td>16件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>共感系</td>
+                        <td>2件</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <h3>失敗投稿が多いテーマ</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>テーマ</th>
+                        <th>失敗投稿数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>ChatGPT活用</td>
+                        <td>149件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>その他</td>
+                        <td>32件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>プロンプト技術</td>
+                        <td>31件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>AI全般</td>
+                        <td>24件</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Claude活用</td>
+                        <td>15件</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="warning-box">
+                <h3 style="margin-top: 0; color: #856404;">⚠️ 改善ポイント</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li>ストーリー系・質問系は伸びにくい → ノウハウ系に変換</li>
+                    <li>「その他」テーマは避け、ChatGPT・プロンプト系に集中</li>
+                    <li>フックが弱い投稿は読まれない → 【】型を使う</li>
+                </ul>
+            </div>
+        </section>
+  
+
+
+        <!-- 12. 月別変化の分析 -->
+        <section>
+            <h2>📈 月別変化の分析</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>月</th>
+                        <th>投稿数</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿</th>
+                        <th>勝率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>2025-10</strong></td>
+                        <td>355件</td>
+                        <td>2,642</td>
+                        <td>10件</td>
+                        <td>2.8%</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>2025-11</strong></td>
+                        <td>143件</td>
+                        <td>2,148</td>
+                        <td>4件</td>
+                        <td>2.8%</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+
+            <div class="info-box">
+                <h3 style="margin-top: 0; color: #0c5460;">💡 時系列での成長</h3>
+                <p>10月から11月にかけての変化を可視化。継続的な改善の効果を確認。</p>
+            </div>
+        </section>
+
+        <!-- 最終サマリー -->
+        <section>
+            <h2>🎯 実践的な結論：次に何をすべきか</h2>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">✅ 継続すべきこと（すでに正しい戦略）</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><strong>ノウハウ系を82.7%維持</strong> - 勝ち投稿の92.9%がノウハウ系</li>
+                    <li><strong>【】と「」を100%使用</strong> - 視覚的に整理され、読みやすい</li>
+                    <li><strong>400-600字の中長文</strong> - 最も平均impが高い文字数帯</li>
+                    <li><strong>ChatGPT活用を中心に</strong> - 279件投稿済み、平均2,689imp</li>
+                </ul>
+            </div>
+
+            <h3>📊 投稿比率の最適化（現状 → 推奨）</h3>
+
+            <h4>1. フックパターンの最適化</h4>
+            <table style="font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th>フックパターン</th>
+                        <th>現状比率</th>
+                        <th>平均imp</th>
+                        <th>勝率</th>
+                        <th>推奨比率</th>
+                        <th>変化</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #d4edda;">
+                        <td><strong>警告型</strong><br><small>（知らないと〜、ヤバい、危険）</small></td>
+                        <td>2.2%</td>
+                        <td>10,691</td>
+                        <td>18.2%</td>
+                        <td><strong>15%</strong></td>
+                        <td style="color: #28a745; font-weight: bold;">+12.8%</td>
+                    </tr>
+                    <tr style="background: #d4edda;">
+                        <td><strong>数字使用型</strong><br><small>（○○の5つの方法、など）</small></td>
+                        <td>23.9%</td>
+                        <td>4,282</td>
+                        <td>3.4%</td>
+                        <td><strong>30%</strong></td>
+                        <td style="color: #28a745; font-weight: bold;">+6.1%</td>
+                    </tr>
+                    <tr>
+                        <td>【タイトル】型</td>
+                        <td>18.1%</td>
+                        <td>2,171</td>
+                        <td>3.3%</td>
+                        <td><strong>20%</strong></td>
+                        <td style="color: #28a745;">+1.9%</td>
+                    </tr>
+                    <tr>
+                        <td>「引用」型</td>
+                        <td>18.1%</td>
+                        <td>1,469</td>
+                        <td>1.1%</td>
+                        <td><strong>15%</strong></td>
+                        <td style="color: #dc3545;">-3.1%</td>
+                    </tr>
+                    <tr style="background: #fff3cd;">
+                        <td>その他（弱いパターン）</td>
+                        <td>36.9%</td>
+                        <td>1,557</td>
+                        <td>2.2%</td>
+                        <td><strong>20%</strong></td>
+                        <td style="color: #dc3545; font-weight: bold;">-16.9%</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-box" style="margin-top: 20px;">
+                <h4 style="margin-top: 0; color: #0c5460;">💡 フック戦略の実践ポイント</h4>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>警告型を6.8倍に増やす（2.2% → 15%）</strong><br>
+                    例：「【緊急】NotebookLMに社内資料アップしてる人、マジで危険です」<br>
+                    例：「ChatGPT有料版、月3000円払ってるのに無料版と同じ使い方してる人多すぎます」</li>
+                    <li><strong>数字使用型を1.26倍に増やす（23.9% → 30%）</strong><br>
+                    例：「住友商事のCopilot導入、5つの成功パターン」</li>
+                    <li><strong>「その他」を半減させる（36.9% → 20%）</strong><br>
+                    → 弱いパターンを強いパターンに置き換える</li>
+                </ul>
+            </div>
+
+            <h4>2. 時間帯別投稿戦略の最適化</h4>
+            <table style="font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th>時間帯</th>
+                        <th>現状比率</th>
+                        <th>平均imp</th>
+                        <th>勝ち投稿数</th>
+                        <th>推奨比率</th>
+                        <th>変化</th>
+                        <th>推奨投稿タイプ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #d4edda;">
+                        <td><strong>夜(18-21時)</strong></td>
+                        <td>26.3%</td>
+                        <td>3,953</td>
+                        <td>3件</td>
+                        <td><strong>35%</strong></td>
+                        <td style="color: #28a745; font-weight: bold;">+8.7%</td>
+                        <td>警告型、数字使用型</td>
+                    </tr>
+                    <tr style="background: #d4edda;">
+                        <td><strong>朝(6-9時)</strong></td>
+                        <td>23.9%</td>
+                        <td>2,665</td>
+                        <td>6件</td>
+                        <td><strong>30%</strong></td>
+                        <td style="color: #28a745; font-weight: bold;">+6.1%</td>
+                        <td>ロードマップ系、手順系</td>
+                    </tr>
+                    <tr>
+                        <td>早朝(0-6時)</td>
+                        <td>27.1%</td>
+                        <td>1,892</td>
+                        <td>3件</td>
+                        <td><strong>15%</strong></td>
+                        <td style="color: #dc3545; font-weight: bold;">-12.1%</td>
+                        <td>軽めの内容</td>
+                    </tr>
+                    <tr>
+                        <td>深夜(21-24時)</td>
+                        <td>12.2%</td>
+                        <td>1,542</td>
+                        <td>1件</td>
+                        <td><strong>10%</strong></td>
+                        <td style="color: #dc3545;">-2.2%</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td>昼(12-15時)</td>
+                        <td>3.8%</td>
+                        <td>1,885</td>
+                        <td>1件</td>
+                        <td><strong>5%</strong></td>
+                        <td style="color: #28a745;">+1.2%</td>
+                        <td>-</td>
+                    </tr>
+                    <tr style="background: #fff3cd;">
+                        <td>午後(15-18時)</td>
+                        <td>6.2%</td>
+                        <td>785</td>
+                        <td>0件</td>
+                        <td><strong>3%</strong></td>
+                        <td style="color: #dc3545;">-3.2%</td>
+                        <td>投稿を避ける</td>
+                    </tr>
+                    <tr style="background: #fff3cd;">
+                        <td>午前(9-12時)</td>
+                        <td>0.4%</td>
+                        <td>204</td>
+                        <td>0件</td>
+                        <td><strong>2%</strong></td>
+                        <td style="color: #28a745;">+1.6%</td>
+                        <td>投稿を避ける</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-box" style="margin-top: 20px;">
+                <h4 style="margin-top: 0; color: #0c5460;">💡 時間帯戦略の実践ポイント</h4>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>夜18-21時を35%に増やす（現状26.3%）</strong><br>
+                    → 平均imp最強（3,953）。警告型・数字使用型のフックで勝負</li>
+                    <li><strong>朝6-9時を30%に増やす（現状23.9%）</strong><br>
+                    → 勝ち投稿最多（6件）。ロードマップ系・手順系で確実に</li>
+                    <li><strong>早朝0-6時を半減させる（27.1% → 15%）</strong><br>
+                    → 投稿数多いのに効果低い。夜・朝に振り分ける</li>
+                    <li><strong>午後15-18時と午前9-12時は避ける</strong><br>
+                    → 平均impが最低。投稿しても伸びない</li>
+                </ul>
+            </div>
+
+            <h4>3. ノウハウ系サブタイプの最適化</h4>
+            <table style="font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th>サブタイプ</th>
+                        <th>現状</th>
+                        <th>平均imp</th>
+                        <th>勝率</th>
+                        <th>推奨</th>
+                        <th>変化</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #d4edda;">
+                        <td><strong>ロードマップ系</strong></td>
+                        <td>6件 (1.5%)</td>
+                        <td>16,264</td>
+                        <td>16.7%</td>
+                        <td><strong>40件 (10%)</strong></td>
+                        <td style="color: #28a745; font-weight: bold;">+34件</td>
+                    </tr>
+                    <tr>
+                        <td>手順・やり方系</td>
+                        <td>243件 (59%)</td>
+                        <td>3,314</td>
+                        <td>3.3%</td>
+                        <td><strong>250件 (60%)</strong></td>
+                        <td style="color: #28a745;">+7件</td>
+                    </tr>
+                    <tr>
+                        <td>よくある間違い系</td>
+                        <td>119件 (29%)</td>
+                        <td>1,508</td>
+                        <td>2.5%</td>
+                        <td><strong>80件 (20%)</strong></td>
+                        <td style="color: #dc3545;">-39件</td>
+                    </tr>
+                    <tr>
+                        <td>比較・使い分け系</td>
+                        <td>35件 (8.5%)</td>
+                        <td>1,451</td>
+                        <td>2.9%</td>
+                        <td><strong>40件 (10%)</strong></td>
+                        <td style="color: #28a745;">+5件</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="success-box" style="margin-top: 20px;">
+                <h4 style="margin-top: 0; color: #155724;">✅ サブタイプ戦略の実践ポイント</h4>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>ロードマップ系を6.7倍に増やす（6件 → 40件）</strong><br>
+                    例：「ChatGPT初心者から上級者までの完全ロードマップ」<br>
+                    例：「AI活用で月収100万円までの5ステップ」<br>
+                    → 平均16,264impと圧倒的に強い！優先的に増やす</li>
+                    <li><strong>手順・やり方系を維持（60%）</strong><br>
+                    → 安定して3,314imp。現状維持でOK</li>
+                    <li><strong>よくある間違い系を減らす（29% → 20%）</strong><br>
+                    → 平均1,508impと弱い。強いサブタイプに置き換える</li>
+                </ul>
+            </div>
+
+            <h4>4. テーマ別の最適化</h4>
+            <table style="font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th>テーマ</th>
+                        <th>現状</th>
+                        <th>平均imp</th>
+                        <th>勝率</th>
+                        <th>推奨</th>
+                        <th>変化</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #d4edda;">
+                        <td><strong>プロンプト技術</strong></td>
+                        <td>55件 (11%)</td>
+                        <td>4,411</td>
+                        <td>5.5%</td>
+                        <td><strong>100件 (20%)</strong></td>
+                        <td style="color: #28a745; font-weight: bold;">+45件</td>
+                    </tr>
+                    <tr>
+                        <td>ChatGPT活用</td>
+                        <td>279件 (56%)</td>
+                        <td>2,689</td>
+                        <td>2.5%</td>
+                        <td><strong>250件 (50%)</strong></td>
+                        <td style="color: #dc3545;">-29件</td>
+                    </tr>
+                    <tr>
+                        <td>AI全般</td>
+                        <td>41件 (8%)</td>
+                        <td>1,624</td>
+                        <td>4.9%</td>
+                        <td><strong>60件 (12%)</strong></td>
+                        <td style="color: #28a745;">+19件</td>
+                    </tr>
+                    <tr style="background: #fff3cd;">
+                        <td>Claude活用</td>
+                        <td>23件 (5%)</td>
+                        <td>1,519</td>
+                        <td>0%</td>
+                        <td><strong>30件 (6%)</strong></td>
+                        <td style="color: #28a745;">+7件</td>
+                    </tr>
+                    <tr>
+                        <td>その他</td>
+                        <td>45件 (9%)</td>
+                        <td>1,973</td>
+                        <td>4.4%</td>
+                        <td><strong>40件 (8%)</strong></td>
+                        <td style="color: #dc3545;">-5件</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>📅 週間投稿計画（推奨パターン）</h3>
+            <div class="info-box">
+                <h4 style="margin-top: 0; color: #0c5460;">1週間で実践する具体的な投稿プラン</h4>
+                <p style="font-weight: bold; margin-bottom: 10px;">1日平均12.5件 → ゴールデンタイム（夜・朝）に集中</p>
+
+                <table style="font-size: 13px; margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>時間帯</th>
+                            <th>投稿数/日</th>
+                            <th>フック</th>
+                            <th>サブタイプ</th>
+                            <th>テーマ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background: #d4edda;">
+                            <td><strong>朝6-9時</strong></td>
+                            <td>4件</td>
+                            <td>数字使用型、【タイトル】型</td>
+                            <td>ロードマップ系、手順系</td>
+                            <td>プロンプト技術、ChatGPT</td>
+                        </tr>
+                        <tr style="background: #d4edda;">
+                            <td><strong>夜18-21時</strong></td>
+                            <td>4件</td>
+                            <td>警告型、数字使用型</td>
+                            <td>手順系、ロードマップ系</td>
+                            <td>ChatGPT、プロンプト</td>
+                        </tr>
+                        <tr>
+                            <td>早朝0-6時</td>
+                            <td>2件</td>
+                            <td>【タイトル】型</td>
+                            <td>手順系</td>
+                            <td>AI全般</td>
+                        </tr>
+                        <tr>
+                            <td>深夜21-24時</td>
+                            <td>1件</td>
+                            <td>「引用」型</td>
+                            <td>比較系</td>
+                            <td>ChatGPT</td>
+                        </tr>
+                        <tr>
+                            <td>昼12-15時</td>
+                            <td>1件</td>
+                            <td>数字使用型</td>
+                            <td>手順系</td>
+                            <td>プロンプト</td>
+                        </tr>
+                        <tr style="background: #fff3cd;">
+                            <td>その他</td>
+                            <td>0-1件</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p style="margin-top: 15px; font-weight: bold;">【重要】1週間で最低1件は「ロードマップ系 × 警告型」を投稿する</p>
+                <p style="margin-top: 5px;">例：「【知らないとヤバい】ChatGPT初心者が上級者になるまでの完全ロードマップ」</p>
+            </div>
+
+            <div class="warning-box">
+                <h3 style="margin-top: 0; color: #856404;">⛔ 絶対に避けるべきこと</h3>
+                <ul style="margin-left: 20px; line-height: 2;">
+                    <li><strong>午後15-18時と午前9-12時の投稿</strong> → 平均impが最低</li>
+                    <li><strong>「その他」フックパターン（36.9% → 20%に削減）</strong> → 弱いパターンを強いパターンに置き換える</li>
+                    <li><strong>質問系・共感系・ストーリー系</strong> → ノウハウ系に変換</li>
+                    <li><strong>Claude活用で勝率0%</strong> → 書き方を大幅に変える必要あり</li>
+                    <li><strong>100字以下の短文</strong> → 400-600字の中長文にする</li>
+                </ul>
+            </div>
+
+            <div class="success-box">
+                <h3 style="margin-top: 0; color: #155724;">🎯 今すぐ実行する3つのアクション</h3>
+                <ol style="margin-left: 20px; line-height: 2; font-size: 16px;">
+                    <li><strong>今週から「警告型フック」を1日2件投稿する</strong><br>
+                    <small>現状2.2% → 15%に増やす。平均10,691impと圧倒的に強い</small></li>
+                    <li><strong>早朝0-6時の投稿を半分にして、夜18-21時に振り分ける</strong><br>
+                    <small>夜18-21時は平均3,953impで最強。ここに集中投下</small></li>
+                    <li><strong>ロードマップ系を週1回 → 週6回に増やす</strong><br>
+                    <small>平均16,264impと圧倒的。優先的に増やすべき</small></li>
+                </ol>
+            </div>
+        </section>
+  
+
+    </div>
+
+    <script>
+    // データ埋め込み
+    const dailySummary = [{"date":"2025-10-01","postsCount":22,"winnerCount":0,"totalImpressions":19023,"totalLikes":115,"averageImpressions":864.6818181818181,"averageLikeRate":0.004547437746526491,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["17845029822579633","17960661647987995","17871861927437485","17915784057191399","17914212903068996","18092077426763956","18288290158262180","18057954341181474","18028480730720680","17881116036394759","18072363470176732","18042766391419623","18066211430360292","18537842134054785","18022615868572054","18086659688308762","18002802002812292","18073871423129813","17921248551079882","17948815014041245","17909588211230328","17920599909080846"]},{"date":"2025-10-02","postsCount":6,"winnerCount":0,"totalImpressions":7233,"totalLikes":40,"averageImpressions":1205.5,"averageLikeRate":0.005250414972177604,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["17935894130961311","18184093330326425","17925185094013046","18091374565793904","18090016678881512","18086926661502602"]},{"date":"2025-10-03","postsCount":7,"winnerCount":0,"totalImpressions":9990,"totalLikes":56,"averageImpressions":1427.142857142857,"averageLikeRate":0.006187143924032218,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18060352724124579","18062395046529668","18134206129455003","18043432688409071","17922785802151273","18299992258301832","18096825850604621"]},{"date":"2025-10-04","postsCount":18,"winnerCount":3,"totalImpressions":318170,"totalLikes":1269,"averageImpressions":17676.11111111111,"averageLikeRate":0.004502615081872403,"lineTotalNew":169,"lineThreads":31,"lineThreadsProfile":9,"lineThreadsPost":23,"lineThreadsGeneral":31,"lineInstagram":60,"lineYoutube":3,"postIds":["18066643631588005","18087949642809995","18048405995645216","18099282904645308","18076843031117816","18178216294344177","18386546842125735","17957055437861638","17898075273167603","18089890504887615","17938404036081665","18169723603322747","18415378216113880","18067136021206073","18290335870283563","18070727867227961","18081053615294589","18105825721594136"]},{"date":"2025-10-05","postsCount":16,"winnerCount":2,"totalImpressions":62244,"totalLikes":215,"averageImpressions":3890.25,"averageLikeRate":0.003958213503355161,"lineTotalNew":57,"lineThreads":52,"lineThreadsProfile":7,"lineThreadsPost":46,"lineThreadsGeneral":52,"lineInstagram":2,"lineYoutube":3,"postIds":["17864576292412877","18201887851313053","17943149588934555","17879430069407426","18531277393027172","18074009093467630","18176756443346868","17981061560870327","17892970944198767","17859825099508924","18021661073576956","18028987316726789","18324700213213126","18059437868622126","18141105763434029","18059892263148563"]},{"date":"2025-10-06","postsCount":3,"winnerCount":0,"totalImpressions":2858,"totalLikes":4,"averageImpressions":952.6666666666666,"averageLikeRate":0.0011960649235902324,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18059341565629287","18085797509483783","17927705595126365"]},{"date":"2025-10-07","postsCount":22,"winnerCount":0,"totalImpressions":57158,"totalLikes":238,"averageImpressions":2598.090909090909,"averageLikeRate":0.0043011444927826695,"lineTotalNew":2,"lineThreads":1,"lineThreadsProfile":1,"lineThreadsPost":0,"lineThreadsGeneral":1,"lineInstagram":0,"lineYoutube":1,"postIds":["17852532693512464","18068757365250462","18089097367671518","18107068090600131","18530446669016077","18066160601588180","18026661287534237","18058326626450298","18186236158333693","17848492122573553","17862276177492099","18427759930102706","17927264679129781","18015424598790694","18027763847741095","18195104620319494","18110099773873393","18059017319170812","18084153613940783","18098976814639082","18344019952166012","17848377312575276"]},{"date":"2025-10-08","postsCount":22,"winnerCount":0,"totalImpressions":22507,"totalLikes":133,"averageImpressions":1023.0454545454545,"averageLikeRate":0.0062864442709134405,"lineTotalNew":11,"lineThreads":9,"lineThreadsProfile":0,"lineThreadsPost":9,"lineThreadsGeneral":9,"lineInstagram":0,"lineYoutube":2,"postIds":["18389330644123635","17858699016518678","18129504325466797","17999479037822897","18075940955122617","17945273226050460","18078854404844017","18023792939685093","18059735660410746","17992111385850211","17884672326258669","18089592130841755","17985032579889366","17936031561087725","18060071981386886","18078133223089887","18071045855267935","18288811921287164","18323695495211820","18056837267530729","18018759206786598","18084972158503436"]},{"date":"2025-10-09","postsCount":14,"winnerCount":0,"totalImpressions":17777,"totalLikes":61,"averageImpressions":1269.7857142857142,"averageLikeRate":0.003381258939276723,"lineTotalNew":1,"lineThreads":1,"lineThreadsProfile":0,"lineThreadsPost":1,"lineThreadsGeneral":1,"lineInstagram":0,"lineYoutube":0,"postIds":["18080456042002145","18085663666934202","18066171590261589","18359027878088762","18088126258733687","18095047993682871","18106593157592406","18135154597456326","18082681174789234","18405762103187124","18155174269395261","18114447790535375","18041541974463574","18080536004283426"]},{"date":"2025-10-10","postsCount":18,"winnerCount":1,"totalImpressions":28532,"totalLikes":110,"averageImpressions":1585.111111111111,"averageLikeRate":0.0038753451406592287,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["17932724510982849","18093144661811985","17845149444586427","17958022043861926","18080200390822968","17861850474497126","18096994192665894","1.80965E+16","18148770130410935","17941229121076214","18357422872095613","18078769754042265","17865343650470016","18106806931592735","18077343433881115","18083967910763288","17986601798895054","18081102727952549"]},{"date":"2025-10-11","postsCount":8,"winnerCount":0,"totalImpressions":10325,"totalLikes":50,"averageImpressions":1290.625,"averageLikeRate":0.004581165911777105,"lineTotalNew":6,"lineThreads":4,"lineThreadsProfile":0,"lineThreadsPost":4,"lineThreadsGeneral":4,"lineInstagram":0,"lineYoutube":1,"postIds":["18146399113422552","18093299092814328","17904896061125305","18086388595907790","18388656430123397","18035965112699726","17895979617325412","18082356649968206"]},{"date":"2025-10-12","postsCount":13,"winnerCount":0,"totalImpressions":9398,"totalLikes":30,"averageImpressions":722.9230769230769,"averageLikeRate":0.0033985455427159284,"lineTotalNew":2,"lineThreads":2,"lineThreadsProfile":1,"lineThreadsPost":1,"lineThreadsGeneral":2,"lineInstagram":0,"lineYoutube":0,"postIds":["17973783335933072","18059682674172212","18308756296220978","18059092301532035","18074145823897553","18083136553787999","18083514578485452","18113512822554167","18082393627802866","17885616735379656","18082051225803625","17952306416985870","18094930087624545"]},{"date":"2025-10-13","postsCount":21,"winnerCount":1,"totalImpressions":106257,"totalLikes":222,"averageImpressions":5059.857142857143,"averageLikeRate":0.003587096158535066,"lineTotalNew":1,"lineThreads":1,"lineThreadsProfile":1,"lineThreadsPost":0,"lineThreadsGeneral":1,"lineInstagram":0,"lineYoutube":0,"postIds":["18082726339788559","18018840113775578","18404844775187894","18240094534294774","18187774033332830","18014235602790822","18297306808265196","1.80778E+16","18068592983337714","17881210602403732","18081933548093833","17844563472590944","18083122295474351","18084925127502595","18061462487131263","18059948546412417","17969348999796563","18532577926050468","18083956895295865","17946372228051728","17890536237221938"]},{"date":"2025-10-14","postsCount":11,"winnerCount":0,"totalImpressions":9177,"totalLikes":43,"averageImpressions":834.2727272727273,"averageLikeRate":0.004548746846442012,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18038632928705552","18084032329771346","18132725602471409","18060362345625638","18076513493035714","18058297595446234","18315053737172915","18078418160099317","18005110976805880","18539902285054646","18090571255894757"]},{"date":"2025-10-15","postsCount":13,"winnerCount":0,"totalImpressions":7304,"totalLikes":34,"averageImpressions":561.8461538461538,"averageLikeRate":0.003983694064576064,"lineTotalNew":2,"lineThreads":2,"lineThreadsProfile":0,"lineThreadsPost":2,"lineThreadsGeneral":2,"lineInstagram":0,"lineYoutube":0,"postIds":["17976114371931365","18332086006237790","18063540467617177","17864157624473716","17919229155049547","17944497018059242","1.80231E+16","18087978130909180","18141814771435909","18066277712581660","18004116587657194","18082187791946694","17863755735481032"]},{"date":"2025-10-16","postsCount":5,"winnerCount":0,"totalImpressions":5128,"totalLikes":24,"averageImpressions":1025.6,"averageLikeRate":0.006093804405398197,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18088091876509651","18079767349858959","18077511146116548","18069660479206805","18206725603312004"]},{"date":"2025-10-17","postsCount":14,"winnerCount":0,"totalImpressions":16846,"totalLikes":60,"averageImpressions":1203.2857142857142,"averageLikeRate":0.004275172626607658,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18099291229639453","17896207923185780","17929145598000799","17851162722566921","18086648467929787","18073190186267495","18087685738902187","18055676540235011","18084002587786430","18082269682789073","18077056088126322","17934977790067289","18099961153632773","18176203672361075"]},{"date":"2025-10-18","postsCount":6,"winnerCount":0,"totalImpressions":3702,"totalLikes":7,"averageImpressions":617,"averageLikeRate":0.0029756915772199163,"lineTotalNew":4,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":4,"lineYoutube":0,"postIds":["17858417820465765","18076242395170761","18081306332492241","18061951370381825","17901800772280354","18072798524242175"]},{"date":"2025-10-19","postsCount":4,"winnerCount":0,"totalImpressions":5267,"totalLikes":15,"averageImpressions":1316.75,"averageLikeRate":0.0028192591149447488,"lineTotalNew":6,"lineThreads":4,"lineThreadsProfile":2,"lineThreadsPost":2,"lineThreadsGeneral":4,"lineInstagram":1,"lineYoutube":1,"postIds":["17876287845330745","18048164732371432","17882521308396994","17879040597302766"]},{"date":"2025-10-20","postsCount":20,"winnerCount":1,"totalImpressions":33768,"totalLikes":96,"averageImpressions":1688.4,"averageLikeRate":0.002841414780650929,"lineTotalNew":2,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":1,"lineYoutube":0,"postIds":["18082889425970318","17942447037063791","18060580169178338","18072325976464778","18089623681703882","17992123643845490","18529858447029409","18427094542108793","1.81001E+16","18126581521488218","18620916091032170","18084038035804692","17979416285766424","18096625867688145","17849071992547512","17986216949907391","17987610704906472","18092032672864387","18045694316689651","18003603296662488"]},{"date":"2025-10-21","postsCount":17,"winnerCount":0,"totalImpressions":25957,"totalLikes":86,"averageImpressions":1526.8823529411766,"averageLikeRate":0.0021803889398074026,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["17847082272588249","18108141262526019","17856060669544294","18030070442524707","18030888455734729","18312926983223269","18331759438229045","18066430646378726","18187522597332533","17873815974350340","18048719555342335","17946772754915717","18083175289971150","17950663260043234","17984794655909762","18071843708183284","18018244835606396"]},{"date":"2025-10-22","postsCount":6,"winnerCount":0,"totalImpressions":12806,"totalLikes":46,"averageImpressions":2134.3333333333335,"averageLikeRate":0.003428362227195111,"lineTotalNew":15,"lineThreads":9,"lineThreadsProfile":0,"lineThreadsPost":9,"lineThreadsGeneral":9,"lineInstagram":4,"lineYoutube":0,"postIds":["17920797465196225","18084854827780824","18182073604348228","18066335870066197","18066816593059165","17978812568771466"]},{"date":"2025-10-23","postsCount":4,"winnerCount":0,"totalImpressions":5897,"totalLikes":19,"averageImpressions":1474.25,"averageLikeRate":0.0019159238313166348,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18073982470955069","18007893686804653","17873680575356417","18512176252066506"]},{"date":"2025-10-25","postsCount":14,"winnerCount":0,"totalImpressions":15764,"totalLikes":64,"averageImpressions":1126,"averageLikeRate":0.002884453127534322,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18044873441444594","18066842780592312","18105116569722277","18042393944686342","17871726303446206","18043705751680691","18084538450949509","17898871332320664","18416521216115231","18198238549316804","17950313819907888","18081130535018450","17906484405257467","18538083508031934"]},{"date":"2025-10-26","postsCount":18,"winnerCount":0,"totalImpressions":33013,"totalLikes":118,"averageImpressions":1834.0555555555557,"averageLikeRate":0.003389300370383715,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["17897376336182504","17959102403865208","18063287474573591","17995851875838425","17982625517878744","18061605665627431","18095199490870715","18112028860603959","18004701548810828","18054908954295020","18484550815077854","18208399873311883","17910835788248163","18099117643666028","18121226359509462","18155432578403671","18144035653430227","18290045170276313"]},{"date":"2025-10-27","postsCount":6,"winnerCount":0,"totalImpressions":8620,"totalLikes":37,"averageImpressions":1436.6666666666667,"averageLikeRate":0.003100804615477961,"lineTotalNew":2,"lineThreads":2,"lineThreadsProfile":0,"lineThreadsPost":2,"lineThreadsGeneral":2,"lineInstagram":0,"lineYoutube":0,"postIds":["18062323355423503","18021248864595326","17842366308605251","18146778040425666","18101042491598131","18488480137077080"]},{"date":"2025-10-28","postsCount":9,"winnerCount":1,"totalImpressions":45773,"totalLikes":87,"averageImpressions":5085.888888888889,"averageLikeRate":0.002497864533149017,"lineTotalNew":3,"lineThreads":2,"lineThreadsProfile":0,"lineThreadsPost":2,"lineThreadsGeneral":2,"lineInstagram":0,"lineYoutube":1,"postIds":["18054013283312137","17854377429557707","18091290817867058","18144793888384797","17898291999313778","18002141306824105","18536154181019036","17915214951206757","18071767811248158"]},{"date":"2025-10-29","postsCount":2,"winnerCount":0,"totalImpressions":2999,"totalLikes":19,"averageImpressions":1499.5,"averageLikeRate":0.006808657474040745,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18074918584964766","17986712402882844"]},{"date":"2025-10-30","postsCount":6,"winnerCount":1,"totalImpressions":24955,"totalLikes":71,"averageImpressions":4159.166666666667,"averageLikeRate":0.0039654718910291,"lineTotalNew":1,"lineThreads":1,"lineThreadsProfile":1,"lineThreadsPost":0,"lineThreadsGeneral":1,"lineInstagram":0,"lineYoutube":0,"postIds":["18531075928037394","17874334278352090","18143715562435288","18090605644917213","18045952349406628","17969296229813470"]},{"date":"2025-10-31","postsCount":10,"winnerCount":0,"totalImpressions":9299,"totalLikes":53,"averageImpressions":929.9,"averageLikeRate":0.006502071739667462,"lineTotalNew":1,"lineThreads":1,"lineThreadsProfile":1,"lineThreadsPost":0,"lineThreadsGeneral":1,"lineInstagram":0,"lineYoutube":0,"postIds":["18014472905619867","18176708620318339","18070420532595540","18092167567885787","18102568996726186","18082413853995288","18029782202734078","18102900310713276","18062355833393995","18078316919153890"]},{"date":"2025-11-01","postsCount":17,"winnerCount":0,"totalImpressions":20592,"totalLikes":0,"averageImpressions":1211.2941176470588,"averageLikeRate":0,"lineTotalNew":1,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":1,"lineYoutube":0,"postIds":["18075978983141726","1.79153E+16","18066374276599491","18089098837941128","18542830204043039","18083950051818917","18084609463804715","18074633125972419","17970535151799057","18083158397473756","18084042226819858","17985968201743291","17926109298156991","17947439780916699","17877326658426015","17868049167395635","18008389772642572"]},{"date":"2025-11-02","postsCount":9,"winnerCount":0,"totalImpressions":10530,"totalLikes":0,"averageImpressions":1170,"averageLikeRate":0,"lineTotalNew":1,"lineThreads":1,"lineThreadsProfile":0,"lineThreadsPost":1,"lineThreadsGeneral":1,"lineInstagram":0,"lineYoutube":0,"postIds":["18200079331317726","18141228892449785","18073889818970902","17934175287099683","17965747787981338","18070522619343315","17877525054328521","18326712418242449","18111661615584829"]},{"date":"2025-11-03","postsCount":7,"winnerCount":0,"totalImpressions":7358,"totalLikes":0,"averageImpressions":1051.142857142857,"averageLikeRate":0,"lineTotalNew":3,"lineThreads":2,"lineThreadsProfile":0,"lineThreadsPost":2,"lineThreadsGeneral":2,"lineInstagram":1,"lineYoutube":0,"postIds":["18542939572030829","17971963982951120","18009781565803508","17983501547755560","18106056547721665","18095928157643827","17865023400489869"]},{"date":"2025-11-04","postsCount":15,"winnerCount":1,"totalImpressions":27456,"totalLikes":0,"averageImpressions":1830.4,"averageLikeRate":0,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18074151872188969","18031654952735940","18065176655123502","17889611586242819","17975385734937389","17968340975970188","17871570303378896","18080081975098872","18244603153292038","18099058627739662","17889567282374059","18055287740636532","17852264373571018","18132083650470017","18212942821308563"]},{"date":"2025-11-05","postsCount":6,"winnerCount":0,"totalImpressions":12485,"totalLikes":0,"averageImpressions":2080.8333333333335,"averageLikeRate":0,"lineTotalNew":6,"lineThreads":5,"lineThreadsProfile":0,"lineThreadsPost":5,"lineThreadsGeneral":5,"lineInstagram":0,"lineYoutube":1,"postIds":["18337782763228370","18099142048707196","17910698505249260","18089883187914110","18002426531819627","18048145025376669"]},{"date":"2025-11-06","postsCount":6,"winnerCount":0,"totalImpressions":11628,"totalLikes":0,"averageImpressions":1938,"averageLikeRate":0,"lineTotalNew":3,"lineThreads":3,"lineThreadsProfile":0,"lineThreadsPost":3,"lineThreadsGeneral":3,"lineInstagram":0,"lineYoutube":0,"postIds":["17908206813253195","17958626318871818","18133929871463233","18008473316811985","17856470703555334","18248334040295083"]},{"date":"2025-11-07","postsCount":24,"winnerCount":2,"totalImpressions":67101,"totalLikes":203,"averageImpressions":2795.875,"averageLikeRate":0.0013431597112364664,"lineTotalNew":4,"lineThreads":4,"lineThreadsProfile":0,"lineThreadsPost":4,"lineThreadsGeneral":4,"lineInstagram":0,"lineYoutube":0,"postIds":["17924683944032298","17980278554924138","17932379538108272","18077661650177504","18063020066413235","18426489718128554","18084702487826357","17935027805980309","18297194824280369","17894177412358376","18056056976288917","18089390351499988","18075059174242697","18076978708912580","17896625100355189","17884882914399742","18150143323424420","18100807483669267","17924336064157097","18110624230599709","17874971175352201","18088958353738781","17895005337347514","18061557134170830"]},{"date":"2025-11-08","postsCount":30,"winnerCount":0,"totalImpressions":48249,"totalLikes":186,"averageImpressions":1608.3,"averageLikeRate":0.0029539292272457787,"lineTotalNew":0,"lineThreads":0,"lineThreadsProfile":0,"lineThreadsPost":0,"lineThreadsGeneral":0,"lineInstagram":0,"lineYoutube":0,"postIds":["18082450949084857","17898516276181733","18416547703112778","18023433866773528","18081054926025172","18182274283356608","17989667090886721","17888408775371922","18091477808495176","17995950227845038","18096977476775789","17985674339746861","18542373832024291","18056282321288778","17965060713002532","18408956041189024","17973145823952199","18026603336777092","18078906893326265","17924700759173464","18182238796346222","17968791173977402","18011975597799810","17877990066329516","18064538132383317","17968790045975380","17900849355315731","18428361508106568","18268152235304846","17909562393255885"]},{"date":"2025-11-09","postsCount":29,"winnerCount":1,"totalImpressions":101833,"totalLikes":206,"averageImpressions":3511.4827586206898,"averageLikeRate":0.001962976405983973,"lineTotalNew":14,"lineThreads":13,"lineThreadsProfile":7,"lineThreadsPost":6,"lineThreadsGeneral":13,"lineInstagram":1,"lineYoutube":0,"postIds":["18095466568692014","18069320240525020","18049748723672322","18187281808339482","17873366853447889","18148494331418476","17889030159382725","18024923237777348","18085277087478910","18088464341481174","17861110977532330","18123127927516901","18067028435454223","18058989305245104","18048822146385146","17852944815572968","18407558677186167","18027858806560258","18366036046086564","17929045236137354","18150244693422230","18536077726017805","18049721384691251","17890159764371884","18305690965268770","18544149280012512","18062838323177857","18114507583565160","18110552467581531"]},{"date":"2025-11-10","postsCount":0,"winnerCount":0,"totalImpressions":0,"totalLikes":0,"averageImpressions":0,"averageLikeRate":0,"lineTotalNew":13,"lineThreads":10,"lineThreadsProfile":1,"lineThreadsPost":9,"lineThreadsGeneral":10,"lineInstagram":1,"lineYoutube":2,"postIds":[]}];
+    const followerMetrics = [{"date":"2025-10-01","followers":833,"followersDelta":37,"profileViews":10293,"postIds":["17845029822579633","17960661647987995","17871861927437485","17915784057191399","17914212903068996","18092077426763956","18288290158262180","18057954341181474","18028480730720680","17881116036394759","18072363470176732","18042766391419623","18066211430360292","18537842134054785","18022615868572054","18086659688308762","18002802002812292","18073871423129813","17921248551079882","17948815014041245","17909588211230328","17920599909080846"],"postImpressionsTotal":19023},{"date":"2025-10-02","followers":861,"followersDelta":28,"profileViews":4023,"postIds":["17935894130961311","18184093330326425","17925185094013046","18091374565793904","18090016678881512","18086926661502602"],"postImpressionsTotal":7233},{"date":"2025-10-03","followers":888,"followersDelta":27,"profileViews":4835,"postIds":["18060352724124579","18062395046529668","18134206129455003","18043432688409071","17922785802151273","18299992258301832","18096825850604621"],"postImpressionsTotal":9990},{"date":"2025-10-04","followers":1191,"followersDelta":303,"profileViews":146122,"postIds":["18066643631588005","18087949642809995","18048405995645216","18099282904645308","18076843031117816","18178216294344177","18386546842125735","17957055437861638","17898075273167603","18089890504887615","17938404036081665","18169723603322747","18415378216113880","18067136021206073","18290335870283563","18070727867227961","18081053615294589","18105825721594136"],"postImpressionsTotal":318170},{"date":"2025-10-05","followers":1946,"followersDelta":755,"profileViews":67170,"postIds":["17864576292412877","18201887851313053","17943149588934555","17879430069407426","18531277393027172","18074009093467630","18176756443346868","17981061560870327","17892970944198767","17859825099508924","18021661073576956","18028987316726789","18324700213213126","18059437868622126","18141105763434029","18059892263148563"],"postImpressionsTotal":62244},{"date":"2025-10-06","followers":1968,"followersDelta":22,"profileViews":9570,"postIds":["18059341565629287","18085797509483783","17927705595126365"],"postImpressionsTotal":2858},{"date":"2025-10-07","followers":2056,"followersDelta":88,"profileViews":16405,"postIds":["17852532693512464","18068757365250462","18089097367671518","18107068090600131","18530446669016077","18066160601588180","18026661287534237","18058326626450298","18186236158333693","17848492122573553","17862276177492099","18427759930102706","17927264679129781","18015424598790694","18027763847741095","18195104620319494","18110099773873393","18059017319170812","18084153613940783","18098976814639082","18344019952166012","17848377312575276"],"postImpressionsTotal":57158},{"date":"2025-10-08","followers":2073,"followersDelta":17,"profileViews":8401,"postIds":["18389330644123635","17858699016518678","18129504325466797","17999479037822897","18075940955122617","17945273226050460","18078854404844017","18023792939685093","18059735660410746","17992111385850211","17884672326258669","18089592130841755","17985032579889366","17936031561087725","18060071981386886","18078133223089887","18071045855267935","18288811921287164","18323695495211820","18056837267530729","18018759206786598","18084972158503436"],"postImpressionsTotal":22507},{"date":"2025-10-09","followers":2084,"followersDelta":11,"profileViews":22088,"postIds":["18080456042002145","18085663666934202","18066171590261589","18359027878088762","18088126258733687","18095047993682871","18106593157592406","18135154597456326","18082681174789234","18405762103187124","18155174269395261","18114447790535375","18041541974463574","18080536004283426"],"postImpressionsTotal":17777},{"date":"2025-10-10","followers":2119,"followersDelta":35,"profileViews":8966,"postIds":["17932724510982849","18093144661811985","17845149444586427","17958022043861926","18080200390822968","17861850474497126","18096994192665894","1.80965E+16","18148770130410935","17941229121076214","18357422872095613","18078769754042265","17865343650470016","18106806931592735","18077343433881115","18083967910763288","17986601798895054","18081102727952549"],"postImpressionsTotal":28532},{"date":"2025-10-11","followers":2125,"followersDelta":6,"profileViews":3699,"postIds":["18146399113422552","18093299092814328","17904896061125305","18086388595907790","18388656430123397","18035965112699726","17895979617325412","18082356649968206"],"postImpressionsTotal":10325},{"date":"2025-10-12","followers":2129,"followersDelta":4,"profileViews":7044,"postIds":["17973783335933072","18059682674172212","18308756296220978","18059092301532035","18074145823897553","18083136553787999","18083514578485452","18113512822554167","18082393627802866","17885616735379656","18082051225803625","17952306416985870","18094930087624545"],"postImpressionsTotal":9398},{"date":"2025-10-13","followers":2164,"followersDelta":35,"profileViews":72690,"postIds":["18082726339788559","18018840113775578","18404844775187894","18240094534294774","18187774033332830","18014235602790822","18297306808265196","1.80778E+16","18068592983337714","17881210602403732","18081933548093833","17844563472590944","18083122295474351","18084925127502595","18061462487131263","18059948546412417","17969348999796563","18532577926050468","18083956895295865","17946372228051728","17890536237221938"],"postImpressionsTotal":106257},{"date":"2025-10-14","followers":2180,"followersDelta":16,"profileViews":6069,"postIds":["18038632928705552","18084032329771346","18132725602471409","18060362345625638","18076513493035714","18058297595446234","18315053737172915","18078418160099317","18005110976805880","18539902285054646","18090571255894757"],"postImpressionsTotal":9177},{"date":"2025-10-15","followers":2180,"followersDelta":0,"profileViews":2972,"postIds":["17976114371931365","18332086006237790","18063540467617177","17864157624473716","17919229155049547","17944497018059242","1.80231E+16","18087978130909180","18141814771435909","18066277712581660","18004116587657194","18082187791946694","17863755735481032"],"postImpressionsTotal":7304},{"date":"2025-10-16","followers":2185,"followersDelta":5,"profileViews":4721,"postIds":["18088091876509651","18079767349858959","18077511146116548","18069660479206805","18206725603312004"],"postImpressionsTotal":5128},{"date":"2025-10-17","followers":2202,"followersDelta":17,"profileViews":8390,"postIds":["18099291229639453","17896207923185780","17929145598000799","17851162722566921","18086648467929787","18073190186267495","18087685738902187","18055676540235011","18084002587786430","18082269682789073","18077056088126322","17934977790067289","18099961153632773","18176203672361075"],"postImpressionsTotal":16846},{"date":"2025-10-18","followers":2204,"followersDelta":2,"profileViews":3948,"postIds":["17858417820465765","18076242395170761","18081306332492241","18061951370381825","17901800772280354","18072798524242175"],"postImpressionsTotal":3702},{"date":"2025-10-19","followers":2208,"followersDelta":4,"profileViews":2620,"postIds":["17876287845330745","18048164732371432","17882521308396994","17879040597302766"],"postImpressionsTotal":5267},{"date":"2025-10-20","followers":2237,"followersDelta":29,"profileViews":11148,"postIds":["18082889425970318","17942447037063791","18060580169178338","18072325976464778","18089623681703882","17992123643845490","18529858447029409","18427094542108793","1.81001E+16","18126581521488218","18620916091032170","18084038035804692","17979416285766424","18096625867688145","17849071992547512","17986216949907391","17987610704906472","18092032672864387","18045694316689651","18003603296662488"],"postImpressionsTotal":33768},{"date":"2025-10-21","followers":2260,"followersDelta":23,"profileViews":12660,"postIds":["17847082272588249","18108141262526019","17856060669544294","18030070442524707","18030888455734729","18312926983223269","18331759438229045","18066430646378726","18187522597332533","17873815974350340","18048719555342335","17946772754915717","18083175289971150","17950663260043234","17984794655909762","18071843708183284","18018244835606396"],"postImpressionsTotal":25957},{"date":"2025-10-22","followers":2268,"followersDelta":8,"profileViews":5228,"postIds":["17920797465196225","18084854827780824","18182073604348228","18066335870066197","18066816593059165","17978812568771466"],"postImpressionsTotal":12806},{"date":"2025-10-23","followers":2272,"followersDelta":4,"profileViews":6650,"postIds":["18073982470955069","18007893686804653","17873680575356417","18512176252066506"],"postImpressionsTotal":5897},{"date":"2025-10-24","followers":2274,"followersDelta":2,"profileViews":974,"postIds":[],"postImpressionsTotal":0},{"date":"2025-10-25","followers":2274,"followersDelta":0,"profileViews":10955,"postIds":["18044873441444594","18066842780592312","18105116569722277","18042393944686342","17871726303446206","18043705751680691","18084538450949509","17898871332320664","18416521216115231","18198238549316804","17950313819907888","18081130535018450","17906484405257467","18538083508031934"],"postImpressionsTotal":15764},{"date":"2025-10-26","followers":2309,"followersDelta":35,"profileViews":20495,"postIds":["17897376336182504","17959102403865208","18063287474573591","17995851875838425","17982625517878744","18061605665627431","18095199490870715","18112028860603959","18004701548810828","18054908954295020","18484550815077854","18208399873311883","17910835788248163","18099117643666028","18121226359509462","18155432578403671","18144035653430227","18290045170276313"],"postImpressionsTotal":33013},{"date":"2025-10-27","followers":2321,"followersDelta":12,"profileViews":3061,"postIds":["18062323355423503","18021248864595326","17842366308605251","18146778040425666","18101042491598131","18488480137077080"],"postImpressionsTotal":8620},{"date":"2025-10-28","followers":2336,"followersDelta":15,"profileViews":6574,"postIds":["18054013283312137","17854377429557707","18091290817867058","18144793888384797","17898291999313778","18002141306824105","18536154181019036","17915214951206757","18071767811248158"],"postImpressionsTotal":45773},{"date":"2025-10-29","followers":2331,"followersDelta":-5,"profileViews":3365,"postIds":["18074918584964766","17986712402882844"],"postImpressionsTotal":2999},{"date":"2025-10-30","followers":2348,"followersDelta":17,"profileViews":15168,"postIds":["18531075928037394","17874334278352090","18143715562435288","18090605644917213","18045952349406628","17969296229813470"],"postImpressionsTotal":24955},{"date":"2025-10-31","followers":2353,"followersDelta":5,"profileViews":4541,"postIds":["18014472905619867","18176708620318339","18070420532595540","18092167567885787","18102568996726186","18082413853995288","18029782202734078","18102900310713276","18062355833393995","18078316919153890"],"postImpressionsTotal":9299},{"date":"2025-11-01","followers":2385,"followersDelta":32,"profileViews":18536,"postIds":["18075978983141726","1.79153E+16","18066374276599491","18089098837941128","18542830204043039","18083950051818917","18084609463804715","18074633125972419","17970535151799057","18083158397473756","18084042226819858","17985968201743291","17926109298156991","17947439780916699","17877326658426015","17868049167395635","18008389772642572"],"postImpressionsTotal":20592},{"date":"2025-11-02","followers":2401,"followersDelta":16,"profileViews":3069,"postIds":["18200079331317726","18141228892449785","18073889818970902","17934175287099683","17965747787981338","18070522619343315","17877525054328521","18326712418242449","18111661615584829"],"postImpressionsTotal":10530},{"date":"2025-11-03","followers":2411,"followersDelta":10,"profileViews":7036,"postIds":["18542939572030829","17971963982951120","18009781565803508","17983501547755560","18106056547721665","18095928157643827","17865023400489869"],"postImpressionsTotal":7358},{"date":"2025-11-04","followers":2449,"followersDelta":38,"profileViews":6570,"postIds":["18074151872188969","18031654952735940","18065176655123502","17889611586242819","17975385734937389","17968340975970188","17871570303378896","18080081975098872","18244603153292038","18099058627739662","17889567282374059","18055287740636532","17852264373571018","18132083650470017","18212942821308563"],"postImpressionsTotal":27456},{"date":"2025-11-05","followers":2461,"followersDelta":12,"profileViews":4981,"postIds":["18337782763228370","18099142048707196","17910698505249260","18089883187914110","18002426531819627","18048145025376669"],"postImpressionsTotal":12485},{"date":"2025-11-06","followers":2485,"followersDelta":24,"profileViews":7652,"postIds":["17908206813253195","17958626318871818","18133929871463233","18008473316811985","17856470703555334","18248334040295083"],"postImpressionsTotal":11628},{"date":"2025-11-07","followers":2553,"followersDelta":68,"profileViews":20516,"postIds":["17924683944032298","17980278554924138","17932379538108272","18077661650177504","18063020066413235","18426489718128554","18084702487826357","17935027805980309","18297194824280369","17894177412358376","18056056976288917","18089390351499988","18075059174242697","18076978708912580","17896625100355189","17884882914399742","18150143323424420","18100807483669267","17924336064157097","18110624230599709","17874971175352201","18088958353738781","17895005337347514","18061557134170830"],"postImpressionsTotal":67101},{"date":"2025-11-08","followers":2630,"followersDelta":77,"profileViews":41427,"postIds":["18082450949084857","17898516276181733","18416547703112778","18023433866773528","18081054926025172","18182274283356608","17989667090886721","17888408775371922","18091477808495176","17995950227845038","18096977476775789","17985674339746861","18542373832024291","18056282321288778","17965060713002532","18408956041189024","17973145823952199","18026603336777092","18078906893326265","17924700759173464","18182238796346222","17968791173977402","18011975597799810","17877990066329516","18064538132383317","17968790045975380","17900849355315731","18428361508106568","18268152235304846","17909562393255885"],"postImpressionsTotal":48249},{"date":"2025-11-09","followers":2779,"followersDelta":149,"profileViews":137176,"postIds":["18095466568692014","18069320240525020","18049748723672322","18187281808339482","17873366853447889","18148494331418476","17889030159382725","18024923237777348","18085277087478910","18088464341481174","17861110977532330","18123127927516901","18067028435454223","18058989305245104","18048822146385146","17852944815572968","18407558677186167","18027858806560258","18366036046086564","17929045236137354","18150244693422230","18536077726017805","18049721384691251","17890159764371884","18305690965268770","18544149280012512","18062838323177857","18114507583565160","18110552467581531"],"postImpressionsTotal":101833}];
+
+    // 日別推移グラフ - 日付で結合してデータの整合性を確保
+    const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+
+    // フォロワーメトリクスをMapに変換
+    const followerMap = new Map();
+    followerMetrics.forEach(f => {
+        followerMap.set(f.date, f.followersDelta || 0);
+    });
+
+    // dailySummaryを基準に全データを結合
+    const dailyLabels = dailySummary.map(d => d.date.substring(5));
+    const dailyImpressions = dailySummary.map(d => d.totalImpressions);
+    const dailyFollowerDeltas = dailySummary.map(d => followerMap.get(d.date) || 0);
+    const dailyLineRegistrations = dailySummary.map(d => d.lineThreads);
+
+    new Chart(dailyCtx, {
+        type: 'bar',
+        data: {
+            labels: dailyLabels,
+            datasets: [
+                {
+                    label: 'インプレッション',
+                    data: dailyImpressions,
+                    type: 'line',
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    yAxisID: 'y',
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                },
+                {
+                    label: 'フォロワー増加',
+                    data: dailyFollowerDeltas,
+                    backgroundColor: 'rgba(118, 75, 162, 0.7)',
+                    yAxisID: 'y1',
+                },
+                {
+                    label: 'LINE登録（Threads経由）',
+                    data: dailyLineRegistrations,
+                    backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                    yAxisID: 'y1',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: { mode: 'index', intersect: false }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: { display: true, text: 'インプレッション' }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    min: 0,
+                    title: { display: true, text: 'フォロワー増加 / LINE登録' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+    </script>
+</body>
+</html>

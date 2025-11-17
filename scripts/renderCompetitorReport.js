@@ -246,6 +246,12 @@ async function renderReport(slug) {
   const dailySummaryRaw = JSON.parse(await fs.readFile(path.join(baseDir, 'daily_summary.json'), 'utf8'));
   const postsRaw = JSON.parse(await fs.readFile(path.join(baseDir, 'posts.json'), 'utf8'));
 
+  // 期間を動的に計算
+  const dates = dailySummaryRaw.map(d => d.date).filter(Boolean).sort();
+  const startDate = dates.length > 0 ? dates[0] : '';
+  const endDate = dates.length > 0 ? dates[dates.length - 1] : '';
+  const dateRange = startDate && endDate ? `${startDate} 〜 ${endDate}` : '直近30日';
+
   const dailySummary = computeDailyWithDelta(dailySummaryRaw);
 
   const postsWithDelta = postsRaw.map((post) => ({
@@ -523,7 +529,7 @@ async function renderReport(slug) {
   <body>
     <header class="hero">
       <h1>${escapeHtml(accountName)}｜Threads運用レポート</h1>
-      <p>対象期間：2025-09-17 〜 2025-10-16（直近30日）</p>
+      <p>対象期間：${dateRange}</p>
     </header>
     <main class="container">
       ${statsCards}
