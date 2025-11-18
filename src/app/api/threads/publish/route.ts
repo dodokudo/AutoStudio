@@ -41,6 +41,12 @@ function extractUrlFromText(text: string): { textWithoutUrl: string; url: string
   if (urls && urls.length > 0) {
     const url = urls[0];
     const textWithoutUrl = text.replace(url, '').trim();
+
+    // テキストが空になる場合は、元のテキストをそのまま使う（link_attachmentは使わない）
+    if (!textWithoutUrl) {
+      return { textWithoutUrl: text, url: undefined };
+    }
+
     return { textWithoutUrl, url };
   }
 
