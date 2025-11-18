@@ -280,9 +280,9 @@ export function PostQueue({
                   {isPending ? '保存中…' : '保存'}
                 </Button>
               ) : null}
-              {onApprove && item.status !== 'approved' && item.status !== 'scheduled' ? (
+              {onApprove && (item.status !== 'approved' && item.status !== 'scheduled' || item.jobStatus === 'failed' || item.logStatus === 'failed') ? (
                 <Button onClick={() => onApprove(item.id)} disabled={isPending || hasTextError}>
-                  {isPending ? '承認中…' : '承認'}
+                  {isPending ? '承認中…' : item.jobStatus === 'failed' || item.logStatus === 'failed' ? '再承認' : '承認'}
                 </Button>
               ) : null}
               {onReject && item.status !== 'rejected' ? (
