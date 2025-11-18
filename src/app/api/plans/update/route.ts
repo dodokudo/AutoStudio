@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { upsertPlan } from '@/lib/bigqueryPlans';
 import { postThread } from '@/lib/threadsApi';
 
+// テキストからURLを検出して分離する
+function extractUrlFromText(text: string): { textWithoutUrl: string; url: string | undefined } {
+  const urlPattern = /https?:\/\/[^\s]+/g;
+  const urls = text.match(urlPattern);
+
+  if (urls && urls.length > 0) {
+    const url = urls[0];
+    const textWithoutUrl = text.replace(url, '').trim();
+
+    // テキストが空になる場合は、元のテキストをそのまま使う
+    if (!textWithoutUrl) {
+      return { textWithoutUrl: text, url: undefined };
+    }
+
+    return { textWithoutUrl, url };
+  }
+
+  return { textWithoutUrl: text, url: undefined };
+}
+
 interface UpdatePlanRequest {
   planId: string;
   status: 'draft' | 'approved';
@@ -54,7 +74,9 @@ export async function POST(request: NextRequest) {
         });
 
         // Post main thread
-        const mainThreadId = await postThread(mainText);
+        const { textWithoutUrl: mainTextWithoutUrl, url: mainUrl } = extractUrlFromText(mainText);
+        console.log(`[plans/update] Main text: "${mainTextWithoutUrl.substring(0, 50)}...", URL: ${mainUrl || 'none'}`);
+        const mainThreadId = await postThread(mainTextWithoutUrl, undefined, mainUrl);
         console.log('[plans/update] Main thread posted:', mainThreadId);
 
         // Post comments in sequence
@@ -69,7 +91,10 @@ export async function POST(request: NextRequest) {
           console.log(`[plans/update] Waiting ${delaySeconds} seconds before posting comment ${i + 1}...`);
           await new Promise(resolve => setTimeout(resolve, randomDelayMs));
 
-          const commentThreadId = await postThread(comment.text, replyToId);
+          // コメントからURLを検出して分離
+          const { textWithoutUrl: commentTextWithoutUrl, url: commentUrl } = extractUrlFromText(comment.text);
+          console.log(`[plans/update] Comment ${i + 1} text: "${commentTextWithoutUrl.substring(0, 50)}...", URL: ${commentUrl || 'none'}`);
+          const commentThreadId = await postThread(commentTextWithoutUrl, replyToId, commentUrl);
           console.log(`[plans/update] Comment ${i + 1} posted:`, commentThreadId);
           replyToId = commentThreadId;
         }
