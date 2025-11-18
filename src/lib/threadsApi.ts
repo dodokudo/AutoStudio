@@ -31,7 +31,7 @@ async function request(path: string, options: RequestInit & { params?: Record<st
   return res.json();
 }
 
-async function createContainer(text: string, replyToId?: string) {
+async function createContainer(text: string, replyToId?: string, linkUrl?: string) {
   const body: Record<string, unknown> = {
     text,
     media_type: 'TEXT',
@@ -39,6 +39,10 @@ async function createContainer(text: string, replyToId?: string) {
 
   if (replyToId) {
     body.reply_to_id = replyToId;
+  }
+
+  if (linkUrl) {
+    body.link_attachment = linkUrl;
   }
 
   console.log('[threadsApi] createContainer body:', body);
@@ -93,7 +97,7 @@ async function publishContainer(containerId: string) {
   return statusRes.id as string;
 }
 
-export async function postThread(text: string, replyToId?: string) {
+export async function postThread(text: string, replyToId?: string, linkUrl?: string) {
   const rawEnv = process.env.THREADS_POSTING_ENABLED;
   const trimmedEnv = rawEnv?.trim();
   const isEnabled = trimmedEnv === 'true';
@@ -102,6 +106,8 @@ export async function postThread(text: string, replyToId?: string) {
     textLength: text.length,
     hasReplyToId: !!replyToId,
     replyToId,
+    hasLinkUrl: !!linkUrl,
+    linkUrl,
     postingEnabled: THREADS_POSTING_ENABLED,
     environment: process.env.NODE_ENV,
     hasToken: !!THREADS_TOKEN,
@@ -138,7 +144,7 @@ export async function postThread(text: string, replyToId?: string) {
   }
 
   console.log('[threadsApi] Creating container...');
-  const containerId = await createContainer(text, replyToId);
+  const containerId = await createContainer(text, replyToId, linkUrl);
   console.log('[threadsApi] Container created:', containerId);
 
   console.log('[threadsApi] Publishing container...');
