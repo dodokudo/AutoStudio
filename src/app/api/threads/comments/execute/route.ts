@@ -5,6 +5,23 @@ import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
+// テキストからURLを検出して分離する
+function extractUrlFromText(text: string): { textWithoutUrl: string; url: string | undefined } {
+  // URLの正規表現パターン
+  const urlPattern = /https?:\/\/[^\s]+/g;
+  const urls = text.match(urlPattern);
+
+  if (urls && urls.length > 0) {
+    // 最初のURLを link_attachment として使用
+    const url = urls[0];
+    // テキストからURLを削除し、余分な空白を整理
+    const textWithoutUrl = text.replace(url, '').trim();
+    return { textWithoutUrl, url };
+  }
+
+  return { textWithoutUrl: text, url: undefined };
+}
+
 export async function POST() {
   try {
     console.log('[threads/comments/execute] Starting scheduled comment execution...');
@@ -54,7 +71,12 @@ export async function POST() {
         // Threads APIの安定性のため、短い待機時間を追加
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        const commentThreadId = await postThread(comment.comment_text, replyToId);
+        // テキストからURLを検出して分離
+        const { textWithoutUrl, url } = extractUrlFromText(comment.comment_text);
+
+        console.log(`[threads/comments/execute] Text: "${textWithoutUrl}", URL: ${url || 'none'}`);
+
+        const commentThreadId = await postThread(textWithoutUrl, replyToId, url);
 
         console.log(`[threads/comments/execute] Comment ${comment.comment_order} posted with ID: ${commentThreadId}`);
 

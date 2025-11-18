@@ -33,6 +33,20 @@ const COMMENT_SCHEDULE_SCHEMA = [
   { name: 'created_at', type: 'TIMESTAMP' },
 ];
 
+// テキストからURLを検出して分離する
+function extractUrlFromText(text: string): { textWithoutUrl: string; url: string | undefined } {
+  const urlPattern = /https?:\/\/[^\s]+/g;
+  const urls = text.match(urlPattern);
+
+  if (urls && urls.length > 0) {
+    const url = urls[0];
+    const textWithoutUrl = text.replace(url, '').trim();
+    return { textWithoutUrl, url };
+  }
+
+  return { textWithoutUrl: text, url: undefined };
+}
+
 async function ensureLogTable() {
   const client = createBigQueryClient(PROJECT_ID);
   const dataset = client.dataset(DATASET);
@@ -177,7 +191,9 @@ export async function POST(request: NextRequest) {
 
     // Post main thread
     console.log(`[threads/publish] Posting main thread...`);
-    const mainThreadId = await postThread(plan.main_text);
+    const { textWithoutUrl, url } = extractUrlFromText(plan.main_text);
+    console.log(`[threads/publish] Text: "${textWithoutUrl.substring(0, 50)}...", URL: ${url || 'none'}`);
+    const mainThreadId = await postThread(textWithoutUrl, undefined, url);
     console.log(`[threads/publish] Main thread posted with ID: ${mainThreadId}`);
 
     // Schedule comments for delayed posting
