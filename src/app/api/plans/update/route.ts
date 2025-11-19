@@ -2,21 +2,48 @@ import { NextRequest, NextResponse } from 'next/server';
 import { upsertPlan } from '@/lib/bigqueryPlans';
 import { postThread } from '@/lib/threadsApi';
 
+// URLからトラッキングパラメータを除去する
+function cleanUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    // トラッキングパラメータを削除
+    const trackingParams = ['xmt', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'igshid'];
+    trackingParams.forEach(param => urlObj.searchParams.delete(param));
+
+    // パラメータが空になったらクエリ文字列を完全に削除
+    if (urlObj.searchParams.toString() === '') {
+      return `${urlObj.origin}${urlObj.pathname}`;
+    }
+    return urlObj.toString();
+  } catch {
+    // URL解析に失敗した場合はそのまま返す
+    return url;
+  }
+}
+
 // テキストからURLを検出して分離する
 function extractUrlFromText(text: string): { textWithoutUrl: string; url: string | undefined } {
   const urlPattern = /https?:\/\/[^\s]+/g;
   const urls = text.match(urlPattern);
 
   if (urls && urls.length > 0) {
-    const url = urls[0];
-    const textWithoutUrl = text.replace(url, '').trim();
+    const rawUrl = urls[0];
+    const cleanedUrl = cleanUrl(rawUrl);
+
+    // Threads URLはlink_attachmentとして使用できないため、クリーンなURLをテキストに含める
+    if (rawUrl.includes('threads.com') || rawUrl.includes('threads.net')) {
+      const textWithCleanUrl = text.replace(rawUrl, cleanedUrl);
+      return { textWithoutUrl: textWithCleanUrl, url: undefined };
+    }
+
+    const textWithoutUrl = text.replace(rawUrl, '').trim();
 
     // テキストが空になる場合は、元のテキストをそのまま使う
     if (!textWithoutUrl) {
       return { textWithoutUrl: text, url: undefined };
     }
 
-    return { textWithoutUrl, url };
+    return { textWithoutUrl, url: cleanedUrl };
   }
 
   return { textWithoutUrl: text, url: undefined };
@@ -81,6 +108,14 @@ export async function POST(request: NextRequest) {
 
         // Post comments in sequence
         let replyToId = mainThreadId;
+
+        // メインスレッド投稿後、APIでメディアが利用可能になるまで待機
+        if (comments.length > 0) {
+          const initialDelayMs = 10000; // 10秒待機
+          console.log(`[plans/update] Waiting ${initialDelayMs / 1000} seconds for main thread to be available...`);
+          await new Promise(resolve => setTimeout(resolve, initialDelayMs));
+        }
+
         for (let i = 0; i < comments.length; i++) {
           const comment = comments[i];
           console.log(`[plans/update] Posting comment ${i + 1}/${comments.length}...`);
@@ -92,8 +127,14 @@ export async function POST(request: NextRequest) {
           await new Promise(resolve => setTimeout(resolve, randomDelayMs));
 
           // コメントからURLを検出して分離
+          console.log(`[plans/update] Comment ${i + 1} original text:`, JSON.stringify(comment.text));
           const { textWithoutUrl: commentTextWithoutUrl, url: commentUrl } = extractUrlFromText(comment.text);
-          console.log(`[plans/update] Comment ${i + 1} text: "${commentTextWithoutUrl.substring(0, 50)}...", URL: ${commentUrl || 'none'}`);
+          console.log(`[plans/update] Comment ${i + 1} extracted:`, {
+            textWithoutUrl: commentTextWithoutUrl,
+            url: commentUrl,
+            textLength: commentTextWithoutUrl.length,
+            urlLength: commentUrl?.length
+          });
           const commentThreadId = await postThread(commentTextWithoutUrl, replyToId, commentUrl);
           console.log(`[plans/update] Comment ${i + 1} posted:`, commentThreadId);
           replyToId = commentThreadId;

@@ -2,6 +2,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
+  "functions": {
+    "src/app/api/threads/generate-operation/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/plans/update/route.ts": {
+      "maxDuration": 300
+    }
+  },
   "crons": [
     {
       "path": "/api/threads/cron/run",

@@ -5,6 +5,9 @@ import { searchMultipleTopics } from '@/lib/tavily/client';
 import type { PlanStatus, ThreadPlanSummary } from '@/types/threadPlan';
 import type { BigQuery } from '@google-cloud/bigquery';
 
+// Vercel function timeout: 5 minutes
+export const maxDuration = 300;
+
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
