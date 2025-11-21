@@ -2,10 +2,10 @@
   {
     "date": "2025-10-04",
     "totalNew": 169,
-    "fromThreadsAny": 31,
-    "fromThreadsProfile": 9,
-    "fromThreadsPost": 23,
-    "fromThreadsGeneral": 31,
+    "fromThreadsAny": 34,
+    "fromThreadsProfile": 10,
+    "fromThreadsPost": 25,
+    "fromThreadsGeneral": 34,
     "fromInstagram": 60,
     "fromYoutube": 3
   },
@@ -164,7 +164,7 @@
     "totalNew": 1,
     "fromThreadsAny": 1,
     "fromThreadsProfile": 1,
-    "fromThreadsPost": 0,
+    "fromThreadsPost": 1,
     "fromThreadsGeneral": 1,
     "fromInstagram": 0,
     "fromYoutube": 0
@@ -234,7 +234,7 @@
     "totalNew": 14,
     "fromThreadsAny": 13,
     "fromThreadsProfile": 7,
-    "fromThreadsPost": 6,
+    "fromThreadsPost": 7,
     "fromThreadsGeneral": 13,
     "fromInstagram": 1,
     "fromYoutube": 0
@@ -248,5 +248,105 @@
     "fromThreadsGeneral": 10,
     "fromInstagram": 1,
     "fromYoutube": 2
+  },
+  {
+    "date": "2025-11-11",
+    "totalNew": 8,
+    "fromThreadsAny": 8,
+    "fromThreadsProfile": 1,
+    "fromThreadsPost": 7,
+    "fromThreadsGeneral": 8,
+    "fromInstagram": 0,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-12",
+    "totalNew": 12,
+    "fromThreadsAny": 12,
+    "fromThreadsProfile": 4,
+    "fromThreadsPost": 10,
+    "fromThreadsGeneral": 12,
+    "fromInstagram": 1,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-13",
+    "totalNew": 3,
+    "fromThreadsAny": 3,
+    "fromThreadsProfile": 0,
+    "fromThreadsPost": 3,
+    "fromThreadsGeneral": 3,
+    "fromInstagram": 0,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-14",
+    "totalNew": 12,
+    "fromThreadsAny": 12,
+    "fromThreadsProfile": 1,
+    "fromThreadsPost": 11,
+    "fromThreadsGeneral": 12,
+    "fromInstagram": 0,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-16",
+    "totalNew": 29,
+    "fromThreadsAny": 27,
+    "fromThreadsProfile": 3,
+    "fromThreadsPost": 21,
+    "fromThreadsGeneral": 27,
+    "fromInstagram": 1,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-17",
+    "totalNew": 6,
+    "fromThreadsAny": 5,
+    "fromThreadsProfile": 1,
+    "fromThreadsPost": 4,
+    "fromThreadsGeneral": 5,
+    "fromInstagram": 0,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-18",
+    "totalNew": 8,
+    "fromThreadsAny": 8,
+    "fromThreadsProfile": 1,
+    "fromThreadsPost": 7,
+    "fromThreadsGeneral": 8,
+    "fromInstagram": 0,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-19",
+    "totalNew": 15,
+    "fromThreadsAny": 14,
+    "fromThreadsProfile": 0,
+    "fromThreadsPost": 14,
+    "fromThreadsGeneral": 14,
+    "fromInstagram": 1,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-20",
+    "totalNew": 11,
+    "fromThreadsAny": 10,
+    "fromThreadsProfile": 2,
+    "fromThreadsPost": 8,
+    "fromThreadsGeneral": 10,
+    "fromInstagram": 0,
+    "fromYoutube": 0
+  },
+  {
+    "date": "2025-11-21",
+    "totalNew": 2,
+    "fromThreadsAny": 1,
+    "fromThreadsProfile": 1,
+    "fromThreadsPost": 0,
+    "fromThreadsGeneral": 1,
+    "fromInstagram": 0,
+    "fromYoutube": 0
   }
 ]

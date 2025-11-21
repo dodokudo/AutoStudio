@@ -88,18 +88,13 @@
                     <div class="metric-value">2,288人</div>
                     <div class="metric-sub">1日平均 44.9人</div>
                 </div>
-                <div class="metric-card">
-                    <div class="metric-label">LINE登録（Threads経由）</div>
-                    <div class="metric-value">263件</div>
-                    <div class="metric-sub">CVR 0.017%</div>
-                </div>
             </div>
 
             <div class="success-box" style="margin-top: 30px;">
                 <h3 style="margin-top: 0; color: #155724;">✅ 最重要インサイト</h3>
                 <ul style="margin-left: 20px; line-height: 2;">
                     <li><span class="highlight">ノウハウ系が82.7%を占め</span>、勝ち投稿の92.9%がノウハウ系（戦略は正しい）</li>
-                    <li>最大バズ投稿：270,000 imp + フォロワー303人増 + LINE登録31件（10月4日）</li>
+                    <li>最大バズ投稿：270,000 imp + フォロワー303人増（10月4日）</li>
                     <li>朝6-9時が勝ち投稿最多（43%）、夜18-21時が平均impで最強</li>
                     <li>「【タイトル】型」フックが最も効果的</li>
                     <li>ChatGPT活用テーマが最強（勝率5.7%、平均3,619 imp）</li>
@@ -109,7 +104,7 @@
 
         <!-- 2. 日別推移 -->
         <section>
-            <h2>📈 日別推移（インプレッション・フォロワー・LINE登録）</h2>
+            <h2>📈 日別推移（インプレッション・フォロワー）</h2>
             <div class="chart-container"><canvas id="dailyChart"></canvas></div>
         </section>
 
@@ -2050,7 +2045,6 @@ AIに「自分専用のプロンプト生成AI」作ったら、10分が10秒に
     const dailyLabels = dailySummary.map(d => d.date.substring(5));
     const dailyImpressions = dailySummary.map(d => d.totalImpressions);
     const dailyFollowerDeltas = dailySummary.map(d => followerMap.get(d.date) || 0);
-    const dailyLineRegistrations = dailySummary.map(d => d.lineThreads);
 
     new Chart(dailyCtx, {
         type: 'bar',
@@ -2072,12 +2066,6 @@ AIに「自分専用のプロンプト生成AI」作ったら、10分が10秒に
                     label: 'フォロワー増加',
                     data: dailyFollowerDeltas,
                     backgroundColor: 'rgba(118, 75, 162, 0.7)',
-                    yAxisID: 'y1',
-                },
-                {
-                    label: 'LINE登録（Threads経由）',
-                    data: dailyLineRegistrations,
-                    backgroundColor: 'rgba(255, 193, 7, 0.8)',
                     yAxisID: 'y1',
                 }
             ]
@@ -2102,7 +2090,7 @@ AIに「自分専用のプロンプト生成AI」作ったら、10分が10秒に
                     display: true,
                     position: 'right',
                     min: 0,
-                    title: { display: true, text: 'フォロワー増加 / LINE登録' },
+                    title: { display: true, text: 'フォロワー増加' },
                     grid: { drawOnChartArea: false }
                 }
             }
