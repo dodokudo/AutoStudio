@@ -10,6 +10,7 @@ import { PageSkeleton } from '@/components/ui/page-skeleton';
 import type { LstepAnalyticsData } from '@/lib/lstep/analytics';
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
 import { FunnelAnalysis } from './FunnelAnalysis';
+import { CrossAnalysis, type CrossAnalysisData } from './CrossAnalysis';
 import type { FunnelAnalysisResult } from '@/lib/lstep/funnel';
 
 interface LineDashboardClientProps {
@@ -116,6 +117,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [funnelData, setFunnelData] = useState<FunnelAnalysisResult | null>(null);
   const [funnelLoading, setFunnelLoading] = useState(false);
   const [funnelError, setFunnelError] = useState<string | null>(null);
+  const [crossAnalysisData, setCrossAnalysisData] = useState<CrossAnalysisData | null>(null);
+  const [crossAnalysisLoading, setCrossAnalysisLoading] = useState(false);
+  const [crossAnalysisError, setCrossAnalysisError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LineTabKey>('main');
   const [pendingTab, setPendingTab] = useState<LineTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
@@ -265,6 +269,64 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       controller.abort();
     };
   }, [customEndDate, customStartDate, dateRange, initialData.attributes]);
+
+  // クロス分析データの取得
+  useEffect(() => {
+    let aborted = false;
+
+    let range: { start: string; end: string } | null;
+    if (dateRange === 'all') {
+      // 全期間の場合は過去90日をデフォルトに
+      const end = new Date();
+      const start = new Date(end.getTime());
+      start.setDate(start.getDate() - 89);
+      range = {
+        start: formatIsoDate(start),
+        end: formatIsoDate(end),
+      };
+    } else if (dateRange === 'custom') {
+      if (!customStartDate || !customEndDate) {
+        return () => { aborted = true; };
+      }
+      range = normalizeCustomRange(customStartDate, customEndDate);
+    } else {
+      range = calculatePresetRange(dateRange);
+    }
+
+    if (!range) {
+      return () => { aborted = true; };
+    }
+
+    const controller = new AbortController();
+    setCrossAnalysisLoading(true);
+    setCrossAnalysisError(null);
+
+    fetch(`/api/line/cross-analysis?start=${range.start}&end=${range.end}`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch cross analysis (${response.status})`);
+        }
+        return response.json() as Promise<CrossAnalysisData & { range: { start: string; end: string } }>;
+      })
+      .then((data) => {
+        if (aborted) return;
+        setCrossAnalysisData(data);
+      })
+      .catch((error) => {
+        if (aborted || error.name === 'AbortError') return;
+        setCrossAnalysisError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!aborted) {
+          setCrossAnalysisLoading(false);
+        }
+      });
+
+    return () => {
+      aborted = true;
+      controller.abort();
+    };
+  }, [customEndDate, customStartDate, dateRange]);
 
   useEffect(() => {
     // custom_funnelタブがアクティブ、またはタブが切り替わった時のみフェッチ
@@ -622,6 +684,16 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                   ))}
                 </div>
               </Card>
+
+              {/* クロス分析セクション */}
+              <div className="pt-4">
+                <h2 className="text-xl font-bold text-[color:var(--color-text-primary)] mb-4">クロス分析</h2>
+                <CrossAnalysis
+                  data={crossAnalysisData}
+                  loading={crossAnalysisLoading}
+                  error={crossAnalysisError}
+                />
+              </div>
             </div>
           ) : null}
 

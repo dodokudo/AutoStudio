@@ -550,8 +550,15 @@ ${theme}
     cleanContent = cleanContent.split(fenceToken).join('');
     cleanContent = cleanContent.trim();
 
-    const parsed = JSON.parse(cleanContent);
-    posts.push({ ...parsed, theme });
+    try {
+      const parsed = JSON.parse(cleanContent);
+      posts.push({ ...parsed, theme });
+    } catch (parseError) {
+      console.error('[threads/generate-operation] JSON parse error for theme:', theme);
+      console.error('[threads/generate-operation] Raw content (first 2000 chars):', cleanContent.slice(0, 2000));
+      console.error('[threads/generate-operation] Parse error:', parseError);
+      throw parseError;
+    }
   }
 
   return posts;
