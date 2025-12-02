@@ -10,6 +10,7 @@ import {
   type StoredContentScript,
 } from '@/lib/youtube/bigquery';
 import { getLineDashboardData, countLineSourceRegistrations } from '@/lib/lstep/dashboard';
+import { getLstepAnalyticsByDateRange } from '@/lib/lstep/analytics';
 import { getLinkClicksSummary } from '@/lib/links/analytics';
 import type { YoutubeVideoSummary } from '@/lib/youtube/dashboard';
 import type { ReelHighlight } from '@/lib/instagram/dashboard';
@@ -148,6 +149,7 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
     lineData,
     lineAudienceTotal,
     linkSummary,
+    lineAnalytics,
   ] = await Promise.all([
     getThreadsInsightsData(),
     getThreadsDashboard(),
@@ -156,6 +158,7 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
     getLineDashboardData(PROJECT_ID),
     fetchLineAudienceTotal(PROJECT_ID),
     getLinkClicksSummary({ startDate: periodStart, endDate: periodEnd }),
+    getLstepAnalyticsByDateRange(PROJECT_ID, toDateKey(periodStart), toDateKey(periodEnd)),
   ]);
 
   const youtubeContext = createYoutubeBigQueryContext(PROJECT_ID, process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media');
@@ -176,37 +179,6 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
   const youtubeSubscriberLatest = youtubeData.channelSummary?.subscriberCount ?? 0;
   const youtubeSubscriberDelta = sumValuesWithinRange(youtubeData.overviewSeries, periodStartKey, periodEndKey, (point) => Number(point.subscriberNet ?? 0));
 
-  const lineFollowerLatest = lineAudienceTotal ?? 0;
-  const lineDelta = sumValuesWithinRange(lineData.dailyNewFriends, periodStartKey, periodEndKey, (point) => Number(point.count ?? 0));
-
-  const followerBreakdown: HomeFollowerBreakdown[] = [
-    {
-      platform: 'threads',
-      label: 'Threads',
-      count: threadsFollowerLatest,
-      delta: threadsFollowerDelta,
-    },
-    {
-      platform: 'instagram',
-      label: 'Instagram',
-      count: instagramFollowerLatest,
-      delta: instagramFollowerDelta,
-    },
-    {
-      platform: 'youtube',
-      label: 'YouTube',
-      count: youtubeSubscriberLatest ?? 0,
-      delta: youtubeSubscriberDelta,
-    },
-    {
-      platform: 'line',
-      label: 'LINE',
-      count: lineFollowerLatest ?? 0,
-      delta: lineDelta,
-    },
-  ];
-
-  const totalFollowers = followerBreakdown.reduce((sum, item) => sum + (item.count ?? 0), 0);
   const linkClicksByCategory = new Map(linkSummary.byCategory.map((item) => [item.category, item.clicks]));
   const topClicksDescription = ['threads', 'instagram', 'youtube']
     .map((category) => {
@@ -307,6 +279,40 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
       return { source: label, registrations: count };
     }),
   );
+
+  const lineRegistrationTotal = lineRegistrationBySource.reduce((sum, item) => sum + (item.registrations ?? 0), 0);
+  const lineFollowerLatest = lineAudienceTotal ?? 0;
+  const lineRegistrationPeriodTotal =
+    lineAnalytics?.funnel?.lineRegistration ?? lineRegistrationTotal;
+
+  const followerBreakdown: HomeFollowerBreakdown[] = [
+    {
+      platform: 'threads',
+      label: 'Threads',
+      count: threadsFollowerLatest,
+      delta: threadsFollowerDelta,
+    },
+    {
+      platform: 'instagram',
+      label: 'Instagram',
+      count: instagramFollowerLatest,
+      delta: instagramFollowerDelta,
+    },
+    {
+      platform: 'youtube',
+      label: 'YouTube',
+      count: youtubeSubscriberLatest ?? 0,
+      delta: youtubeSubscriberDelta,
+    },
+    {
+      platform: 'line',
+      label: 'LINE',
+      count: lineFollowerLatest ?? 0,
+      delta: lineRegistrationPeriodTotal,
+    },
+  ];
+
+  const totalFollowers = followerBreakdown.reduce((sum, item) => sum + (item.count ?? 0), 0);
 
   const lineRegistrationMap = new Map(lineRegistrationBySource.map((item) => [item.source, item.registrations]));
 
