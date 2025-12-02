@@ -322,9 +322,7 @@ export default async function ThreadsHome({
     const linkClickConversionRate = safeDivide(totalLinkClicks, profileViewsNumeric);
     const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, totalLinkClicks);
 
-    const rangeDurationDays = selectedRangeWindow
-      ? Math.max(1, Math.round((selectedRangeWindow.end.getTime() - selectedRangeWindow.start.getTime()) / DAY_MS) + 1)
-      : selectedPreset.days;
+    const rangeDurationDays = Math.max(1, Math.round((selectedRangeWindow.end.getTime() - selectedRangeWindow.start.getTime()) / DAY_MS) + 1);
 
     const postsPerDay = rangeDurationDays ? postsCountForRange / rangeDurationDays : null;
 

@@ -19,7 +19,7 @@ import type {
 } from '@/lib/youtube/dashboard';
 import type { StoredContentScript } from '@/lib/youtube/bigquery';
 import { YoutubeViewTrendChart } from './YoutubeViewTrendChart';
-import { UNIFIED_RANGE_OPTIONS, type UnifiedRangePreset } from '@/lib/dateRangePresets';
+import { UNIFIED_RANGE_OPTIONS, isUnifiedRangePreset, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 
 type TabKey = 'scripts' | 'own' | 'competitors';
 
@@ -550,9 +550,9 @@ export function YoutubeDashboardShell({
           className="flex-1 min-w-[240px]"
         />
         <DashboardDateRangePicker
-          options={RANGE_OPTIONS}
+          options={UNIFIED_RANGE_OPTIONS}
           value={selectedRange}
-          onChange={setSelectedRange}
+          onChange={(v) => { if (isUnifiedRangePreset(v)) setSelectedRange(v); }}
           allowCustom={false}
           latestLabel={overview.latestSnapshotDate ? `最新 ${dateFormatter.format(new Date(overview.latestSnapshotDate))}` : undefined}
         />
