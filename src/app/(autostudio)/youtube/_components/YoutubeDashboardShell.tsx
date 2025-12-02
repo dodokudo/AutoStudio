@@ -19,15 +19,9 @@ import type {
 } from '@/lib/youtube/dashboard';
 import type { StoredContentScript } from '@/lib/youtube/bigquery';
 import { YoutubeViewTrendChart } from './YoutubeViewTrendChart';
+import { UNIFIED_RANGE_OPTIONS, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 
 type TabKey = 'scripts' | 'own' | 'competitors';
-
-const RANGE_OPTIONS = [
-  { value: '7d', label: '7日間' },
-  { value: '1d', label: '昨日' },
-  { value: '30d', label: '30日間' },
-  { value: '90d', label: '90日間' },
-];
 
 interface YoutubeDashboardShellProps {
   overview: YoutubeDashboardData['overview'];
@@ -106,7 +100,7 @@ export function YoutubeDashboardShell({
   const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [selectedRange, setSelectedRange] = useState<string>('7d');
+  const [selectedRange, setSelectedRange] = useState<UnifiedRangePreset>('7d');
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(topVideos[0]?.videoId ?? null);
 
   useEffect(() => {

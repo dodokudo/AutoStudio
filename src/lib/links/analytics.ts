@@ -1,4 +1,5 @@
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { formatDateInput } from '@/lib/dateRangePresets';
 
 const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
@@ -95,6 +96,8 @@ export async function getLinkClicksSummary({
   endDate: Date;
 }): Promise<LinkClicksSummary> {
   const bigquery = createBigQueryClient(projectId);
+  const startKey = formatDateInput(startDate);
+  const endKey = formatDateInput(endDate);
 
   const query = `
     WITH latest_links AS (
@@ -108,9 +111,9 @@ export async function getLinkClicksSummary({
     filtered_clicks AS (
       SELECT
         cl.short_link_id,
-        DATE(cl.clicked_at) AS clicked_date
+        DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") AS clicked_date
       FROM \`${projectId}.${dataset}.click_logs\` cl
-      WHERE DATE(cl.clicked_at) BETWEEN @startDate AND @endDate
+      WHERE DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
     )
     SELECT
       COALESCE(ll.category, 'unknown') AS category,
@@ -124,8 +127,8 @@ export async function getLinkClicksSummary({
   const [rows] = await bigquery.query({
     query,
     params: {
-      startDate: startDate.toISOString().slice(0, 10),
-      endDate: endDate.toISOString().slice(0, 10),
+      startDate: startKey,
+      endDate: endKey,
     },
   });
 

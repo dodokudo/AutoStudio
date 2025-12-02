@@ -8,36 +8,18 @@ import { InsightsTab } from "./_components/insights-tab";
 import { CompetitorTab } from "./_components/competitor-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
-import { getThreadsLinkClicksByRange } from "@/lib/links/analytics";
+import { getLinkClicksSummary } from "@/lib/links/analytics";
 import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
+import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
 const PROJECT_ID = resolveProjectId();
 
-const INSIGHTS_RANGE_OPTIONS = [
-  { label: "7日間", value: "7d", days: 7 },
-  { label: "昨日", value: "1d", days: 1 },
-  { label: "3日間", value: "3d", days: 3 },
-  { label: "30日間", value: "30d", days: 30 },
-] as const;
-const RANGE_SELECT_OPTIONS = [
-  { label: "昨日", value: "1d" },
-  { label: "3日間", value: "3d" },
-  { label: "7日間", value: "7d" },
-  { label: "30日間", value: "30d" },
-  { label: "カスタム", value: "custom" },
-];
+const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 
 export const dynamic = 'force-dynamic';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const formatDateKey = (date: Date): string => {
-  const year = date.getUTCFullYear();
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getUTCDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 type ThreadsTabKey = 'post' | 'insights' | 'competitor';
 
@@ -138,58 +120,22 @@ export default async function ThreadsHome({
   const rangeParam = typeof resolvedSearchParams?.range === "string" ? resolvedSearchParams.range : undefined;
   const startParam = typeof resolvedSearchParams?.start === "string" ? resolvedSearchParams.start : undefined;
   const endParam = typeof resolvedSearchParams?.end === "string" ? resolvedSearchParams.end : undefined;
-  const isValidDateString = (value: string | undefined): value is string =>
-    !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const selectedRangeValue: UnifiedRangePreset = isUnifiedRangePreset(rangeParam) ? rangeParam : '7d';
+  const resolvedRange = resolveDateRange(selectedRangeValue, startParam, endParam);
+  const rangeValueForUi = resolvedRange.preset;
+  const customStart = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.start) : startParam;
+  const customEnd = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.end) : endParam;
+  const selectedRangeWindow = { start: resolvedRange.start, end: resolvedRange.end };
 
-  const defaultRange = INSIGHTS_RANGE_OPTIONS.find((option) => option.value === '7d') ?? INSIGHTS_RANGE_OPTIONS[0];
-  const selectedPreset = INSIGHTS_RANGE_OPTIONS.find((option) => option.value === rangeParam) ?? defaultRange;
-  let selectedRangeValue: string = selectedPreset.value;
-  let noteText = `レポート期間: ${selectedPreset.label}`;
-  let customStart: string | undefined = isValidDateString(startParam) ? startParam : undefined;
-  let customEnd: string | undefined = isValidDateString(endParam) ? endParam : undefined;
+  const noteText =
+    resolvedRange.preset === 'all'
+      ? 'レポート期間: 全期間'
+      : `レポート期間: ${formatDateInput(resolvedRange.start)} 〜 ${formatDateInput(resolvedRange.end)}`;
 
-  let insightsOptions: ThreadsInsightsOptions = { rangeDays: selectedPreset.days };
-
-  if (rangeParam === "custom") {
-    selectedRangeValue = "custom";
-    if (customStart && customEnd) {
-      const parsedStart = new Date(`${customStart}T00:00:00Z`);
-      const parsedEnd = new Date(`${customEnd}T00:00:00Z`);
-      if (!Number.isNaN(parsedStart.getTime()) && !Number.isNaN(parsedEnd.getTime())) {
-        let normalizedStart = parsedStart;
-        let normalizedEnd = parsedEnd;
-        if (parsedStart > parsedEnd) {
-          normalizedStart = parsedEnd;
-          normalizedEnd = parsedStart;
-        }
-        customStart = normalizedStart.toISOString().slice(0, 10);
-        customEnd = normalizedEnd.toISOString().slice(0, 10);
-        insightsOptions = { startDate: customStart, endDate: customEnd };
-        noteText = `レポート期間: ${customStart} 〜 ${customEnd}`;
-      } else {
-        noteText = 'レポート期間: カスタム日付を正しく入力してください';
-      }
-    } else {
-      noteText = 'レポート期間: カスタム日付を入力してください';
-    }
-  }
-
-  const selectedRangeWindow = (() => {
-    if (selectedRangeValue === 'custom' && customStart && customEnd) {
-      const startDate = new Date(`${customStart}T00:00:00Z`);
-      const endDate = new Date(`${customEnd}T23:59:59Z`);
-      if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
-        const start = startDate <= endDate ? startDate : endDate;
-        const end = startDate <= endDate ? endDate : startDate;
-        return { start, end } as const;
-      }
-    }
-
-    const days = selectedPreset.days;
-    const now = new Date();
-    const start = new Date(now.getTime() - days * DAY_MS);
-    return { start, end: now } as const;
-  })();
+  const insightsOptions: ThreadsInsightsOptions = {
+    startDate: formatDateInput(resolvedRange.start),
+    endDate: formatDateInput(resolvedRange.end),
+  };
 
   const tabParamRaw = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : undefined;
   const normalizedTabParam = tabParamRaw === 'overview' ? 'post' : tabParamRaw;
@@ -202,8 +148,8 @@ export default async function ThreadsHome({
     const durationMs = Math.max(rangeEndDate.getTime() - rangeStartDate.getTime(), DAY_MS);
     const previousRangeEnd = new Date(rangeStartDate.getTime() - 1);
     const previousRangeStart = new Date(previousRangeEnd.getTime() - durationMs);
-    const postsQueryStartKey = formatDateKey(previousRangeStart);
-    const postsQueryEndKey = formatDateKey(rangeEndDate);
+    const postsQueryStartKey = formatDateInput(previousRangeStart);
+    const postsQueryEndKey = formatDateInput(rangeEndDate);
 
     const [insights, planSummaries, dashboard, insightsActivity, currentClicks, previousClicks] = await Promise.all([
       getThreadsInsights(PROJECT_ID, insightsOptions),
@@ -216,8 +162,8 @@ export default async function ThreadsHome({
         startDate: postsQueryStartKey,
         endDate: postsQueryEndKey,
       }),
-      getThreadsLinkClicksByRange(rangeStartDate, rangeEndDate),
-      getThreadsLinkClicksByRange(previousRangeStart, previousRangeEnd),
+      getLinkClicksSummary({ startDate: rangeStartDate, endDate: rangeEndDate }),
+      getLinkClicksSummary({ startDate: previousRangeStart, endDate: previousRangeEnd }),
     ]);
 
     let lineRegistrationCount: number | null = null;
@@ -229,8 +175,8 @@ export default async function ThreadsHome({
     let previousPostsCount: number | null = null;
 
     if (selectedRangeWindow) {
-      const rangeStartKey = formatDateKey(rangeStartDate);
-      const rangeEndKey = formatDateKey(rangeEndDate);
+      const rangeStartKey = formatDateInput(rangeStartDate);
+      const rangeEndKey = formatDateInput(rangeEndDate);
 
       try {
         lineRegistrationCount = await countLineSourceRegistrations(PROJECT_ID, {
@@ -258,8 +204,11 @@ export default async function ThreadsHome({
       profileViewsForRange = sumImpressionsWithin(rangeStartDate, rangeEndDate);
       previousProfileViews = sumImpressionsWithin(previousRangeStart, previousRangeEnd);
 
-      linkClicksForRange = currentClicks.reduce((sum, item) => sum + item.clicks, 0);
-      previousLinkClicks = previousClicks.reduce((sum, item) => sum + item.clicks, 0);
+      // Threadsカテゴリのみのクリックを取得
+      const currentThreadsClicks = currentClicks.byCategory?.find((item) => item.category === 'threads')?.clicks ?? null;
+      const previousThreadsClicks = previousClicks.byCategory?.find((item) => item.category === 'threads')?.clicks ?? null;
+      linkClicksForRange = currentThreadsClicks;
+      previousLinkClicks = previousThreadsClicks;
 
       const countPostsWithin = (windowStart: Date, windowEnd: Date) =>
         insightsActivity.posts.reduce((total, post) => {
@@ -285,11 +234,6 @@ export default async function ThreadsHome({
         console.error('[threads/page] Failed to load default LINE registrations:', lineError);
       }
     }
-
-    const totalLinkClicks =
-      typeof linkClicksForRange === 'number'
-        ? linkClicksForRange
-        : currentClicks.reduce((sum, item) => sum + item.clicks, 0);
 
     const resolveDeltaTone = (value: number | undefined): 'up' | 'down' | 'neutral' | undefined => {
       if (value === undefined) return undefined;
@@ -346,13 +290,31 @@ export default async function ThreadsHome({
           ? insights.accountSummary.totalProfileViews
           : null;
 
+    // フォロワー増減は期間内のdailyMetricsで算出（Threadsタブ基準）
+    const sortedDailyMetrics = [...insightsActivity.dailyMetrics].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+    const firstPoint = sortedDailyMetrics.find((m) => {
+      const d = new Date(`${m.date}T00:00:00Z`);
+      return d >= rangeStartDate && d <= rangeEndDate;
+    });
+    const lastPoint = [...sortedDailyMetrics].reverse().find((m) => {
+      const d = new Date(`${m.date}T00:00:00Z`);
+      return d >= rangeStartDate && d <= rangeEndDate;
+    });
+    const followersStart = firstPoint?.followers ?? sortedDailyMetrics.at(-1)?.followers ?? null;
+    const followersEnd = lastPoint?.followers ?? sortedDailyMetrics[0]?.followers ?? null;
+    const followerDeltaValue =
+      followersStart !== null && followersEnd !== null ? followersEnd - followersStart : insights.accountSummary.followersChange;
+
     const lineRegistrationsNumeric =
       typeof lineRegistrationCount === 'number' && Number.isFinite(lineRegistrationCount)
         ? lineRegistrationCount
         : null;
 
+    const totalLinkClicks = linkClicksForRange;
     const linkClicksDeltaValue =
-      previousLinkClicks !== null ? totalLinkClicks - previousLinkClicks : null;
+      previousLinkClicks !== null && totalLinkClicks !== null ? totalLinkClicks - previousLinkClicks : null;
 
     const postsDeltaValue =
       previousPostsCount !== null ? postsCountForRange - previousPostsCount : null;
@@ -383,12 +345,10 @@ export default async function ThreadsHome({
         label: '現在のフォロワー数',
         value: formatNumber(insights.accountSummary.averageFollowers),
         delta:
-          insights.accountSummary.followersChange === 0
+          followerDeltaValue === null || followerDeltaValue === 0
             ? undefined
-            : `${insights.accountSummary.followersChange > 0 ? '+' : ''}${formatNumber(
-                insights.accountSummary.followersChange,
-              )}`,
-        deltaTone: resolveDeltaTone(insights.accountSummary.followersChange),
+            : `${followerDeltaValue > 0 ? '+' : ''}${formatNumber(followerDeltaValue)}`,
+        deltaTone: resolveDeltaTone(followerDeltaValue ?? undefined),
       },
       {
         label: '投稿数',
@@ -425,16 +385,16 @@ export default async function ThreadsHome({
     const chartWindowStart = rangeStartDate;
     const chartWindowEnd = rangeEndDate;
 
-    const sortedDailyMetrics = [...insightsActivity.dailyMetrics].sort(
+    const sortedDailyMetricsForChart = [...insightsActivity.dailyMetrics].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 
-    const filteredDailyMetrics = sortedDailyMetrics.filter((metric) => {
+    const filteredDailyMetrics = sortedDailyMetricsForChart.filter((metric) => {
       const metricDate = new Date(`${metric.date}T00:00:00Z`);
       return metricDate.getTime() >= chartWindowStart.getTime() && metricDate.getTime() <= chartWindowEnd.getTime();
     });
 
-    const dailyMetricsForChart = filteredDailyMetrics.length ? filteredDailyMetrics : sortedDailyMetrics;
+    const dailyMetricsForChart = filteredDailyMetrics.length ? filteredDailyMetrics : sortedDailyMetricsForChart;
 
     const impressionsByDate = insightsActivity.posts.reduce<Record<string, number>>((acc, post) => {
       const postedAt = new Date(post.postedAt);
@@ -449,8 +409,8 @@ export default async function ThreadsHome({
     try {
       const lineRegistrationSeries = await listLineSourceRegistrations(PROJECT_ID, {
         sourceName: 'Threads',
-        startDate: formatDateKey(chartWindowStart),
-        endDate: formatDateKey(chartWindowEnd),
+        startDate: formatDateInput(chartWindowStart),
+        endDate: formatDateInput(chartWindowEnd),
       });
       lineRegistrationsByDate = lineRegistrationSeries.reduce<Record<string, number>>((acc, point) => {
         acc[point.date] = point.count;
@@ -527,9 +487,11 @@ export default async function ThreadsHome({
     const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
 
     const sharedParams = new URLSearchParams();
-    if (rangeParam) sharedParams.set('range', rangeParam);
-    if (customStart) sharedParams.set('start', customStart);
-    if (customEnd) sharedParams.set('end', customEnd);
+    if (rangeValueForUi) sharedParams.set('range', rangeValueForUi);
+    if (rangeValueForUi === 'custom') {
+      if (customStart) sharedParams.set('start', customStart);
+      if (customEnd) sharedParams.set('end', customEnd);
+    }
 
     const tabItems = (
       [
@@ -554,7 +516,7 @@ export default async function ThreadsHome({
         rangeSelector={
           <InsightsRangeSelector
             options={rangeSelectorOptions}
-            value={selectedRangeValue}
+            value={rangeValueForUi}
             customStart={customStart}
             customEnd={customEnd}
           />
@@ -575,8 +537,7 @@ export default async function ThreadsHome({
           <InsightsTab
             posts={insightsActivity.posts}
             dailyMetrics={insightsActivity.dailyMetrics}
-            rangePresets={INSIGHTS_RANGE_OPTIONS.map(({ value, days }) => ({ value, days }))}
-            selectedRangeValue={selectedRangeValue}
+            selectedRangeValue={rangeValueForUi}
             customStart={customStart}
             customEnd={customEnd}
             noteText={noteText}

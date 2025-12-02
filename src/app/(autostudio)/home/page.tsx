@@ -1,34 +1,38 @@
 import { Banner } from '@/components/ui/banner';
 import { getHomeDashboardData } from '@/lib/home/dashboard';
 import { HomeDashboardShell } from './_components/HomeDashboardShell';
+import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 export const dynamic = 'force-dynamic';
-
-const RANGE_PRESETS = [
-  { value: '7d', label: '7日間', days: 7 },
-  { value: '1d', label: '昨日', days: 1 },
-  { value: '30d', label: '30日間', days: 30 },
-  { value: '90d', label: '90日間', days: 90 },
-] as const;
 
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[]>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
-  const rangeParam = typeof searchParams?.range === 'string' ? searchParams.range : undefined;
-  const defaultRangeOption = RANGE_PRESETS.find((option) => option.value === '7d') ?? RANGE_PRESETS[0];
-  const selectedRangeOption = RANGE_PRESETS.find((option) => option.value === rangeParam) ?? defaultRangeOption;
+  const params = await searchParams;
+  const rangeParam = typeof params?.range === 'string' ? params.range : undefined;
+  const startParam = typeof params?.start === 'string' ? params.start : undefined;
+  const endParam = typeof params?.end === 'string' ? params.end : undefined;
+
+  const selectedValue = isUnifiedRangePreset(rangeParam) ? rangeParam : '7d';
+  const resolvedRange = resolveDateRange(selectedValue, startParam, endParam);
 
   try {
-    const data = await getHomeDashboardData({ rangeDays: selectedRangeOption.days, rangeValue: selectedRangeOption.value });
+    const data = await getHomeDashboardData({
+      startDate: resolvedRange.start,
+      endDate: resolvedRange.end,
+      rangeValue: resolvedRange.preset,
+    });
 
     return (
       <div className="section-stack">
         <HomeDashboardShell
           data={data}
-          rangeOptions={RANGE_PRESETS.map(({ value, label }) => ({ value, label }))}
-          selectedRange={selectedRangeOption.value}
+          rangeOptions={UNIFIED_RANGE_OPTIONS}
+          selectedRange={resolvedRange.preset}
+          customStart={startParam}
+          customEnd={endParam}
         />
       </div>
     );

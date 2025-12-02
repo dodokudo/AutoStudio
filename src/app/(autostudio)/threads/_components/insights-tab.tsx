@@ -7,16 +7,11 @@ import { Card } from '@/components/ui/card';
 import { AccountInsightsCard } from './account-insights-card';
 import { TopContentCard } from './top-content-card';
 import { TemplateSummary } from './template-summary';
-
-interface RangePreset {
-  value: string;
-  days: number;
-}
+import { resolveDateRange, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 interface InsightsTabProps {
   posts: PostInsight[];
   dailyMetrics: DailyFollowerMetric[];
-  rangePresets: RangePreset[];
   selectedRangeValue: string;
   customStart?: string;
   customEnd?: string;
@@ -51,7 +46,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function InsightsTab({
   posts,
   dailyMetrics,
-  rangePresets,
   selectedRangeValue,
   customStart,
   customEnd,
@@ -61,27 +55,10 @@ export function InsightsTab({
   const [topContentSort, setTopContentSort] = useState<TopContentSort>('views');
 
   const resolveRange = useMemo(() => {
-    if (selectedRangeValue === 'custom' && customStart && customEnd) {
-      const start = new Date(`${customStart}T00:00:00Z`);
-      const end = new Date(`${customEnd}T23:59:59Z`);
-      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-        const orderedStart = start <= end ? start : end;
-        const orderedEnd = start <= end ? end : start;
-        return {
-          start: orderedStart,
-          end: orderedEnd,
-        } as const;
-      }
-    }
-
-    const preset = rangePresets.find((item) => item.value === selectedRangeValue) ?? rangePresets[0];
-    const now = new Date();
-    const start = new Date(now.getTime() - preset.days * DAY_MS);
-    return {
-      start,
-      end: now,
-    } as const;
-  }, [selectedRangeValue, customStart, customEnd, rangePresets]);
+    const presetValue = isUnifiedRangePreset(selectedRangeValue) ? selectedRangeValue : '7d';
+    const { start, end } = resolveDateRange(presetValue, customStart, customEnd);
+    return { start, end } as const;
+  }, [selectedRangeValue, customStart, customEnd]);
 
   const currentRange = useMemo(() => {
     const { start, end } = resolveRange;

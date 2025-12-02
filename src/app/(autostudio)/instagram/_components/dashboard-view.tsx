@@ -24,13 +24,17 @@ interface Props {
 }
 
 const presetLabels: Record<DatePreset, string> = {
-  yesterday: '昨日',
+  '1d': '昨日',
+  '3d': '過去3日',
   'this-week': '今週',
+  '7d': '過去7日',
   'last-week': '先週',
   'this-month': '今月',
+  '30d': '過去30日',
   'last-month': '先月',
-  custom: 'カスタム',
+  '90d': '過去90日',
   all: '全期間',
+  custom: 'カスタム',
 };
 
 const formatDateForInput = (date?: Date | null): string => {

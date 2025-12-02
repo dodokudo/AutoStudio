@@ -12,6 +12,7 @@ import {
 import { getLineDashboardData, countLineSourceRegistrations } from '@/lib/lstep/dashboard';
 import { getLstepAnalyticsByDateRange } from '@/lib/lstep/analytics';
 import { getLinkClicksSummary } from '@/lib/links/analytics';
+import { formatDateInput } from '@/lib/dateRangePresets';
 import type { YoutubeVideoSummary } from '@/lib/youtube/dashboard';
 import type { ReelHighlight } from '@/lib/instagram/dashboard';
 import type { PostInsight } from '@/lib/threadsInsightsData';
@@ -77,9 +78,7 @@ export interface HomeDashboardData {
   platformSummaries: HomePlatformSummary[];
 }
 
-function toDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
+const toDateKey = (date: Date): string => formatDateInput(date);
 
 function formatNumberIntl(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);
@@ -134,12 +133,22 @@ function sumValuesWithinRange<T extends { date: string }>(
     .reduce((sum, item) => sum + (getValue(item) || 0), 0);
 }
 
-export async function getHomeDashboardData(options: { rangeDays?: number; rangeValue?: string } = {}): Promise<HomeDashboardData> {
+export async function getHomeDashboardData(options: {
+  rangeDays?: number;
+  rangeValue?: string;
+  startDate?: Date;
+  endDate?: Date;
+} = {}): Promise<HomeDashboardData> {
   const rangeDays = options.rangeDays ?? DEFAULT_RANGE_DAYS;
   const selectedRangeValue = options.rangeValue ?? `${rangeDays}d`;
-  const periodEnd = new Date();
-  const periodStart = new Date(periodEnd.getTime());
-  periodStart.setUTCDate(periodStart.getUTCDate() - rangeDays + 1);
+  const periodEnd = options.endDate ? new Date(options.endDate) : new Date();
+  const periodStart = options.startDate
+    ? new Date(options.startDate)
+    : (() => {
+        const start = new Date(periodEnd.getTime());
+        start.setUTCDate(start.getUTCDate() - rangeDays + 1);
+        return start;
+      })();
 
   const [
     threadsInsights,
@@ -267,6 +276,8 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
     { key: 'Threads', label: 'Threads' },
     { key: 'Instagram', label: 'Instagram' },
     { key: 'Youtube', label: 'YouTube' },
+    { key: 'Organic', label: 'オーガニック' },
+    { key: 'Other', label: 'その他' },
   ];
 
   const lineRegistrationBySource = await Promise.all(
@@ -320,6 +331,7 @@ export async function getHomeDashboardData(options: { rangeDays?: number; rangeV
     const impressions = Number(post.insights?.impressions ?? 0);
     return sum + (Number.isFinite(impressions) ? impressions : 0);
   }, 0);
+
   const threadsLinkClicks = linkClicksByCategory.get('threads') ?? 0;
   const threadsLineRegistrations = lineRegistrationMap.get('Threads') ?? 0;
 

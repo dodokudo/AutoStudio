@@ -12,21 +12,11 @@ import { DailyRegistrationsTable } from './DailyRegistrationsTable';
 import { FunnelAnalysis } from './FunnelAnalysis';
 import { CrossAnalysis, type CrossAnalysisData } from './CrossAnalysis';
 import type { FunnelAnalysisResult } from '@/lib/lstep/funnel';
+import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, type UnifiedRangePreset, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 interface LineDashboardClientProps {
   initialData: LstepAnalyticsData;
 }
-
-type DateRangeFilter = 'yesterday' | '3days' | '7days' | '30days' | '90days' | 'all' | 'custom';
-
-const RANGE_PRESETS: Array<{ id: Exclude<DateRangeFilter, 'custom'>; label: string }> = [
-  { id: 'yesterday', label: '昨日' },
-  { id: '3days', label: '過去3日' },
-  { id: '7days', label: '過去7日' },
-  { id: '30days', label: '過去30日' },
-  { id: '90days', label: '過去90日' },
-  { id: 'all', label: '全期間' },
-];
 
 const LINE_TABS = [
   { id: 'main', label: 'メイン' },
@@ -60,52 +50,8 @@ function formatDateLabel(value: string): string {
   return dateFormatter.format(new Date(value));
 }
 
-function formatIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function normalizeCustomRange(start: string, end: string): { start: string; end: string } | null {
-  if (!start || !end) return null;
-  const startDate = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T00:00:00`);
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-    return null;
-  }
-  if (startDate.getTime() > endDate.getTime()) {
-    return { start: formatIsoDate(endDate), end: formatIsoDate(startDate) };
-  }
-  return { start: formatIsoDate(startDate), end: formatIsoDate(endDate) };
-}
-
-function calculatePresetRange(range: DateRangeFilter): { start: string; end: string } | null {
-  const daysMap: Record<DateRangeFilter, number | null> = {
-    yesterday: 1,
-    '3days': 3,
-    '7days': 7,
-    '30days': 30,
-    '90days': 90,
-    all: null,
-    custom: null,
-  };
-
-  const days = daysMap[range];
-  if (!days) return null;
-
-  const end = new Date();
-  const start = new Date(end.getTime());
-  start.setDate(start.getDate() - (days - 1));
-
-  return {
-    start: formatIsoDate(start),
-    end: formatIsoDate(end),
-  };
-}
-
 export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
-  const [dateRange, setDateRange] = useState<DateRangeFilter>('3days');
+  const [dateRange, setDateRange] = useState<UnifiedRangePreset>('7d');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [sourceStats, setSourceStats] = useState(initialData.sources);
@@ -128,28 +74,15 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   useEffect(() => {
     let aborted = false;
 
-    if (dateRange === 'all') {
+    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+    const { start, end, preset } = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const startKey = formatDateInput(start);
+    const endKey = formatDateInput(end);
+
+    if (preset === 'all') {
       setSourceStats(initialData.sources);
       setSourcesLoading(false);
       setSourcesError(null);
-      return () => {
-        aborted = true;
-      };
-    }
-
-    let range: { start: string; end: string } | null;
-    if (dateRange === 'custom') {
-      if (!customStartDate || !customEndDate) {
-        return () => {
-          aborted = true;
-        };
-      }
-      range = normalizeCustomRange(customStartDate, customEndDate);
-    } else {
-      range = calculatePresetRange(dateRange);
-    }
-
-    if (!range) {
       return () => {
         aborted = true;
       };
@@ -159,7 +92,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     setSourcesLoading(true);
     setSourcesError(null);
 
-    fetch(`/api/line/source-counts?start=${range.start}&end=${range.end}`, { signal: controller.signal })
+    fetch(`/api/line/source-counts?start=${startKey}&end=${endKey}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Failed to fetch source counts (${response.status})`);
@@ -210,28 +143,15 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   useEffect(() => {
     let aborted = false;
 
-    if (dateRange === 'all') {
+    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+    const { start, end, preset } = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const startKey = formatDateInput(start);
+    const endKey = formatDateInput(end);
+
+    if (preset === 'all') {
       setAttributeStats(initialData.attributes);
       setAttributesLoading(false);
       setAttributesError(null);
-      return () => {
-        aborted = true;
-      };
-    }
-
-    let range: { start: string; end: string } | null;
-    if (dateRange === 'custom') {
-      if (!customStartDate || !customEndDate) {
-        return () => {
-          aborted = true;
-        };
-      }
-      range = normalizeCustomRange(customStartDate, customEndDate);
-    } else {
-      range = calculatePresetRange(dateRange);
-    }
-
-    if (!range) {
       return () => {
         aborted = true;
       };
@@ -241,7 +161,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     setAttributesLoading(true);
     setAttributesError(null);
 
-    fetch(`/api/line/attributes?start=${range.start}&end=${range.end}`, { signal: controller.signal })
+    fetch(`/api/line/attributes?start=${startKey}&end=${endKey}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Failed to fetch attributes (${response.status})`);
@@ -274,34 +194,16 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   useEffect(() => {
     let aborted = false;
 
-    let range: { start: string; end: string } | null;
-    if (dateRange === 'all') {
-      // 全期間の場合は過去90日をデフォルトに
-      const end = new Date();
-      const start = new Date(end.getTime());
-      start.setDate(start.getDate() - 89);
-      range = {
-        start: formatIsoDate(start),
-        end: formatIsoDate(end),
-      };
-    } else if (dateRange === 'custom') {
-      if (!customStartDate || !customEndDate) {
-        return () => { aborted = true; };
-      }
-      range = normalizeCustomRange(customStartDate, customEndDate);
-    } else {
-      range = calculatePresetRange(dateRange);
-    }
-
-    if (!range) {
-      return () => { aborted = true; };
-    }
+    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+    const { start, end, preset } = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const startKey = formatDateInput(start);
+    const endKey = formatDateInput(end);
 
     const controller = new AbortController();
     setCrossAnalysisLoading(true);
     setCrossAnalysisError(null);
 
-    fetch(`/api/line/cross-analysis?start=${range.start}&end=${range.end}`, { signal: controller.signal })
+    fetch(`/api/line/cross-analysis?start=${startKey}&end=${endKey}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) {
           throw new Error(`Failed to fetch cross analysis (${response.status})`);
@@ -339,22 +241,16 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     setFunnelLoading(true);
     setFunnelError(null);
 
-    let range: { start: string; end: string } | null = null;
-    if (dateRange === 'custom') {
-      if (customStartDate && customEndDate) {
-        range = normalizeCustomRange(customStartDate, customEndDate);
-      }
-    } else if (dateRange !== 'all') {
-      range = calculatePresetRange(dateRange);
-    }
+    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+    const { start, end } = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const startKey = formatDateInput(start);
+    const endKey = formatDateInput(end);
 
-    const body = range
-      ? {
-          preset: 'igln',
-          startDate: range.start,
-          endDate: range.end,
-        }
-      : { preset: 'igln' };
+    const body = {
+      preset: 'igln',
+      startDate: startKey,
+      endDate: endKey,
+    };
 
     fetch('/api/line/funnel', {
       method: 'POST',
@@ -400,29 +296,14 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   }, [isPending, isTabLoading]);
 
   const filteredAnalytics = useMemo(() => {
-    let dailyDataInRange = initialData.dailyRegistrations;
+    const resolved = resolveDateRange(dateRange, customStartDate, customEndDate);
+    const rangeStart = resolved.start;
+    const rangeEnd = resolved.end;
 
-    if (dateRange === 'custom' && customStartDate && customEndDate) {
-      const start = new Date(customStartDate);
-      const end = new Date(customEndDate);
-      dailyDataInRange = initialData.dailyRegistrations.filter((item) => {
-        const target = new Date(item.date);
-        return target >= start && target <= end;
-      });
-    } else if (dateRange !== 'all') {
-      const daysLookup: Record<Exclude<DateRangeFilter, 'custom'>, number | null> = {
-        yesterday: 1,
-        '3days': 3,
-        '7days': 7,
-        '30days': 30,
-        '90days': 90,
-        all: null,
-      };
-      const take = daysLookup[dateRange as Exclude<DateRangeFilter, 'custom'>];
-      if (take) {
-        dailyDataInRange = initialData.dailyRegistrations.slice(0, take);
-      }
-    }
+    const dailyDataInRange = initialData.dailyRegistrations.filter((item) => {
+      const target = new Date(item.date);
+      return target >= rangeStart && target <= rangeEnd;
+    });
 
     const totalRegistrations = dailyDataInRange.reduce((sum, day) => sum + day.registrations, 0);
     const totalSurveyCompleted = dailyDataInRange.reduce((sum, day) => sum + day.surveyCompleted, 0);
@@ -431,12 +312,12 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     const registrationRatio = baseRegistrations > 0 ? totalRegistrations / baseRegistrations : 0;
 
     const surveyEnteredEstimate =
-      dateRange === 'all'
+      resolved.preset === 'all'
         ? initialData.funnel.surveyEntered
         : Math.round(initialData.funnel.surveyEntered * registrationRatio);
 
     const surveyCompletedValue =
-      dateRange === 'all' ? initialData.funnel.surveyCompleted : totalSurveyCompleted;
+      resolved.preset === 'all' ? initialData.funnel.surveyCompleted : totalSurveyCompleted;
 
     const funnel = {
       lineRegistration: totalRegistrations,
@@ -545,14 +426,12 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     [filteredAnalytics.attributes],
   );
 
-  const datePickerOptions = useMemo(
-    () => [...RANGE_PRESETS.map((preset) => ({ value: preset.id, label: preset.label })), { value: 'custom', label: 'カスタム' }],
-    [],
-  );
+  const datePickerOptions = useMemo(() => UNIFIED_RANGE_OPTIONS, []);
 
   const handleRangeSelect = (nextValue: string) => {
-    setDateRange(nextValue as DateRangeFilter);
-    if (nextValue !== 'custom') {
+    const preset = isUnifiedRangePreset(nextValue) ? nextValue : '7d';
+    setDateRange(preset);
+    if (preset !== 'custom') {
       setCustomStartDate('');
       setCustomEndDate('');
     }

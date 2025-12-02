@@ -6,6 +6,7 @@ import LoadingScreen from '@/components/LoadingScreen';
 import { useDateRange, DatePreset } from '@/lib/dateRangeStore';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
+import { UNIFIED_RANGE_OPTIONS } from '@/lib/dateRangePresets';
 import {
   ComposedChart,
   Bar,
@@ -37,13 +38,17 @@ const TAB_SKELETON_SECTIONS: Record<InstagramTabKey, number> = {
 const TAB_SKELETON_DELAY_MS = 240;
 
 const presetLabels: Record<DatePreset, string> = {
-  yesterday: '昨日',
+  '1d': '昨日',
+  '3d': '過去3日',
   'this-week': '今週',
+  '7d': '過去7日',
   'last-week': '先週',
   'this-month': '今月',
+  '30d': '過去30日',
   'last-month': '先月',
-  custom: 'カスタム',
+  '90d': '過去90日',
   all: '全期間',
+  custom: 'カスタム',
 };
 
 const formatDateForInput = (date?: Date | null): string => {
@@ -420,11 +425,7 @@ export function InstagramDashboardView({ data }: Props) {
       : presetLabels[dateRange.preset];
 
   const datePickerOptions = useMemo(
-    () =>
-      (Object.keys(presetLabels) as Array<DatePreset>).map((preset) => ({
-        value: preset,
-        label: presetLabels[preset],
-      })),
+    () => UNIFIED_RANGE_OPTIONS.map(({ value, label }) => ({ value, label })),
     [],
   );
 

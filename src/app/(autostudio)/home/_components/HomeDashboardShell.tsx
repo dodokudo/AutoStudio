@@ -17,6 +17,8 @@ interface HomeDashboardShellProps {
   data: HomeDashboardData;
   rangeOptions: Array<{ value: string; label: string }>;
   selectedRange: string;
+  customStart?: string;
+  customEnd?: string;
 }
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
@@ -45,7 +47,7 @@ type TopCard = {
 const HOME_TAB_ITEMS = [{ id: 'home', label: 'ホーム' }];
 const NOOP = () => {};
 
-export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDashboardShellProps) {
+export function HomeDashboardShell({ data, rangeOptions, selectedRange, customStart, customEnd }: HomeDashboardShellProps) {
   const { followerBreakdown, highlights, tasks, lineFunnel, lineRegistrationBySource, clickSummary, platformSummaries } = data;
   const router = useRouter();
   const pathname = usePathname();
@@ -53,10 +55,27 @@ export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDa
 
   const handleRangeChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (value === rangeOptions[0]?.value) {
-      params.delete('range');
+    params.set('range', value);
+    if (value !== 'custom') {
+      params.delete('start');
+      params.delete('end');
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  const handleCustomChange = (start: string, end: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('range', 'custom');
+    if (start) {
+      params.set('start', start);
     } else {
-      params.set('range', value);
+      params.delete('start');
+    }
+    if (end) {
+      params.set('end', end);
+    } else {
+      params.delete('end');
     }
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
@@ -98,7 +117,10 @@ export function HomeDashboardShell({ data, rangeOptions, selectedRange }: HomeDa
           options={rangeOptions}
           value={selectedRange}
           onChange={handleRangeChange}
-          allowCustom={false}
+          allowCustom
+          customStart={customStart}
+          customEnd={customEnd}
+          onCustomChange={handleCustomChange}
           latestLabel={`最新 ${data.period.end}`}
         />
       </div>

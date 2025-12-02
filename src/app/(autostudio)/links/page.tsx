@@ -5,88 +5,7 @@ import { LinksTabShell, type LinksTabKey } from './_components/links-tab-shell';
 import { LinksInsightsDashboard } from './_components/links-insights-dashboard';
 import { LinksRangeSelector } from './_components/links-range-selector';
 import { LinkFunnelsManager } from './_components/link-funnels-manager';
-
-type RangeValue = 'yesterday' | '3d' | '7d' | 'month' | 'custom';
-
-const DEFAULT_RANGE: RangeValue = '7d';
-
-const RANGE_OPTIONS: Array<{ value: RangeValue; label: string }> = [
-  { value: 'yesterday', label: '昨日' },
-  { value: '3d', label: '過去3日間' },
-  { value: '7d', label: '過去7日間' },
-  { value: 'month', label: '今月' },
-  { value: 'custom', label: 'カスタム' },
-];
-
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-function isValidDate(value?: string): value is string {
-  return typeof value === 'string' && DATE_PATTERN.test(value);
-}
-
-function toJstDate(date: Date): Date {
-  return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
-}
-
-function formatDateJst(date: Date): string {
-  return date
-    .toLocaleDateString('ja-JP', {
-      timeZone: 'Asia/Tokyo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-    .replace(/\//g, '-');
-}
-
-function addDays(date: Date, diff: number): Date {
-  const next = new Date(date);
-  next.setDate(next.getDate() + diff);
-  return next;
-}
-
-function resolveRangeDates(range: RangeValue, customStart?: string, customEnd?: string): { startDate: string; endDate: string } {
-  const today = toJstDate(new Date());
-  const todayDateString = formatDateJst(today);
-
-  switch (range) {
-    case 'yesterday': {
-      const yesterday = addDays(today, -1);
-      const date = formatDateJst(yesterday);
-      return { startDate: date, endDate: date };
-    }
-    case '3d': {
-      const end = today;
-      const start = addDays(today, -2);
-      return { startDate: formatDateJst(start), endDate: formatDateJst(end) };
-    }
-    case '7d': {
-      const end = today;
-      const start = addDays(today, -6);
-      return { startDate: formatDateJst(start), endDate: formatDateJst(end) };
-    }
-    case 'month': {
-      const end = today;
-      const start = new Date(today);
-      start.setDate(1);
-      return { startDate: formatDateJst(start), endDate: formatDateJst(end) };
-    }
-    case 'custom': {
-      if (customStart && customEnd) {
-        return { startDate: customStart, endDate: customEnd };
-      }
-      if (customStart) {
-        return { startDate: customStart, endDate: customStart };
-      }
-      if (customEnd) {
-        return { startDate: customEnd, endDate: customEnd };
-      }
-      return resolveRangeDates(DEFAULT_RANGE);
-    }
-    default:
-      return { startDate: todayDateString, endDate: todayDateString };
-  }
-}
+import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, isUnifiedRangePreset, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,18 +28,16 @@ export default async function LinksPage({ searchParams }: LinksPageProps) {
     href: `?tab=${tab}`,
   }));
 
-  const rangeParam = typeof resolvedParams.range === 'string' ? (resolvedParams.range as RangeValue) : undefined;
-  const allowedRangeValues = RANGE_OPTIONS.map((option) => option.value);
-  const rangeValue: RangeValue = rangeParam && allowedRangeValues.includes(rangeParam) ? rangeParam : DEFAULT_RANGE;
+  const rangeParam = typeof resolvedParams.range === 'string' ? resolvedParams.range : undefined;
+  const rangeValue: UnifiedRangePreset = isUnifiedRangePreset(rangeParam) ? rangeParam : '7d';
 
-  let customStart = isValidDate(resolvedParams.start) ? resolvedParams.start : undefined;
-  let customEnd = isValidDate(resolvedParams.end) ? resolvedParams.end : undefined;
-  if (customStart && customEnd && customStart > customEnd) {
-    [customStart, customEnd] = [customEnd, customStart];
-  }
+  const customStart = resolvedParams.start;
+  const customEnd = resolvedParams.end;
 
-  const { startDate, endDate } = resolveRangeDates(rangeValue, customStart, customEnd);
-  const periodLabel = `${startDate} 〜 ${endDate}`;
+  const { start: startDateObj, end: endDateObj, preset } = resolveDateRange(rangeValue, customStart, customEnd);
+  const startDate = formatDateInput(startDateObj);
+  const endDate = formatDateInput(endDateObj);
+  const periodLabel = preset === 'all' ? `全期間 (${startDate} 〜 ${endDate})` : `${startDate} 〜 ${endDate}`;
 
   const needInsights = activeTab === 'insights';
   const insights = needInsights ? await getLinkInsightsOverview({ startDate, endDate }) : null;
@@ -132,7 +49,7 @@ export default async function LinksPage({ searchParams }: LinksPageProps) {
       toolbar={
         activeTab !== 'manage' ? (
           <LinksRangeSelector
-            options={RANGE_OPTIONS}
+            options={UNIFIED_RANGE_OPTIONS}
             value={rangeValue}
             customStart={customStart}
             customEnd={customEnd}
