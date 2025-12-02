@@ -195,38 +195,98 @@ const THREADS_THEMES = [
   'Threadsのネタ切れ対策、マトリクス法で無限にネタを出す方法',
   'Threadsのジャンル別NGパターン、避けるべき表現集',
   'Threadsの差別化ポイント、競合と被らないテーマの見つけ方',
+
+  // 否定・警告系テーマ（40個）- 門口パターン用
+  // いいね周り・フォロー周り系
+  'Threadsのいいね周り、時間の無駄すぎる理由',
+  'Threadsのフォロー周り、やめたらフォロワー増えた話',
+  'Threadsのコメント周り、効果ゼロどころか逆効果',
+  'Threadsのいいね周り30分、その時間で投稿30本作れます',
+  'Threadsの相互フォロー、アカウント壊れる原因No.1',
+  'Threadsのインサイト祭り、参加したらアカウント終了',
+  'Threadsのフォロバ企画、質の低いフォロワーしか増えない',
+  'Threadsの自分からアクション、アルゴリズムに評価されません',
+
+  // 指標の勘違い系
+  'Threadsのいいね数、閲覧数と全く別の指標です',
+  'Threadsの閲覧数、伸びてもフォロワー増えない理由',
+  'Threadsのフォロワー数、増えても売上ゼロの人が多い理由',
+  'Threadsのフォロワー1万人、LINE登録10件の現実',
+  'Threadsのバズ投稿、フォロワー増加に繋がらない真実',
+  'Threadsのコメント数、多くても売れない理由',
+  'Threadsのリポスト数、追いかけても意味ない理由',
+  'Threadsの見せかけの数字、騙されてる人多すぎ',
+
+  // 間違った行動系
+  'Threadsの冒頭1行目、適当に書いてる人終わってます',
+  'Threadsの日常投稿、一貫性ないアカウントは伸びない',
+  'Threadsのバズ投稿真似、表面だけパクっても無意味',
+  'Threadsの短文投稿量産、価値が薄くてフォローされない',
+  'Threadsの毎日投稿、疲弊して質が落ちたら本末転倒',
+  'Threadsの投稿数信仰、量より質が正解な理由',
+  'Threadsの完璧主義、投稿できないなら意味ない',
+  'Threadsのネタ切れ、同じ話を切り口変えて何度も使う',
+
+  // 間違った発信者・情報源系
+  'Threadsのいいね周り推奨発信者、自分は広告で伸ばしてる',
+  'Threadsのフォロー周り推奨、教えてる本人が結果出てない',
+  'Threadsの古いノウハウ、2024年以前の情報は使えない',
+  'Threadsの有料教材、無料で十分な情報ばかり',
+  'Threadsのインフルエンサー、フォロワー数だけ多くて売上ゼロ',
+  'Threadsの成功者の真似、表面だけ見ても再現できない',
+  'Threadsの〇〇するだけで伸びる系、全部嘘です',
+  'Threadsの楽して伸ばす系、存在しません',
+
+  // アカウント崩壊系
+  'Threadsのアカウント崩壊、相互フォローが原因の9割',
+  'Threadsのシャドウバン、いいね周りが引き金になる',
+  'Threadsのエンゲージメント低下、質の低いフォロワーが原因',
+  'Threadsの投稿が伸びなくなった、アカウント評価が下がってる',
+  'Threadsのおすすめに載らない、アルゴリズムに嫌われてる',
+  'Threadsのリーチ激減、やってはいけない行動3つ',
+  'Threadsのアカウント作り直し、その前にやるべきこと',
+  'Threadsの低迷期、抜け出す方法は1つだけ',
 ];
 
-// フックパターン（門口さん・スギさんの分析を反映した7パターン）
-type HookPattern = 'warning' | 'number' | 'title' | 'emotion' | 'story' | 'authority' | 'contrast';
+// フックパターン（門口さん・スギさんの分析を反映した8パターン）
+type HookPattern = 'warning' | 'number' | 'title' | 'emotion' | 'story' | 'authority' | 'contrast' | 'denial';
 
 const HOOK_PATTERNS: Array<{ type: HookPattern; weight: number; templates: string[] }> = [
   {
+    type: 'denial',
+    weight: 35, // 35%の確率（門口パターン: 否定・権威型）
+    templates: [
+      'まだ{theme}してる人、12月で終了です',
+      '{theme}してる人、完全に時代遅れです。全部ズレてます',
+      '{theme}、まだやってる人マジで終わってます',
+      'やばいです。{theme}してる人、アカウント壊れます',
+      '【大至急】{theme}してる人、今すぐやめてください',
+      '{theme}、832投稿分析したら完全に逆効果でした',
+    ],
+  },
+  {
     type: 'warning',
-    weight: 35, // 35%の確率（門口さんパターン: 警告型65%を反映）
+    weight: 20, // 20%の確率（警告型）
     templates: [
       '{theme}、9割の人が間違ってます',
-      '{theme}、完全に時代遅れです',
       '{theme}、知らない人多すぎて損してます',
       '{theme}、やってない人マジでもったいないです',
       '{theme}してる人、アカウント伸びません',
-      '{theme}、今すぐやめないと終わります',
     ],
   },
   {
     type: 'number',
-    weight: 20, // 20%の確率（スギさんパターン: データ型35%を反映）
+    weight: 15, // 15%の確率（データ型）
     templates: [
-      '{theme}、1ヶ月でフォロワー1600名増えました',
-      '{theme}、126万インプレッション達成した方法',
-      '{theme}、498件のデータ分析で判明しました',
+      '{theme}、2ヶ月でフォロワー2500名増えました',
+      '{theme}、167万インプレッション達成した方法',
+      '{theme}、832件のデータ分析で判明しました',
       '{theme}、平均インプレッションが7.3倍になった話',
-      '{theme}、4ヶ月で1万人達成した全手法',
     ],
   },
   {
     type: 'authority',
-    weight: 15, // 15%の確率（門口さんパターン: 権威型20%を反映）
+    weight: 10, // 10%の確率（権威型）
     templates: [
       'Threadsの公式発表によると、{theme}',
       'Meta最新アップデート、{theme}',
@@ -236,7 +296,7 @@ const HOOK_PATTERNS: Array<{ type: HookPattern; weight: number; templates: strin
   },
   {
     type: 'emotion',
-    weight: 10, // 10%の確率（スギさんパターン: 感情型15%を反映）
+    weight: 5, // 5%の確率（感情型）
     templates: [
       '私が絶対やらない{theme}',
       '正直、{theme}は大嫌いです',
@@ -246,7 +306,7 @@ const HOOK_PATTERNS: Array<{ type: HookPattern; weight: number; templates: strin
   },
   {
     type: 'title',
-    weight: 10, // 10%の確率
+    weight: 5, // 5%の確率（タイトル型）
     templates: [
       '【緊急】{theme}',
       '【知らないとヤバい】{theme}',
@@ -257,17 +317,17 @@ const HOOK_PATTERNS: Array<{ type: HookPattern; weight: number; templates: strin
   },
   {
     type: 'story',
-    weight: 5, // 5%の確率（スギさんパターン: ストーリー型5%を反映）
+    weight: 5, // 5%の確率（ストーリー型）
     templates: [
       '私のThreads運用、{theme}で変わりました',
       'フォロワー100人の頃、{theme}を知らなかった',
-      '{theme}を実践したら、人生変わった',
+      '{theme}を実践したら、激変しました',
       'Threads始めて3ヶ月、{theme}に気づいた',
     ],
   },
   {
     type: 'contrast',
-    weight: 5, // 5%の確率（スギさんパターン: 対比型5%を反映）
+    weight: 5, // 5%の確率（対比型）
     templates: [
       '{theme}じゃない、実は〇〇です',
       'みんな{theme}と思ってるけど、違います',
@@ -444,7 +504,7 @@ async function generateThreadsOperationPosts(latestUpdates: string): Promise<Cla
   const client = createBigQueryClient(PROJECT_ID);
   const monguchiPosts = await fetchMonguchiPostsForOperation(client, PROJECT_ID);
 
-  const selectedThemes = selectRandomThemes(10); // 10個のテーマを選択
+  const selectedThemes = selectRandomThemes(15); // 15個のテーマを選択
   const posts: ClaudePost[] = [];
 
   for (let i = 0; i < selectedThemes.length; i++) {
@@ -611,7 +671,7 @@ export async function POST() {
 
       await send({ type: 'stage', stage: 'fetching', message: '門口さんの高パフォーマンス投稿20件を取得中…' });
 
-      const total = 10;
+      const total = 15;
       await send({ type: 'start', total });
       await send({ type: 'stage', stage: 'generating', message: `Claudeで投稿を生成中… (${total}件)` });
 
@@ -626,7 +686,7 @@ export async function POST() {
         elapsedMs: Date.now() - generationStartedAt,
       });
 
-      const fallbackSchedule = ['07:00', '08:30', '10:00', '12:00', '14:00', '16:00', '18:00', '19:30', '21:00', '22:00'];
+      const fallbackSchedule = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00'];
       const generatedPlans = claudePosts.map((post, index) => {
         const planId = `threads-op-${index + 1}`;
         const scheduledTime = fallbackSchedule[index] || '07:00';
