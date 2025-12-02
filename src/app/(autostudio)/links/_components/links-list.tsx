@@ -93,6 +93,7 @@ export function LinksList() {
                       {link.category === 'threads' && 'Threads'}
                       {link.category === 'instagram' && 'Instagram'}
                       {link.category === 'youtube' && 'YouTube'}
+                      {link.category === 'line' && 'LINE'}
                       {link.category === 'ad' && '広告'}
                     </span>
                   )}

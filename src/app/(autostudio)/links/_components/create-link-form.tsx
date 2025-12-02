@@ -15,7 +15,7 @@ export function CreateLinkForm() {
     description: '',
     ogpImageUrl: '',
     managementName: '',
-    category: '' as '' | 'threads' | 'instagram' | 'youtube' | 'ad',
+    category: '' as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line',
   });
 
   const previewUrl = typeof window !== 'undefined' ? `${window.location.origin}/l/${formData.shortCode}` : '';
@@ -92,13 +92,14 @@ export function CreateLinkForm() {
             </label>
             <select
               value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value as '' | 'threads' | 'instagram' | 'youtube' | 'ad' })}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' })}
               className="w-full rounded-md border border-[color:var(--color-border)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">選択してください</option>
               <option value="threads">Threads</option>
               <option value="instagram">Instagram</option>
               <option value="youtube">YouTube</option>
+              <option value="line">LINE</option>
               <option value="ad">広告</option>
             </select>
           </div>

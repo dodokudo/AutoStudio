@@ -21,7 +21,7 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
     description: '',
     ogpImageUrl: '',
     managementName: '',
-    category: '' as '' | 'threads' | 'instagram' | 'youtube' | 'ad',
+    category: '' as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line',
   });
 
   const [shortCode, setShortCode] = useState('');
@@ -159,7 +159,7 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  category: e.target.value as '' | 'threads' | 'instagram' | 'youtube' | 'ad',
+                  category: e.target.value as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line',
                 })
               }
               className="w-full px-3 py-2 border border-[color:var(--color-border)] rounded-[var(--radius-sm)] focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -168,6 +168,7 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
               <option value="threads">Threads</option>
               <option value="instagram">Instagram</option>
               <option value="youtube">YouTube</option>
+              <option value="line">LINE</option>
               <option value="ad">広告</option>
             </select>
           </div>
