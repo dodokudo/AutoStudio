@@ -504,7 +504,7 @@ async function generateThreadsOperationPosts(latestUpdates: string): Promise<Cla
   const client = createBigQueryClient(PROJECT_ID);
   const monguchiPosts = await fetchMonguchiPostsForOperation(client, PROJECT_ID);
 
-  const selectedThemes = selectRandomThemes(15); // 15個のテーマを選択
+  const selectedThemes = selectRandomThemes(10); // 10個のテーマを選択（タイムアウト回避）
   const posts: ClaudePost[] = [];
 
   for (let i = 0; i < selectedThemes.length; i++) {
@@ -671,7 +671,7 @@ export async function POST() {
 
       await send({ type: 'stage', stage: 'fetching', message: '門口さんの高パフォーマンス投稿20件を取得中…' });
 
-      const total = 15;
+      const total = 10;
       await send({ type: 'start', total });
       await send({ type: 'stage', stage: 'generating', message: `Claudeで投稿を生成中… (${total}件)` });
 
@@ -686,7 +686,7 @@ export async function POST() {
         elapsedMs: Date.now() - generationStartedAt,
       });
 
-      const fallbackSchedule = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00'];
+      const fallbackSchedule = ['07:00', '08:30', '10:00', '12:00', '14:00', '16:00', '18:00', '19:30', '21:00', '22:00'];
       const generatedPlans = claudePosts.map((post, index) => {
         const planId = `threads-op-${index + 1}`;
         const scheduledTime = fallbackSchedule[index] || '07:00';
