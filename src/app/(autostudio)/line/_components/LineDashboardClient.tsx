@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import useSWR from 'swr';
 
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
@@ -9,10 +10,21 @@ import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRa
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import type { LstepAnalyticsData } from '@/lib/lstep/analytics';
+import type { FunnelDefinition, FunnelAnalysisResult } from '@/lib/lstep/funnel';
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
 import { LineFunnelsManager } from './LineFunnelsManager';
 import { CrossAnalysis, type CrossAnalysisData } from './CrossAnalysis';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, type UnifiedRangePreset, isUnifiedRangePreset } from '@/lib/dateRangePresets';
+
+const fetcher = async (input: RequestInfo) => {
+  const res = await fetch(input.toString());
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+};
+
+interface FunnelListResponse {
+  custom: FunnelDefinition[];
+}
 
 interface LineDashboardClientProps {
   initialData: LstepAnalyticsData;
@@ -48,6 +60,42 @@ function formatPercent(value: number): string {
 
 function formatDateLabel(value: string): string {
   return dateFormatter.format(new Date(value));
+}
+
+// 期間比較用ユーティリティ
+function getDateNDaysAgo(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+const MAIN_COMPARISON_DATES_KEY = 'line-main-comparison-dates';
+
+interface MainComparisonDates {
+  periodAStart: string;
+  periodAEnd: string;
+  periodBStart: string;
+  periodBEnd: string;
+}
+
+function loadMainComparisonDates(): MainComparisonDates | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(MAIN_COMPARISON_DATES_KEY);
+    if (!stored) return null;
+    return JSON.parse(stored) as MainComparisonDates;
+  } catch {
+    return null;
+  }
+}
+
+function saveMainComparisonDates(dates: MainComparisonDates): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(MAIN_COMPARISON_DATES_KEY, JSON.stringify(dates));
+  } catch {
+    // ignore
+  }
 }
 
 const toStartOfDay = (date: Date) => {
@@ -88,6 +136,35 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [crossAnalysisData, setCrossAnalysisData] = useState<CrossAnalysisData | null>(null);
   const [crossAnalysisLoading, setCrossAnalysisLoading] = useState(false);
   const [crossAnalysisError, setCrossAnalysisError] = useState<string | null>(null);
+  // メインタブ用カスタムファネル
+  const [mainFunnelList, setMainFunnelList] = useState<FunnelDefinition[]>([]);
+  const [selectedMainFunnelId, setSelectedMainFunnelId] = useState<string | null>(null);
+  const [mainFunnelResult, setMainFunnelResult] = useState<FunnelAnalysisResult | null>(null);
+  const [mainFunnelLoading, setMainFunnelLoading] = useState(false);
+  const [mainFunnelError, setMainFunnelError] = useState<string | null>(null);
+  const [mainFunnelDropdownOpen, setMainFunnelDropdownOpen] = useState(false);
+  // メインタブ用期間比較
+  const [mainShowComparison, setMainShowComparison] = useState(true);
+  const [mainPeriodAStart, setMainPeriodAStart] = useState(() => {
+    const saved = loadMainComparisonDates();
+    return saved?.periodAStart ?? getDateNDaysAgo(60);
+  });
+  const [mainPeriodAEnd, setMainPeriodAEnd] = useState(() => {
+    const saved = loadMainComparisonDates();
+    return saved?.periodAEnd ?? getDateNDaysAgo(31);
+  });
+  const [mainPeriodBStart, setMainPeriodBStart] = useState(() => {
+    const saved = loadMainComparisonDates();
+    return saved?.periodBStart ?? getDateNDaysAgo(30);
+  });
+  const [mainPeriodBEnd, setMainPeriodBEnd] = useState(() => {
+    const saved = loadMainComparisonDates();
+    return saved?.periodBEnd ?? getDateNDaysAgo(1);
+  });
+  const [mainComparisonResultA, setMainComparisonResultA] = useState<FunnelAnalysisResult | null>(null);
+  const [mainComparisonResultB, setMainComparisonResultB] = useState<FunnelAnalysisResult | null>(null);
+  const [mainComparisonLoading, setMainComparisonLoading] = useState(false);
+  const [mainComparisonError, setMainComparisonError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LineTabKey>('main');
   const [pendingTab, setPendingTab] = useState<LineTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
@@ -254,6 +331,150 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       controller.abort();
     };
   }, [customEndDate, customStartDate, dateRange]);
+
+  // メインタブ用: 期間比較の日付が変更されたらローカルストレージに保存
+  useEffect(() => {
+    saveMainComparisonDates({
+      periodAStart: mainPeriodAStart,
+      periodAEnd: mainPeriodAEnd,
+      periodBStart: mainPeriodBStart,
+      periodBEnd: mainPeriodBEnd,
+    });
+  }, [mainPeriodAStart, mainPeriodAEnd, mainPeriodBStart, mainPeriodBEnd]);
+
+  // メインタブ用: カスタムファネル一覧を取得
+  useEffect(() => {
+    let aborted = false;
+    fetch('/api/line/funnel')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch funnels');
+        return res.json() as Promise<FunnelListResponse>;
+      })
+      .then((data) => {
+        if (aborted) return;
+        setMainFunnelList(data.custom ?? []);
+        // 初期選択: 最初のファネル
+        if (!selectedMainFunnelId && data.custom?.length > 0) {
+          setSelectedMainFunnelId(data.custom[0].id);
+        }
+      })
+      .catch((err) => {
+        if (aborted) return;
+        console.error('Failed to load funnels', err);
+      });
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  // メインタブ用: 選択されたファネルの分析を実行
+  useEffect(() => {
+    if (!selectedMainFunnelId) {
+      setMainFunnelResult(null);
+      return;
+    }
+    const selectedFunnel = mainFunnelList.find((f) => f.id === selectedMainFunnelId);
+    if (!selectedFunnel) {
+      setMainFunnelResult(null);
+      return;
+    }
+
+    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+    const startKey = formatDateInput(adjusted.start);
+    const endKey = formatDateInput(adjusted.end);
+
+    let aborted = false;
+    const controller = new AbortController();
+    setMainFunnelLoading(true);
+    setMainFunnelError(null);
+
+    fetch('/api/line/funnel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        funnelDefinition: selectedFunnel,
+        startDate: startKey,
+        endDate: endKey,
+      }),
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to analyze funnel');
+        return res.json() as Promise<FunnelAnalysisResult>;
+      })
+      .then((data) => {
+        if (aborted) return;
+        setMainFunnelResult(data);
+      })
+      .catch((err) => {
+        if (aborted || err.name === 'AbortError') return;
+        setMainFunnelError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!aborted) setMainFunnelLoading(false);
+      });
+
+    return () => {
+      aborted = true;
+      controller.abort();
+    };
+  }, [selectedMainFunnelId, mainFunnelList, dateRange, customStartDate, customEndDate, initialData.latestSnapshotDate]);
+
+  // メインタブ用: 期間比較を実行
+  const runMainComparison = useCallback(async () => {
+    if (!selectedMainFunnelId) return;
+    const selectedFunnel = mainFunnelList.find((f) => f.id === selectedMainFunnelId);
+    if (!selectedFunnel) return;
+
+    setMainComparisonLoading(true);
+    setMainComparisonError(null);
+
+    try {
+      const [resA, resB] = await Promise.all([
+        fetch('/api/line/funnel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            funnelDefinition: selectedFunnel,
+            startDate: mainPeriodAStart,
+            endDate: mainPeriodAEnd,
+          }),
+        }),
+        fetch('/api/line/funnel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            funnelDefinition: selectedFunnel,
+            startDate: mainPeriodBStart,
+            endDate: mainPeriodBEnd,
+          }),
+        }),
+      ]);
+
+      if (!resA.ok || !resB.ok) throw new Error('比較データの取得に失敗しました');
+
+      const [dataA, dataB] = await Promise.all([
+        resA.json() as Promise<FunnelAnalysisResult>,
+        resB.json() as Promise<FunnelAnalysisResult>,
+      ]);
+
+      setMainComparisonResultA(dataA);
+      setMainComparisonResultB(dataB);
+    } catch (err) {
+      setMainComparisonError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMainComparisonLoading(false);
+    }
+  }, [selectedMainFunnelId, mainFunnelList, mainPeriodAStart, mainPeriodAEnd, mainPeriodBStart, mainPeriodBEnd]);
+
+  // メインタブ用: 初期表示時に期間比較を自動実行
+  useEffect(() => {
+    if (selectedMainFunnelId && mainFunnelList.length > 0 && !mainComparisonResultA && !mainComparisonLoading) {
+      runMainComparison();
+    }
+  }, [selectedMainFunnelId, mainFunnelList, mainComparisonResultA, mainComparisonLoading, runMainComparison]);
 
   useEffect(() => {
     if (!isPending && isTabLoading) {
@@ -469,49 +690,55 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                 ))}
               </div>
 
-              <Card className="p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
+              {/* 日別登録数と流入経路を左右レイアウト */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日別登録数</h2>
-                    <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                      LSTEPの登録数とアンケート完了数を日別に確認できます。
-                    </p>
+                    <span className="text-xs text-[color:var(--color-text-muted)]">
+                      直近 {filteredAnalytics.dailyRegistrations.length} 日
+                    </span>
                   </div>
-                  <span className="text-xs text-[color:var(--color-text-muted)]">
-                    直近 {filteredAnalytics.dailyRegistrations.length} 日
-                  </span>
-                </div>
-                <div className="mt-4">
-                  <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
-                </div>
-              </Card>
+                  <div className="mt-4">
+                    <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
+                  </div>
+                </Card>
 
-              <Card className="p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">流入経路</h2>
-                  {sourcesLoading ? (
-                    <span className="text-xs text-[color:var(--color-text-muted)]">最新の流入データを取得しています…</span>
+                <Card className="p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">流入経路</h2>
+                    {sourcesLoading ? (
+                      <span className="text-xs text-[color:var(--color-text-muted)]">取得中…</span>
+                    ) : null}
+                  </div>
+                  {sourcesError ? (
+                    <p className="mt-3 text-xs text-[color:var(--color-danger)]">{sourcesError}</p>
                   ) : null}
-                </div>
-                {sourcesError ? (
-                  <p className="mt-3 text-xs text-[color:var(--color-danger)]">{sourcesError}</p>
-                ) : null}
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                  {sourceEntries.map((source) => (
-                    <div
-                      key={source.key}
-                      className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4 text-center shadow-[var(--shadow-soft)]"
-                    >
-                      <p className="text-sm font-medium text-[color:var(--color-text-secondary)]">{source.label}</p>
-                      <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                        {formatNumber(source.count)}
-                      </p>
-                      <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{formatPercent(source.percent)}</p>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+                  <div className="mt-4 space-y-3">
+                    {sourceEntries.map((source) => (
+                      <div key={source.key} className="flex items-center gap-3">
+                        <div className="w-24 text-sm font-medium text-[color:var(--color-text-secondary)]">
+                          {source.label}
+                        </div>
+                        <div className="flex-1 h-6 bg-[color:var(--color-surface-muted)] rounded-[var(--radius-sm)] overflow-hidden">
+                          <div
+                            className="h-full bg-[color:var(--color-accent)] transition-all duration-300"
+                            style={{ width: `${Math.min(100, Math.max(0, source.percent))}%` }}
+                          />
+                        </div>
+                        <div className="w-16 text-right text-sm font-semibold text-[color:var(--color-text-primary)]">
+                          {formatNumber(source.count)}
+                        </div>
+                        <div className="w-14 text-right text-xs text-[color:var(--color-text-muted)]">
+                          {formatPercent(source.percent)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
 
+              {/* 属性分析（カスタムファネルの上に移動） */}
               <Card className="p-6">
                 <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">属性分析</h2>
 
@@ -631,6 +858,417 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                 </div>
               </Card>
 
+              {/* カスタムファネル（メインタブ用） */}
+              {mainFunnelList.length > 0 && (
+                <Card className="p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">カスタムファネル</h2>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setMainFunnelDropdownOpen(!mainFunnelDropdownOpen)}
+                          className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-1.5 text-sm font-medium text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-surface-muted)] transition"
+                        >
+                          {mainFunnelList.find(f => f.id === selectedMainFunnelId)?.name ?? 'ファネルを選択'}
+                          <svg
+                            className={`h-4 w-4 transition-transform ${mainFunnelDropdownOpen ? 'rotate-180' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {mainFunnelDropdownOpen && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-10"
+                              onClick={() => setMainFunnelDropdownOpen(false)}
+                            />
+                            <div className="absolute top-full left-0 z-20 mt-1 min-w-[200px] rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white py-1 shadow-lg">
+                              {mainFunnelList.map((funnel) => (
+                                <button
+                                  key={funnel.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedMainFunnelId(funnel.id);
+                                    setMainFunnelDropdownOpen(false);
+                                  }}
+                                  className={`w-full px-3 py-2 text-left text-sm transition hover:bg-[color:var(--color-surface-muted)] ${
+                                    funnel.id === selectedMainFunnelId
+                                      ? 'bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent-dark)]'
+                                      : 'text-[color:var(--color-text-primary)]'
+                                  }`}
+                                >
+                                  <div className="font-medium">{funnel.name}</div>
+                                  {funnel.description && (
+                                    <div className="text-xs text-[color:var(--color-text-secondary)]">{funnel.description}</div>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {mainFunnelLoading && (
+                        <span className="text-xs text-[color:var(--color-text-muted)]">分析中...</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMainShowComparison(!mainShowComparison);
+                          if (!mainShowComparison && !mainComparisonResultA) {
+                            runMainComparison();
+                          }
+                        }}
+                        className="px-3 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] border border-[color:var(--color-border)] hover:bg-[color:var(--color-surface-muted)] transition"
+                      >
+                        {mainShowComparison ? '期間比較を閉じる' : '期間比較'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {mainFunnelError && (
+                    <p className="mt-3 text-xs text-[color:var(--color-danger)]">{mainFunnelError}</p>
+                  )}
+
+                  {mainFunnelResult && !mainFunnelLoading && (
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full min-w-[720px]">
+                        <thead>
+                          <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                            <th className="px-4 py-3">#</th>
+                            <th className="px-4 py-3">ステップ</th>
+                            <th className="px-4 py-3 text-right">到達人数</th>
+                            <th className="px-4 py-3 text-right">未到達人数</th>
+                            <th className="px-4 py-3 text-right">移行率</th>
+                            <th className="px-4 py-3 text-right">全体比</th>
+                            <th className="px-4 py-3">視覚化</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
+                          {mainFunnelResult.steps.map((step, index) => {
+                            const isFirst = index === 0;
+                            const conversionColor =
+                              step.conversionRate >= 50
+                                ? 'text-green-600'
+                                : step.conversionRate >= 20
+                                  ? 'text-yellow-600'
+                                  : 'text-red-600';
+
+                            return (
+                              <tr key={step.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
+                                <td className="px-4 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
+                                <td className="px-4 py-3">
+                                  <div className="font-medium text-[color:var(--color-text-primary)]">{step.label}</div>
+                                </td>
+                                <td className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-primary)]">
+                                  {formatNumber(step.reached)}
+                                </td>
+                                <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                                  {isFirst ? '-' : formatNumber(step.notReached)}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  {isFirst ? (
+                                    <span className="text-[color:var(--color-text-secondary)]">-</span>
+                                  ) : (
+                                    <span className={conversionColor}>{formatPercent(step.conversionRate)}</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                                  {formatPercent(step.overallRate)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="h-6 w-full overflow-hidden rounded bg-gray-100">
+                                    <div
+                                      className="h-full bg-green-500 transition-all"
+                                      style={{ width: `${step.overallRate}%` }}
+                                    />
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* 期間比較セクション */}
+                  {mainShowComparison && (
+                    <div className="mt-6 pt-6 border-t border-[color:var(--color-border)] space-y-6">
+                      <div>
+                        <h3 className="text-lg font-semibold text-[color:var(--color-text-primary)]">期間比較分析</h3>
+                        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                          2つの期間を比較して、ファネルの変化を分析します。
+                        </p>
+                      </div>
+
+                      {/* 期間設定 */}
+                      <div className="grid gap-6 md:grid-cols-2">
+                        {/* A期間 */}
+                        <div className="space-y-3 p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
+                          <h4 className="text-sm font-semibold text-blue-700">A期間（過去）</h4>
+                          <div className="grid gap-2 grid-cols-2">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs text-blue-600">開始日</span>
+                              <input
+                                type="date"
+                                value={mainPeriodAStart}
+                                onChange={(e) => setMainPeriodAStart(e.target.value)}
+                                className="rounded-[var(--radius-sm)] border border-blue-300 px-2 py-1.5 text-sm"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs text-blue-600">終了日</span>
+                              <input
+                                type="date"
+                                value={mainPeriodAEnd}
+                                onChange={(e) => setMainPeriodAEnd(e.target.value)}
+                                className="rounded-[var(--radius-sm)] border border-blue-300 px-2 py-1.5 text-sm"
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* B期間 */}
+                        <div className="space-y-3 p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
+                          <h4 className="text-sm font-semibold text-green-700">B期間（最近）</h4>
+                          <div className="grid gap-2 grid-cols-2">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs text-green-600">開始日</span>
+                              <input
+                                type="date"
+                                value={mainPeriodBStart}
+                                onChange={(e) => setMainPeriodBStart(e.target.value)}
+                                className="rounded-[var(--radius-sm)] border border-green-300 px-2 py-1.5 text-sm"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs text-green-600">終了日</span>
+                              <input
+                                type="date"
+                                value={mainPeriodBEnd}
+                                onChange={(e) => setMainPeriodBEnd(e.target.value)}
+                                className="rounded-[var(--radius-sm)] border border-green-300 px-2 py-1.5 text-sm"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={runMainComparison}
+                          disabled={mainComparisonLoading}
+                          className="px-4 py-2 bg-gray-900 text-white rounded-[var(--radius-sm)] text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+                        >
+                          {mainComparisonLoading ? '分析中...' : '比較分析を実行'}
+                        </button>
+                      </div>
+
+                      {mainComparisonError && (
+                        <p className="text-sm text-[color:var(--color-danger)]">エラー: {mainComparisonError}</p>
+                      )}
+
+                      {/* 比較結果 */}
+                      {mainComparisonResultA && mainComparisonResultB && (
+                        <div className="space-y-4">
+                          {/* サマリー */}
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
+                              <p className="text-xs font-medium text-blue-600 mb-2">A期間: {mainPeriodAStart} 〜 {mainPeriodAEnd}</p>
+                              <p className="text-2xl font-bold text-blue-700">{formatNumber(mainComparisonResultA.totalBase)}人</p>
+                              <p className="text-xs text-blue-600">計測対象</p>
+                            </div>
+                            <div className="p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
+                              <p className="text-xs font-medium text-green-600 mb-2">B期間: {mainPeriodBStart} 〜 {mainPeriodBEnd}</p>
+                              <p className="text-2xl font-bold text-green-700">{formatNumber(mainComparisonResultB.totalBase)}人</p>
+                              <p className="text-xs text-green-600">計測対象</p>
+                              {(() => {
+                                const diff = mainComparisonResultB.totalBase - mainComparisonResultA.totalBase;
+                                const pct = mainComparisonResultA.totalBase > 0 ? (diff / mainComparisonResultA.totalBase) * 100 : 0;
+                                return (
+                                  <p className={`text-xs mt-1 ${diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {diff >= 0 ? '+' : ''}{formatNumber(diff)} ({diff >= 0 ? '+' : ''}{formatPercent(pct)})
+                                  </p>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* 比較テーブル */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[1000px]">
+                              <thead>
+                                <tr className="border-b border-[color:var(--color-border)] bg-gray-50">
+                                  <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">#</th>
+                                  <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">ステップ</th>
+                                  <th className="px-3 py-3 text-center text-xs font-medium text-blue-600 bg-blue-50" colSpan={3}>A期間</th>
+                                  <th className="w-4"></th>
+                                  <th className="px-3 py-3 text-center text-xs font-medium text-green-600 bg-green-50" colSpan={3}>B期間</th>
+                                  <th className="px-3 py-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]" colSpan={2}>差分</th>
+                                </tr>
+                                <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-xs">
+                                  <th className="px-3 py-2"></th>
+                                  <th className="px-3 py-2"></th>
+                                  <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">到達数</th>
+                                  <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">移行率</th>
+                                  <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">全体比</th>
+                                  <th className="w-4"></th>
+                                  <th className="px-3 py-2 text-right text-green-600 bg-green-50">到達数</th>
+                                  <th className="px-3 py-2 text-right text-green-600 bg-green-50">移行率</th>
+                                  <th className="px-3 py-2 text-right text-green-600 bg-green-50">全体比</th>
+                                  <th className="px-3 py-2 text-right">移行率差</th>
+                                  <th className="px-3 py-2 text-right">全体比差</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
+                                {mainComparisonResultA.steps.map((stepA, index) => {
+                                  const stepB = mainComparisonResultB.steps[index];
+                                  if (!stepB) return null;
+                                  const isFirst = index === 0;
+                                  const rateDiff = stepB.conversionRate - stepA.conversionRate;
+                                  const overallDiff = stepB.overallRate - stepA.overallRate;
+
+                                  return (
+                                    <tr key={stepA.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
+                                      <td className="px-3 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
+                                      <td className="px-3 py-3 font-medium text-[color:var(--color-text-primary)]">
+                                        {stepA.label}
+                                      </td>
+                                      <td className="px-3 py-3 text-right bg-blue-50/50">{formatNumber(stepA.reached)}</td>
+                                      <td className="px-3 py-3 text-right bg-blue-50/50">
+                                        {isFirst ? '-' : formatPercent(stepA.conversionRate)}
+                                      </td>
+                                      <td className="px-3 py-3 text-right bg-blue-50/50">
+                                        {formatPercent(stepA.overallRate)}
+                                      </td>
+                                      <td className="w-6"></td>
+                                      <td className="px-3 py-3 text-right bg-green-50/50">{formatNumber(stepB.reached)}</td>
+                                      <td className="px-3 py-3 text-right bg-green-50/50">
+                                        {isFirst ? '-' : formatPercent(stepB.conversionRate)}
+                                      </td>
+                                      <td className="px-3 py-3 text-right bg-green-50/50">
+                                        {formatPercent(stepB.overallRate)}
+                                      </td>
+                                      <td className="px-3 py-3 text-right">
+                                        {isFirst ? (
+                                          '-'
+                                        ) : (
+                                          <span className={rateDiff >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                            {rateDiff >= 0 ? '+' : ''}{formatPercent(rateDiff)}
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-3 text-right">
+                                        {isFirst ? (
+                                          '-'
+                                        ) : (
+                                          <span className={overallDiff >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                            {overallDiff >= 0 ? '+' : ''}{formatPercent(overallDiff)}
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* 全体比の視覚的な比較（左右分割） */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-4">全体比の比較</h4>
+                            <div className="grid gap-6 md:grid-cols-2">
+                              {/* A期間 */}
+                              <div className="p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
+                                <h5 className="text-sm font-semibold text-blue-700 mb-3">A期間</h5>
+                                <div className="space-y-3">
+                                  {mainComparisonResultA.steps.map((step, index) => (
+                                    <div key={step.stepId} className="space-y-1">
+                                      <div className="flex justify-between text-xs">
+                                        <span className="text-blue-700">{index}. {step.label}</span>
+                                        <span className="font-semibold text-blue-800">{formatPercent(step.overallRate)}</span>
+                                      </div>
+                                      <div className="h-4 bg-blue-100 rounded overflow-hidden">
+                                        <div
+                                          className="h-full bg-blue-500 transition-all"
+                                          style={{ width: `${step.overallRate}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* B期間 */}
+                              <div className="p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
+                                <h5 className="text-sm font-semibold text-green-700 mb-3">B期間</h5>
+                                <div className="space-y-3">
+                                  {mainComparisonResultB.steps.map((step, index) => {
+                                    const stepA = mainComparisonResultA.steps[index];
+                                    const diff = stepA ? step.overallRate - stepA.overallRate : 0;
+                                    return (
+                                      <div key={step.stepId} className="space-y-1">
+                                        <div className="flex justify-between text-xs">
+                                          <span className="text-green-700">{index}. {step.label}</span>
+                                          <span className="font-semibold text-green-800">
+                                            {formatPercent(step.overallRate)}
+                                            {index > 0 && (
+                                              <span className={`ml-2 ${diff >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                ({diff >= 0 ? '+' : ''}{formatPercent(diff)})
+                                              </span>
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="h-4 bg-green-100 rounded overflow-hidden">
+                                          <div
+                                            className="h-full bg-green-500 transition-all"
+                                            style={{ width: `${step.overallRate}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              )}
+            </div>
+          ) : null}
+
+          {activeTab === 'funnel' ? (
+            <div className="space-y-6">
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル分析</h2>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {funnelCards.map((card) => (
+                    <div
+                      key={card.label}
+                      className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-soft)]"
+                    >
+                      <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">{card.label}</p>
+                      <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
+                      {card.helper ? (
+                        <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{card.helper}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
               {/* クロス分析セクション */}
               <div className="pt-4">
                 <h2 className="text-xl font-bold text-[color:var(--color-text-primary)] mb-4">クロス分析</h2>
@@ -641,26 +1279,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                 />
               </div>
             </div>
-          ) : null}
-
-          {activeTab === 'funnel' ? (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル分析</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {funnelCards.map((card) => (
-                  <div
-                    key={card.label}
-                    className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-soft)]"
-                  >
-                    <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">{card.label}</p>
-                    <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
-                    {card.helper ? (
-                      <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{card.helper}</p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </Card>
           ) : null}
 
           {activeTab === 'custom_funnel' ? (

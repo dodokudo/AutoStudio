@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { resolveProjectId } from '@/lib/bigquery';
 import {
   analyzeFunnel,
-  PRESET_FUNNEL_IGLN,
-  PRESET_FUNNEL_SURVEY,
   listFunnelDefinitions,
   saveFunnelDefinition,
   type FunnelDefinition,
@@ -29,10 +27,8 @@ export async function GET() {
 
   try {
     const customFunnels = await listFunnelDefinitions(PROJECT_ID);
-    const presets = [PRESET_FUNNEL_IGLN, PRESET_FUNNEL_SURVEY];
 
     return NextResponse.json({
-      presets,
       custom: customFunnels,
     });
   } catch (error) {
@@ -87,17 +83,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { funnelDefinition, startDate, endDate, preset } = body;
+    const { funnelDefinition, startDate, endDate } = body;
 
-    // プリセット指定の場合
-    let definition: FunnelDefinition | null = null;
-    if (preset === 'igln') {
-      definition = PRESET_FUNNEL_IGLN;
-    } else if (preset === 'survey') {
-      definition = PRESET_FUNNEL_SURVEY;
-    } else if (funnelDefinition) {
-      definition = funnelDefinition;
-    }
+    const definition: FunnelDefinition | null = funnelDefinition ?? null;
 
     if (!definition) {
       return NextResponse.json({ error: 'Funnel definition is required' }, { status: 400 });

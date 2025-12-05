@@ -37,7 +37,6 @@ interface LineFunnelsManagerProps {
 }
 
 interface FunnelListResponse {
-  presets: FunnelDefinition[];
   custom: FunnelDefinition[];
 }
 
@@ -79,6 +78,36 @@ function getDateNDaysAgo(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+// ローカルストレージのキー
+const COMPARISON_DATES_KEY = 'line-funnel-comparison-dates';
+
+interface ComparisonDates {
+  periodAStart: string;
+  periodAEnd: string;
+  periodBStart: string;
+  periodBEnd: string;
+}
+
+function loadComparisonDates(): ComparisonDates | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(COMPARISON_DATES_KEY);
+    if (!stored) return null;
+    return JSON.parse(stored) as ComparisonDates;
+  } catch {
+    return null;
+  }
+}
+
+function saveComparisonDates(dates: ComparisonDates): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(COMPARISON_DATES_KEY, JSON.stringify(dates));
+  } catch {
+    // ignore
+  }
+}
+
 export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerProps) {
   const { data: funnelListData, mutate: mutateFunnels } = useSWR<FunnelListResponse>(
     '/api/line/funnel',
@@ -90,12 +119,10 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
     fetcher,
   );
 
-  const presets = useMemo(() => funnelListData?.presets ?? [], [funnelListData]);
-  const customFunnels = useMemo(() => funnelListData?.custom ?? [], [funnelListData]);
+  const funnels = useMemo(() => funnelListData?.custom ?? [], [funnelListData]);
   const tagColumns = useMemo(() => tagColumnsData?.columns ?? [], [tagColumnsData]);
 
   const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null);
-  const [selectedFunnelType, setSelectedFunnelType] = useState<'preset' | 'custom'>('preset');
   const [editingFunnel, setEditingFunnel] = useState<FunnelFormState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -103,24 +130,45 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  // 期間比較用の状態
+  // 期間比較用の状態（ローカルストレージから復元）
   const [showComparison, setShowComparison] = useState(false);
-  const [periodAStart, setPeriodAStart] = useState(getDateNDaysAgo(60));
-  const [periodAEnd, setPeriodAEnd] = useState(getDateNDaysAgo(31));
-  const [periodBStart, setPeriodBStart] = useState(getDateNDaysAgo(30));
-  const [periodBEnd, setPeriodBEnd] = useState(getDateNDaysAgo(1));
+  const [periodAStart, setPeriodAStart] = useState(() => {
+    const saved = loadComparisonDates();
+    return saved?.periodAStart ?? getDateNDaysAgo(60);
+  });
+  const [periodAEnd, setPeriodAEnd] = useState(() => {
+    const saved = loadComparisonDates();
+    return saved?.periodAEnd ?? getDateNDaysAgo(31);
+  });
+  const [periodBStart, setPeriodBStart] = useState(() => {
+    const saved = loadComparisonDates();
+    return saved?.periodBStart ?? getDateNDaysAgo(30);
+  });
+  const [periodBEnd, setPeriodBEnd] = useState(() => {
+    const saved = loadComparisonDates();
+    return saved?.periodBEnd ?? getDateNDaysAgo(1);
+  });
   const [comparisonResultA, setComparisonResultA] = useState<FunnelAnalysisResult | null>(null);
   const [comparisonResultB, setComparisonResultB] = useState<FunnelAnalysisResult | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
-  // 初期選択: プリセットの最初のファネル
+  // 期間比較の日付が変更されたらローカルストレージに保存
   useEffect(() => {
-    if (!selectedFunnelId && presets.length > 0) {
-      setSelectedFunnelId(presets[0].id);
-      setSelectedFunnelType('preset');
+    saveComparisonDates({
+      periodAStart,
+      periodAEnd,
+      periodBStart,
+      periodBEnd,
+    });
+  }, [periodAStart, periodAEnd, periodBStart, periodBEnd]);
+
+  // 初期選択: 最初のファネル
+  useEffect(() => {
+    if (!selectedFunnelId && funnels.length > 0) {
+      setSelectedFunnelId(funnels[0].id);
     }
-  }, [presets, selectedFunnelId]);
+  }, [funnels, selectedFunnelId]);
 
   // 選択されたファネルの分析を実行
   useEffect(() => {
@@ -134,10 +182,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
     setAnalysisLoading(true);
     setAnalysisError(null);
 
-    const selectedFunnel =
-      selectedFunnelType === 'preset'
-        ? presets.find((f) => f.id === selectedFunnelId)
-        : customFunnels.find((f) => f.id === selectedFunnelId);
+    const selectedFunnel = funnels.find((f) => f.id === selectedFunnelId);
 
     if (!selectedFunnel) {
       setAnalysisLoading(false);
@@ -148,8 +193,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        preset: selectedFunnelType === 'preset' ? selectedFunnelId : undefined,
-        funnelDefinition: selectedFunnelType === 'custom' ? selectedFunnel : undefined,
+        funnelDefinition: selectedFunnel,
         startDate,
         endDate,
       }),
@@ -179,15 +223,12 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
       aborted = true;
       controller.abort();
     };
-  }, [selectedFunnelId, selectedFunnelType, presets, customFunnels, startDate, endDate]);
+  }, [selectedFunnelId, funnels, startDate, endDate]);
 
   const selectedFunnel = useMemo(() => {
     if (!selectedFunnelId) return null;
-    if (selectedFunnelType === 'preset') {
-      return presets.find((f) => f.id === selectedFunnelId) ?? null;
-    }
-    return customFunnels.find((f) => f.id === selectedFunnelId) ?? null;
-  }, [selectedFunnelId, selectedFunnelType, presets, customFunnels]);
+    return funnels.find((f) => f.id === selectedFunnelId) ?? null;
+  }, [selectedFunnelId, funnels]);
 
   // 期間比較分析を実行
   const runComparison = useCallback(async () => {
@@ -202,8 +243,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            preset: selectedFunnelType === 'preset' ? selectedFunnelId : undefined,
-            funnelDefinition: selectedFunnelType === 'custom' ? selectedFunnel : undefined,
+            funnelDefinition: selectedFunnel,
             startDate: periodAStart,
             endDate: periodAEnd,
           }),
@@ -212,8 +252,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            preset: selectedFunnelType === 'preset' ? selectedFunnelId : undefined,
-            funnelDefinition: selectedFunnelType === 'custom' ? selectedFunnel : undefined,
+            funnelDefinition: selectedFunnel,
             startDate: periodBStart,
             endDate: periodBEnd,
           }),
@@ -236,7 +275,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
     } finally {
       setComparisonLoading(false);
     }
-  }, [selectedFunnel, selectedFunnelId, selectedFunnelType, periodAStart, periodAEnd, periodBStart, periodBEnd]);
+  }, [selectedFunnel, periodAStart, periodAEnd, periodBStart, periodBEnd]);
 
   const onCreate = () => {
     const defaultTagColumn = tagColumns[0]?.column ?? 'survey_completed';
@@ -284,8 +323,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
       }
       await mutateFunnels();
       if (selectedFunnelId === funnelId) {
-        setSelectedFunnelId(presets[0]?.id ?? null);
-        setSelectedFunnelType('preset');
+        setSelectedFunnelId(null);
       }
       if (editingFunnel?.id === funnelId) {
         resetEditingState();
@@ -332,7 +370,6 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
       await mutateFunnels();
       if (savedFunnel?.id) {
         setSelectedFunnelId(savedFunnel.id);
-        setSelectedFunnelType('custom');
       }
       resetEditingState();
     } catch (error) {
@@ -401,7 +438,6 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
     });
   };
 
-  const isPreset = selectedFunnelType === 'preset';
 
   // 差分計算ヘルパー
   const getDiff = (a: number, b: number): { value: number; isPositive: boolean } => {
@@ -420,19 +456,21 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
             </Button>
           </div>
 
-          {/* プリセットファネル */}
-          <div>
-            <p className="text-xs font-medium text-[color:var(--color-text-muted)] mb-2">プリセット</p>
-            <div className="space-y-1">
-              {presets.map((funnel) => {
-                const isActive = funnel.id === selectedFunnelId && selectedFunnelType === 'preset';
+          {/* ファネル一覧 */}
+          <div className="space-y-1">
+            {funnels.length === 0 ? (
+              <p className="text-sm text-[color:var(--color-text-secondary)] px-3">
+                ファネルがありません
+              </p>
+            ) : (
+              funnels.map((funnel) => {
+                const isActive = funnel.id === selectedFunnelId;
                 return (
                   <button
                     key={funnel.id}
                     type="button"
                     onClick={() => {
                       setSelectedFunnelId(funnel.id);
-                      setSelectedFunnelType('preset');
                       setEditingFunnel(null);
                       setShowComparison(false);
                     }}
@@ -448,46 +486,8 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                     ) : null}
                   </button>
                 );
-              })}
-            </div>
-          </div>
-
-          {/* カスタムファネル */}
-          <div>
-            <p className="text-xs font-medium text-[color:var(--color-text-muted)] mb-2">カスタム</p>
-            <div className="space-y-1">
-              {customFunnels.length === 0 ? (
-                <p className="text-sm text-[color:var(--color-text-secondary)] px-3">
-                  カスタムファネルはありません
-                </p>
-              ) : (
-                customFunnels.map((funnel) => {
-                  const isActive = funnel.id === selectedFunnelId && selectedFunnelType === 'custom';
-                  return (
-                    <button
-                      key={funnel.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedFunnelId(funnel.id);
-                        setSelectedFunnelType('custom');
-                        setEditingFunnel(null);
-                        setShowComparison(false);
-                      }}
-                      className={`w-full rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition ${
-                        isActive
-                          ? 'bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent-dark)]'
-                          : 'bg-white text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-surface-muted)]'
-                      }`}
-                    >
-                      <div className="font-medium">{funnel.name}</div>
-                      {funnel.description ? (
-                        <div className="text-xs text-[color:var(--color-text-secondary)]">{funnel.description}</div>
-                      ) : null}
-                    </button>
-                  );
-                })
-              )}
-            </div>
+              })
+            )}
           </div>
         </Card>
 
@@ -500,30 +500,21 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                   <p className="text-xs text-[color:var(--color-text-secondary)]">{selectedFunnel.description}</p>
                 ) : null}
               </div>
-              {!isPreset ? (
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" onClick={() => onEdit(selectedFunnel)} disabled={!!editingFunnel}>
-                    編集
-                  </Button>
-                  <Button variant="secondary" onClick={() => onDuplicate(selectedFunnel)} disabled={!!editingFunnel}>
-                    複製
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleDelete(selectedFunnel.id)}
-                    disabled={deleteBusy}
-                  >
-                    削除
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" onClick={() => onDuplicate(selectedFunnel)} disabled={!!editingFunnel}>
-                    複製して編集
-                  </Button>
-                  <span className="text-xs text-[color:var(--color-text-muted)]">プリセット</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={() => onEdit(selectedFunnel)} disabled={!!editingFunnel}>
+                  編集
+                </Button>
+                <Button variant="secondary" onClick={() => onDuplicate(selectedFunnel)} disabled={!!editingFunnel}>
+                  複製
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => handleDelete(selectedFunnel.id)}
+                  disabled={deleteBusy}
+                >
+                  削除
+                </Button>
+              </div>
             </div>
             <div>
               <p className="text-xs font-semibold text-[color:var(--color-text-secondary)]">ステップ</p>
@@ -540,181 +531,8 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
       </aside>
 
       <section className="space-y-6">
-        {editingFunnel ? (
-          <Card className="space-y-6 p-6">
-            <div>
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-                {editingFunnel.id ? 'ファネルを編集' : 'ファネルを作成'}
-              </h2>
-              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                LSTEPのタグを使ってファネルを定義し、各ステップの到達率を分析します。
-              </p>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">ファネル名</span>
-                <input
-                  type="text"
-                  value={editingFunnel.name}
-                  onChange={(event) =>
-                    setEditingFunnel({ ...editingFunnel, name: event.target.value })
-                  }
-                  className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-                  placeholder="例: コンサル申込ファネル"
-                />
-              </label>
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">説明（任意）</span>
-                <input
-                  type="text"
-                  value={editingFunnel.description ?? ''}
-                  onChange={(event) =>
-                    setEditingFunnel({ ...editingFunnel, description: event.target.value })
-                  }
-                  className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-                  placeholder="このファネルの目的をメモできます"
-                />
-              </label>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
-                  ステップ定義 ({editingFunnel.steps.length}件)
-                </h3>
-                <Button variant="secondary" onClick={() => addStep()}>
-                  + 末尾に追加
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {editingFunnel.steps.map((step, index) => {
-                  const isFirstStep = index === 0;
-                  return (
-                    <div key={`${step.id}-${index}`} className="group">
-                      <Card className="p-4 border-l-4 border-l-[color:var(--color-accent)]">
-                        <div className="flex items-start gap-4">
-                          {/* ステップ番号とドラッグハンドル */}
-                          <div className="flex flex-col items-center gap-1 pt-1">
-                            <span className="text-xs font-bold text-[color:var(--color-accent)] bg-[color:var(--color-accent-muted)] rounded-full w-6 h-6 flex items-center justify-center">
-                              {index}
-                            </span>
-                            {!isFirstStep && (
-                              <div className="flex flex-col gap-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() => moveStep(index, -1)}
-                                  disabled={index <= 1}
-                                  className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30"
-                                  title="上に移動"
-                                >
-                                  ▲
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => moveStep(index, 1)}
-                                  disabled={index === editingFunnel.steps.length - 1}
-                                  className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30"
-                                  title="下に移動"
-                                >
-                                  ▼
-                                </button>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* メインコンテンツ */}
-                          <div className="flex-1 grid gap-3 md:grid-cols-2">
-                            <label className="flex flex-col gap-1">
-                              <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
-                                表示名 {isFirstStep && '(固定)'}
-                              </span>
-                              <input
-                                type="text"
-                                value={step.label}
-                                onChange={(event) => updateStep(index, { label: event.target.value })}
-                                className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] disabled:bg-gray-50 disabled:text-[color:var(--color-text-secondary)]"
-                                disabled={isFirstStep}
-                                placeholder="例: アンケート完了"
-                              />
-                            </label>
-
-                            <label className="flex flex-col gap-1">
-                              <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
-                                タグカラム {isFirstStep && '(固定)'}
-                              </span>
-                              {isFirstStep ? (
-                                <input
-                                  type="text"
-                                  value="friend_added_at"
-                                  disabled
-                                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-gray-50 px-3 py-2 text-sm text-[color:var(--color-text-secondary)]"
-                                />
-                              ) : (
-                                <select
-                                  value={step.tagColumn}
-                                  onChange={(event) => updateStep(index, { tagColumn: event.target.value })}
-                                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-                                >
-                                  {tagColumns.map((column) => (
-                                    <option key={column.column} value={column.column}>
-                                      {column.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </label>
-                          </div>
-
-                          {/* 削除ボタン */}
-                          {!isFirstStep && (
-                            <button
-                              type="button"
-                              onClick={() => removeStep(index)}
-                              className="p-2 text-[color:var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 rounded transition"
-                              title="このステップを削除"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </Card>
-
-                      {/* ステップ間に挿入ボタン */}
-                      {index < editingFunnel.steps.length - 1 && (
-                        <div className="flex justify-center py-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={() => addStep(index)}
-                            className="text-xs text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-dark)] flex items-center gap-1 px-2 py-1 rounded hover:bg-[color:var(--color-accent-muted)]"
-                          >
-                            <span>+</span>
-                            <span>ここに挿入</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[color:var(--color-border)]">
-              <Button variant="secondary" onClick={resetEditingState} disabled={isSaving}>
-                キャンセル
-              </Button>
-              <Button onClick={saveFunnel} disabled={isSaving}>
-                {isSaving ? '保存中…' : '保存'}
-              </Button>
-            </div>
-          </Card>
-        ) : null}
-
         {/* 分析結果表示 */}
-        {selectedFunnel && !editingFunnel ? (
+        {selectedFunnel ? (
           <>
             <Card className="space-y-6 p-6">
               <div className="flex items-center justify-between">
@@ -936,23 +754,28 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
 
                     {/* 詳細比較テーブル */}
                     <div className="overflow-x-auto">
-                      <table className="w-full min-w-[900px]">
+                      <table className="w-full min-w-[1000px]">
                         <thead>
                           <tr className="border-b border-[color:var(--color-border)] bg-gray-50">
-                            <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">#</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">ステップ</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-blue-600 bg-blue-50" colSpan={2}>A期間</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-green-600 bg-green-50" colSpan={2}>B期間</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]">差分</th>
+                            <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">#</th>
+                            <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">ステップ</th>
+                            <th className="px-3 py-3 text-right text-xs font-medium text-blue-600 bg-blue-50" colSpan={3}>A期間</th>
+                            <th className="w-6"></th>
+                            <th className="px-3 py-3 text-left text-xs font-medium text-green-600 bg-green-50" colSpan={3}>B期間</th>
+                            <th className="px-3 py-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]" colSpan={2}>差分</th>
                           </tr>
                           <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-xs">
-                            <th className="px-4 py-2"></th>
-                            <th className="px-4 py-2"></th>
-                            <th className="px-4 py-2 text-right text-blue-600 bg-blue-50">到達数</th>
-                            <th className="px-4 py-2 text-right text-blue-600 bg-blue-50">移行率</th>
-                            <th className="px-4 py-2 text-right text-green-600 bg-green-50">到達数</th>
-                            <th className="px-4 py-2 text-right text-green-600 bg-green-50">移行率</th>
-                            <th className="px-4 py-2 text-right">移行率差</th>
+                            <th className="px-3 py-2"></th>
+                            <th className="px-3 py-2"></th>
+                            <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">到達数</th>
+                            <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">移行率</th>
+                            <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">全体比</th>
+                            <th className="w-6"></th>
+                            <th className="px-3 py-2 text-right text-green-600 bg-green-50">到達数</th>
+                            <th className="px-3 py-2 text-right text-green-600 bg-green-50">移行率</th>
+                            <th className="px-3 py-2 text-right text-green-600 bg-green-50">全体比</th>
+                            <th className="px-3 py-2 text-right">移行率差</th>
+                            <th className="px-3 py-2 text-right">全体比差</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
@@ -961,27 +784,44 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                             if (!stepB) return null;
                             const isFirst = index === 0;
                             const rateDiff = getDiff(stepA.conversionRate, stepB.conversionRate);
+                            const overallDiff = getDiff(stepA.overallRate, stepB.overallRate);
 
                             return (
                               <tr key={stepA.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
-                                <td className="px-4 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
-                                <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">
+                                <td className="px-3 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
+                                <td className="px-3 py-3 font-medium text-[color:var(--color-text-primary)]">
                                   {stepA.label}
                                 </td>
-                                <td className="px-4 py-3 text-right bg-blue-50/50">{formatNumber(stepA.reached)}</td>
-                                <td className="px-4 py-3 text-right bg-blue-50/50">
+                                <td className="px-3 py-3 text-right bg-blue-50/50">{formatNumber(stepA.reached)}</td>
+                                <td className="px-3 py-3 text-right bg-blue-50/50">
                                   {isFirst ? '-' : formatPercent(stepA.conversionRate)}
                                 </td>
-                                <td className="px-4 py-3 text-right bg-green-50/50">{formatNumber(stepB.reached)}</td>
-                                <td className="px-4 py-3 text-right bg-green-50/50">
+                                <td className="px-3 py-3 text-right bg-blue-50/50">
+                                  {formatPercent(stepA.overallRate)}
+                                </td>
+                                <td className="w-6"></td>
+                                <td className="px-3 py-3 text-right bg-green-50/50">{formatNumber(stepB.reached)}</td>
+                                <td className="px-3 py-3 text-right bg-green-50/50">
                                   {isFirst ? '-' : formatPercent(stepB.conversionRate)}
                                 </td>
-                                <td className="px-4 py-3 text-right">
+                                <td className="px-3 py-3 text-right bg-green-50/50">
+                                  {formatPercent(stepB.overallRate)}
+                                </td>
+                                <td className="px-3 py-3 text-right">
                                   {isFirst ? (
                                     '-'
                                   ) : (
                                     <span className={rateDiff.isPositive ? 'text-green-600' : 'text-red-600'}>
                                       {rateDiff.isPositive ? '+' : ''}{formatPercent(rateDiff.value)}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 text-right">
+                                  {isFirst ? (
+                                    '-'
+                                  ) : (
+                                    <span className={overallDiff.isPositive ? 'text-green-600' : 'text-red-600'}>
+                                      {overallDiff.isPositive ? '+' : ''}{formatPercent(overallDiff.value)}
                                     </span>
                                   )}
                                 </td>
@@ -992,39 +832,63 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                       </table>
                     </div>
 
-                    {/* 視覚的な比較バー */}
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-[color:var(--color-text-primary)]">全体比の比較</h4>
-                      {comparisonResultA.steps.map((stepA, index) => {
-                        const stepB = comparisonResultB.steps[index];
-                        if (!stepB) return null;
-
-                        return (
-                          <div key={stepA.stepId} className="space-y-1">
-                            <p className="text-xs text-[color:var(--color-text-secondary)]">{stepA.label}</p>
-                            <div className="flex gap-2 items-center">
-                              <span className="text-xs text-blue-600 w-8">A</span>
-                              <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
-                                <div
-                                  className="h-full bg-blue-500 transition-all"
-                                  style={{ width: `${stepA.overallRate}%` }}
-                                />
+                    {/* 全体比の視覚的な比較（左右分割） */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-4">全体比の比較</h4>
+                      <div className="grid gap-6 md:grid-cols-2">
+                        {/* A期間 */}
+                        <div className="p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
+                          <h5 className="text-sm font-semibold text-blue-700 mb-3">A期間</h5>
+                          <div className="space-y-3">
+                            {comparisonResultA.steps.map((step, index) => (
+                              <div key={step.stepId} className="space-y-1">
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-blue-700">{index}. {step.label}</span>
+                                  <span className="font-semibold text-blue-800">{formatPercent(step.overallRate)}</span>
+                                </div>
+                                <div className="h-4 bg-blue-100 rounded overflow-hidden">
+                                  <div
+                                    className="h-full bg-blue-500 transition-all"
+                                    style={{ width: `${step.overallRate}%` }}
+                                  />
+                                </div>
                               </div>
-                              <span className="text-xs w-16 text-right">{formatPercent(stepA.overallRate)}</span>
-                            </div>
-                            <div className="flex gap-2 items-center">
-                              <span className="text-xs text-green-600 w-8">B</span>
-                              <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
-                                <div
-                                  className="h-full bg-green-500 transition-all"
-                                  style={{ width: `${stepB.overallRate}%` }}
-                                />
-                              </div>
-                              <span className="text-xs w-16 text-right">{formatPercent(stepB.overallRate)}</span>
-                            </div>
+                            ))}
                           </div>
-                        );
-                      })}
+                        </div>
+
+                        {/* B期間 */}
+                        <div className="p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
+                          <h5 className="text-sm font-semibold text-green-700 mb-3">B期間</h5>
+                          <div className="space-y-3">
+                            {comparisonResultB.steps.map((step, index) => {
+                              const stepA = comparisonResultA.steps[index];
+                              const diff = stepA ? getDiff(stepA.overallRate, step.overallRate) : null;
+                              return (
+                                <div key={step.stepId} className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-green-700">{index}. {step.label}</span>
+                                    <span className="font-semibold text-green-800">
+                                      {formatPercent(step.overallRate)}
+                                      {diff && index > 0 && (
+                                        <span className={`ml-2 ${diff.isPositive ? 'text-green-600' : 'text-red-500'}`}>
+                                          ({diff.isPositive ? '+' : ''}{formatPercent(diff.value)})
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div className="h-4 bg-green-100 rounded overflow-hidden">
+                                    <div
+                                      className="h-full bg-green-500 transition-all"
+                                      style={{ width: `${step.overallRate}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1034,6 +898,180 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
         ) : !editingFunnel ? (
           <Card className="p-6 text-sm text-[color:var(--color-text-secondary)]">
             ファネルを選択すると分析結果が表示されます。
+          </Card>
+        ) : null}
+
+        {/* ファネル編集フォーム */}
+        {editingFunnel ? (
+          <Card className="space-y-6 p-6">
+            <div>
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+                {editingFunnel.id ? 'ファネルを編集' : 'ファネルを作成'}
+              </h2>
+              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                LSTEPのタグを使ってファネルを定義し、各ステップの到達率を分析します。
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">ファネル名</span>
+                <input
+                  type="text"
+                  value={editingFunnel.name}
+                  onChange={(event) =>
+                    setEditingFunnel({ ...editingFunnel, name: event.target.value })
+                  }
+                  className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                  placeholder="例: コンサル申込ファネル"
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">説明（任意）</span>
+                <input
+                  type="text"
+                  value={editingFunnel.description ?? ''}
+                  onChange={(event) =>
+                    setEditingFunnel({ ...editingFunnel, description: event.target.value })
+                  }
+                  className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                  placeholder="このファネルの目的をメモできます"
+                />
+              </label>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                  ステップ定義 ({editingFunnel.steps.length}件)
+                </h3>
+                <Button variant="secondary" onClick={() => addStep()}>
+                  + 末尾に追加
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                {editingFunnel.steps.map((step, index) => {
+                  const isFirstStep = index === 0;
+                  return (
+                    <div key={`${step.id}-${index}`} className="group">
+                      <Card className="p-4 border-l-4 border-l-[color:var(--color-accent)]">
+                        <div className="flex items-start gap-4">
+                          {/* ステップ番号とドラッグハンドル */}
+                          <div className="flex flex-col items-center gap-1 pt-1">
+                            <span className="text-xs font-bold text-[color:var(--color-accent)] bg-[color:var(--color-accent-muted)] rounded-full w-6 h-6 flex items-center justify-center">
+                              {index}
+                            </span>
+                            {!isFirstStep && (
+                              <div className="flex flex-col gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => moveStep(index, -1)}
+                                  disabled={index <= 1}
+                                  className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30"
+                                  title="上に移動"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveStep(index, 1)}
+                                  disabled={index === editingFunnel.steps.length - 1}
+                                  className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30"
+                                  title="下に移動"
+                                >
+                                  ▼
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* メインコンテンツ */}
+                          <div className="flex-1 grid gap-3 md:grid-cols-2">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
+                                表示名 {isFirstStep && '(固定)'}
+                              </span>
+                              <input
+                                type="text"
+                                value={step.label}
+                                onChange={(event) => updateStep(index, { label: event.target.value })}
+                                className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] disabled:bg-gray-50 disabled:text-[color:var(--color-text-secondary)]"
+                                disabled={isFirstStep}
+                                placeholder="例: アンケート完了"
+                              />
+                            </label>
+
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
+                                タグカラム {isFirstStep && '(固定)'}
+                              </span>
+                              {isFirstStep ? (
+                                <input
+                                  type="text"
+                                  value="friend_added_at"
+                                  disabled
+                                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-gray-50 px-3 py-2 text-sm text-[color:var(--color-text-secondary)]"
+                                />
+                              ) : (
+                                <select
+                                  value={step.tagColumn}
+                                  onChange={(event) => updateStep(index, { tagColumn: event.target.value })}
+                                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                                >
+                                  {tagColumns.map((column) => (
+                                    <option key={column.column} value={column.column}>
+                                      {column.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </label>
+                          </div>
+
+                          {/* 削除ボタン */}
+                          {!isFirstStep && (
+                            <button
+                              type="button"
+                              onClick={() => removeStep(index)}
+                              className="p-2 text-[color:var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 rounded transition"
+                              title="このステップを削除"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </Card>
+
+                      {/* ステップ間に挿入ボタン */}
+                      {index < editingFunnel.steps.length - 1 && (
+                        <div className="flex justify-center py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => addStep(index)}
+                            className="text-xs text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-dark)] flex items-center gap-1 px-2 py-1 rounded hover:bg-[color:var(--color-accent-muted)]"
+                          >
+                            <span>+</span>
+                            <span>ここに挿入</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[color:var(--color-border)]">
+              <Button variant="secondary" onClick={resetEditingState} disabled={isSaving}>
+                キャンセル
+              </Button>
+              <Button onClick={saveFunnel} disabled={isSaving}>
+                {isSaving ? '保存中…' : '保存'}
+              </Button>
+            </div>
           </Card>
         ) : null}
       </section>
