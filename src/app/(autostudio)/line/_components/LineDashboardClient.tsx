@@ -10,9 +10,8 @@ import { dashboardCardClass } from '@/components/dashboard/styles';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import type { LstepAnalyticsData } from '@/lib/lstep/analytics';
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
-import { FunnelAnalysis } from './FunnelAnalysis';
+import { LineFunnelsManager } from './LineFunnelsManager';
 import { CrossAnalysis, type CrossAnalysisData } from './CrossAnalysis';
-import type { FunnelAnalysisResult } from '@/lib/lstep/funnel';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, type UnifiedRangePreset, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 interface LineDashboardClientProps {
@@ -86,9 +85,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [attributeStats, setAttributeStats] = useState(initialData.attributes);
   const [attributesLoading, setAttributesLoading] = useState(false);
   const [attributesError, setAttributesError] = useState<string | null>(null);
-  const [funnelData, setFunnelData] = useState<FunnelAnalysisResult | null>(null);
-  const [funnelLoading, setFunnelLoading] = useState(false);
-  const [funnelError, setFunnelError] = useState<string | null>(null);
   const [crossAnalysisData, setCrossAnalysisData] = useState<CrossAnalysisData | null>(null);
   const [crossAnalysisLoading, setCrossAnalysisLoading] = useState(false);
   const [crossAnalysisError, setCrossAnalysisError] = useState<string | null>(null);
@@ -258,61 +254,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       controller.abort();
     };
   }, [customEndDate, customStartDate, dateRange]);
-
-  useEffect(() => {
-    // custom_funnelタブがアクティブ、またはタブが切り替わった時のみフェッチ
-    if (activeTab !== 'custom_funnel') {
-      return () => {};
-    }
-
-    let aborted = false;
-    const controller = new AbortController();
-    setFunnelLoading(true);
-    setFunnelError(null);
-
-    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
-    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
-    const startKey = formatDateInput(adjusted.start);
-    const endKey = formatDateInput(adjusted.end);
-
-    const body = {
-      preset: 'igln',
-      startDate: startKey,
-      endDate: endKey,
-    };
-
-    fetch('/api/line/funnel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to fetch funnel (${response.status})`);
-        }
-        return response.json() as Promise<FunnelAnalysisResult>;
-      })
-      .then((data) => {
-        if (aborted) return;
-        setFunnelData(data);
-      })
-      .catch((error) => {
-        if (aborted || error.name === 'AbortError') return;
-        setFunnelError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => {
-        if (!aborted) {
-          setFunnelLoading(false);
-        }
-      });
-
-    return () => {
-      aborted = true;
-      controller.abort();
-    };
-  }, [activeTab, customEndDate, customStartDate, dateRange]);
 
   useEffect(() => {
     if (!isPending && isTabLoading) {
@@ -723,29 +664,20 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
           ) : null}
 
           {activeTab === 'custom_funnel' ? (
-            <div className="space-y-6">
-              {funnelLoading ? (
-                <Card className="p-6">
-                  <p className="text-sm text-[color:var(--color-text-secondary)]">
-                    ファネル分析データを読み込んでいます...
-                  </p>
-                </Card>
-              ) : funnelError ? (
-                <Card className="p-6">
-                  <p className="text-sm text-[color:var(--color-danger)]">
-                    エラーが発生しました: {funnelError}
-                  </p>
-                </Card>
-              ) : funnelData ? (
-                <FunnelAnalysis data={funnelData} />
-              ) : (
-                <Card className="p-6">
-                  <p className="text-sm text-[color:var(--color-text-secondary)]">
-                    ファネルデータがありません。
-                  </p>
-                </Card>
-              )}
-            </div>
+            <LineFunnelsManager
+              startDate={(() => {
+                const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+                const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+                const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+                return formatDateInput(adjusted.start);
+              })()}
+              endDate={(() => {
+                const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+                const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+                const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+                return formatDateInput(adjusted.end);
+              })()}
+            />
           ) : null}
         </>
       )}
