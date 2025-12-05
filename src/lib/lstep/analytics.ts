@@ -89,6 +89,106 @@ export async function countLineRegistrationsByDateRange(
   return Number(row?.total ?? 0);
 }
 
+export interface SourceCountResult {
+  threads: number;
+  instagram: number;
+  youtube: number;
+  organic: number;
+  other: number;
+  total: number;
+}
+
+/**
+ * 期間内の流入経路別LINE登録者数を取得
+ * lstep_friends_rawテーブルを使用（登録数KPIと同じデータソース）
+ */
+export async function countLineRegistrationsBySource(
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<SourceCountResult> {
+  const datasetId = DEFAULT_DATASET;
+  const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
+
+  // 最新のスナップショット日付を取得
+  const [latestSnapshot] = await runQuery<{ snapshot_date: string | null }>(client, projectId, datasetId, {
+    query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM \`${projectId}.${datasetId}.${TABLE_NAME}\``,
+  });
+
+  const snapshotDate = latestSnapshot?.snapshot_date;
+  if (!snapshotDate) {
+    return { threads: 0, instagram: 0, youtube: 0, organic: 0, other: 0, total: 0 };
+  }
+
+  // 各流入経路のカウントを取得
+  // 複数の流入経路を持つユーザーは、最も優先度の高い流入経路にカウント
+  // 優先順位: Threads > Instagram > YouTube > Organic > Other
+  const [row] = await runQuery<{
+    total: number;
+    threads: number;
+    instagram: number;
+    youtube: number;
+    organic: number;
+  }>(client, projectId, datasetId, {
+    query: `
+      WITH users_in_range AS (
+        SELECT
+          id,
+          -- Threads系（source_threads, source_threads_post, source_threads_profile, source_threads_fixed）
+          GREATEST(
+            COALESCE(source_threads, 0),
+            COALESCE(source_threads_post, 0),
+            COALESCE(source_threads_profile, 0),
+            COALESCE(source_threads_fixed, 0)
+          ) AS is_threads,
+          -- Instagram系（source_instagram, source_instagram_profile, source_instagram_comment）
+          GREATEST(
+            COALESCE(source_instagram, 0),
+            COALESCE(source_instagram_profile, 0),
+            COALESCE(source_instagram_comment, 0)
+          ) AS is_instagram,
+          -- YouTube
+          COALESCE(source_youtube, 0) AS is_youtube,
+          -- Organic
+          COALESCE(inflow_organic, 0) AS is_organic
+        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+        WHERE snapshot_date = @snapshotDate
+          AND friend_added_at IS NOT NULL
+          AND DATE(friend_added_at) BETWEEN @startDate AND @endDate
+      ),
+      categorized AS (
+        SELECT
+          id,
+          CASE
+            WHEN is_threads = 1 THEN 'threads'
+            WHEN is_instagram = 1 THEN 'instagram'
+            WHEN is_youtube = 1 THEN 'youtube'
+            WHEN is_organic = 1 THEN 'organic'
+            ELSE 'other'
+          END AS source_category
+        FROM users_in_range
+      )
+      SELECT
+        COUNT(DISTINCT id) AS total,
+        COUNTIF(source_category = 'threads') AS threads,
+        COUNTIF(source_category = 'instagram') AS instagram,
+        COUNTIF(source_category = 'youtube') AS youtube,
+        COUNTIF(source_category = 'organic') AS organic
+      FROM categorized
+    `,
+    params: { snapshotDate, startDate, endDate },
+  });
+
+  const total = Number(row?.total ?? 0);
+  const threads = Number(row?.threads ?? 0);
+  const instagram = Number(row?.instagram ?? 0);
+  const youtube = Number(row?.youtube ?? 0);
+  const organic = Number(row?.organic ?? 0);
+  const other = total - threads - instagram - youtube - organic;
+
+  return { threads, instagram, youtube, organic, other: Math.max(0, other), total };
+}
+
 /**
  * 期間指定でLstep分析データを取得
  */

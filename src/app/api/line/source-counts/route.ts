@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
-import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
+import { resolveProjectId } from '@/lib/bigquery';
+import { countLineRegistrationsBySource } from '@/lib/lstep/analytics';
 
 const PROJECT_ID = (() => {
   const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
   return preferred ? resolveProjectId(preferred) : null;
 })();
-
-const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 
 function isValidDate(value: string | null): value is string {
   if (!value) return false;
@@ -59,47 +57,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [threads, instagram, youtube, organic, og] = await Promise.all([
-      countLineSourceRegistrations(PROJECT_ID, { startDate: start, endDate: end, sourceName: 'Threads', datasetId: DATASET_ID }),
-      countLineSourceRegistrations(PROJECT_ID, { startDate: start, endDate: end, sourceName: 'Instagram', datasetId: DATASET_ID }),
-      countLineSourceRegistrations(PROJECT_ID, { startDate: start, endDate: end, sourceName: 'Youtube', datasetId: DATASET_ID }),
-      countLineSourceRegistrations(PROJECT_ID, { startDate: start, endDate: end, sourceName: 'Organic', datasetId: DATASET_ID }),
-      countLineSourceRegistrations(PROJECT_ID, { startDate: start, endDate: end, sourceName: 'OG', datasetId: DATASET_ID }),
-    ]);
-
-    const organicTotal = organic + og;
-
-    const client = createBigQueryClient(PROJECT_ID, process.env.LSTEP_BQ_LOCATION);
-    const [rows] = await client.query({
-      query: `
-        SELECT COUNT(DISTINCT user_id) AS total
-        FROM \`${PROJECT_ID}.${DATASET_ID}.user_core\`
-        WHERE DATE(friend_added_at) BETWEEN @startDate AND @endDate
-      `,
-      params: { startDate: start, endDate: end },
-    });
-
-    const totalRow = (rows as Array<{ total: bigint | number | string | null }>)[0];
-    const totalValue = totalRow?.total;
-    const total =
-      typeof totalValue === 'number'
-        ? totalValue
-        : typeof totalValue === 'bigint'
-          ? Number(totalValue)
-          : typeof totalValue === 'string'
-            ? Number(totalValue) || 0
-            : 0;
-
-    const other = Math.max(0, total - (threads + instagram + youtube + organicTotal));
+    // lstep_friends_rawテーブルから流入経路別カウントを取得
+    // 登録数KPIと同じデータソースを使用することで、合計が一致する
+    const sourceCounts = await countLineRegistrationsBySource(PROJECT_ID, start, end);
 
     const response = {
       range: { start, end },
-      threads,
-      instagram,
-      youtube,
-      organic: organicTotal,
-      other,
-      total,
+      threads: sourceCounts.threads,
+      instagram: sourceCounts.instagram,
+      youtube: sourceCounts.youtube,
+      organic: sourceCounts.organic,
+      other: sourceCounts.other,
+      total: sourceCounts.total,
       generatedAt: toIsoDate(new Date()),
     };
 

@@ -175,23 +175,20 @@ export async function analyzeFunnel(
 }
 
 /**
- * プリセットファネル定義: IGxLINE
+ * プリセットファネル定義: Threads ファネル
  */
 export const PRESET_FUNNEL_IGLN: FunnelDefinition = {
   id: 'igln',
-  name: 'IG × LINE ファネル分析',
-  description: 'IGアカウントからLINE登録、セミナー参加、個別相談、成約までのファネル',
+  name: 'Threads ファネル分析',
+  description: 'LINE登録からアンケート回答、動画視聴、個別相談、成約までのファネル',
   steps: [
     { id: 'measure_target', label: '計測対象', tagColumn: 'friend_added_at' },
-    { id: 'survey_completed', label: 'IG：アンケート回答了', tagColumn: 'survey_completed' },
-    { id: 'view_page', label: '問質ページ遷移', tagColumn: 'igln_view_page' },
-    { id: 'video_watched', label: 'IG：動画視聴', tagColumn: 'igln_video_watched' },
-    { id: 's_apply', label: 'IG：セミナー申し込み', tagColumn: 'igln_s_apply_page' },
-    { id: 's_joined', label: 'IG：セミナー参加', tagColumn: 'igln_s_joineddone' },
-    { id: 's_bonus', label: 'IG：特典受け取り', tagColumn: 'igln_s_bonusdone' },
-    { id: 'personal_msg', label: 'IG：個別相談全申し込み', tagColumn: 'igln_personal_msg' },
-    { id: 'personal_detail', label: 'IG：個別相談会詳細フォーム回答', tagColumn: 'igln_detail_finisheddone' },
-    { id: 'contracted', label: 'IG：成約', tagColumn: 'igln_contracted' },
+    { id: 'survey_completed', label: 'アンケート回答完了', tagColumn: 'survey_completed' },
+    { id: 'video_lp', label: '動画LP遷移', tagColumn: 'th_video_lp' },
+    { id: 'video_watched', label: '動画閲覧', tagColumn: 'th_video_watched' },
+    { id: 'consultation_form', label: '個別相談フォーム遷移', tagColumn: 'th_consultation_form' },
+    { id: 'consultation_applied', label: '個別相談申込済み', tagColumn: 'th_consultation_applied' },
+    { id: 'contracted', label: '成約', tagColumn: 'th_contracted' },
   ],
 };
 
