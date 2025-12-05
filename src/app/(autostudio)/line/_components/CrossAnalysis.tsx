@@ -65,13 +65,6 @@ function formatNumber(value: number): string {
 }
 
 // AutoStudioトンマナに準拠したカラー
-const ageColors: Record<string, { bg: string; text: string; border: string }> = {
-  '20代': { bg: 'bg-[#161819]', text: 'text-[color:var(--color-text-primary)]', border: 'border-[color:var(--color-border)]' },
-  '30代': { bg: 'bg-[#161819]', text: 'text-[color:var(--color-text-primary)]', border: 'border-[color:var(--color-border)]' },
-  '40代': { bg: 'bg-[#161819]', text: 'text-[color:var(--color-text-primary)]', border: 'border-[color:var(--color-border)]' },
-  '50代': { bg: 'bg-[#161819]', text: 'text-[color:var(--color-text-primary)]', border: 'border-[color:var(--color-border)]' },
-};
-
 // クロス集計テーブルを構築
 function buildCrossTable(
   data: CrossAnalysisRow[],
@@ -116,10 +109,10 @@ function CrossTable({ data, dim1Label, dim2Label, dim1Order, dim2Order, highligh
   const maxValue = Math.max(...allValues, 0);
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white shadow-[var(--shadow-soft)]">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-[color:var(--color-border)]">
+          <tr className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]">
             <th className="py-2 px-3 text-left font-medium text-[color:var(--color-text-secondary)]">
               {dim1Label} \ {dim2Label}
             </th>
@@ -133,9 +126,9 @@ function CrossTable({ data, dim1Label, dim2Label, dim1Order, dim2Order, highligh
             </th>
           </tr>
         </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.dim1} className="border-b border-[color:var(--color-border)] last:border-b-0">
+        <tbody className="divide-y divide-[color:var(--color-border)]">
+          {rows.map((row, rowIdx) => (
+            <tr key={row.dim1} className={rowIdx % 2 === 0 ? 'bg-[color:var(--color-surface)]' : 'bg-white'}>
               <td className="py-2 px-3 font-medium text-[color:var(--color-text-primary)]">
                 {row.dim1}
               </td>
@@ -259,22 +252,23 @@ function AgeDetailCard({
   jobDetails: Map<string, { total: number; revenue: { label: string; count: number; percent: number }[]; goal: { label: string; count: number; percent: number }[] }>;
 }) {
   const percent = totalUsers > 0 ? (ageData.total / totalUsers) * 100 : 0;
-  const colors = ageColors[ageData.age] || { bg: 'bg-gray-500', text: 'text-gray-600', border: 'border-gray-300' };
 
   // 職業を人数順にソート
   const sortedJobs = [...ageData.jobBreakdown].sort((a, b) => b.count - a.count);
 
   return (
-    <div className={`rounded-xl border-2 ${colors.border} bg-[color:var(--color-surface)] overflow-hidden`}>
+    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white shadow-[var(--shadow-soft)] overflow-hidden">
       {/* ヘッダー */}
-      <div className={`${colors.bg} px-4 py-3 flex items-center justify-between`}>
+      <div className="px-4 py-3 flex items-center justify-between bg-[color:var(--color-surface-muted)]">
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/20 text-white font-bold text-xl">
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-white text-[color:var(--color-text-primary)] font-bold text-lg border border-[color:var(--color-border)]">
             {ageData.age.replace('代', '')}
           </span>
-          <div className="text-white">
-            <p className="text-xl font-bold">{ageData.age}</p>
-            <p className="text-sm opacity-90">{formatNumber(ageData.total)}人 (全体の{percent.toFixed(1)}%)</p>
+          <div className="text-[color:var(--color-text-primary)]">
+            <p className="text-base font-semibold">{ageData.age}</p>
+            <p className="text-xs text-[color:var(--color-text-secondary)]">
+              {formatNumber(ageData.total)}人 (全体の{percent.toFixed(1)}%)
+            </p>
           </div>
         </div>
       </div>
@@ -286,15 +280,15 @@ function AgeDetailCard({
           if (!detail || detail.total === 0) return null;
 
           return (
-            <div key={jobItem.job} className={`p-4 ${jobIdx === 0 ? 'bg-[color:var(--color-surface-muted)]' : ''}`}>
+            <div key={jobItem.job} className={`p-4 ${jobIdx === 0 ? 'bg-[color:var(--color-surface-muted)]' : 'bg-white'}`}>
               {/* 職業ヘッダー */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <span className={`text-base font-bold ${jobIdx === 0 ? 'text-[color:var(--color-text-primary)]' : 'text-[color:var(--color-text-primary)]'}`}>
+                  <span className="text-base font-semibold text-[color:var(--color-text-primary)]">
                     {jobItem.job}
                   </span>
                   {jobIdx === 0 && (
-                    <span className="text-xs bg-[color:var(--color-text-primary)] text-white px-1.5 py-0.5 rounded font-medium">TOP</span>
+                    <span className="text-[10px] bg-[color:var(--color-accent)] text-white px-2 py-0.5 rounded-full font-semibold">TOP</span>
                   )}
                 </div>
                 <span className="text-sm font-semibold text-[color:var(--color-text-primary)]">

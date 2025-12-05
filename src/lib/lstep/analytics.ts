@@ -38,6 +38,7 @@ export interface SourceAnalysis {
 
 // 属性分析のデータ型
 export interface AttributeAnalysis {
+  gender: Array<{ label: string; count: number; percent: number }>;
   age: Array<{ label: string; count: number; percent: number }>;
   job: Array<{ label: string; count: number; percent: number }>;
   currentRevenue: Array<{ label: string; count: number; percent: number }>;
@@ -96,6 +97,7 @@ export async function getLstepAnalyticsByDateRange(
         organicPercent: 0,
       },
       attributes: {
+        gender: [],
         age: [],
         job: [],
         currentRevenue: [],
@@ -163,6 +165,7 @@ export async function getLstepAnalytics(projectId: string): Promise<LstepAnalyti
         organicPercent: 0,
       },
       attributes: {
+        gender: [],
         age: [],
         job: [],
         currentRevenue: [],
@@ -481,7 +484,44 @@ async function getAttributeAnalysis(
   datasetId: string,
   snapshotDate: string,
 ): Promise<AttributeAnalysis> {
+  const defaultGender = [
+    { label: '男性', count: 0, percent: 0 },
+    { label: '女性', count: 0, percent: 0 },
+  ];
   // 年齢層（アンケート完了者のみ）
+  const genderRows = await runQuery<{ gender_male: number; gender_female: number; total: number }>(
+    client,
+    projectId,
+    datasetId,
+    {
+      query: `
+        SELECT
+          COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
+          COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
+          COUNT(DISTINCT id) AS total
+        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+        WHERE snapshot_date = @snapshotDate
+      `,
+      params: { snapshotDate },
+    },
+  );
+
+  const male = Number(genderRows?.[0]?.gender_male ?? 0);
+  const female = Number(genderRows?.[0]?.gender_female ?? 0);
+  const totalGender = Number(genderRows?.[0]?.total ?? 0);
+  const gender = [
+    {
+      label: '男性',
+      count: male,
+      percent: totalGender > 0 ? (male / totalGender) * 100 : 0,
+    },
+    {
+      label: '女性',
+      count: female,
+      percent: totalGender > 0 ? (female / totalGender) * 100 : 0,
+    },
+  ];
+
   const ageRows = await runQuery<{ age_group: string; count: number }>(client, projectId, datasetId, {
     query: `
       SELECT
@@ -673,6 +713,7 @@ async function getAttributeAnalysis(
   }));
 
   return {
+    gender,
     age,
     job,
     currentRevenue,
@@ -694,6 +735,42 @@ async function getAttributeAnalysisByDateRange(
   const dateFilter = startDate && endDate
     ? 'AND DATE(friend_added_at) BETWEEN @startDate AND @endDate'
     : '';
+
+  // 性別（期間指定）
+  const genderRows = await runQuery<{ gender_male: number; gender_female: number; total: number }>(
+    client,
+    projectId,
+    datasetId,
+    {
+      query: `
+        SELECT
+          COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
+          COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
+          COUNT(DISTINCT id) AS total
+        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+        WHERE snapshot_date = @snapshotDate
+          AND friend_added_at IS NOT NULL
+          ${dateFilter}
+      `,
+      params: { snapshotDate, startDate, endDate },
+    },
+  );
+
+  const male = Number(genderRows?.[0]?.gender_male ?? 0);
+  const female = Number(genderRows?.[0]?.gender_female ?? 0);
+  const totalGender = Number(genderRows?.[0]?.total ?? 0);
+  const gender = [
+    {
+      label: '男性',
+      count: male,
+      percent: totalGender > 0 ? (male / totalGender) * 100 : 0,
+    },
+    {
+      label: '女性',
+      count: female,
+      percent: totalGender > 0 ? (female / totalGender) * 100 : 0,
+    },
+  ];
 
   // 年齢層（アンケート完了者のみ、期間指定）
   const ageRows = await runQuery<{ age_group: string; count: number }>(client, projectId, datasetId, {
@@ -933,6 +1010,7 @@ async function getAttributeAnalysisByDateRange(
   }));
 
   return {
+    gender,
     age,
     job,
     currentRevenue,

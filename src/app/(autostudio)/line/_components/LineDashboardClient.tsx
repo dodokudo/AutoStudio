@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
@@ -50,6 +51,31 @@ function formatDateLabel(value: string): string {
   return dateFormatter.format(new Date(value));
 }
 
+const toStartOfDay = (date: Date) => {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const toEndOfDay = (date: Date) => {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+  return d;
+};
+
+function adjustRangeWithSnapshot(rangeStart: Date, rangeEnd: Date, latestSnapshotDate?: string | null) {
+  if (!latestSnapshotDate) return { start: rangeStart, end: rangeEnd };
+  const snapshotDate = toStartOfDay(new Date(latestSnapshotDate));
+  if (Number.isNaN(snapshotDate.getTime())) return { start: rangeStart, end: rangeEnd };
+  const currentEnd = rangeEnd;
+  if (snapshotDate <= currentEnd) return { start: rangeStart, end: rangeEnd };
+
+  // Extend end to snapshot date, keep duration
+  const durationDays = Math.max(1, Math.round((rangeEnd.getTime() - rangeStart.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+  const newEnd = toEndOfDay(snapshotDate);
+  const newStart = toStartOfDay(new Date(newEnd.getTime() - (durationDays - 1) * 24 * 60 * 60 * 1000));
+  return { start: newStart, end: newEnd };
+}
+
 export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [dateRange, setDateRange] = useState<UnifiedRangePreset>('7d');
   const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -75,11 +101,12 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     let aborted = false;
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const { start, end, preset } = resolveDateRange(rangePreset, customStartDate, customEndDate);
-    const startKey = formatDateInput(start);
-    const endKey = formatDateInput(end);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+    const startKey = formatDateInput(adjusted.start);
+    const endKey = formatDateInput(adjusted.end);
 
-    if (preset === 'all') {
+    if (resolved.preset === 'all') {
       setSourceStats(initialData.sources);
       setSourcesLoading(false);
       setSourcesError(null);
@@ -144,11 +171,12 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     let aborted = false;
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const { start, end, preset } = resolveDateRange(rangePreset, customStartDate, customEndDate);
-    const startKey = formatDateInput(start);
-    const endKey = formatDateInput(end);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+    const startKey = formatDateInput(adjusted.start);
+    const endKey = formatDateInput(adjusted.end);
 
-    if (preset === 'all') {
+    if (resolved.preset === 'all') {
       setAttributeStats(initialData.attributes);
       setAttributesLoading(false);
       setAttributesError(null);
@@ -195,9 +223,10 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     let aborted = false;
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const { start, end, preset } = resolveDateRange(rangePreset, customStartDate, customEndDate);
-    const startKey = formatDateInput(start);
-    const endKey = formatDateInput(end);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+    const startKey = formatDateInput(adjusted.start);
+    const endKey = formatDateInput(adjusted.end);
 
     const controller = new AbortController();
     setCrossAnalysisLoading(true);
@@ -242,9 +271,10 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     setFunnelError(null);
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const { start, end } = resolveDateRange(rangePreset, customStartDate, customEndDate);
-    const startKey = formatDateInput(start);
-    const endKey = formatDateInput(end);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+    const startKey = formatDateInput(adjusted.start);
+    const endKey = formatDateInput(adjusted.end);
 
     const body = {
       preset: 'igln',
@@ -297,8 +327,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
 
   const filteredAnalytics = useMemo(() => {
     const resolved = resolveDateRange(dateRange, customStartDate, customEndDate);
-    const rangeStart = resolved.start;
-    const rangeEnd = resolved.end;
+    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+    const rangeStart = adjusted.start;
+    const rangeEnd = adjusted.end;
 
     const dailyDataInRange = initialData.dailyRegistrations.filter((item) => {
       const target = new Date(item.date);
@@ -339,7 +370,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const summaryCards = useMemo(() => {
     const days = filteredAnalytics.dailyRegistrations.length;
     const registrations = filteredAnalytics.funnel.lineRegistration;
-    const surveyEntered = filteredAnalytics.funnel.surveyEntered;
     const surveyCompleted = filteredAnalytics.funnel.surveyCompleted;
     const latestDate = filteredAnalytics.dailyRegistrations[0]?.date ?? null;
     const averagePerDay = days > 0 ? registrations / days : 0;
@@ -352,14 +382,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
         secondary: days > 0 ? `平均 ${formatNumber(averagePerDay)}人/日` : null,
       },
       {
-        label: 'アンケート遷移数',
-        primary: `${formatNumber(surveyEntered)}人`,
-        secondary: registrations > 0 ? `移行率 ${formatPercent(filteredAnalytics.funnel.surveyEnteredCVR)}` : null,
-      },
-      {
         label: 'アンケート完了数',
         primary: `${formatNumber(surveyCompleted)}人`,
-        secondary: surveyEntered > 0 ? `完了率 ${formatPercent(filteredAnalytics.funnel.surveyCompletedCVR)}` : null,
+        secondary: registrations > 0 ? `完了率 ${formatPercent(filteredAnalytics.funnel.surveyCompletedCVR)}` : null,
       },
       {
         label: 'アンケート回答率',
@@ -416,6 +441,17 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     [filteredAnalytics.sources],
   );
 
+  // 性別データ（円グラフ用）
+  const genderData = useMemo(() => {
+    const gender = filteredAnalytics.attributes.gender ?? [];
+    return gender.map((item) => ({
+      name: item.label,
+      value: item.count,
+      percent: item.percent,
+    }));
+  }, [filteredAnalytics.attributes.gender]);
+
+  // 性別以外の属性グループ
   const attributeGroups = useMemo(
     () => [
       { title: '年齢層', items: filteredAnalytics.attributes.age },
@@ -480,7 +516,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
         <>
           {activeTab === 'main' ? (
             <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {summaryCards.map((card) => (
                   <Card key={card.label} className={dashboardCardClass}>
                     <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
@@ -537,7 +573,97 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
 
               <Card className="p-6">
                 <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">属性分析</h2>
-                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+
+                {/* 性別セクション - 2カラムレイアウト */}
+                <div className="mt-6">
+                  <h3 className="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">性別</h3>
+                  {genderData.length === 0 ? (
+                    <p className="text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
+                  ) : (
+                    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] items-center">
+                      {/* 左: 人数表示 */}
+                      <div className="space-y-3 w-full">
+                        {genderData.map((item) => (
+                          <div key={item.name} className="flex items-center gap-3">
+                            <div className="w-12 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.name}</div>
+                            <div className="flex-1 h-7 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] overflow-hidden">
+                              <div
+                                className="h-full rounded-[var(--radius-sm)] transition-all duration-300"
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, item.percent))}%`,
+                                  backgroundColor: item.name === '男性' ? '#0a7aff' : '#ff6b9d',
+                                }}
+                              />
+                            </div>
+                            <div className="w-16 text-right text-sm font-semibold text-[color:var(--color-text-primary)]">
+                              {formatNumber(item.value)}人
+                            </div>
+                          </div>
+                        ))}
+                        <div className="text-xs text-[color:var(--color-text-muted)] pl-12">
+                          合計: {formatNumber(genderData.reduce((sum, item) => sum + item.value, 0))}人
+                        </div>
+                      </div>
+
+                      {/* 右: 円グラフ + 凡例 */}
+                      <div className="flex items-center gap-4 justify-center lg:justify-start">
+                        <div className="w-[150px] h-[150px] relative flex-shrink-0">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={genderData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={38}
+                                outerRadius={68}
+                                paddingAngle={2}
+                                dataKey="value"
+                              >
+                                {genderData.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={entry.name === '男性' ? '#0a7aff' : '#ff6b9d'}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(value: number, name: string) => [
+                                  `${formatNumber(value)}人`,
+                                  name,
+                                ]}
+                                contentStyle={{
+                                  backgroundColor: 'var(--color-surface)',
+                                  border: '1px solid var(--color-border)',
+                                  borderRadius: 'var(--radius-md)',
+                                  fontSize: '12px',
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-xs text-[color:var(--color-text-muted)]">男女比</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {genderData.map((item) => (
+                            <div key={item.name} className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: item.name === '男性' ? '#0a7aff' : '#ff6b9d' }}
+                              />
+                              <span className="text-sm text-[color:var(--color-text-secondary)] whitespace-nowrap">
+                                {item.name}: {formatPercent(item.percent)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 他の属性 */}
+                <div className="mt-8 grid gap-6 lg:grid-cols-2">
                   {attributeGroups.map((group) => (
                     <div key={group.title} className="space-y-3">
                       <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{group.title}</h3>

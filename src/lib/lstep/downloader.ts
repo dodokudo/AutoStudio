@@ -154,18 +154,42 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
   await page.waitForTimeout(2000);
   console.log('CSVエクスポート設定ページに戻りました:', page.url());
 
-  // 7. 「この条件でダウンロード」をクリック
+  // 7. エクスポート前のダウンロードリンク数を取得
+  const initialDownloadLinks = page.getByRole('link', { name: 'ダウンロード' });
+  const initialCount = await initialDownloadLinks.count();
+  console.log(`エクスポート前のダウンロードリンク数: ${initialCount}`);
+
+  // 8. 「この条件でダウンロード」をクリック
   console.log('この条件でダウンロードをクリック...');
   await page.getByRole('button', { name: 'この条件でダウンロード' }).click();
 
-  // 8. 画面をリロード（エクスポート履歴を更新）
-  console.log('ページをリロードしています...');
+  // 9. 新しいエクスポートが完了するまでポーリング（最大90秒）
+  console.log('エクスポート完了を待機中...');
   await page.waitForLoadState('domcontentloaded');
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(3000);
-  console.log('リロード完了');
 
-  // 9. エクスポート履歴の1番上のダウンロードボタンをクリック
+  let exportReady = false;
+  for (let i = 0; i < 18; i++) {
+    await page.waitForTimeout(5000);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+
+    // ダウンロードリンク数が増えたか確認
+    const downloadLinks = page.getByRole('link', { name: 'ダウンロード' });
+    const count = await downloadLinks.count();
+    console.log(`ポーリング ${i + 1}/18: ダウンロードリンク ${count}個 (初期: ${initialCount})`);
+
+    if (count > initialCount) {
+      exportReady = true;
+      console.log('新しいエクスポート完了を確認');
+      break;
+    }
+  }
+
+  if (!exportReady) {
+    throw new Error('エクスポートが90秒以内に完了しませんでした');
+  }
+
+  // 10. エクスポート履歴の1番上のダウンロードボタンをクリック
   console.log('ダウンロードボタンをクリック...');
   const downloadPromise = page.waitForEvent('download', { timeout: config.downloadTimeoutMs });
 
