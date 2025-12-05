@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -72,6 +72,13 @@ function toStepForm(step: FunnelStep): FunnelStepForm {
   };
 }
 
+// 日付を30日前に設定するユーティリティ
+function getDateNDaysAgo(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
 export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerProps) {
   const { data: funnelListData, mutate: mutateFunnels } = useSWR<FunnelListResponse>(
     '/api/line/funnel',
@@ -95,6 +102,17 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
   const [analysisResult, setAnalysisResult] = useState<FunnelAnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  // 期間比較用の状態
+  const [showComparison, setShowComparison] = useState(false);
+  const [periodAStart, setPeriodAStart] = useState(getDateNDaysAgo(60));
+  const [periodAEnd, setPeriodAEnd] = useState(getDateNDaysAgo(31));
+  const [periodBStart, setPeriodBStart] = useState(getDateNDaysAgo(30));
+  const [periodBEnd, setPeriodBEnd] = useState(getDateNDaysAgo(1));
+  const [comparisonResultA, setComparisonResultA] = useState<FunnelAnalysisResult | null>(null);
+  const [comparisonResultB, setComparisonResultB] = useState<FunnelAnalysisResult | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   // 初期選択: プリセットの最初のファネル
   useEffect(() => {
@@ -170,6 +188,55 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
     }
     return customFunnels.find((f) => f.id === selectedFunnelId) ?? null;
   }, [selectedFunnelId, selectedFunnelType, presets, customFunnels]);
+
+  // 期間比較分析を実行
+  const runComparison = useCallback(async () => {
+    if (!selectedFunnel) return;
+
+    setComparisonLoading(true);
+    setComparisonError(null);
+
+    try {
+      const [resA, resB] = await Promise.all([
+        fetch('/api/line/funnel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            preset: selectedFunnelType === 'preset' ? selectedFunnelId : undefined,
+            funnelDefinition: selectedFunnelType === 'custom' ? selectedFunnel : undefined,
+            startDate: periodAStart,
+            endDate: periodAEnd,
+          }),
+        }),
+        fetch('/api/line/funnel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            preset: selectedFunnelType === 'preset' ? selectedFunnelId : undefined,
+            funnelDefinition: selectedFunnelType === 'custom' ? selectedFunnel : undefined,
+            startDate: periodBStart,
+            endDate: periodBEnd,
+          }),
+        }),
+      ]);
+
+      if (!resA.ok || !resB.ok) {
+        throw new Error('Failed to fetch comparison data');
+      }
+
+      const [dataA, dataB] = await Promise.all([
+        resA.json() as Promise<FunnelAnalysisResult>,
+        resB.json() as Promise<FunnelAnalysisResult>,
+      ]);
+
+      setComparisonResultA(dataA);
+      setComparisonResultB(dataB);
+    } catch (error) {
+      setComparisonError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComparisonLoading(false);
+    }
+  }, [selectedFunnel, selectedFunnelId, selectedFunnelType, periodAStart, periodAEnd, periodBStart, periodBEnd]);
 
   const onCreate = () => {
     const defaultTagColumn = tagColumns[0]?.column ?? 'survey_completed';
@@ -267,17 +334,25 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
     }
   };
 
-  const addStep = () => {
+  const addStep = (insertAtIndex?: number) => {
     if (!editingFunnel) return;
     const defaultTagColumn = tagColumns[0]?.column ?? 'survey_completed';
     const stepIndex = editingFunnel.steps.length;
-    setEditingFunnel({
-      ...editingFunnel,
-      steps: [
-        ...editingFunnel.steps,
-        { id: `step_${stepIndex}`, label: `ステップ${stepIndex}`, tagColumn: defaultTagColumn },
-      ],
-    });
+    const newStep = { id: `step_${stepIndex}_${Date.now()}`, label: `ステップ${stepIndex}`, tagColumn: defaultTagColumn };
+
+    if (insertAtIndex !== undefined && insertAtIndex >= 0) {
+      const newSteps = [...editingFunnel.steps];
+      newSteps.splice(insertAtIndex + 1, 0, newStep);
+      setEditingFunnel({
+        ...editingFunnel,
+        steps: newSteps,
+      });
+    } else {
+      setEditingFunnel({
+        ...editingFunnel,
+        steps: [...editingFunnel.steps, newStep],
+      });
+    }
   };
 
   const updateStep = (index: number, updates: Partial<FunnelStepForm>) => {
@@ -292,8 +367,11 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
 
   const removeStep = (index: number) => {
     if (!editingFunnel) return;
-    // 最初のステップ（計測対象）は削除不可
     if (index === 0) return;
+    if (editingFunnel.steps.length <= 2) {
+      alert('最低2つのステップ（計測対象 + 1ステップ）が必要です');
+      return;
+    }
     setEditingFunnel({
       ...editingFunnel,
       steps: editingFunnel.steps.filter((_, idx) => idx !== index),
@@ -302,7 +380,6 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
 
   const moveStep = (index: number, delta: number) => {
     if (!editingFunnel) return;
-    // 最初のステップ（計測対象）は移動不可
     if (index === 0) return;
     const nextIndex = index + delta;
     if (nextIndex < 1 || nextIndex >= editingFunnel.steps.length) return;
@@ -316,6 +393,12 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
   };
 
   const isPreset = selectedFunnelType === 'preset';
+
+  // 差分計算ヘルパー
+  const getDiff = (a: number, b: number): { value: number; isPositive: boolean } => {
+    const diff = b - a;
+    return { value: diff, isPositive: diff >= 0 };
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[320px,1fr]">
@@ -342,6 +425,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                       setSelectedFunnelId(funnel.id);
                       setSelectedFunnelType('preset');
                       setEditingFunnel(null);
+                      setShowComparison(false);
                     }}
                     className={`w-full rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition ${
                       isActive
@@ -378,6 +462,7 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                         setSelectedFunnelId(funnel.id);
                         setSelectedFunnelType('custom');
                         setEditingFunnel(null);
+                        setShowComparison(false);
                       }}
                       className={`w-full rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition ${
                         isActive
@@ -478,92 +563,129 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">ステップ定義</h3>
-                <Button variant="secondary" onClick={addStep}>
-                  ステップを追加
+                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                  ステップ定義 ({editingFunnel.steps.length}件)
+                </h3>
+                <Button variant="secondary" onClick={() => addStep()}>
+                  + 末尾に追加
                 </Button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {editingFunnel.steps.map((step, index) => {
                   const isFirstStep = index === 0;
                   return (
-                    <Card key={index} className="space-y-3 p-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
-                          ステップ {index} {isFirstStep ? '（計測対象）' : ''}
-                        </h4>
-                        {!isFirstStep ? (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="secondary"
-                              onClick={() => moveStep(index, -1)}
-                              disabled={index <= 1}
-                            >
-                              ↑
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => moveStep(index, 1)}
-                              disabled={index === editingFunnel.steps.length - 1}
-                            >
-                              ↓
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => removeStep(index)}
-                            >
-                              削除
-                            </Button>
+                    <div key={`${step.id}-${index}`} className="group">
+                      <Card className="p-4 border-l-4 border-l-[color:var(--color-accent)]">
+                        <div className="flex items-start gap-4">
+                          {/* ステップ番号とドラッグハンドル */}
+                          <div className="flex flex-col items-center gap-1 pt-1">
+                            <span className="text-xs font-bold text-[color:var(--color-accent)] bg-[color:var(--color-accent-muted)] rounded-full w-6 h-6 flex items-center justify-center">
+                              {index}
+                            </span>
+                            {!isFirstStep && (
+                              <div className="flex flex-col gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => moveStep(index, -1)}
+                                  disabled={index <= 1}
+                                  className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30"
+                                  title="上に移動"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveStep(index, 1)}
+                                  disabled={index === editingFunnel.steps.length - 1}
+                                  className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] disabled:opacity-30"
+                                  title="下に移動"
+                                >
+                                  ▼
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        ) : null}
-                      </div>
 
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className="flex flex-col gap-2">
-                          <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">表示名</span>
-                          <input
-                            type="text"
-                            value={step.label}
-                            onChange={(event) => updateStep(index, { label: event.target.value })}
-                            className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-                            disabled={isFirstStep}
-                          />
-                        </label>
+                          {/* メインコンテンツ */}
+                          <div className="flex-1 grid gap-3 md:grid-cols-2">
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
+                                表示名 {isFirstStep && '(固定)'}
+                              </span>
+                              <input
+                                type="text"
+                                value={step.label}
+                                onChange={(event) => updateStep(index, { label: event.target.value })}
+                                className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] disabled:bg-gray-50 disabled:text-[color:var(--color-text-secondary)]"
+                                disabled={isFirstStep}
+                                placeholder="例: アンケート完了"
+                              />
+                            </label>
 
-                        <label className="flex flex-col gap-2">
-                          <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
-                            タグカラム
-                          </span>
-                          {isFirstStep ? (
-                            <input
-                              type="text"
-                              value="friend_added_at（固定）"
-                              disabled
-                              className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-gray-50 px-3 py-2 text-sm text-[color:var(--color-text-secondary)]"
-                            />
-                          ) : (
-                            <select
-                              value={step.tagColumn}
-                              onChange={(event) => updateStep(index, { tagColumn: event.target.value })}
-                              className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
+                                タグカラム {isFirstStep && '(固定)'}
+                              </span>
+                              {isFirstStep ? (
+                                <input
+                                  type="text"
+                                  value="friend_added_at"
+                                  disabled
+                                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-gray-50 px-3 py-2 text-sm text-[color:var(--color-text-secondary)]"
+                                />
+                              ) : (
+                                <select
+                                  value={step.tagColumn}
+                                  onChange={(event) => updateStep(index, { tagColumn: event.target.value })}
+                                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                                >
+                                  {tagColumns.map((column) => (
+                                    <option key={column.column} value={column.column}>
+                                      {column.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </label>
+                          </div>
+
+                          {/* 削除ボタン */}
+                          {!isFirstStep && (
+                            <button
+                              type="button"
+                              onClick={() => removeStep(index)}
+                              className="p-2 text-[color:var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 rounded transition"
+                              title="このステップを削除"
                             >
-                              {tagColumns.map((column) => (
-                                <option key={column.column} value={column.column}>
-                                  {column.label}
-                                </option>
-                              ))}
-                            </select>
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                            </button>
                           )}
-                        </label>
-                      </div>
-                    </Card>
+                        </div>
+                      </Card>
+
+                      {/* ステップ間に挿入ボタン */}
+                      {index < editingFunnel.steps.length - 1 && (
+                        <div className="flex justify-center py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => addStep(index)}
+                            className="text-xs text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-dark)] flex items-center gap-1 px-2 py-1 rounded hover:bg-[color:var(--color-accent-muted)]"
+                          >
+                            <span>+</span>
+                            <span>ここに挿入</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[color:var(--color-border)]">
               <Button variant="secondary" onClick={resetEditingState} disabled={isSaving}>
                 キャンセル
               </Button>
@@ -576,117 +698,322 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
 
         {/* 分析結果表示 */}
         {selectedFunnel && !editingFunnel ? (
-          <Card className="space-y-6 p-6">
-            <div>
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">{selectedFunnel.name}</h2>
-              <p className="text-sm text-[color:var(--color-text-secondary)]">
-                {startDate} 〜 {endDate} の結果
-              </p>
-            </div>
+          <>
+            <Card className="space-y-6 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">{selectedFunnel.name}</h2>
+                  <p className="text-sm text-[color:var(--color-text-secondary)]">
+                    {startDate} 〜 {endDate} の結果
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowComparison(!showComparison)}
+                >
+                  {showComparison ? '期間比較を閉じる' : '期間比較'}
+                </Button>
+              </div>
 
-            {analysisLoading ? (
-              <p className="text-sm text-[color:var(--color-text-secondary)]">ファネル分析中...</p>
-            ) : analysisError ? (
-              <p className="text-sm text-[color:var(--color-danger)]">エラー: {analysisError}</p>
-            ) : analysisResult ? (
-              <>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
-                    <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">計測対象</p>
-                    <p className="mt-2 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                      {formatNumber(analysisResult.totalBase)}人
-                    </p>
-                  </div>
-                  {analysisResult.steps.length >= 2 ? (
+              {analysisLoading ? (
+                <p className="text-sm text-[color:var(--color-text-secondary)]">ファネル分析中...</p>
+              ) : analysisError ? (
+                <p className="text-sm text-[color:var(--color-danger)]">エラー: {analysisError}</p>
+              ) : analysisResult ? (
+                <>
+                  <div className="grid gap-4 md:grid-cols-3">
                     <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
-                      <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">
-                        {analysisResult.steps[1]?.label ?? 'ステップ1'}
-                      </p>
+                      <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">計測対象</p>
                       <p className="mt-2 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                        {formatNumber(analysisResult.steps[1]?.reached ?? 0)}人
-                      </p>
-                      <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
-                        移行率 {formatPercent(analysisResult.steps[1]?.conversionRate ?? 0)}
+                        {formatNumber(analysisResult.totalBase)}人
                       </p>
                     </div>
-                  ) : null}
-                  <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
-                    <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">
-                      最終ステップ
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                      {formatNumber(analysisResult.steps[analysisResult.steps.length - 1]?.reached ?? 0)}人
-                    </p>
-                    <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
-                      全体比 {formatPercent(analysisResult.steps[analysisResult.steps.length - 1]?.overallRate ?? 0)}
-                    </p>
+                    {analysisResult.steps.length >= 2 ? (
+                      <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
+                        <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">
+                          {analysisResult.steps[1]?.label ?? 'ステップ1'}
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-[color:var(--color-text-primary)]">
+                          {formatNumber(analysisResult.steps[1]?.reached ?? 0)}人
+                        </p>
+                        <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
+                          移行率 {formatPercent(analysisResult.steps[1]?.conversionRate ?? 0)}
+                        </p>
+                      </div>
+                    ) : null}
+                    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
+                      <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">
+                        最終ステップ
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-[color:var(--color-text-primary)]">
+                        {formatNumber(analysisResult.steps[analysisResult.steps.length - 1]?.reached ?? 0)}人
+                      </p>
+                      <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
+                        全体比 {formatPercent(analysisResult.steps[analysisResult.steps.length - 1]?.overallRate ?? 0)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px]">
+                      <thead>
+                        <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                          <th className="px-4 py-3">#</th>
+                          <th className="px-4 py-3">ステップ</th>
+                          <th className="px-4 py-3 text-right">到達人数</th>
+                          <th className="px-4 py-3 text-right">未到達人数</th>
+                          <th className="px-4 py-3 text-right">移行率</th>
+                          <th className="px-4 py-3 text-right">全体比</th>
+                          <th className="px-4 py-3">視覚化</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
+                        {analysisResult.steps.map((step, index) => {
+                          const isFirst = index === 0;
+                          const conversionColor =
+                            step.conversionRate >= 50
+                              ? 'text-green-600'
+                              : step.conversionRate >= 20
+                                ? 'text-yellow-600'
+                                : 'text-red-600';
+
+                          return (
+                            <tr key={step.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
+                              <td className="px-4 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-[color:var(--color-text-primary)]">{step.label}</div>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-primary)]">
+                                {formatNumber(step.reached)}
+                              </td>
+                              <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                                {isFirst ? '-' : formatNumber(step.notReached)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {isFirst ? (
+                                  <span className="text-[color:var(--color-text-secondary)]">-</span>
+                                ) : (
+                                  <span className={conversionColor}>{formatPercent(step.conversionRate)}</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                                {formatPercent(step.overallRate)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="h-6 w-full overflow-hidden rounded bg-gray-100">
+                                  <div
+                                    className="h-full bg-green-500 transition-all"
+                                    style={{ width: `${step.overallRate}%` }}
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-[color:var(--color-text-secondary)]">ファネルを選択してください。</p>
+              )}
+            </Card>
+
+            {/* 期間比較セクション */}
+            {showComparison && (
+              <Card className="space-y-6 p-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">期間比較分析</h2>
+                  <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                    2つの期間を比較して、ファネルの変化を分析します。
+                  </p>
+                </div>
+
+                {/* 期間設定 */}
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* A期間 */}
+                  <div className="space-y-3 p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
+                    <h3 className="text-sm font-semibold text-blue-700">A期間（過去）</h3>
+                    <div className="grid gap-2 grid-cols-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-blue-600">開始日</span>
+                        <input
+                          type="date"
+                          value={periodAStart}
+                          onChange={(e) => setPeriodAStart(e.target.value)}
+                          className="rounded-[var(--radius-sm)] border border-blue-300 px-2 py-1.5 text-sm"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-blue-600">終了日</span>
+                        <input
+                          type="date"
+                          value={periodAEnd}
+                          onChange={(e) => setPeriodAEnd(e.target.value)}
+                          className="rounded-[var(--radius-sm)] border border-blue-300 px-2 py-1.5 text-sm"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* B期間 */}
+                  <div className="space-y-3 p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
+                    <h3 className="text-sm font-semibold text-green-700">B期間（最近）</h3>
+                    <div className="grid gap-2 grid-cols-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-green-600">開始日</span>
+                        <input
+                          type="date"
+                          value={periodBStart}
+                          onChange={(e) => setPeriodBStart(e.target.value)}
+                          className="rounded-[var(--radius-sm)] border border-green-300 px-2 py-1.5 text-sm"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-green-600">終了日</span>
+                        <input
+                          type="date"
+                          value={periodBEnd}
+                          onChange={(e) => setPeriodBEnd(e.target.value)}
+                          className="rounded-[var(--radius-sm)] border border-green-300 px-2 py-1.5 text-sm"
+                        />
+                      </label>
+                    </div>
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px]">
-                    <thead>
-                      <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
-                        <th className="px-4 py-3">#</th>
-                        <th className="px-4 py-3">ステップ</th>
-                        <th className="px-4 py-3 text-right">到達人数</th>
-                        <th className="px-4 py-3 text-right">未到達人数</th>
-                        <th className="px-4 py-3 text-right">移行率</th>
-                        <th className="px-4 py-3 text-right">全体比</th>
-                        <th className="px-4 py-3">視覚化</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
-                      {analysisResult.steps.map((step, index) => {
-                        const isFirst = index === 0;
-                        const conversionColor =
-                          step.conversionRate >= 50
-                            ? 'text-green-600'
-                            : step.conversionRate >= 20
-                              ? 'text-yellow-600'
-                              : 'text-red-600';
+                <div className="flex justify-center">
+                  <Button onClick={runComparison} disabled={comparisonLoading}>
+                    {comparisonLoading ? '分析中...' : '比較分析を実行'}
+                  </Button>
+                </div>
+
+                {/* 比較結果 */}
+                {comparisonError && (
+                  <p className="text-sm text-[color:var(--color-danger)]">エラー: {comparisonError}</p>
+                )}
+
+                {comparisonResultA && comparisonResultB && (
+                  <div className="space-y-4">
+                    {/* サマリー比較 */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
+                        <p className="text-xs font-medium text-blue-600 mb-2">A期間: {periodAStart} 〜 {periodAEnd}</p>
+                        <p className="text-2xl font-bold text-blue-700">{formatNumber(comparisonResultA.totalBase)}人</p>
+                        <p className="text-xs text-blue-600">計測対象</p>
+                      </div>
+                      <div className="p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
+                        <p className="text-xs font-medium text-green-600 mb-2">B期間: {periodBStart} 〜 {periodBEnd}</p>
+                        <p className="text-2xl font-bold text-green-700">{formatNumber(comparisonResultB.totalBase)}人</p>
+                        <p className="text-xs text-green-600">計測対象</p>
+                        {(() => {
+                          const diff = getDiff(comparisonResultA.totalBase, comparisonResultB.totalBase);
+                          return (
+                            <p className={`text-xs mt-1 ${diff.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff.isPositive ? '+' : ''}{formatNumber(diff.value)} ({diff.isPositive ? '+' : ''}{formatPercent(comparisonResultA.totalBase > 0 ? (diff.value / comparisonResultA.totalBase) * 100 : 0)})
+                            </p>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* 詳細比較テーブル */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[900px]">
+                        <thead>
+                          <tr className="border-b border-[color:var(--color-border)] bg-gray-50">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">#</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">ステップ</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-blue-600 bg-blue-50" colSpan={2}>A期間</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-green-600 bg-green-50" colSpan={2}>B期間</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]">差分</th>
+                          </tr>
+                          <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-xs">
+                            <th className="px-4 py-2"></th>
+                            <th className="px-4 py-2"></th>
+                            <th className="px-4 py-2 text-right text-blue-600 bg-blue-50">到達数</th>
+                            <th className="px-4 py-2 text-right text-blue-600 bg-blue-50">移行率</th>
+                            <th className="px-4 py-2 text-right text-green-600 bg-green-50">到達数</th>
+                            <th className="px-4 py-2 text-right text-green-600 bg-green-50">移行率</th>
+                            <th className="px-4 py-2 text-right">移行率差</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
+                          {comparisonResultA.steps.map((stepA, index) => {
+                            const stepB = comparisonResultB.steps[index];
+                            if (!stepB) return null;
+                            const isFirst = index === 0;
+                            const rateDiff = getDiff(stepA.conversionRate, stepB.conversionRate);
+
+                            return (
+                              <tr key={stepA.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
+                                <td className="px-4 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
+                                <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">
+                                  {stepA.label}
+                                </td>
+                                <td className="px-4 py-3 text-right bg-blue-50/50">{formatNumber(stepA.reached)}</td>
+                                <td className="px-4 py-3 text-right bg-blue-50/50">
+                                  {isFirst ? '-' : formatPercent(stepA.conversionRate)}
+                                </td>
+                                <td className="px-4 py-3 text-right bg-green-50/50">{formatNumber(stepB.reached)}</td>
+                                <td className="px-4 py-3 text-right bg-green-50/50">
+                                  {isFirst ? '-' : formatPercent(stepB.conversionRate)}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  {isFirst ? (
+                                    '-'
+                                  ) : (
+                                    <span className={rateDiff.isPositive ? 'text-green-600' : 'text-red-600'}>
+                                      {rateDiff.isPositive ? '+' : ''}{formatPercent(rateDiff.value)}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* 視覚的な比較バー */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-[color:var(--color-text-primary)]">全体比の比較</h4>
+                      {comparisonResultA.steps.map((stepA, index) => {
+                        const stepB = comparisonResultB.steps[index];
+                        if (!stepB) return null;
 
                         return (
-                          <tr key={step.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
-                            <td className="px-4 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
-                            <td className="px-4 py-3">
-                              <div className="font-medium text-[color:var(--color-text-primary)]">{step.label}</div>
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-primary)]">
-                              {formatNumber(step.reached)}
-                            </td>
-                            <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
-                              {isFirst ? '-' : formatNumber(step.notReached)}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {isFirst ? (
-                                <span className="text-[color:var(--color-text-secondary)]">-</span>
-                              ) : (
-                                <span className={conversionColor}>{formatPercent(step.conversionRate)}</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
-                              {formatPercent(step.overallRate)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="h-6 w-full overflow-hidden rounded bg-gray-100">
+                          <div key={stepA.stepId} className="space-y-1">
+                            <p className="text-xs text-[color:var(--color-text-secondary)]">{stepA.label}</p>
+                            <div className="flex gap-2 items-center">
+                              <span className="text-xs text-blue-600 w-8">A</span>
+                              <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
                                 <div
-                                  className="h-full bg-green-500 transition-all"
-                                  style={{ width: `${step.overallRate}%` }}
+                                  className="h-full bg-blue-500 transition-all"
+                                  style={{ width: `${stepA.overallRate}%` }}
                                 />
                               </div>
-                            </td>
-                          </tr>
+                              <span className="text-xs w-16 text-right">{formatPercent(stepA.overallRate)}</span>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                              <span className="text-xs text-green-600 w-8">B</span>
+                              <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
+                                <div
+                                  className="h-full bg-green-500 transition-all"
+                                  style={{ width: `${stepB.overallRate}%` }}
+                                />
+                              </div>
+                              <span className="text-xs w-16 text-right">{formatPercent(stepB.overallRate)}</span>
+                            </div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-[color:var(--color-text-secondary)]">ファネルを選択してください。</p>
+                    </div>
+                  </div>
+                )}
+              </Card>
             )}
-          </Card>
+          </>
         ) : !editingFunnel ? (
           <Card className="p-6 text-sm text-[color:var(--color-text-secondary)]">
             ファネルを選択すると分析結果が表示されます。
