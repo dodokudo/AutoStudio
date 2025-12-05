@@ -54,6 +54,42 @@ export interface LstepAnalyticsData {
 }
 
 /**
+ * 期間内のLINE登録者数を取得（シンプル版）
+ * ホームダッシュボードのKPIカード用
+ */
+export async function countLineRegistrationsByDateRange(
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const datasetId = DEFAULT_DATASET;
+  const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
+
+  // 最新のスナップショット日付を取得
+  const [latestSnapshot] = await runQuery<{ snapshot_date: string | null }>(client, projectId, datasetId, {
+    query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM \`${projectId}.${datasetId}.${TABLE_NAME}\``,
+  });
+
+  const snapshotDate = latestSnapshot?.snapshot_date;
+  if (!snapshotDate) {
+    return 0;
+  }
+
+  const [row] = await runQuery<{ total: number }>(client, projectId, datasetId, {
+    query: `
+      SELECT COUNT(DISTINCT id) AS total
+      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+      WHERE snapshot_date = @snapshotDate
+        AND friend_added_at IS NOT NULL
+        AND DATE(friend_added_at) BETWEEN @startDate AND @endDate
+    `,
+    params: { snapshotDate, startDate, endDate },
+  });
+
+  return Number(row?.total ?? 0);
+}
+
+/**
  * 期間指定でLstep分析データを取得
  */
 export async function getLstepAnalyticsByDateRange(

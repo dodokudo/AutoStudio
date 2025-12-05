@@ -10,7 +10,7 @@ import {
   type StoredContentScript,
 } from '@/lib/youtube/bigquery';
 import { getLineDashboardData, countLineSourceRegistrations } from '@/lib/lstep/dashboard';
-import { getLstepAnalyticsByDateRange } from '@/lib/lstep/analytics';
+import { getLstepAnalyticsByDateRange, countLineRegistrationsByDateRange } from '@/lib/lstep/analytics';
 import { getLinkClicksSummary } from '@/lib/links/analytics';
 import { formatDateInput } from '@/lib/dateRangePresets';
 import type { YoutubeVideoSummary } from '@/lib/youtube/dashboard';
@@ -141,14 +141,29 @@ export async function getHomeDashboardData(options: {
 } = {}): Promise<HomeDashboardData> {
   const rangeDays = options.rangeDays ?? DEFAULT_RANGE_DAYS;
   const selectedRangeValue = options.rangeValue ?? `${rangeDays}d`;
-  const periodEnd = options.endDate ? new Date(options.endDate) : new Date();
-  const periodStart = options.startDate
-    ? new Date(options.startDate)
-    : (() => {
-        const start = new Date(periodEnd.getTime());
-        start.setUTCDate(start.getUTCDate() - rangeDays + 1);
-        return start;
-      })();
+  // resolveDateRangeで計算された日付をそのまま使用（タイムゾーン維持）
+  let periodEnd = options.endDate ?? new Date();
+  let periodStart = options.startDate ?? (() => {
+    const start = new Date(periodEnd.getTime());
+    start.setDate(start.getDate() - rangeDays + 1);
+    return start;
+  })();
+
+  // LINEタブと同様に、最新スナップショット日付に基づいて期間を調整
+  // 今日のJST日付を使用（LステップCSVは今日分まで取得済みのため）
+  // 日付比較のために時間を正規化（startOfDayで比較）
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const periodEndDate = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate(), 0, 0, 0, 0);
+
+  if (periodEndDate.getTime() < todayStart.getTime()) {
+    // 期間を今日まで延長（LINEタブのadjustRangeWithSnapshotと同じロジック）
+    // durationDaysは元の期間と同じ日数を維持（resolveDateRangeで「昨日」が終了日なので+1して今日を終了日に）
+    periodEnd = new Date(todayStart.getFullYear(), todayStart.getMonth(), todayStart.getDate(), 23, 59, 59, 999);
+    // startDateも1日ずらす（終了日を1日延長したので開始日も1日延長）
+    periodStart = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000);
+    periodStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate(), 0, 0, 0, 0);
+  }
 
   const [
     threadsInsights,
@@ -159,6 +174,7 @@ export async function getHomeDashboardData(options: {
     lineAudienceTotal,
     linkSummary,
     lineAnalytics,
+    lineRegistrationCount,
   ] = await Promise.all([
     getThreadsInsightsData(),
     getThreadsDashboard(),
@@ -168,6 +184,7 @@ export async function getHomeDashboardData(options: {
     fetchLineAudienceTotal(PROJECT_ID),
     getLinkClicksSummary({ startDate: periodStart, endDate: periodEnd }),
     getLstepAnalyticsByDateRange(PROJECT_ID, toDateKey(periodStart), toDateKey(periodEnd)),
+    countLineRegistrationsByDateRange(PROJECT_ID, toDateKey(periodStart), toDateKey(periodEnd)),
   ]);
 
   const youtubeContext = createYoutubeBigQueryContext(PROJECT_ID, process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media');
@@ -291,10 +308,9 @@ export async function getHomeDashboardData(options: {
     }),
   );
 
-  const lineRegistrationTotal = lineRegistrationBySource.reduce((sum, item) => sum + (item.registrations ?? 0), 0);
   const lineFollowerLatest = lineAudienceTotal ?? 0;
-  const lineRegistrationPeriodTotal =
-    lineAnalytics?.funnel?.lineRegistration ?? lineRegistrationTotal;
+  // KPIカードのdeltaはLINEタブと同じlstep_friends_rawテーブルから取得
+  const lineRegistrationPeriodTotal = lineRegistrationCount;
 
   const followerBreakdown: HomeFollowerBreakdown[] = [
     {

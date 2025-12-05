@@ -184,6 +184,7 @@ export async function countLineSourceRegistrations(
     endDate,
   });
 
+  // source_nameは「Threads」「Threads ポスト」「Threads プロフ」など複数あるのでLIKE検索
   const [row] = await runQuery<{ total: bigint | number | string | null }>(client, projectId, datasetId, {
     query: `
       WITH matched_users AS (
@@ -193,7 +194,7 @@ export async function countLineSourceRegistrations(
           ON core.user_id = sources.user_id
           AND core.snapshot_date = sources.snapshot_date
         WHERE DATE(core.friend_added_at) BETWEEN @startDate AND @endDate
-          AND sources.source_name = @sourceName
+          AND sources.source_name LIKE CONCAT(@sourceName, '%')
           AND sources.source_flag = 1
       )
       SELECT COUNT(*) AS total
@@ -228,7 +229,7 @@ export async function listLineSourceRegistrations(
             ON core.user_id = sources.user_id
             AND core.snapshot_date = sources.snapshot_date
           WHERE DATE(core.friend_added_at) BETWEEN @startDate AND @endDate
-            AND sources.source_name = @sourceName
+            AND sources.source_name LIKE CONCAT(@sourceName, '%')
             AND sources.source_flag = 1
         )
         SELECT
