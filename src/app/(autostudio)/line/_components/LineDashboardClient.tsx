@@ -525,6 +525,8 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       dailyRegistrations: dailyDataInRange,
       sources: sourceStats,
       attributes: attributeStats,
+      rangeStart,
+      rangeEnd,
     };
   }, [customEndDate, customStartDate, dateRange, initialData, sourceStats, attributeStats]);
 
@@ -550,7 +552,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       {
         label: 'アンケート回答率',
         primary: formatPercent(surveyResponseRate),
-        secondary: `回答数 ${formatNumber(surveyCompleted)}人${latestDate ? `・最新 ${formatDateLabel(latestDate)}` : ''}`,
+        secondary: filteredAnalytics.rangeStart && filteredAnalytics.rangeEnd
+          ? `期間：${dateFormatter.format(filteredAnalytics.rangeStart)} 〜 ${dateFormatter.format(filteredAnalytics.rangeEnd)}`
+          : null,
       },
     ];
   }, [filteredAnalytics]);
