@@ -259,6 +259,15 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
     });
   };
 
+  const onDuplicate = (funnel: FunnelDefinition) => {
+    setEditingFunnel({
+      // idを設定しないことで新規作成扱いになる
+      name: `${funnel.name}（コピー）`,
+      description: funnel.description,
+      steps: funnel.steps.map(toStepForm),
+    });
+  };
+
   const resetEditingState = () => {
     setEditingFunnel(null);
     setIsSaving(false);
@@ -496,6 +505,9 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                   <Button variant="secondary" onClick={() => onEdit(selectedFunnel)} disabled={!!editingFunnel}>
                     編集
                   </Button>
+                  <Button variant="secondary" onClick={() => onDuplicate(selectedFunnel)} disabled={!!editingFunnel}>
+                    複製
+                  </Button>
                   <Button
                     variant="secondary"
                     onClick={() => handleDelete(selectedFunnel.id)}
@@ -505,7 +517,12 @@ export function LineFunnelsManager({ startDate, endDate }: LineFunnelsManagerPro
                   </Button>
                 </div>
               ) : (
-                <span className="text-xs text-[color:var(--color-text-muted)]">プリセット</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" onClick={() => onDuplicate(selectedFunnel)} disabled={!!editingFunnel}>
+                    複製して編集
+                  </Button>
+                  <span className="text-xs text-[color:var(--color-text-muted)]">プリセット</span>
+                </div>
               )}
             </div>
             <div>
