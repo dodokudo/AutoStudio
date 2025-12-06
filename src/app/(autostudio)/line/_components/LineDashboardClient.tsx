@@ -1025,82 +1025,97 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
 
                       {/* 比較テーブル */}
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1000px]">
-                          <thead>
-                            <tr className="border-b border-[color:var(--color-border)] bg-gray-50">
-                              <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">#</th>
-                              <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">ステップ</th>
-                              <th className="px-3 py-3 text-center text-xs font-medium text-blue-600 bg-blue-50" colSpan={3}>A期間</th>
-                              <th className="w-4"></th>
-                              <th className="px-3 py-3 text-center text-xs font-medium text-green-600 bg-green-50" colSpan={3}>B期間</th>
-                              <th className="px-3 py-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]" colSpan={2}>差分</th>
-                            </tr>
-                            <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-xs">
-                              <th className="px-3 py-2"></th>
-                              <th className="px-3 py-2"></th>
-                              <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">到達数</th>
-                              <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">移行率</th>
-                              <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">全体比</th>
-                              <th className="w-4"></th>
-                              <th className="px-3 py-2 text-right text-green-600 bg-green-50">到達数</th>
-                              <th className="px-3 py-2 text-right text-green-600 bg-green-50">移行率</th>
-                              <th className="px-3 py-2 text-right text-green-600 bg-green-50">全体比</th>
-                              <th className="px-3 py-2 text-right">移行率差</th>
-                              <th className="px-3 py-2 text-right">全体比差</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
-                            {mainComparisonResultA.steps.map((stepA, index) => {
-                              const stepB = mainComparisonResultB.steps[index];
-                              if (!stepB) return null;
-                              const isFirst = index === 0;
-                              const rateDiff = stepB.conversionRate - stepA.conversionRate;
-                              const overallDiff = stepB.overallRate - stepA.overallRate;
+                        <div className="mx-auto min-w-[1088px] max-w-[1200px]">
+                          <table className="w-full table-fixed">
+                            <colgroup>
+                              <col className="w-[48px]" />
+                              <col className="w-[200px]" />
+                              <col className="w-[96px]" />
+                              <col className="w-[96px]" />
+                              <col className="w-[96px]" />
+                              <col className="w-[16px]" />
+                              <col className="w-[96px]" />
+                              <col className="w-[96px]" />
+                              <col className="w-[96px]" />
+                              <col className="w-[124px]" />
+                              <col className="w-[124px]" />
+                            </colgroup>
+                            <thead>
+                              <tr className="border-b border-[color:var(--color-border)] bg-gray-50">
+                                <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">#</th>
+                                <th className="px-3 py-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">ステップ</th>
+                                <th className="px-3 py-3 text-center text-xs font-medium text-blue-600 bg-blue-50" colSpan={3}>A期間</th>
+                                <th className="w-4"></th>
+                                <th className="px-3 py-3 text-center text-xs font-medium text-green-600 bg-green-50" colSpan={3}>B期間</th>
+                                <th className="px-3 py-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]" colSpan={2}>差分</th>
+                              </tr>
+                              <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-xs">
+                                <th className="px-3 py-2"></th>
+                                <th className="px-3 py-2"></th>
+                                <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">到達数</th>
+                                <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">移行率</th>
+                                <th className="px-3 py-2 text-right text-blue-600 bg-blue-50">全体比</th>
+                                <th className="w-4"></th>
+                                <th className="px-3 py-2 text-right text-green-600 bg-green-50">到達数</th>
+                                <th className="px-3 py-2 text-right text-green-600 bg-green-50">移行率</th>
+                                <th className="px-3 py-2 text-right text-green-600 bg-green-50">全体比</th>
+                                <th className="px-3 py-2 text-right">移行率差</th>
+                                <th className="px-3 py-2 text-right">全体比差</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
+                              {mainComparisonResultA.steps.map((stepA, index) => {
+                                const stepB = mainComparisonResultB.steps[index];
+                                if (!stepB) return null;
+                                const isFirst = index === 0;
+                                const rateDiff = stepB.conversionRate - stepA.conversionRate;
+                                const overallDiff = stepB.overallRate - stepA.overallRate;
 
-                              return (
-                                <tr key={stepA.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
-                                  <td className="px-3 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
-                                  <td className="px-3 py-3 font-medium text-[color:var(--color-text-primary)]">
-                                    {stepA.label}
-                                  </td>
-                                  <td className="px-3 py-3 text-right bg-blue-50/50">{formatNumber(stepA.reached)}</td>
-                                  <td className="px-3 py-3 text-right bg-blue-50/50">
-                                    {isFirst ? '-' : formatPercent(stepA.conversionRate)}
-                                  </td>
-                                  <td className="px-3 py-3 text-right bg-blue-50/50">
-                                    {formatPercent(stepA.overallRate)}
-                                  </td>
-                                  <td className="w-4"></td>
-                                  <td className="px-3 py-3 text-right bg-green-50/50">{formatNumber(stepB.reached)}</td>
-                                  <td className="px-3 py-3 text-right bg-green-50/50">
-                                    {isFirst ? '-' : formatPercent(stepB.conversionRate)}
-                                  </td>
-                                  <td className="px-3 py-3 text-right bg-green-50/50">
-                                    {formatPercent(stepB.overallRate)}
-                                  </td>
-                                  <td className="px-3 py-3 text-right">
-                                    {isFirst ? (
-                                      '-'
-                                    ) : (
-                                      <span className={rateDiff >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                        {rateDiff >= 0 ? '+' : ''}{formatPercent(rateDiff)}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-3 text-right">
-                                    {isFirst ? (
-                                      '-'
-                                    ) : (
-                                      <span className={overallDiff >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                        {overallDiff >= 0 ? '+' : ''}{formatPercent(overallDiff)}
-                                      </span>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                                return (
+                                  <tr key={stepA.stepId} className="hover:bg-[color:var(--color-surface-muted)]">
+                                    <td className="px-3 py-3 text-[color:var(--color-text-secondary)]">{index}</td>
+                                    <td className="px-3 py-3 font-medium text-[color:var(--color-text-primary)]">
+                                      {stepA.label}
+                                    </td>
+                                    <td className="px-3 py-3 text-right bg-blue-50/50">{formatNumber(stepA.reached)}</td>
+                                    <td className="px-3 py-3 text-right bg-blue-50/50">
+                                      {isFirst ? '-' : formatPercent(stepA.conversionRate)}
+                                    </td>
+                                    <td className="px-3 py-3 text-right bg-blue-50/50">
+                                      {formatPercent(stepA.overallRate)}
+                                    </td>
+                                    <td className="w-4"></td>
+                                    <td className="px-3 py-3 text-right bg-green-50/50">{formatNumber(stepB.reached)}</td>
+                                    <td className="px-3 py-3 text-right bg-green-50/50">
+                                      {isFirst ? '-' : formatPercent(stepB.conversionRate)}
+                                    </td>
+                                    <td className="px-3 py-3 text-right bg-green-50/50">
+                                      {formatPercent(stepB.overallRate)}
+                                    </td>
+                                    <td className="px-3 py-3 text-right">
+                                      {isFirst ? (
+                                        '-'
+                                      ) : (
+                                        <span className={rateDiff >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                          {rateDiff >= 0 ? '+' : ''}{formatPercent(rateDiff)}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-3 text-right">
+                                      {isFirst ? (
+                                        '-'
+                                      ) : (
+                                        <span className={overallDiff >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                          {overallDiff >= 0 ? '+' : ''}{formatPercent(overallDiff)}
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
 
                       {/* 全体比の視覚的な比較（左右分割） */}

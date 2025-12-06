@@ -7,7 +7,6 @@ interface InsightStat {
   value: string;
   delta?: string;
   deltaTone?: 'up' | 'down' | 'neutral';
-  deltaHighlight?: boolean;
 }
 
 interface InsightsCardProps {
@@ -53,11 +52,9 @@ export function InsightsCard({ title, stats, note, actions }: InsightsCardProps)
               <p
                 className={classNames(
                   'mt-3 text-xs font-medium',
-                  stat.deltaHighlight
-                    ? 'block rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-2 text-sm text-[color:var(--color-text-primary)] shadow-sm'
-                    : stat.deltaTone
-                        ? toneTextClass[stat.deltaTone]
-                        : 'text-[color:var(--color-text-muted)]',
+                  stat.deltaTone
+                    ? toneTextClass[stat.deltaTone]
+                    : 'text-[color:var(--color-text-muted)]',
                 )}
               >
                 {stat.delta}

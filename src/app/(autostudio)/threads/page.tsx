@@ -10,7 +10,7 @@ import { CompetitorTab } from "./_components/competitor-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getLinkClicksSummary } from "@/lib/links/analytics";
-import type { PromptCompetitorHighlight, PromptTemplateSummary, PromptTrendingTopic } from "@/types/prompt";
+import type { PromptCompetitorHighlight, PromptTrendingTopic } from "@/types/prompt";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
@@ -67,32 +67,6 @@ const FALLBACK_TRENDING: PromptTrendingTopic[] = [
   { themeTag: '副業Tips', avgFollowersDelta: -18, avgViews: 5400, sampleAccounts: ['biz_learn'] },
 ];
 
-const FALLBACK_TEMPLATES: PromptTemplateSummary[] = [
-  {
-    templateId: 'Template-A',
-    version: 3,
-    status: 'active',
-    impressionAvg72h: 2100,
-    likeAvg72h: 320,
-    structureNotes: 'Hookで課題→Insight→CTAの流れが安定',
-  },
-  {
-    templateId: 'Template-B',
-    version: 2,
-    status: 'candidate',
-    impressionAvg72h: 1680,
-    likeAvg72h: 240,
-    structureNotes: '導入で具体数字を入れると反応が高い',
-  },
-  {
-    templateId: 'Template-C',
-    version: 1,
-    status: 'needs_review',
-    impressionAvg72h: 980,
-    likeAvg72h: 150,
-    structureNotes: 'リードが長いので要調整',
-  },
-];
 
 function toDisplayHighlight(
   item: PromptCompetitorHighlight | FallbackHighlight,
@@ -139,9 +113,9 @@ export default async function ThreadsHome({
   };
 
   const tabParamRaw = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : undefined;
-  const normalizedTabParam = tabParamRaw === 'overview' ? 'post' : tabParamRaw;
-  const allowedTabs: ThreadsTabKey[] = ['post', 'insights', 'competitor'];
-  const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'post';
+  const normalizedTabParam = tabParamRaw === 'overview' ? 'insights' : tabParamRaw;
+  const allowedTabs: ThreadsTabKey[] = ['insights', 'post', 'competitor'];
+  const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'insights';
 
   try {
     const { start: rangeStartDate, end: rangeEndDate } = selectedRangeWindow;
@@ -192,6 +166,7 @@ export default async function ThreadsHome({
     const effectivePostCount = insights?.postCount ?? lightweightInsights?.postCount ?? 0;
 
     let lineRegistrationCount: number | null = null;
+    let previousLineRegistrationCount: number | null = null;
     let profileViewsForRange: number | null = null;
     let previousProfileViews: number | null = null;
     let linkClicksForRange: number | null = null;
@@ -204,11 +179,23 @@ export default async function ThreadsHome({
       const rangeEndKey = formatDateInput(rangeEndDate);
 
       try {
-        lineRegistrationCount = await countLineSourceRegistrations(PROJECT_ID, {
-          startDate: rangeStartKey,
-          endDate: rangeEndKey,
-          sourceName: 'Threads',
-        });
+        const previousRangeStartKey = formatDateInput(previousRangeStart);
+        const previousRangeEndKey = formatDateInput(previousRangeEnd);
+
+        const [currentLineCount, prevLineCount] = await Promise.all([
+          countLineSourceRegistrations(PROJECT_ID, {
+            startDate: rangeStartKey,
+            endDate: rangeEndKey,
+            sourceName: 'Threads',
+          }),
+          countLineSourceRegistrations(PROJECT_ID, {
+            startDate: previousRangeStartKey,
+            endDate: previousRangeEndKey,
+            sourceName: 'Threads',
+          }),
+        ]);
+        lineRegistrationCount = currentLineCount;
+        previousLineRegistrationCount = prevLineCount;
       } catch (lineError) {
         console.error('[threads/page] Failed to load LINE registrations:', lineError);
       }
@@ -356,10 +343,22 @@ export default async function ThreadsHome({
       postsPerDay !== null ? `${postsPerDay.toFixed(1)}件` : null,
     ].filter((part): part is string => Boolean(part));
 
-    const linkDeltaParts = [
+    const lineRegistrationDeltaValue =
+      previousLineRegistrationCount !== null && lineRegistrationCount !== null
+        ? lineRegistrationCount - previousLineRegistrationCount
+        : null;
+
+    const linkClicksDeltaParts = [
       linkClickConversionRate !== null ? `遷移率: ${formatPercent(linkClickConversionRate, 2)}` : null,
-      linkClicksDeltaValue !== null
-        ? `前期間比 ${linkClicksDeltaValue > 0 ? '+' : ''}${formatNumber(linkClicksDeltaValue)}クリック`
+      linkClicksDeltaValue !== null && linkClicksDeltaValue !== 0
+        ? `${linkClicksDeltaValue > 0 ? '+' : ''}${formatNumber(linkClicksDeltaValue)}`
+        : null,
+    ].filter((part): part is string => Boolean(part));
+
+    const lineRegistrationDeltaParts = [
+      lineRegistrationConversionRate !== null ? `遷移率: ${formatPercent(lineRegistrationConversionRate, 2)}` : null,
+      lineRegistrationDeltaValue !== null && lineRegistrationDeltaValue !== 0
+        ? `${lineRegistrationDeltaValue > 0 ? '+' : ''}${formatNumber(lineRegistrationDeltaValue)}`
         : null,
     ].filter((part): part is string => Boolean(part));
 
@@ -389,19 +388,14 @@ export default async function ThreadsHome({
       {
         label: 'リンククリック数',
         value: formatNumber(totalLinkClicks),
-        delta: linkDeltaParts.length ? linkDeltaParts.join(' / ') : undefined,
-        deltaTone:
-          linkClicksDeltaValue !== null ? resolveDeltaTone(linkClicksDeltaValue) ?? 'neutral' : undefined,
-        deltaHighlight: linkDeltaParts.length > 0,
+        delta: linkClicksDeltaParts.length ? linkClicksDeltaParts.join(' / ') : undefined,
+        deltaTone: resolveDeltaTone(linkClicksDeltaValue ?? undefined),
       },
       {
         label: 'LINE登録数',
         value: formatNumber(lineRegistrationCount),
-        delta:
-          lineRegistrationConversionRate !== null
-            ? `遷移率: ${formatPercent(lineRegistrationConversionRate, 2)}`
-            : undefined,
-        deltaHighlight: lineRegistrationConversionRate !== null,
+        delta: lineRegistrationDeltaParts.length ? lineRegistrationDeltaParts.join(' / ') : undefined,
+        deltaTone: resolveDeltaTone(lineRegistrationDeltaValue ?? undefined),
       },
     ];
 
@@ -424,6 +418,15 @@ export default async function ThreadsHome({
       if (Number.isNaN(postedAt.getTime())) return acc;
       const dateKey = postedAt.toISOString().slice(0, 10);
       acc[dateKey] = (acc[dateKey] ?? 0) + (Number(post.insights?.impressions ?? 0) || 0);
+      return acc;
+    }, {});
+
+    // 日別投稿数を計算
+    const postCountByDate = insightsActivity.posts.reduce<Record<string, number>>((acc, post) => {
+      const postedAt = new Date(post.postedAt);
+      if (Number.isNaN(postedAt.getTime())) return acc;
+      const dateKey = postedAt.toISOString().slice(0, 10);
+      acc[dateKey] = (acc[dateKey] ?? 0) + 1;
       return acc;
     }, {});
 
@@ -452,6 +455,7 @@ export default async function ThreadsHome({
         impressions: impressionsByDate[metric.date] ?? 0,
         followerDelta,
         lineRegistrations: lineRegistrationsByDate[metric.date] ?? 0,
+        postCount: postCountByDate[metric.date] ?? 0,
       };
     });
 
@@ -468,6 +472,7 @@ export default async function ThreadsHome({
         impressions: impressionsByDate[date] ?? 0,
         followerDelta: 0,
         lineRegistrations: lineRegistrationsByDate[date] ?? 0,
+        postCount: postCountByDate[date] ?? 0,
       }));
     }
 
@@ -496,11 +501,6 @@ export default async function ThreadsHome({
       sampleAccounts: topic.sampleAccounts ?? [],
     }));
 
-    const templateSummaries =
-      effectiveTemplateSummaries.length > 0
-        ? effectiveTemplateSummaries
-        : FALLBACK_TEMPLATES;
-
     const templateOptions =
       effectiveTemplateSummaries?.map((template) => ({
         value: template.templateId,
@@ -518,8 +518,8 @@ export default async function ThreadsHome({
 
     const tabItems = (
       [
-        { id: 'post' as ThreadsTabKey, label: '投稿' },
         { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
+        { id: 'post' as ThreadsTabKey, label: '投稿' },
         { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
       ] satisfies Array<{ id: ThreadsTabKey; label: string }>
     ).map((item) => {
@@ -547,24 +547,21 @@ export default async function ThreadsHome({
       >
         {activeTab === 'post' ? (
           <PostTab
-            stats={stats}
-            noteText={noteText}
             planSummaries={planSummaries}
             templateOptions={templateOptions}
             recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
-            performanceSeries={trimmedPerformanceSeries}
-            maxImpressions={maxImpressionsValue}
-            maxFollowerDelta={maxFollowerDeltaValue}
           />
         ) : activeTab === 'insights' ? (
           <InsightsTab
             posts={insightsActivity.posts}
-            dailyMetrics={insightsActivity.dailyMetrics}
             selectedRangeValue={rangeValueForUi}
             customStart={customStart}
             customEnd={customEnd}
             noteText={noteText}
-            templateSummaries={templateSummaries}
+            stats={stats}
+            performanceSeries={trimmedPerformanceSeries}
+            maxImpressions={maxImpressionsValue}
+            maxFollowerDelta={maxFollowerDeltaValue}
           />
         ) : (
           <CompetitorTab highlights={competitorHighlights} trendingTopics={trendingTopics} />
