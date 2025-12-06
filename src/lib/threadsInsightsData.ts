@@ -4,8 +4,8 @@ import type { ThreadInsights } from './threadsApi';
 
 const DATASET = 'autostudio_threads';
 const PROJECT_ID = resolveProjectId();
-const POSTS_LIMIT = 120;
-const CACHE_TTL_MS = 1000 * 60 * 5;
+const POSTS_LIMIT = 200;
+const CACHE_TTL_MS = 1000 * 60 * 30;
 
 export interface PostInsight {
   planId: string;
@@ -97,11 +97,9 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       params.endDate = options.endDate;
     }
 
-    let limitClause = '';
-    if (!options.startDate && !options.endDate) {
-      limitClause = 'LIMIT @limit';
-      params.limit = POSTS_LIMIT;
-    }
+    // 常に件数制限をかける（期間指定時も無制限にしない）
+    const limitClause = 'LIMIT @limit';
+    params.limit = POSTS_LIMIT;
 
     const query = `
       SELECT

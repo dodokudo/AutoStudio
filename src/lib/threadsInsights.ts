@@ -27,7 +27,7 @@ export interface ThreadsInsightsOptions {
   endDate?: string;
 }
 
-const CACHE_TTL_MS = 1000 * 60 * 5;
+const CACHE_TTL_MS = 1000 * 60 * 30;
 const cacheStore = new Map<string, { data: ThreadsInsightsData; fetchedAt: number }>();
 
 export async function getThreadsInsights(

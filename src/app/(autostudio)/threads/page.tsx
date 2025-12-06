@@ -1,4 +1,5 @@
 import { getThreadsInsights, type ThreadsInsightsOptions } from "@/lib/threadsInsights";
+import { getLightweightInsights } from "@/lib/threadsAccountSummary";
 import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
 import { getThreadsDashboard } from "@/lib/threadsDashboard";
 import { getThreadsInsightsData } from "@/lib/threadsInsightsData";
@@ -151,8 +152,20 @@ export default async function ThreadsHome({
     const postsQueryStartKey = formatDateInput(previousRangeStart);
     const postsQueryEndKey = formatDateInput(rangeEndDate);
 
-    const [insights, planSummaries, dashboard, insightsActivity, currentClicks, previousClicks] = await Promise.all([
-      getThreadsInsights(PROJECT_ID, insightsOptions),
+    // タブごとに必要なデータだけ取得（投稿タブでは競合データ等を取らない）
+    const needsFullInsights = activeTab === 'insights' || activeTab === 'competitor';
+
+    const [
+      insights,
+      lightweightInsights,
+      planSummaries,
+      dashboard,
+      insightsActivity,
+      currentClicks,
+      previousClicks,
+    ] = await Promise.all([
+      needsFullInsights ? getThreadsInsights(PROJECT_ID, insightsOptions) : Promise.resolve(null),
+      !needsFullInsights ? getLightweightInsights(PROJECT_ID, insightsOptions) : Promise.resolve(null),
       (async () => {
         await seedPlansIfNeeded();
         return listPlanSummaries();
@@ -166,12 +179,24 @@ export default async function ThreadsHome({
       getLinkClicksSummary({ startDate: previousRangeStart, endDate: previousRangeEnd }),
     ]);
 
+    // 投稿タブ用のデータを統合
+    const effectiveAccountSummary = insights?.accountSummary ?? lightweightInsights?.accountSummary ?? {
+      averageFollowers: 0,
+      averageProfileViews: 0,
+      totalProfileViews: 0,
+      followersChange: 0,
+      profileViewsChange: 0,
+      recentDates: [],
+    };
+    const effectiveTemplateSummaries = insights?.templateSummaries ?? lightweightInsights?.templateSummaries ?? [];
+    const effectivePostCount = insights?.postCount ?? lightweightInsights?.postCount ?? 0;
+
     let lineRegistrationCount: number | null = null;
     let profileViewsForRange: number | null = null;
     let previousProfileViews: number | null = null;
     let linkClicksForRange: number | null = null;
     let previousLinkClicks: number | null = null;
-    let postsCountForRange: number = insights.postCount;
+    let postsCountForRange: number = effectivePostCount;
     let previousPostsCount: number | null = null;
 
     if (selectedRangeWindow) {
@@ -265,12 +290,12 @@ export default async function ThreadsHome({
     };
 
     const profileViewsDisplayValue =
-      profileViewsForRange !== null ? profileViewsForRange : insights.accountSummary.totalProfileViews;
+      profileViewsForRange !== null ? profileViewsForRange : effectiveAccountSummary.totalProfileViews;
 
     const profileViewsDeltaValue =
       profileViewsForRange !== null && previousProfileViews !== null
         ? profileViewsForRange - previousProfileViews
-        : insights.accountSummary.profileViewsChange;
+        : effectiveAccountSummary.profileViewsChange;
 
     const profileViewsDelta =
       profileViewsDeltaValue === undefined || profileViewsDeltaValue === null || profileViewsDeltaValue === 0
@@ -286,8 +311,8 @@ export default async function ThreadsHome({
     const profileViewsNumeric =
       typeof profileViewsForRange === 'number'
         ? profileViewsForRange
-        : typeof insights.accountSummary.totalProfileViews === 'number'
-          ? insights.accountSummary.totalProfileViews
+        : typeof effectiveAccountSummary.totalProfileViews === 'number'
+          ? effectiveAccountSummary.totalProfileViews
           : null;
 
     // フォロワー増減は期間内のdailyMetricsで算出（Threadsタブ基準）
@@ -305,7 +330,7 @@ export default async function ThreadsHome({
     const followersStart = firstPoint?.followers ?? sortedDailyMetrics.at(-1)?.followers ?? null;
     const followersEnd = lastPoint?.followers ?? sortedDailyMetrics[0]?.followers ?? null;
     const followerDeltaValue =
-      followersStart !== null && followersEnd !== null ? followersEnd - followersStart : insights.accountSummary.followersChange;
+      followersStart !== null && followersEnd !== null ? followersEnd - followersStart : effectiveAccountSummary.followersChange;
 
     const lineRegistrationsNumeric =
       typeof lineRegistrationCount === 'number' && Number.isFinite(lineRegistrationCount)
@@ -341,7 +366,7 @@ export default async function ThreadsHome({
     const stats = [
       {
         label: '現在のフォロワー数',
-        value: formatNumber(insights.accountSummary.averageFollowers),
+        value: formatNumber(effectiveAccountSummary.averageFollowers),
         delta:
           followerDeltaValue === null || followerDeltaValue === 0
             ? undefined
@@ -459,11 +484,11 @@ export default async function ThreadsHome({
 
 
     const competitorHighlights: DisplayHighlight[] = (
-      insights.competitorHighlights.length ? insights.competitorHighlights : FALLBACK_HIGHLIGHTS
+      (insights?.competitorHighlights?.length ?? 0) > 0 ? insights!.competitorHighlights : FALLBACK_HIGHLIGHTS
     ).map((item) => toDisplayHighlight(item));
 
     const trendingTopics = (
-      insights.trendingTopics.length ? insights.trendingTopics : FALLBACK_TRENDING
+      (insights?.trendingTopics?.length ?? 0) > 0 ? insights!.trendingTopics : FALLBACK_TRENDING
     ).map((topic) => ({
       themeTag: topic.themeTag,
       avgFollowersDelta: topic.avgFollowersDelta,
@@ -472,12 +497,12 @@ export default async function ThreadsHome({
     }));
 
     const templateSummaries =
-      insights.templateSummaries && insights.templateSummaries.length
-        ? insights.templateSummaries
+      effectiveTemplateSummaries.length > 0
+        ? effectiveTemplateSummaries
         : FALLBACK_TEMPLATES;
 
     const templateOptions =
-      insights.templateSummaries?.map((template) => ({
+      effectiveTemplateSummaries?.map((template) => ({
         value: template.templateId,
         label: `${template.templateId} (v${template.version})`,
       })) || [];
