@@ -495,10 +495,7 @@ export default async function ThreadsHome({
             endDate={formatDateInput(resolvedRange.end)}
           />
         ) : (
-          <ReportTab
-            startDate={formatDateInput(resolvedRange.start)}
-            endDate={formatDateInput(resolvedRange.end)}
-          />
+          <ReportTab />
         )}
       </ThreadsTabShell>
     );

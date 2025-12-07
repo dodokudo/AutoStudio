@@ -139,7 +139,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
           postedAt,
           templateId: 'unknown',
           theme: 'Threads投稿',
-          mainText: toPlain(row.content ?? '').slice(0, 600),
+          mainText: toPlain(row.content ?? ''),
           comments: [],
           insights: {
             impressions,

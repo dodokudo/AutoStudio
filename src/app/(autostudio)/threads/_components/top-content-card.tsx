@@ -17,9 +17,15 @@ interface TopContentCardProps {
 
 
 
+function cleanContent(text: string) {
+  // 【メイン投稿】などのプレフィックスを除去
+  return text.replace(/^【メイン投稿】\s*/g, '').replace(/^【コメント\d+】\s*/g, '');
+}
+
 function truncateText(text: string, maxLength = 80) {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength)}…`;
+  const cleaned = cleanContent(text);
+  if (cleaned.length <= maxLength) return cleaned;
+  return `${cleaned.slice(0, maxLength)}…`;
 }
 
 export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCardProps) {
@@ -72,7 +78,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
                 </p>
               </summary>
               <div className="mt-2 border-t border-[color:var(--color-border)] pt-2 text-sm text-[color:var(--color-text-secondary)] whitespace-pre-wrap">
-                {post.content}
+                {cleanContent(post.content)}
               </div>
             </details>
           ))
