@@ -6,11 +6,10 @@ import { getThreadsInsightsData } from "@/lib/threadsInsightsData";
 import { resolveProjectId } from "@/lib/bigquery";
 import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
-import { CompetitorTab } from "./_components/competitor-tab";
+import { CompetitorTabLight } from "./_components/competitor-tab-light";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getLinkClicksSummary } from "@/lib/links/analytics";
-import type { PromptCompetitorHighlight, PromptTrendingTopic } from "@/types/prompt";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
@@ -23,68 +22,6 @@ export const dynamic = 'force-dynamic';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ThreadsTabKey = 'post' | 'insights' | 'competitor';
-
-type DisplayHighlight = {
-  accountName: string;
-  username?: string;
-  impressions?: string;
-  likes?: string;
-  summary: string;
-  categories: string[];
-};
-
-type FallbackHighlight = {
-  accountName: string;
-  username?: string;
-  impressions?: string;
-  likes?: string;
-  note: string;
-  categories?: string[];
-};
-
-const FALLBACK_HIGHLIGHTS: FallbackHighlight[] = [
-  {
-    accountName: 'competitor1',
-    username: 'marketing_pro',
-    impressions: '12,400',
-    likes: '2,180',
-    note: '採用の舞台裏をストーリー形式で公開し、CTAで無料相談へ誘導。',
-    categories: ['未読', '要リライト'],
-  },
-  {
-    accountName: 'competitor2',
-    username: 'startup_lab',
-    impressions: '8,960',
-    likes: '1,480',
-    note: 'バズった要因を3つの見出しで整理。Hook → Insight → CTA の流れが秀逸。',
-    categories: ['保存増', 'インサイト'],
-  },
-];
-
-const FALLBACK_TRENDING: PromptTrendingTopic[] = [
-  { themeTag: 'AI活用', avgFollowersDelta: 48, avgViews: 12600, sampleAccounts: ['competitor1', 'competitor2'] },
-  { themeTag: 'SNS運用術', avgFollowersDelta: 32, avgViews: 9800, sampleAccounts: ['growth_studio'] },
-  { themeTag: '副業Tips', avgFollowersDelta: -18, avgViews: 5400, sampleAccounts: ['biz_learn'] },
-];
-
-
-function toDisplayHighlight(
-  item: PromptCompetitorHighlight | FallbackHighlight,
-): DisplayHighlight {
-  const impressions = typeof item.impressions === 'number' ? item.impressions.toLocaleString() : item.impressions;
-  const likes = typeof item.likes === 'number' ? item.likes.toLocaleString() : item.likes;
-  const summary = 'contentSnippet' in item ? item.contentSnippet : item.note;
-  const categories = 'categories' in item && item.categories ? item.categories : [];
-
-  return {
-    accountName: item.accountName,
-    username: 'username' in item ? item.username ?? undefined : undefined,
-    impressions: impressions ?? undefined,
-    likes: likes ?? undefined,
-    summary,
-    categories,
-  };
-}
 
 export default async function ThreadsHome({
   searchParams,
@@ -126,8 +63,8 @@ export default async function ThreadsHome({
     const postsQueryStartKey = formatDateInput(previousRangeStart);
     const postsQueryEndKey = formatDateInput(rangeEndDate);
 
-    // タブごとに必要なデータだけ取得（投稿タブでは競合データ等を取らない）
-    const needsFullInsights = activeTab === 'insights' || activeTab === 'competitor';
+    // タブごとに必要なデータだけ取得（投稿タブと競合タブでは重いデータを取らない）
+    const needsFullInsights = activeTab === 'insights';
 
     const [
       insights,
@@ -488,19 +425,6 @@ export default async function ThreadsHome({
 
 
 
-    const competitorHighlights: DisplayHighlight[] = (
-      (insights?.competitorHighlights?.length ?? 0) > 0 ? insights!.competitorHighlights : FALLBACK_HIGHLIGHTS
-    ).map((item) => toDisplayHighlight(item));
-
-    const trendingTopics = (
-      (insights?.trendingTopics?.length ?? 0) > 0 ? insights!.trendingTopics : FALLBACK_TRENDING
-    ).map((topic) => ({
-      themeTag: topic.themeTag,
-      avgFollowersDelta: topic.avgFollowersDelta,
-      avgViews: topic.avgViews,
-      sampleAccounts: topic.sampleAccounts ?? [],
-    }));
-
     const templateOptions =
       effectiveTemplateSummaries?.map((template) => ({
         value: template.templateId,
@@ -564,7 +488,10 @@ export default async function ThreadsHome({
             maxFollowerDelta={maxFollowerDeltaValue}
           />
         ) : (
-          <CompetitorTab highlights={competitorHighlights} trendingTopics={trendingTopics} />
+          <CompetitorTabLight
+            startDate={formatDateInput(resolvedRange.start)}
+            endDate={formatDateInput(resolvedRange.end)}
+          />
         )}
       </ThreadsTabShell>
     );

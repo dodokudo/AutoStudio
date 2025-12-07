@@ -17,6 +17,7 @@ import { InsightsCard } from './insights-card';
 import { TopContentCard } from './top-content-card';
 import { TimePerformanceCard } from './time-performance-card';
 import { ThreadsFunnelComparison } from './threads-funnel-comparison';
+import { PostAnalysisCard } from './post-analysis-card';
 import { resolveDateRange, isUnifiedRangePreset, formatDateInput } from '@/lib/dateRangePresets';
 
 interface InsightsTabProps {
@@ -312,6 +313,11 @@ export function InsightsTab({
       <ThreadsFunnelComparison
         currentStartDate={formatDateInput(currentRange.start)}
         currentEndDate={formatDateInput(currentRange.end)}
+      />
+
+      <PostAnalysisCard
+        startDate={formatDateInput(currentRange.start)}
+        endDate={formatDateInput(currentRange.end)}
       />
 
       <TimePerformanceCard
