@@ -202,11 +202,11 @@ async function generateMonthlyReport(year: number, month: number): Promise<Month
     ),
     daily_line AS (
       SELECT
-        DATE(registered_at) AS date,
-        COUNTIF(source_name = 'Threads') AS line_threads
+        DATE(friend_added_at) AS date,
+        SUM(source_threads) AS line_threads
       FROM \`${PROJECT_ID}.autostudio_lstep.lstep_friends_raw\`
-      WHERE DATE(registered_at) BETWEEN '${startDate}' AND '${endDate}'
-      GROUP BY DATE(registered_at)
+      WHERE DATE(friend_added_at) BETWEEN '${startDate}' AND '${endDate}'
+      GROUP BY DATE(friend_added_at)
     )
     SELECT
       COALESCE(dp.date, df.date) AS date,
