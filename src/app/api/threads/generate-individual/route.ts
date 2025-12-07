@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildThreadsPromptPayload } from '@/lib/promptBuilder';
 import { generateClaudePlans } from '@/lib/claude';
-import { replaceTodayPlans, upsertPlan } from '@/lib/bigqueryPlans';
+import { upsertPlan } from '@/lib/bigqueryPlans';
 import { resolveProjectId } from '@/lib/bigquery';
 
 const PROJECT_ID = resolveProjectId();
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const theme = typeof body?.theme === 'string' ? body.theme.trim() : '';
-
-    if (!theme) {
-      return NextResponse.json({ error: 'テーマが指定されていません' }, { status: 400 });
-    }
+    // リクエストからテーマを取得（任意）
+    const body = await request.json().catch(() => ({}));
+    const customTheme = typeof body?.theme === 'string' ? body.theme.trim() : '';
 
     // 既存の生成パイプラインを1件用に流用
     let payload;
@@ -26,7 +23,11 @@ export async function POST(request: NextRequest) {
 
     payload.meta.targetPostCount = 1;
     payload.meta.recommendedSchedule = payload.meta.recommendedSchedule.slice(0, 1);
-    payload.writingChecklist.enforcedTheme = theme;
+
+    // テーマが指定されていればそれを使用、なければデフォルトのAI活用テーマ
+    if (customTheme) {
+      payload.writingChecklist.enforcedTheme = customTheme;
+    }
 
     let claudeResult;
     try {
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
 
     const planId = post.planId?.trim() || `gen-${Date.now()}`;
     const scheduledTime = post.scheduledTime?.trim() || payload.meta.recommendedSchedule[0] || '07:00';
+    const theme = post.theme?.trim() || payload.writingChecklist.enforcedTheme;
 
     await upsertPlan({
       plan_id: planId,
@@ -55,8 +57,6 @@ export async function POST(request: NextRequest) {
       main_text: post.mainPost,
       comments: JSON.stringify((post.comments ?? []).map((text, index) => ({ order: index + 1, text }))),
     });
-
-    await replaceTodayPlans([], payload.meta.recommendedSchedule);
 
     return NextResponse.json({ planId, result: post }, { status: 200 });
   } catch (error) {

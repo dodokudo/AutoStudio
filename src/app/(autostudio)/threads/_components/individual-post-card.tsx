@@ -13,7 +13,10 @@ interface GeneratedPost {
   comments: string[];
 }
 
+type PostType = 'ai-tips' | 'threads-operation';
+
 export function IndividualPostCard() {
+  const [postType, setPostType] = useState<PostType>('threads-operation');
   const [theme, setTheme] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPost, setGeneratedPost] = useState<GeneratedPost | null>(null);
@@ -43,14 +46,16 @@ export function IndividualPostCard() {
   };
 
   const handleGenerate = async () => {
-    if (!theme.trim()) return;
-
     setIsGenerating(true);
     try {
-      const response = await fetch('/api/threads/generate-individual', {
+      const apiEndpoint = postType === 'ai-tips'
+        ? '/api/threads/generate-individual'
+        : '/api/threads/generate-individual-operation';
+
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: theme.trim() }),
+        body: JSON.stringify({ theme: theme.trim() || undefined }),
       });
 
       if (!response.ok) {
@@ -117,25 +122,56 @@ export function IndividualPostCard() {
 
   return (
     <Card className="w-full">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">個別投稿作成</h2>
-        <p className="text-sm text-[color:var(--color-text-secondary)]">
-          任意のテーマから1件の投稿案を生成し、そのまま編集・承認できます。
-        </p>
-      </div>
+      <header className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">個別投稿作成</h2>
+          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+            任意のテーマから1件の投稿案を生成し、そのまま編集・承認できます。
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1">
+            <button
+              onClick={() => setPostType('ai-tips')}
+              disabled={isGenerating || isPosting}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                postType === 'ai-tips'
+                  ? 'bg-[color:var(--color-accent)] text-white'
+                  : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+              } disabled:opacity-50`}
+            >
+              AI活用系
+            </button>
+            <button
+              onClick={() => setPostType('threads-operation')}
+              disabled={isGenerating || isPosting}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                postType === 'threads-operation'
+                  ? 'bg-[color:var(--color-accent)] text-white'
+                  : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+              } disabled:opacity-50`}
+            >
+              Threads運用系
+            </button>
+          </div>
+        </div>
+      </header>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2 min-w-0">
         <div className="space-y-4 min-w-0">
-          <label className="block text-sm font-medium text-[color:var(--color-text-primary)]">テーマ・内容</label>
+          <label className="block text-sm font-medium text-[color:var(--color-text-primary)]">テーマ・内容（任意）</label>
           <textarea
             value={theme}
             onChange={(event) => setTheme(event.target.value)}
             rows={6}
-            placeholder="例: AI音声入力で資料作成を時短する具体的な手順"
+            placeholder={postType === 'ai-tips'
+              ? "例: AI音声入力で資料作成を時短する具体的な手順\n\n空欄の場合は自動でテーマが選択されます"
+              : "例: Threadsのフォロワーを増やすための投稿戦略\n\n空欄の場合は自動でテーマが選択されます"
+            }
             className="w-full max-w-full rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 py-3 text-sm text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
             disabled={isGenerating}
           />
-          <Button onClick={handleGenerate} disabled={!theme.trim() || isGenerating} className="w-full sm:w-auto">
+          <Button onClick={handleGenerate} disabled={isGenerating} className="w-full sm:w-auto">
             {isGenerating ? '生成中…' : '投稿案を生成'}
           </Button>
         </div>
@@ -220,7 +256,7 @@ export function IndividualPostCard() {
             </>
           ) : (
             <div className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-6 text-sm text-[color:var(--color-text-secondary)]">
-              投稿案はまだ生成されていません。左側にテーマを入力して生成を開始してください。
+              投稿案はまだ生成されていません。左側でテーマを入力（任意）して生成を開始してください。
             </div>
           )}
         </div>

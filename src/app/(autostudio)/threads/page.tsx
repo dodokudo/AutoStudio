@@ -7,6 +7,7 @@ import { resolveProjectId } from "@/lib/bigquery";
 import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { CompetitorTabLight } from "./_components/competitor-tab-light";
+import { ReportTab } from "./_components/report-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getLinkClicksSummary } from "@/lib/links/analytics";
@@ -21,7 +22,7 @@ export const dynamic = 'force-dynamic';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-type ThreadsTabKey = 'post' | 'insights' | 'competitor';
+type ThreadsTabKey = 'post' | 'insights' | 'competitor' | 'report';
 
 export default async function ThreadsHome({
   searchParams,
@@ -51,7 +52,7 @@ export default async function ThreadsHome({
 
   const tabParamRaw = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : undefined;
   const normalizedTabParam = tabParamRaw === 'overview' ? 'insights' : tabParamRaw;
-  const allowedTabs: ThreadsTabKey[] = ['insights', 'post', 'competitor'];
+  const allowedTabs: ThreadsTabKey[] = ['insights', 'post', 'competitor', 'report'];
   const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'insights';
 
   try {
@@ -445,6 +446,7 @@ export default async function ThreadsHome({
         { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
         { id: 'post' as ThreadsTabKey, label: '投稿' },
         { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
+        { id: 'report' as ThreadsTabKey, label: 'レポート' },
       ] satisfies Array<{ id: ThreadsTabKey; label: string }>
     ).map((item) => {
       const params = new URLSearchParams(sharedParams.toString());
@@ -487,8 +489,13 @@ export default async function ThreadsHome({
             maxImpressions={maxImpressionsValue}
             maxFollowerDelta={maxFollowerDeltaValue}
           />
-        ) : (
+        ) : activeTab === 'competitor' ? (
           <CompetitorTabLight
+            startDate={formatDateInput(resolvedRange.start)}
+            endDate={formatDateInput(resolvedRange.end)}
+          />
+        ) : (
+          <ReportTab
             startDate={formatDateInput(resolvedRange.start)}
             endDate={formatDateInput(resolvedRange.end)}
           />

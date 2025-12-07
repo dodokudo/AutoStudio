@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 import { classNames } from '@/lib/classNames';
 
-type ThreadsTabKey = 'post' | 'insights' | 'competitor';
+type ThreadsTabKey = 'post' | 'insights' | 'competitor' | 'report';
 
 type TabItem = {
   id: ThreadsTabKey;
