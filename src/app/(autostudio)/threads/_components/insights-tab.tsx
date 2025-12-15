@@ -155,7 +155,7 @@ export function InsightsTab({
       }
     });
 
-    return entries.slice(0, 30);
+    return entries;
   }, [effectiveInsights, topContentSort]);
 
   return (

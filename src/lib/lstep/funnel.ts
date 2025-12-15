@@ -435,13 +435,26 @@ export async function getAvailableTagColumns(
  */
 function formatColumnLabel(column: string): string {
   const labelMap: Record<string, string> = {
-    th_video_watched: '動画閲覧',
-    th_video_lp: '動画LP遷移',
-    th_consultation_form: '個別相談フォーム遷移',
-    th_consultation_applied: '個別相談申込済み',
-    th_contracted: '成約',
+    // Threads ファネル (TH:)
+    th_video_watched: 'TH：動画閲覧',
+    th_video_lp: 'TH：動画LP遷移',
+    th_consultation_form: 'TH：個別相談フォーム遷移',
+    th_consultation_applied: 'TH：個別相談申込済み',
+    th_contracted: 'TH：成約',
+    // TAI ファネル (TAI:)
+    tai_lp: 'TAI：動画LP遷移',
+    tai: 'TAI：動画閲覧',
+    tai_video_watched: 'TAI：動画閲覧',
+    tai_personal_applied: 'TAI：個別申込ページ遷移',
+    tai_personal: 'TAI：個別相談会申込済み',
+    tai_consultation_applied: 'TAI：個別相談会申込済み',
+    tai_personal_done: 'TAI：個別相談会実施',
+    tai_consultation_done: 'TAI：個別相談会実施',
+    tai_contracted: 'TAI：成約',
+    // アンケート
     survey_form_inflow: 'アンケートフォーム流入',
     survey_completed: 'アンケート回答完了',
+    // 流入経路
     source_threads: '流入：Threads',
     source_threads_post: '流入：Threads ポスト',
     source_threads_profile: '流入：Threads プロフ',
@@ -451,6 +464,7 @@ function formatColumnLabel(column: string): string {
     source_instagram_comment: '流入：Instagram コメント',
     source_youtube: '流入：YouTube',
     inflow_organic: '流入：オーガニック',
+    // 属性
     gender_male: '性別：男性',
     gender_female: '性別：女性',
   };
