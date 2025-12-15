@@ -98,7 +98,7 @@ export async function analyzeFunnel(
 
   // 日付フィルタ条件を構築
   const dateFilter = options?.startDate && options?.endDate
-    ? 'AND DATE(friend_added_at) BETWEEN @startDate AND @endDate'
+    ? 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate'
     : '';
 
   // BigQueryパラメータを構築（undefinedを除外）

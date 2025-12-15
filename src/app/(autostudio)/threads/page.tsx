@@ -10,7 +10,7 @@ import { CompetitorTabLight } from "./_components/competitor-tab-light";
 import { ReportTab } from "./_components/report-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
-import { getLinkClicksSummary } from "@/lib/links/analytics";
+import { getLinkClicksSummary, getThreadsLinkClicksByRange } from "@/lib/links/analytics";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
@@ -384,14 +384,28 @@ export default async function ThreadsHome({
       console.error('[threads/page] Failed to load LINE registration series:', lineError);
     }
 
+    // Threadsカテゴリのリンククリック数を日別で取得
+    let linkClicksByDate: Record<string, number> = {};
+    try {
+      const linkClicksSeries = await getThreadsLinkClicksByRange(chartWindowStart, chartWindowEnd);
+      linkClicksByDate = linkClicksSeries.reduce<Record<string, number>>((acc, point) => {
+        acc[point.date] = point.clicks;
+        return acc;
+      }, {});
+    } catch (linkError) {
+      console.error('[threads/page] Failed to load link clicks series:', linkError);
+    }
+
     let performanceSeries = dailyMetricsForChart.map((metric, index) => {
       const previousFollowers = index > 0 ? dailyMetricsForChart[index - 1].followers : metric.followers;
       const rawFollowerDelta = index === 0 ? 0 : metric.followers - previousFollowers;
       const followerDelta = rawFollowerDelta > 0 ? rawFollowerDelta : 0;
       return {
         date: metric.date,
+        followers: metric.followers,
         impressions: impressionsByDate[metric.date] ?? 0,
         followerDelta,
+        linkClicks: linkClicksByDate[metric.date] ?? 0,
         lineRegistrations: lineRegistrationsByDate[metric.date] ?? 0,
         postCount: postCountByDate[metric.date] ?? 0,
       };
@@ -407,8 +421,10 @@ export default async function ThreadsHome({
 
       performanceSeries = impressionDates.map((date) => ({
         date,
+        followers: 0,
         impressions: impressionsByDate[date] ?? 0,
         followerDelta: 0,
+        linkClicks: linkClicksByDate[date] ?? 0,
         lineRegistrations: lineRegistrationsByDate[date] ?? 0,
         postCount: postCountByDate[date] ?? 0,
       }));

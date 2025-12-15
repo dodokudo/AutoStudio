@@ -81,7 +81,7 @@ export async function countLineRegistrationsByDateRange(
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
-        AND DATE(friend_added_at) BETWEEN @startDate AND @endDate
+        AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
     `,
     params: { snapshotDate, startDate, endDate },
   });
@@ -154,7 +154,7 @@ export async function countLineRegistrationsBySource(
         FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
         WHERE snapshot_date = @snapshotDate
           AND friend_added_at IS NOT NULL
-          AND DATE(friend_added_at) BETWEEN @startDate AND @endDate
+          AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
       ),
       categorized AS (
         SELECT
@@ -334,6 +334,7 @@ export async function getLstepAnalytics(projectId: string): Promise<LstepAnalyti
 
 /**
  * ファネル分析データを取得
+ * user_coreとuser_surveysテーブルを使用
  */
 async function getFunnelAnalysis(
   client: BigQuery,
@@ -347,12 +348,29 @@ async function getFunnelAnalysis(
     survey_completed: number;
   }>(client, projectId, datasetId, {
     query: `
+      WITH base_users AS (
+        SELECT DISTINCT user_id
+        FROM \`${projectId}.${datasetId}.user_core\`
+        WHERE snapshot_date = @snapshotDate
+      ),
+      survey_entered_users AS (
+        SELECT DISTINCT surveys.user_id
+        FROM \`${projectId}.${datasetId}.user_surveys\` surveys
+        WHERE surveys.snapshot_date = @snapshotDate
+          AND surveys.question = 'フォーム流入'
+          AND surveys.answer_flag = 1
+      ),
+      survey_completed_users AS (
+        SELECT DISTINCT surveys.user_id
+        FROM \`${projectId}.${datasetId}.user_surveys\` surveys
+        WHERE surveys.snapshot_date = @snapshotDate
+          AND surveys.question = '回答完了'
+          AND surveys.answer_flag = 1
+      )
       SELECT
-        COUNT(DISTINCT id) AS total_users,
-        COUNT(DISTINCT CASE WHEN survey_form_inflow = 1 THEN id END) AS survey_entered,
-        COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END) AS survey_completed
-      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-      WHERE snapshot_date = @snapshotDate
+        (SELECT COUNT(*) FROM base_users) AS total_users,
+        (SELECT COUNT(*) FROM survey_entered_users) AS survey_entered,
+        (SELECT COUNT(*) FROM survey_completed_users) AS survey_completed
     `,
     params: { snapshotDate },
   });
@@ -372,6 +390,7 @@ async function getFunnelAnalysis(
 
 /**
  * ファネル分析データを取得（期間指定）
+ * user_coreとuser_surveysテーブルを使用
  */
 async function getFunnelAnalysisByDateRange(
   client: BigQuery,
@@ -382,7 +401,7 @@ async function getFunnelAnalysisByDateRange(
   endDate?: string,
 ): Promise<FunnelAnalysis> {
   const dateFilter = startDate && endDate
-    ? 'AND DATE(friend_added_at) BETWEEN @startDate AND @endDate'
+    ? 'AND DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate'
     : '';
 
   const [row] = await runQuery<{
@@ -391,14 +410,41 @@ async function getFunnelAnalysisByDateRange(
     survey_completed: number;
   }>(client, projectId, datasetId, {
     query: `
+      WITH base_users AS (
+        SELECT DISTINCT core.user_id
+        FROM \`${projectId}.${datasetId}.user_core\` core
+        WHERE core.snapshot_date = @snapshotDate
+          AND core.friend_added_at IS NOT NULL
+          ${dateFilter}
+      ),
+      survey_entered_users AS (
+        SELECT DISTINCT core.user_id
+        FROM \`${projectId}.${datasetId}.user_core\` core
+        INNER JOIN \`${projectId}.${datasetId}.user_surveys\` surveys
+          ON core.user_id = surveys.user_id
+          AND core.snapshot_date = surveys.snapshot_date
+        WHERE core.snapshot_date = @snapshotDate
+          AND core.friend_added_at IS NOT NULL
+          AND surveys.question = 'フォーム流入'
+          AND surveys.answer_flag = 1
+          ${dateFilter}
+      ),
+      survey_completed_users AS (
+        SELECT DISTINCT core.user_id
+        FROM \`${projectId}.${datasetId}.user_core\` core
+        INNER JOIN \`${projectId}.${datasetId}.user_surveys\` surveys
+          ON core.user_id = surveys.user_id
+          AND core.snapshot_date = surveys.snapshot_date
+        WHERE core.snapshot_date = @snapshotDate
+          AND core.friend_added_at IS NOT NULL
+          AND surveys.question = '回答完了'
+          AND surveys.answer_flag = 1
+          ${dateFilter}
+      )
       SELECT
-        COUNT(DISTINCT id) AS total_users,
-        COUNT(DISTINCT CASE WHEN survey_form_inflow = 1 THEN id END) AS survey_entered,
-        COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END) AS survey_completed
-      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-      WHERE snapshot_date = @snapshotDate
-        AND friend_added_at IS NOT NULL
-        ${dateFilter}
+        (SELECT COUNT(*) FROM base_users) AS total_users,
+        (SELECT COUNT(*) FROM survey_entered_users) AS survey_entered,
+        (SELECT COUNT(*) FROM survey_completed_users) AS survey_completed
     `,
     params: { snapshotDate, startDate, endDate },
   });
@@ -418,6 +464,8 @@ async function getFunnelAnalysisByDateRange(
 
 /**
  * 日別登録数を取得（連続した日付で表示）
+ * user_coreテーブルを使用（L-STEP管理画面と同じデータソース）
+ * アンケート回答完了はuser_surveysテーブルを使用
  */
 async function getDailyRegistrations(
   client: BigQuery,
@@ -426,7 +474,7 @@ async function getDailyRegistrations(
 ): Promise<DailyRegistration[]> {
   // 最新のスナップショット日付を取得
   const [latestSnapshot] = await runQuery<{ snapshot_date: string }>(client, projectId, datasetId, {
-    query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM \`${projectId}.${datasetId}.${TABLE_NAME}\``,
+    query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM \`${projectId}.${datasetId}.user_core\``,
   });
 
   const latestSnapshotDate = latestSnapshot?.snapshot_date;
@@ -435,6 +483,7 @@ async function getDailyRegistrations(
   }
 
   // 日付範囲を生成し、登録数とアンケート完了数を取得
+  // user_coreテーブルとuser_surveysテーブルを使用
   const rows = await runQuery<{
     registration_date: string;
     registrations: number;
@@ -442,25 +491,39 @@ async function getDailyRegistrations(
   }>(client, projectId, datasetId, {
     query: `
       WITH date_range AS (
-        SELECT DATE_SUB(CAST(@latestSnapshotDate AS DATE), INTERVAL n DAY) AS date
+        SELECT DATE_SUB(CURRENT_DATE("Asia/Tokyo"), INTERVAL n DAY) AS date
         FROM UNNEST(GENERATE_ARRAY(0, 89)) AS n
       ),
-      daily_stats AS (
+      daily_registrations AS (
         SELECT
-          CAST(DATE(friend_added_at) AS STRING) AS registration_date,
-          COUNT(DISTINCT id) AS registrations,
-          COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END) AS survey_completed
-        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+          CAST(DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") AS STRING) AS registration_date,
+          COUNT(DISTINCT user_id) AS registrations
+        FROM \`${projectId}.${datasetId}.user_core\`
         WHERE friend_added_at IS NOT NULL
           AND snapshot_date = @latestSnapshotDate
+        GROUP BY registration_date
+      ),
+      daily_survey AS (
+        SELECT
+          CAST(DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") AS STRING) AS registration_date,
+          COUNT(DISTINCT core.user_id) AS survey_completed
+        FROM \`${projectId}.${datasetId}.user_core\` core
+        INNER JOIN \`${projectId}.${datasetId}.user_surveys\` surveys
+          ON core.user_id = surveys.user_id
+          AND core.snapshot_date = surveys.snapshot_date
+        WHERE core.friend_added_at IS NOT NULL
+          AND core.snapshot_date = @latestSnapshotDate
+          AND surveys.question = '回答完了'
+          AND surveys.answer_flag = 1
         GROUP BY registration_date
       )
       SELECT
         CAST(dr.date AS STRING) AS registration_date,
-        COALESCE(ds.registrations, 0) AS registrations,
+        COALESCE(dreg.registrations, 0) AS registrations,
         COALESCE(ds.survey_completed, 0) AS survey_completed
       FROM date_range dr
-      LEFT JOIN daily_stats ds ON CAST(dr.date AS STRING) = ds.registration_date
+      LEFT JOIN daily_registrations dreg ON CAST(dr.date AS STRING) = dreg.registration_date
+      LEFT JOIN daily_survey ds ON CAST(dr.date AS STRING) = ds.registration_date
       ORDER BY dr.date DESC
     `,
     params: { latestSnapshotDate },
@@ -525,7 +588,7 @@ async function getSourceAnalysis(
       SELECT COUNT(DISTINCT user_id) AS total
       FROM \`${projectId}.${datasetId}.user_core\`
       WHERE snapshot_date = @snapshotDate
-        AND DATE(friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
+        AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN DATE_SUB(CURRENT_DATE("Asia/Tokyo"), INTERVAL 30 DAY) AND CURRENT_DATE("Asia/Tokyo")
     `,
     params: { snapshotDate },
   });
@@ -588,7 +651,7 @@ async function getSourceAnalysisByDateRange(
       SELECT COUNT(DISTINCT user_id) AS total
       FROM \`${projectId}.${datasetId}.user_core\`
       WHERE snapshot_date = @snapshotDate
-        AND DATE(friend_added_at) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) AND CURRENT_DATE()
+        AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN DATE_SUB(CURRENT_DATE("Asia/Tokyo"), INTERVAL 30 DAY) AND CURRENT_DATE("Asia/Tokyo")
     `,
     params: { snapshotDate },
   });

@@ -193,7 +193,7 @@ export async function countLineSourceRegistrations(
         INNER JOIN \`${projectId}.${datasetId}.user_sources\` sources
           ON core.user_id = sources.user_id
           AND core.snapshot_date = sources.snapshot_date
-        WHERE DATE(core.friend_added_at) BETWEEN @startDate AND @endDate
+        WHERE DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
           AND sources.source_name LIKE CONCAT(@sourceName, '%')
           AND sources.source_flag = 1
       )
@@ -223,12 +223,12 @@ export async function listLineSourceRegistrations(
         WITH matched_users AS (
           SELECT DISTINCT
             core.user_id,
-            DATE(core.friend_added_at) AS joined_date
+            DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") AS joined_date
           FROM \`${projectId}.${datasetId}.user_core\` core
           INNER JOIN \`${projectId}.${datasetId}.user_sources\` sources
             ON core.user_id = sources.user_id
             AND core.snapshot_date = sources.snapshot_date
-          WHERE DATE(core.friend_added_at) BETWEEN @startDate AND @endDate
+          WHERE DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
             AND sources.source_name LIKE CONCAT(@sourceName, '%')
             AND sources.source_flag = 1
         )

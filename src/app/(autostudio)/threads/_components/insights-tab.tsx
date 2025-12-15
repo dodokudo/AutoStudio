@@ -35,8 +35,10 @@ interface InsightsTabProps {
   }>;
   performanceSeries?: Array<{
     date: string;
+    followers: number;
     impressions: number;
     followerDelta: number;
+    linkClicks?: number;
     lineRegistrations?: number;
     postCount?: number;
   }>;
@@ -74,6 +76,8 @@ export function InsightsTab({
     return {
       ...item,
       displayDate,
+      followers: item.followers ?? 0,
+      linkClicks: item.linkClicks ?? 0,
     };
   });
 
@@ -181,14 +185,17 @@ export function InsightsTab({
         {/* 日別データ表 */}
         {showDailyTable && hasChartData && (
           <div className="mt-4 overflow-x-auto rounded-[var(--radius-md)] border border-[color:var(--color-border)]">
-            <table className="w-full min-w-[500px] text-sm">
+            <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50">
                 <tr className="border-b border-[color:var(--color-border)] text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
                   <th className="px-3 py-2">日付</th>
-                  <th className="px-3 py-2 text-right">投稿数</th>
-                  <th className="px-3 py-2 text-right">インプレッション</th>
-                  <th className="px-3 py-2 text-right">フォロワー増加</th>
-                  <th className="px-3 py-2 text-right">LINE登録</th>
+                  <th className="px-3 py-2 text-right">フォロワー数</th>
+                  <th className="px-3 py-2 text-right">増加</th>
+                  <th className="px-3 py-2 text-right">投稿</th>
+                  <th className="px-3 py-2 text-right">インプ</th>
+                  <th className="px-3 py-2 text-right">クリック</th>
+                  <th className="px-3 py-2 text-right">LINE</th>
+                  <th className="px-3 py-2 text-right">登録率</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--color-border)]">
@@ -197,10 +204,21 @@ export function InsightsTab({
                   const displayFullDate = !Number.isNaN(parsed.getTime())
                     ? fullDateFormatter.format(parsed)
                     : item.date;
+                  const linkClicks = item.linkClicks ?? 0;
+                  const lineRegs = item.lineRegistrations ?? 0;
+                  const registrationRate = linkClicks > 0 ? (lineRegs / linkClicks) * 100 : 0;
                   return (
                     <tr key={item.date} className="hover:bg-[color:var(--color-surface-muted)]">
                       <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">
                         {displayFullDate}
+                      </td>
+                      <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                        {numberFormatter.format(item.followers ?? 0)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={item.followerDelta > 0 ? 'text-green-600' : 'text-[color:var(--color-text-secondary)]'}>
+                          {item.followerDelta > 0 ? `+${numberFormatter.format(item.followerDelta)}` : '0'}
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
                         {item.postCount ?? 0}
@@ -208,15 +226,16 @@ export function InsightsTab({
                       <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
                         {numberFormatter.format(item.impressions)}
                       </td>
-                      <td className="px-3 py-2 text-right">
-                        <span className={item.followerDelta > 0 ? 'text-green-600' : 'text-[color:var(--color-text-secondary)]'}>
-                          {item.followerDelta > 0 ? `+${numberFormatter.format(item.followerDelta)}` : '0'}
-                        </span>
+                      <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                        {numberFormatter.format(linkClicks)}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <span className={(item.lineRegistrations ?? 0) > 0 ? 'text-amber-600' : 'text-[color:var(--color-text-secondary)]'}>
-                          {(item.lineRegistrations ?? 0) > 0 ? `+${numberFormatter.format(item.lineRegistrations ?? 0)}` : '0'}
+                        <span className={lineRegs > 0 ? 'text-amber-600' : 'text-[color:var(--color-text-secondary)]'}>
+                          {lineRegs > 0 ? `+${numberFormatter.format(lineRegs)}` : '0'}
                         </span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                        {linkClicks > 0 ? `${registrationRate.toFixed(1)}%` : '-'}
                       </td>
                     </tr>
                   );
