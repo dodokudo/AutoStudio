@@ -16,6 +16,15 @@ export interface PromptAccountSummary {
   recentDates: string[];
 }
 
+export interface PromptPostComment {
+  commentId: string;
+  parentPostId: string;
+  text: string;
+  timestamp: string;
+  depth: number;
+  views: number;
+}
+
 export interface PromptSelfPost {
   postId: string;
   postedAt: string | null;
@@ -23,6 +32,7 @@ export interface PromptSelfPost {
   likes: number;
   content: string;
   permalink: string;
+  commentData?: PromptPostComment[];
 }
 
 export interface PromptCompetitorHighlight {

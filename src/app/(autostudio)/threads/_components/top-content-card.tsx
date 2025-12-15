@@ -5,6 +5,15 @@ import { Card } from '@/components/ui/card';
 
 type SortOption = 'postedAt' | 'views' | 'likes';
 
+interface PostCommentData {
+  commentId: string;
+  parentPostId: string;
+  text: string;
+  timestamp: string;
+  depth: number;
+  views: number;
+}
+
 interface TopContentCardProps {
   posts: Array<{
     id: string;
@@ -13,6 +22,7 @@ interface TopContentCardProps {
     likes: number;
     replies: number;
     postedAt: string;
+    commentData?: PostCommentData[];
   }>;
   sortOption: SortOption;
   onSortChange: (option: SortOption) => void;
@@ -20,7 +30,64 @@ interface TopContentCardProps {
 
 const INITIAL_DISPLAY_COUNT = 20;
 
+interface TransitionRate {
+  from: string;
+  to: string;
+  rate: number;
+  views: number;
+}
 
+interface TransitionResult {
+  transitions: TransitionRate[];
+  overallRate: number | null; // メイン→最終コメント欄の遷移率
+  lastCommentViews: number | null;
+}
+
+function calculateTransitionRates(postViews: number, comments: PostCommentData[]): TransitionResult {
+  if (comments.length === 0 || postViews === 0) {
+    return { transitions: [], overallRate: null, lastCommentViews: null };
+  }
+
+  const sortedComments = [...comments].sort((a, b) => a.depth - b.depth);
+  const transitions: TransitionRate[] = [];
+
+  // メイン投稿 → コメント欄1
+  if (sortedComments.length > 0) {
+    const firstComment = sortedComments[0];
+    const rate = (firstComment.views / postViews) * 100;
+    transitions.push({
+      from: 'メイン',
+      to: 'コメント欄1',
+      rate,
+      views: firstComment.views,
+    });
+  }
+
+  // コメント欄1 → コメント欄2, ...
+  for (let i = 1; i < sortedComments.length; i++) {
+    const prevComment = sortedComments[i - 1];
+    const currComment = sortedComments[i];
+    if (prevComment.views > 0) {
+      const rate = (currComment.views / prevComment.views) * 100;
+      transitions.push({
+        from: `コメント欄${i}`,
+        to: `コメント欄${i + 1}`,
+        rate,
+        views: currComment.views,
+      });
+    }
+  }
+
+  // メイン→最終コメント欄の全体遷移率
+  const lastComment = sortedComments[sortedComments.length - 1];
+  const overallRate = postViews > 0 ? (lastComment.views / postViews) * 100 : null;
+
+  return {
+    transitions,
+    overallRate,
+    lastCommentViews: lastComment.views,
+  };
+}
 
 function cleanContent(text: string) {
   // 【メイン投稿】などのプレフィックスを除去
@@ -40,6 +107,10 @@ function PostCard({ post, isExpanded, onToggle, rank }: {
   rank?: number;
 }) {
   const isTop10 = rank !== undefined && rank <= 10;
+  const commentData = post.commentData ?? [];
+  const hasComments = commentData.length > 0;
+  const { transitions: transitionRates, overallRate } = calculateTransitionRates(post.views, commentData);
+
   return (
     <div
       className={`rounded-[var(--radius-md)] border bg-white p-3 shadow-[var(--shadow-soft)] cursor-pointer ${
@@ -69,6 +140,11 @@ function PostCard({ post, isExpanded, onToggle, rank }: {
             hour: '2-digit',
             minute: '2-digit',
           })}</span>
+          {hasComments && (
+            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
+              コメント欄{commentData.length}つ
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span>閲覧 {post.views.toLocaleString()}</span>
@@ -76,7 +152,53 @@ function PostCard({ post, isExpanded, onToggle, rank }: {
           <span>返信 {post.replies.toLocaleString()}</span>
         </div>
       </div>
-      <p className="mt-1 text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
+
+      {/* コメント欄遷移率表示 */}
+      {transitionRates.length > 0 && (
+        <div className="mt-2 rounded-md bg-gradient-to-r from-purple-50 to-indigo-50 p-2 border border-purple-100">
+          <div className="flex items-center gap-1 flex-wrap text-[10px]">
+            {/* メイン投稿 */}
+            <div className="flex flex-col items-center">
+              <span className="text-gray-500">メイン</span>
+              <span className="font-bold text-gray-700">{post.views.toLocaleString()}</span>
+            </div>
+            {transitionRates.map((t, idx) => {
+              // 1投稿目から2投稿目（idx === 0: メイン→コメント欄1）は10%以上で緑
+              // 2投稿目以降は80%以上で緑
+              const isFirstTransition = idx === 0;
+              const colorClass = isFirstTransition
+                ? t.rate >= 10 ? 'text-green-600' : 'text-red-500'
+                : t.rate >= 80 ? 'text-green-600' : t.rate >= 50 ? 'text-yellow-600' : 'text-red-500';
+
+              return (
+                <div key={idx} className="flex items-center gap-1">
+                  <div className="flex flex-col items-center px-1">
+                    <span className="text-gray-400">→</span>
+                    <span className={`font-bold ${colorClass}`}>
+                      {t.rate.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-gray-500">{t.to}</span>
+                    <span className="font-bold text-gray-700">{t.views.toLocaleString()}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* メイン→最終コメント欄の全体遷移率 */}
+          {overallRate !== null && transitionRates.length > 1 && (
+            <div className="mt-1 pt-1 border-t border-purple-200 flex items-center gap-1 text-[10px]">
+              <span className="text-gray-500">全体遷移率:</span>
+              <span className={`font-bold ${overallRate >= 1 ? 'text-blue-600' : 'text-gray-500'}`}>
+                {overallRate.toFixed(2)}%
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="mt-2 text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
         {isExpanded ? cleanContent(post.content) : truncateText(post.content)}
       </p>
     </div>

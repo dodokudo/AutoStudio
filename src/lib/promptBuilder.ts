@@ -4,6 +4,7 @@ import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
 import type {
   PromptAccountSummary,
   PromptSelfPost,
+  PromptPostComment,
   PromptCompetitorHighlight,
   PromptTrendingTopic,
   PromptTemplateSummary,
@@ -156,14 +157,75 @@ async function fetchTopSelfPosts(
     permalink?: string;
   };
   const rows = await runQuery<Row>(client, sql, { startDate, endDate });
-  return rows.map((row) => ({
+  const posts = rows.map((row) => ({
     postId: row.post_id ?? '',
     postedAt: toPlainString(row.posted_at) ?? null,
     impressions: Number(row.impressions_total ?? 0),
     likes: Number(row.likes_total ?? 0),
     content: row.content ?? '',
     permalink: row.permalink ?? '',
+    commentData: [] as PromptPostComment[],
   }));
+
+  // コメントデータを取得して投稿に紐付け
+  const postIds = posts.map((p) => p.postId).filter(Boolean);
+  if (postIds.length > 0) {
+    try {
+      const commentSql = `
+        SELECT
+          comment_id,
+          parent_post_id,
+          text,
+          timestamp,
+          depth,
+          views
+        FROM \`${projectId}.${DATASET}.threads_comments\`
+        WHERE parent_post_id IN UNNEST(@postIds)
+        ORDER BY parent_post_id, depth ASC
+      `;
+      type CommentRow = {
+        comment_id?: string;
+        parent_post_id?: string;
+        text?: string;
+        timestamp?: string;
+        depth?: number;
+        views?: number;
+      };
+      const commentRows = await runQuery<CommentRow>(client, commentSql, { postIds });
+
+      // 投稿IDごとにコメントをグループ化
+      const commentsByPostId = new Map<string, PromptPostComment[]>();
+      for (const row of commentRows) {
+        const parentPostId = row.parent_post_id ?? '';
+        if (!parentPostId) continue;
+
+        const comment: PromptPostComment = {
+          commentId: row.comment_id ?? '',
+          parentPostId,
+          text: row.text ?? '',
+          timestamp: toPlainString(row.timestamp) ?? '',
+          depth: Number(row.depth ?? 0),
+          views: Number(row.views ?? 0),
+        };
+
+        if (!commentsByPostId.has(parentPostId)) {
+          commentsByPostId.set(parentPostId, []);
+        }
+        commentsByPostId.get(parentPostId)!.push(comment);
+      }
+
+      // 各投稿にコメントデータを紐付け
+      for (const post of posts) {
+        const postComments = commentsByPostId.get(post.postId) || [];
+        post.commentData = postComments.sort((a, b) => a.depth - b.depth);
+      }
+    } catch (error) {
+      // threads_commentsテーブルが存在しない場合はスキップ
+      console.warn('[promptBuilder] threads_comments table not found or query failed', error);
+    }
+  }
+
+  return posts;
 }
 
 function normalizeWhitespace(value: string): string {

@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { PostInsight } from '@/lib/threadsInsightsData';
+import type { PostInsight, PostComment } from '@/lib/threadsInsightsData';
 import { Card } from '@/components/ui/card';
 import { InsightsCard } from './insights-card';
 import { TopContentCard } from './top-content-card';
@@ -141,6 +141,7 @@ export function InsightsTab({
       likes: post.insights.likes ?? 0,
       replies: post.insights.replies ?? 0,
       postedAt: post.postedAt,
+      commentData: post.commentData ?? [],
     }));
 
     entries.sort((a, b) => {

@@ -7,6 +7,15 @@ const PROJECT_ID = resolveProjectId();
 const POSTS_LIMIT = 200;
 const CACHE_TTL_MS = 1000 * 60 * 30;
 
+export interface PostComment {
+  commentId: string;
+  parentPostId: string;
+  text: string;
+  timestamp: string;
+  depth: number;
+  views: number;
+}
+
 export interface PostInsight {
   planId: string;
   postedThreadId: string;
@@ -15,6 +24,7 @@ export interface PostInsight {
   theme: string;
   mainText: string;
   comments: string[];
+  commentData: PostComment[];
   insights: ThreadInsights;
 }
 
@@ -141,6 +151,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
           theme: 'Threads投稿',
           mainText: toPlain(row.content ?? ''),
           comments: [],
+          commentData: [],
           insights: {
             impressions,
             likes,
@@ -151,6 +162,58 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       .sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
   } catch (error) {
     console.error('[threadsInsightsData] Failed to read threads_posts', error);
+  }
+
+  // コメントデータを取得して投稿に紐付ける
+  try {
+    const postIds = posts.map((p) => p.postedThreadId);
+    if (postIds.length > 0) {
+      const [commentRows] = await client.query({
+        query: `
+          SELECT
+            comment_id,
+            parent_post_id,
+            text,
+            timestamp,
+            depth,
+            views
+          FROM \`${PROJECT_ID}.${DATASET}.threads_comments\`
+          WHERE parent_post_id IN UNNEST(@postIds)
+          ORDER BY parent_post_id, depth ASC
+        `,
+        params: { postIds },
+      });
+
+      // 投稿IDごとにコメントをグループ化
+      const commentsByPostId = new Map<string, PostComment[]>();
+      for (const row of commentRows as Record<string, unknown>[]) {
+        const parentPostId = toPlain(row.parent_post_id);
+        if (!parentPostId) continue;
+
+        const comment: PostComment = {
+          commentId: toPlain(row.comment_id),
+          parentPostId,
+          text: toPlain(row.text),
+          timestamp: normalizeTimestamp(row.timestamp),
+          depth: Number(row.depth ?? 0),
+          views: Number(row.views ?? 0),
+        };
+
+        if (!commentsByPostId.has(parentPostId)) {
+          commentsByPostId.set(parentPostId, []);
+        }
+        commentsByPostId.get(parentPostId)!.push(comment);
+      }
+
+      // 各投稿にコメントデータを紐付け
+      for (const post of posts) {
+        const postComments = commentsByPostId.get(post.postedThreadId) || [];
+        post.commentData = postComments.sort((a, b) => a.depth - b.depth);
+      }
+    }
+  } catch (error) {
+    // threads_commentsテーブルが存在しない場合はスキップ
+    console.warn('[threadsInsightsData] threads_comments table not found or query failed', error);
   }
 
   let dailyMetrics: DailyFollowerMetric[] = [];
