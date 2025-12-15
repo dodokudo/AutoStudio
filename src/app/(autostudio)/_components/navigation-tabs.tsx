@@ -11,6 +11,7 @@ const navItems = [
   { id: 'ads', href: '/ads', label: 'Ads' },
   { id: 'youtube', href: '/youtube', label: 'YouTube' },
   { id: 'line', href: '/line', label: 'LINE' },
+  { id: 'sales', href: '/sales', label: 'Sales' },
   { id: 'links', href: '/links', label: 'Links' },
 ];
 
