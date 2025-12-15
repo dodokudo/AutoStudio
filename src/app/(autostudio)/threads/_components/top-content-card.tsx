@@ -33,25 +33,43 @@ function truncateText(text: string, maxLength = 80) {
   return `${cleaned.slice(0, maxLength)}…`;
 }
 
-function PostCard({ post, isExpanded, onToggle }: {
+function PostCard({ post, isExpanded, onToggle, rank }: {
   post: TopContentCardProps['posts'][number];
   isExpanded: boolean;
   onToggle: () => void;
+  rank?: number;
 }) {
+  const isTop10 = rank !== undefined && rank <= 10;
   return (
     <div
-      className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-3 shadow-[var(--shadow-soft)] cursor-pointer"
+      className={`rounded-[var(--radius-md)] border bg-white p-3 shadow-[var(--shadow-soft)] cursor-pointer ${
+        isTop10
+          ? 'border-amber-300 bg-amber-50/30'
+          : 'border-[color:var(--color-border)]'
+      }`}
       onClick={onToggle}
     >
       <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
-        <span>{new Date(post.postedAt).toLocaleString('ja-JP', {
-          timeZone: 'Asia/Tokyo',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        })}</span>
+        <div className="flex items-center gap-2">
+          {isTop10 && (
+            <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${
+              rank === 1 ? 'bg-yellow-400 text-yellow-900' :
+              rank === 2 ? 'bg-gray-300 text-gray-700' :
+              rank === 3 ? 'bg-amber-600 text-white' :
+              'bg-amber-100 text-amber-700'
+            }`}>
+              {rank}
+            </span>
+          )}
+          <span>{new Date(post.postedAt).toLocaleString('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}</span>
+        </div>
         <div className="flex items-center gap-3">
           <span>閲覧 {post.views.toLocaleString()}</span>
           <span>いいね {post.likes.toLocaleString()}</span>
@@ -111,12 +129,13 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
       ) : (
         <>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {displayedPosts.map((post) => (
+            {displayedPosts.map((post, index) => (
               <PostCard
                 key={post.id}
                 post={post}
                 isExpanded={expandedIds.has(post.id)}
                 onToggle={() => toggleExpanded(post.id)}
+                rank={index + 1}
               />
             ))}
           </div>
