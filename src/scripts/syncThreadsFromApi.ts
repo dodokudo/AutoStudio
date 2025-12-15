@@ -125,7 +125,7 @@ async function getThreadsUserInsights(accessToken: string, threadsUserId: string
 
     if (!response.ok) {
       console.warn('[syncThreadsFromApi] Failed to get Threads user insights:', await response.text());
-      return {};
+      return { dateStr };
     }
 
     const data = await response.json();
