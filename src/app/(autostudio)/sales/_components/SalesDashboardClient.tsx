@@ -178,11 +178,19 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   const dailySales = useMemo(() => {
     const dailyMap = new Map<string, { date: string; amount: number; count: number }>();
 
+    // ローカルタイムゾーンでYYYY-MM-DD形式に変換
+    const toLocalDateStr = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
     // 期間内の全日付を初期化
     const startDate = new Date(dateRange.from);
     const endDate = new Date(dateRange.to);
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toLocalDateStr(d);
       dailyMap.set(dateStr, { date: dateStr, amount: 0, count: 0 });
     }
 
@@ -190,7 +198,8 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     for (const charge of charges) {
       if (charge.status !== 'successful') continue;
 
-      const date = charge.created_on.split('T')[0];
+      const chargeDate = new Date(charge.created_on);
+      const date = toLocalDateStr(chargeDate);
       const existing = dailyMap.get(date);
 
       if (existing) {
