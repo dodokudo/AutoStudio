@@ -88,8 +88,10 @@ export function resolveDateRange(
       const end = toEndOfDay(parsedStart <= parsedEnd ? parsedEnd : parsedStart);
       return { start, end, preset };
     }
-    // 無効なカスタム入力はデフォルトにフォールバック
-    return resolveDateRange(DEFAULT_PRESET);
+    // カスタムが選択されているが日付が未入力の場合、デフォルト期間を使用しつつpresetは'custom'を維持
+    // これにより日付入力フィールドが表示される
+    const defaultRange = resolveDateRange(DEFAULT_PRESET);
+    return { start: defaultRange.start, end: defaultRange.end, preset: 'custom' };
   }
 
   switch (preset) {
