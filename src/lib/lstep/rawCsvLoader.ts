@@ -34,12 +34,22 @@ export async function loadRawCsvToBigQuery(
 
   const dataLines = lines.slice(2).filter((line) => line.trim() !== '');
 
-  // LステップのCSVの日時は既にJSTなので、変換不要
+  // LステップのCSVの日時は既にJSTなので、+09:00を付けてBigQueryに正しく認識させる
   const normalizedLines = [
     normalizedHeaders.map((h) => `"${h}"`).join(','),
     ...dataLines.map((line) => {
       const values = parseCSVLine(line);
-      const escapedValues = values.map((value) => `"${value.replace(/"/g, '""')}"`);
+      const escapedValues = values.map((value, idx) => {
+        // friend_added_at (index 2) と last_msg_at (index 4) に+09:00を付ける
+        const header = normalizedHeaders[idx + 1]; // +1 for snapshot_date prefix
+        if ((header === 'friend_added_at' || header === 'last_msg_at') && value && value !== '-' && value !== '--') {
+          // 既に+09がついていなければ追加
+          if (!value.includes('+')) {
+            return `"${value.replace(/"/g, '""')}+09"`;
+          }
+        }
+        return `"${value.replace(/"/g, '""')}"`;
+      });
       return `"${snapshotDate}",${escapedValues.join(',')}`;
     }),
   ].join('\n');

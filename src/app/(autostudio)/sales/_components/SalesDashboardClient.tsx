@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import {
   Bar,
@@ -12,7 +12,21 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Cell,
+  PieChart,
+  Pie,
+  Legend,
 } from 'recharts';
+
+const SALES_CATEGORIES = [
+  { id: 'frontend', label: 'フロントエンド', color: '#3b82f6' },
+  { id: 'backend', label: 'バックエンド', color: '#10b981' },
+  { id: 'backend_renewal', label: 'バックエンド継続', color: '#8b5cf6' },
+  { id: 'analyca', label: 'ANALYCA', color: '#f59e0b' },
+  { id: 'other', label: 'その他', color: '#6b7280' },
+] as const;
+
+type SalesCategoryId = typeof SALES_CATEGORIES[number]['id'];
 
 interface Charge {
   id: string;
@@ -21,6 +35,16 @@ interface Charge {
   status: string;
   created_on: string;
   metadata?: Record<string, string>;
+}
+
+interface ManualSale {
+  id: string;
+  amount: number;
+  category: SalesCategoryId;
+  customerName: string;
+  paymentMethod: string;
+  note: string;
+  transactionDate: string;
 }
 
 interface SalesDashboardClientProps {
@@ -36,6 +60,8 @@ interface SalesDashboardClientProps {
       from: string;
       to: string;
     };
+    categories: Record<string, string>;
+    manualSales: ManualSale[];
   };
 }
 
@@ -54,6 +80,100 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     day: '2-digit',
   });
 
+  // カテゴリ管理（初期値をpropsから取得）
+  const [categories, setCategories] = useState<Record<string, SalesCategoryId>>(
+    initialData.categories as Record<string, SalesCategoryId>
+  );
+  const [savingCategory, setSavingCategory] = useState<string | null>(null);
+
+  // 手動売上（初期値をpropsから取得）
+  const [manualSales, setManualSales] = useState<ManualSale[]>(initialData.manualSales);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualFormData, setManualFormData] = useState({
+    amount: '',
+    category: 'frontend' as SalesCategoryId,
+    customerName: '',
+    paymentMethod: '銀行振込',
+    note: '',
+    transactionDate: new Date().toISOString().split('T')[0],
+  });
+  const [submittingManual, setSubmittingManual] = useState(false);
+
+  // カテゴリを保存
+  const handleCategoryChange = useCallback(async (chargeId: string, category: SalesCategoryId) => {
+    setSavingCategory(chargeId);
+    setCategories(prev => ({ ...prev, [chargeId]: category }));
+
+    try {
+      await fetch('/api/sales/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chargeId, category }),
+      });
+    } catch (error) {
+      console.error('Failed to save category:', error);
+    } finally {
+      setSavingCategory(null);
+    }
+  }, []);
+
+  // 手動売上を追加
+  const handleAddManualSale = useCallback(async () => {
+    if (!manualFormData.amount || !manualFormData.transactionDate) return;
+
+    setSubmittingManual(true);
+    try {
+      const res = await fetch('/api/sales/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: Number(manualFormData.amount),
+          category: manualFormData.category,
+          customerName: manualFormData.customerName,
+          paymentMethod: manualFormData.paymentMethod,
+          note: manualFormData.note,
+          transactionDate: manualFormData.transactionDate,
+        }),
+      });
+
+      if (res.ok) {
+        const { id } = await res.json();
+        setManualSales(prev => [...prev, {
+          id,
+          amount: Number(manualFormData.amount),
+          category: manualFormData.category,
+          customerName: manualFormData.customerName,
+          paymentMethod: manualFormData.paymentMethod,
+          note: manualFormData.note,
+          transactionDate: manualFormData.transactionDate,
+        }]);
+        setManualFormData({
+          amount: '',
+          category: 'frontend',
+          customerName: '',
+          paymentMethod: '銀行振込',
+          note: '',
+          transactionDate: new Date().toISOString().split('T')[0],
+        });
+        setShowManualForm(false);
+      }
+    } catch (error) {
+      console.error('Failed to add manual sale:', error);
+    } finally {
+      setSubmittingManual(false);
+    }
+  }, [manualFormData]);
+
+  // 手動売上を削除
+  const handleDeleteManualSale = useCallback(async (id: string) => {
+    try {
+      await fetch(`/api/sales/manual?id=${id}`, { method: 'DELETE' });
+      setManualSales(prev => prev.filter(s => s.id !== id));
+    } catch (error) {
+      console.error('Failed to delete manual sale:', error);
+    }
+  }, []);
+
   // 日別売上データを集計（期間内の全日付を含む）
   const dailySales = useMemo(() => {
     const dailyMap = new Map<string, { date: string; amount: number; count: number }>();
@@ -66,7 +186,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       dailyMap.set(dateStr, { date: dateStr, amount: 0, count: 0 });
     }
 
-    // 売上データを集計
+    // UnivaPay売上データを集計
     for (const charge of charges) {
       if (charge.status !== 'successful') continue;
 
@@ -79,13 +199,22 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       }
     }
 
+    // 手動売上を追加
+    for (const sale of manualSales) {
+      const existing = dailyMap.get(sale.transactionDate);
+      if (existing) {
+        existing.amount += sale.amount;
+        existing.count += 1;
+      }
+    }
+
     return Array.from(dailyMap.values())
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((item) => ({
         ...item,
         displayDate: shortDateFormatter.format(new Date(item.date)),
       }));
-  }, [charges, dateRange, shortDateFormatter]);
+  }, [charges, manualSales, dateRange, shortDateFormatter]);
 
   // 累計売上を計算
   const cumulativeSales = useMemo(() => {
@@ -99,14 +228,48 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     });
   }, [dailySales]);
 
+  // カテゴリ別売上を集計
+  const categoryStats = useMemo(() => {
+    const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
+      frontend: { amount: 0, count: 0 },
+      backend: { amount: 0, count: 0 },
+      backend_renewal: { amount: 0, count: 0 },
+      analyca: { amount: 0, count: 0 },
+      other: { amount: 0, count: 0 },
+    };
+
+    // UnivaPayの売上をカテゴリ別に集計
+    const successfulCharges = charges.filter(c => c.status === 'successful');
+    for (const charge of successfulCharges) {
+      const category = categories[charge.id] ?? 'other';
+      stats[category].amount += charge.charged_amount;
+      stats[category].count += 1;
+    }
+
+    // 手動売上を追加
+    for (const sale of manualSales) {
+      stats[sale.category].amount += sale.amount;
+      stats[sale.category].count += 1;
+    }
+
+    return SALES_CATEGORIES.map(cat => ({
+      ...cat,
+      ...stats[cat.id],
+    })).filter(cat => cat.amount > 0);
+  }, [charges, categories, manualSales]);
+
+  // 合計（手動売上含む）
+  const totalWithManual = summary.totalAmount + manualSales.reduce((sum, s) => sum + s.amount, 0);
+  const countWithManual = summary.successfulCount + manualSales.length;
+
   const successfulCharges = charges.filter((c) => c.status === 'successful');
   const recentCharges = [...successfulCharges]
     .sort((a, b) => new Date(b.created_on).getTime() - new Date(a.created_on).getTime())
     .slice(0, 20);
 
   // 平均単価を計算
-  const averageAmount = summary.successfulCount > 0
-    ? Math.round(summary.totalAmount / summary.successfulCount)
+  const averageAmount = countWithManual > 0
+    ? Math.round(totalWithManual / countWithManual)
     : 0;
 
   return (
@@ -118,7 +281,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             売上合計
           </p>
           <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-            ¥{numberFormatter.format(summary.totalAmount)}
+            ¥{numberFormatter.format(totalWithManual)}
           </p>
         </Card>
         <Card className="p-4">
@@ -126,7 +289,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             成功件数
           </p>
           <p className="mt-1 text-2xl font-bold text-green-600">
-            {numberFormatter.format(summary.successfulCount)}件
+            {numberFormatter.format(countWithManual)}件
           </p>
         </Card>
         <Card className="p-4">
@@ -146,6 +309,84 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             <span className="text-[color:var(--color-text-muted)]"> / </span>
             <span className="text-amber-600">{summary.pendingCount}</span>
           </p>
+        </Card>
+      </div>
+
+      {/* カテゴリ別売上 */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+            カテゴリ別売上
+          </h2>
+          <div className="mt-4 h-64">
+            {categoryStats.length > 0 ? (
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={categoryStats}
+                    dataKey="amount"
+                    nameKey="label"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={(props) => {
+                      const p = props as unknown as { name: string; percent: number };
+                      return `${p.name} ${(p.percent * 100).toFixed(0)}%`;
+                    }}
+                    labelLine={false}
+                  >
+                    {categoryStats.map((entry) => (
+                      <Cell key={entry.id} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number) => `¥${numberFormatter.format(value)}`}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-[color:var(--color-text-muted)]">
+                  カテゴリが設定された取引がありません
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+            カテゴリ別内訳
+          </h2>
+          <div className="mt-4 space-y-3">
+            {categoryStats.length > 0 ? (
+              categoryStats.map(cat => (
+                <div key={cat.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: cat.color }}
+                    />
+                    <span className="text-sm text-[color:var(--color-text-secondary)]">
+                      {cat.label}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-[color:var(--color-text-primary)]">
+                      ¥{numberFormatter.format(cat.amount)}
+                    </p>
+                    <p className="text-xs text-[color:var(--color-text-muted)]">
+                      {cat.count}件
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                取引一覧からカテゴリを設定してください
+              </p>
+            )}
+          </div>
         </Card>
       </div>
 
@@ -219,54 +460,159 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
         </div>
       </Card>
 
-      {/* 日別売上テーブル */}
+      {/* 手動売上入力 */}
       <Card className="p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-          日別売上一覧
-        </h2>
-        <div className="mt-4 overflow-x-auto">
-          {dailySales.filter((d) => d.count > 0).length > 0 ? (
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+            手動売上入力（銀行振込等）
+          </h2>
+          <button
+            onClick={() => setShowManualForm(!showManualForm)}
+            className="rounded-[var(--radius-md)] bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            {showManualForm ? '閉じる' : '+ 追加'}
+          </button>
+        </div>
+
+        {showManualForm && (
+          <div className="mt-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                  金額 *
+                </label>
+                <input
+                  type="number"
+                  value={manualFormData.amount}
+                  onChange={(e) => setManualFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                  placeholder="100000"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                  カテゴリ *
+                </label>
+                <select
+                  value={manualFormData.category}
+                  onChange={(e) => setManualFormData(prev => ({ ...prev, category: e.target.value as SalesCategoryId }))}
+                  className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                >
+                  {SALES_CATEGORIES.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                  取引日 *
+                </label>
+                <input
+                  type="date"
+                  value={manualFormData.transactionDate}
+                  onChange={(e) => setManualFormData(prev => ({ ...prev, transactionDate: e.target.value }))}
+                  className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                  顧客名
+                </label>
+                <input
+                  type="text"
+                  value={manualFormData.customerName}
+                  onChange={(e) => setManualFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                  className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                  placeholder="山田太郎"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                  支払方法
+                </label>
+                <input
+                  type="text"
+                  value={manualFormData.paymentMethod}
+                  onChange={(e) => setManualFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                  className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                  placeholder="銀行振込"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                  備考
+                </label>
+                <input
+                  type="text"
+                  value={manualFormData.note}
+                  onChange={(e) => setManualFormData(prev => ({ ...prev, note: e.target.value }))}
+                  className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                  placeholder="メモ"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleAddManualSale}
+                disabled={submittingManual || !manualFormData.amount}
+                className="rounded-[var(--radius-md)] bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {submittingManual ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 手動売上一覧 */}
+        {manualSales.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[color:var(--color-border)] text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
                   <th className="px-3 py-2">日付</th>
-                  <th className="px-3 py-2 text-right">売上</th>
-                  <th className="px-3 py-2 text-right">件数</th>
-                  <th className="px-3 py-2 text-right">平均</th>
+                  <th className="px-3 py-2 text-right">金額</th>
+                  <th className="px-3 py-2">カテゴリ</th>
+                  <th className="px-3 py-2">顧客名</th>
+                  <th className="px-3 py-2">支払方法</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--color-border)]">
-                {[...dailySales].filter((d) => d.count > 0).reverse().map((day) => (
-                  <tr key={day.date} className="hover:bg-[color:var(--color-surface-muted)]">
-                    <td className="px-3 py-2 text-[color:var(--color-text-primary)]">
-                      {day.date}
+                {manualSales.map((sale) => (
+                  <tr key={sale.id} className="hover:bg-[color:var(--color-surface-muted)]">
+                    <td className="px-3 py-2">{sale.transactionDate}</td>
+                    <td className="px-3 py-2 text-right font-medium">
+                      ¥{numberFormatter.format(sale.amount)}
                     </td>
-                    <td className="px-3 py-2 text-right font-medium text-[color:var(--color-text-primary)]">
-                      ¥{numberFormatter.format(day.amount)}
+                    <td className="px-3 py-2">
+                      {SALES_CATEGORIES.find(c => c.id === sale.category)?.label}
                     </td>
-                    <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
-                      {day.count}件
-                    </td>
-                    <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
-                      ¥{numberFormatter.format(Math.round(day.amount / day.count))}
+                    <td className="px-3 py-2">{sale.customerName || '-'}</td>
+                    <td className="px-3 py-2">{sale.paymentMethod}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => handleDeleteManualSale(sale.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        削除
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : (
-            <p className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
-              売上データがありません
-            </p>
-          )}
-        </div>
+          </div>
+        )}
       </Card>
 
       {/* 取引一覧 */}
       <Card className="p-6">
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-          最近の取引
+          UnivaPay取引一覧
         </h2>
+        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+          カテゴリを選択して売上を分類できます
+        </p>
         <div className="mt-4 overflow-x-auto">
           {recentCharges.length > 0 ? (
             <table className="w-full text-sm">
@@ -275,6 +621,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                   <th className="px-3 py-2">日時</th>
                   <th className="px-3 py-2 text-right">金額</th>
                   <th className="px-3 py-2">顧客名</th>
+                  <th className="px-3 py-2">カテゴリ</th>
                   <th className="px-3 py-2">ステータス</th>
                 </tr>
               </thead>
@@ -289,6 +636,19 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                     </td>
                     <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
                       {charge.metadata?.['univapay-name'] ?? '-'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={categories[charge.id] ?? ''}
+                        onChange={(e) => handleCategoryChange(charge.id, e.target.value as SalesCategoryId)}
+                        disabled={savingCategory === charge.id}
+                        className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm disabled:opacity-50"
+                      >
+                        <option value="">選択...</option>
+                        {SALES_CATEGORIES.map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.label}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-3 py-2">
                       <StatusBadge status={charge.status} />
