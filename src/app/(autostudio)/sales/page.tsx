@@ -40,7 +40,7 @@ export default async function SalesPage({
   const endParam = typeof resolvedSearchParams?.end === 'string' ? resolvedSearchParams.end : undefined;
 
   const selectedRangeValue: UnifiedRangePreset = isUnifiedRangePreset(rangeParam) ? rangeParam : '30d';
-  const resolvedRange = resolveDateRange(selectedRangeValue, startParam, endParam);
+  const resolvedRange = resolveDateRange(selectedRangeValue, startParam, endParam, { includeToday: true });
   const rangeValueForUi = resolvedRange.preset;
   const customStart = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.start) : startParam;
   const customEnd = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.end) : endParam;

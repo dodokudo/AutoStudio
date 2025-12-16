@@ -64,10 +64,12 @@ export function resolveDateRange(
   preset: UnifiedRangePreset,
   customStart?: string | null,
   customEnd?: string | null,
+  options?: { includeToday?: boolean },
 ): { start: Date; end: Date; preset: UnifiedRangePreset } {
   const today = new Date();
-  const anchor = toStartOfDay(addDays(today, -1)); // 基準日は「昨日」
-  const endOfAnchor = toEndOfDay(anchor);
+  const includeToday = options?.includeToday ?? false;
+  const anchor = includeToday ? toStartOfDay(today) : toStartOfDay(addDays(today, -1)); // 基準日
+  const endOfAnchor = toEndOfDay(includeToday ? today : addDays(today, -1));
 
   const startOfWeek = (anchor: Date) => {
     const day = anchor.getDay();
