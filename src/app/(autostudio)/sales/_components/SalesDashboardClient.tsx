@@ -174,6 +174,18 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     }
   }, []);
 
+  const successfulCharges = charges.filter((c) => c.status === 'successful');
+
+  // 期間内の手動売上をフィルタリング
+  const filteredManualSales = useMemo(() => {
+    const startDate = new Date(dateRange.from);
+    const endDate = new Date(dateRange.to);
+    return manualSales.filter(sale => {
+      const txDate = new Date(sale.transactionDate + 'T12:00:00'); // ローカル日付として解釈
+      return txDate >= startDate && txDate <= endDate;
+    });
+  }, [manualSales, dateRange]);
+
   // 日別売上データを集計（期間内の全日付を含む）
   const dailySales = useMemo(() => {
     const dailyMap = new Map<string, { date: string; amount: number; count: number }>();
@@ -208,8 +220,8 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       }
     }
 
-    // 手動売上を追加
-    for (const sale of manualSales) {
+    // 手動売上を追加（期間内のみ）
+    for (const sale of filteredManualSales) {
       const existing = dailyMap.get(sale.transactionDate);
       if (existing) {
         existing.amount += sale.amount;
@@ -223,7 +235,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
         ...item,
         displayDate: shortDateFormatter.format(new Date(item.date)),
       }));
-  }, [charges, manualSales, dateRange, shortDateFormatter]);
+  }, [charges, filteredManualSales, dateRange, shortDateFormatter]);
 
   // 累計売上を計算
   const cumulativeSales = useMemo(() => {
@@ -255,8 +267,8 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       stats[category].count += 1;
     }
 
-    // 手動売上を追加
-    for (const sale of manualSales) {
+    // 手動売上を追加（期間内のみ）
+    for (const sale of filteredManualSales) {
       stats[sale.category].amount += sale.amount;
       stats[sale.category].count += 1;
     }
@@ -265,13 +277,11 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       ...cat,
       ...stats[cat.id],
     })).filter(cat => cat.amount > 0);
-  }, [charges, categories, manualSales]);
+  }, [charges, categories, filteredManualSales]);
 
-  // 合計（手動売上含む）
-  const totalWithManual = summary.totalAmount + manualSales.reduce((sum, s) => sum + s.amount, 0);
-  const countWithManual = summary.successfulCount + manualSales.length;
-
-  const successfulCharges = charges.filter((c) => c.status === 'successful');
+  // 合計（期間内の手動売上含む）
+  const totalWithManual = summary.totalAmount + filteredManualSales.reduce((sum, s) => sum + s.amount, 0);
+  const countWithManual = summary.successfulCount + filteredManualSales.length;
 
   // 統合取引一覧（UnivaPay + 手動売上）
   type UnifiedTransaction = {
@@ -301,8 +311,8 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       });
     }
 
-    // 手動売上を追加
-    for (const sale of manualSales) {
+    // 手動売上を追加（期間内のみ）
+    for (const sale of filteredManualSales) {
       transactions.push({
         id: sale.id,
         date: new Date(sale.transactionDate),
@@ -317,7 +327,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
     // 日付の新しい順にソート
     return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [successfulCharges, manualSales, categories]);
+  }, [successfulCharges, filteredManualSales, categories]);
 
   // 平均単価を計算
   const averageAmount = countWithManual > 0
