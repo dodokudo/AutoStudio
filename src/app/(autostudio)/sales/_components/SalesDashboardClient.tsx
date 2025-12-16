@@ -263,9 +263,52 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   const countWithManual = summary.successfulCount + manualSales.length;
 
   const successfulCharges = charges.filter((c) => c.status === 'successful');
-  const recentCharges = [...successfulCharges]
-    .sort((a, b) => new Date(b.created_on).getTime() - new Date(a.created_on).getTime())
-    .slice(0, 20);
+
+  // 統合取引一覧（UnivaPay + 手動売上）
+  type UnifiedTransaction = {
+    id: string;
+    date: Date;
+    amount: number;
+    category: SalesCategoryId | null;
+    customerName: string;
+    source: 'univapay' | 'manual';
+    paymentMethod: string;
+    note?: string;
+  };
+
+  const allTransactions = useMemo(() => {
+    const transactions: UnifiedTransaction[] = [];
+
+    // UnivaPay取引を追加
+    for (const charge of successfulCharges) {
+      transactions.push({
+        id: charge.id,
+        date: new Date(charge.created_on),
+        amount: charge.charged_amount,
+        category: categories[charge.id] ?? null,
+        customerName: charge.metadata?.['univapay-name'] ?? '-',
+        source: 'univapay',
+        paymentMethod: 'クレジットカード',
+      });
+    }
+
+    // 手動売上を追加
+    for (const sale of manualSales) {
+      transactions.push({
+        id: sale.id,
+        date: new Date(sale.transactionDate),
+        amount: sale.amount,
+        category: sale.category,
+        customerName: sale.customerName || '-',
+        source: 'manual',
+        paymentMethod: sale.paymentMethod,
+        note: sale.note,
+      });
+    }
+
+    // 日付の新しい順にソート
+    return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [successfulCharges, manualSales, categories]);
 
   // 平均単価を計算
   const averageAmount = countWithManual > 0
@@ -563,95 +606,78 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           </div>
         )}
 
-        {/* 手動売上一覧 */}
-        {manualSales.length > 0 && (
-          <div className="mt-4 overflow-x-auto">
+      </Card>
+
+      {/* 全取引一覧 */}
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+          取引一覧
+        </h2>
+        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+          期間内の全取引（UnivaPay + 手動入力）を日付順に表示
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          {allTransactions.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[color:var(--color-border)] text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
                   <th className="px-3 py-2">日付</th>
                   <th className="px-3 py-2 text-right">金額</th>
-                  <th className="px-3 py-2">カテゴリ</th>
                   <th className="px-3 py-2">顧客名</th>
+                  <th className="px-3 py-2">カテゴリ</th>
                   <th className="px-3 py-2">支払方法</th>
-                  <th className="px-3 py-2"></th>
+                  <th className="px-3 py-2">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--color-border)]">
-                {manualSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-[color:var(--color-surface-muted)]">
-                    <td className="px-3 py-2">{sale.transactionDate}</td>
-                    <td className="px-3 py-2 text-right font-medium">
-                      ¥{numberFormatter.format(sale.amount)}
-                    </td>
-                    <td className="px-3 py-2">
-                      {SALES_CATEGORIES.find(c => c.id === sale.category)?.label}
-                    </td>
-                    <td className="px-3 py-2">{sale.customerName || '-'}</td>
-                    <td className="px-3 py-2">{sale.paymentMethod}</td>
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => handleDeleteManualSale(sale.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        削除
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {/* 取引一覧 */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-          UnivaPay取引一覧
-        </h2>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-          カテゴリを選択して売上を分類できます
-        </p>
-        <div className="mt-4 overflow-x-auto">
-          {recentCharges.length > 0 ? (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[color:var(--color-border)] text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
-                  <th className="px-3 py-2">日時</th>
-                  <th className="px-3 py-2 text-right">金額</th>
-                  <th className="px-3 py-2">顧客名</th>
-                  <th className="px-3 py-2">カテゴリ</th>
-                  <th className="px-3 py-2">ステータス</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[color:var(--color-border)]">
-                {recentCharges.map((charge) => (
-                  <tr key={charge.id} className="hover:bg-[color:var(--color-surface-muted)]">
+                {allTransactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-[color:var(--color-surface-muted)]">
                     <td className="px-3 py-2 text-[color:var(--color-text-primary)]">
-                      {dateFormatter.format(new Date(charge.created_on))}
+                      {dateFormatter.format(tx.date)}
                     </td>
                     <td className="px-3 py-2 text-right font-medium text-[color:var(--color-text-primary)]">
-                      ¥{numberFormatter.format(charge.charged_amount)}
+                      ¥{numberFormatter.format(tx.amount)}
                     </td>
                     <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
-                      {charge.metadata?.['univapay-name'] ?? '-'}
+                      {tx.customerName}
                     </td>
                     <td className="px-3 py-2">
-                      <select
-                        value={categories[charge.id] ?? ''}
-                        onChange={(e) => handleCategoryChange(charge.id, e.target.value as SalesCategoryId)}
-                        disabled={savingCategory === charge.id}
-                        className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm disabled:opacity-50"
-                      >
-                        <option value="">選択...</option>
-                        {SALES_CATEGORIES.map(cat => (
-                          <option key={cat.id} value={cat.id}>{cat.label}</option>
-                        ))}
-                      </select>
+                      {tx.source === 'univapay' ? (
+                        <select
+                          value={tx.category ?? ''}
+                          onChange={(e) => handleCategoryChange(tx.id, e.target.value as SalesCategoryId)}
+                          disabled={savingCategory === tx.id}
+                          className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm disabled:opacity-50"
+                        >
+                          <option value="">選択...</option>
+                          {SALES_CATEGORIES.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-[color:var(--color-text-secondary)]">
+                          {SALES_CATEGORIES.find(c => c.id === tx.category)?.label ?? '-'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
-                      <StatusBadge status={charge.status} />
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        tx.source === 'univapay'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {tx.paymentMethod}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {tx.source === 'manual' && (
+                        <button
+                          onClick={() => handleDeleteManualSale(tx.id)}
+                          className="text-red-600 hover:text-red-800 text-xs"
+                        >
+                          削除
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -665,35 +691,5 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
         </div>
       </Card>
     </>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    successful: 'bg-green-100 text-green-800',
-    failed: 'bg-red-100 text-red-800',
-    error: 'bg-red-100 text-red-800',
-    pending: 'bg-amber-100 text-amber-800',
-    awaiting: 'bg-amber-100 text-amber-800',
-    authorized: 'bg-blue-100 text-blue-800',
-    canceled: 'bg-gray-100 text-gray-800',
-  };
-
-  const labels: Record<string, string> = {
-    successful: '成功',
-    failed: '失敗',
-    error: 'エラー',
-    pending: '処理中',
-    awaiting: '待機中',
-    authorized: '認証済',
-    canceled: 'キャンセル',
-  };
-
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? 'bg-gray-100 text-gray-800'}`}
-    >
-      {labels[status] ?? status}
-    </span>
   );
 }
