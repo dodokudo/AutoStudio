@@ -124,8 +124,12 @@ export function resolveDateRange(
       return { start, end: endOfAnchor, preset };
     }
     case 'last-month': {
-      const start = startOfMonth(addDays(anchor, -anchor.getDate() + 1));
-      const end = toEndOfDay(addDays(start, new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate() - 1));
+      // 先月の1日
+      const lastMonthStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+      const start = toStartOfDay(lastMonthStart);
+      // 先月の最終日
+      const lastMonthEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
+      const end = toEndOfDay(lastMonthEnd);
       return { start, end, preset };
     }
     case '90d': {
