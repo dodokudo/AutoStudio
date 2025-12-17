@@ -5,7 +5,7 @@ type LoadingScreenProps = {
 };
 
 const LoadingScreen: FC<LoadingScreenProps> = ({ message = 'データ読み込み中' }) => (
-  <div className="min-h-screen bg-gradient-to-br from-purple-50 to-emerald-50 flex items-center justify-center">
+  <div className="min-h-screen bg-gradient-to-r from-pink-50/70 via-blue-50/50 to-teal-50/30 flex items-center justify-center">
     <div className="text-center">
       <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

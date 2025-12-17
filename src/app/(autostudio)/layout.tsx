@@ -8,7 +8,7 @@ import { DateRangeProvider } from '@/lib/dateRangeStore';
 export default function AutoStudioLayout({ children }: { children: ReactNode }) {
   return (
     <DateRangeProvider>
-      <div className="min-h-screen bg-[color:var(--color-background)] text-[color:var(--color-text-primary)]">
+      <div className="min-h-screen bg-gradient-to-r from-pink-50/70 via-blue-50/50 to-teal-50/30 text-[color:var(--color-text-primary)]">
         {/* Mobile header remains across small screens */}
         <header className="border-b border-[color:var(--color-border)] bg-white md:hidden">
           <div className="page-container flex h-16 items-center justify-between gap-3">
