@@ -195,6 +195,7 @@ export function InsightsTab({
                   <th className="px-3 py-2 text-right">投稿</th>
                   <th className="px-3 py-2 text-right">インプ</th>
                   <th className="px-3 py-2 text-right">クリック</th>
+                  <th className="px-3 py-2 text-right">CTR</th>
                   <th className="px-3 py-2 text-right">LINE</th>
                   <th className="px-3 py-2 text-right">登録率</th>
                 </tr>
@@ -229,6 +230,9 @@ export function InsightsTab({
                       </td>
                       <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
                         {numberFormatter.format(linkClicks)}
+                      </td>
+                      <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                        {item.impressions > 0 ? `${((linkClicks / item.impressions) * 100).toFixed(2)}%` : '-'}
                       </td>
                       <td className="px-3 py-2 text-right">
                         <span className={lineRegs > 0 ? 'text-amber-600' : 'text-[color:var(--color-text-secondary)]'}>

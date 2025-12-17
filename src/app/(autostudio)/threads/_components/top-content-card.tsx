@@ -201,6 +201,25 @@ function PostCard({ post, isExpanded, onToggle, rank }: {
       <p className="mt-2 text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
         {isExpanded ? cleanContent(post.content) : truncateText(post.content)}
       </p>
+
+      {/* コメント本文（展開時のみ表示） */}
+      {isExpanded && hasComments && (
+        <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
+          <p className="text-xs font-medium text-gray-500">コメント欄</p>
+          {commentData.map((comment, idx) => (
+            <div
+              key={comment.commentId}
+              className="rounded-md bg-gray-50 p-2 text-xs"
+            >
+              <div className="flex items-center gap-2 text-[10px] text-gray-400 mb-1">
+                <span className="font-medium text-purple-600">コメント{idx + 1}</span>
+                <span>閲覧 {comment.views.toLocaleString()}</span>
+              </div>
+              <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

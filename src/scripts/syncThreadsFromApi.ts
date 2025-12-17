@@ -350,7 +350,7 @@ async function syncAccountInsights(bigQueryClient: BigQuery, accessToken: string
 async function syncPosts(bigQueryClient: BigQuery, accessToken: string): Promise<void> {
   console.log('[syncThreadsFromApi] === Syncing Posts ===');
 
-  const posts = await getThreadsPosts(accessToken, 100);
+  const posts = await getThreadsPosts(accessToken, 50);
 
   if (posts.length === 0) {
     console.log('[syncThreadsFromApi] No posts to sync');
@@ -605,7 +605,7 @@ async function ensurePostsTableColumns(bigQueryClient: BigQuery): Promise<void> 
 // メイン処理
 // ============================================================================
 
-type SyncMode = 'account' | 'posts' | 'comments' | 'all';
+type SyncMode = 'account' | 'posts' | 'comments' | 'posts-comments' | 'all';
 
 async function main() {
   const mode = (process.argv[2] || 'all') as SyncMode;
@@ -634,6 +634,10 @@ async function main() {
         await syncPosts(bigQueryClient, THREADS_TOKEN);
         break;
       case 'comments':
+        await syncComments(bigQueryClient, THREADS_TOKEN, accountInfo.username);
+        break;
+      case 'posts-comments':
+        await syncPosts(bigQueryClient, THREADS_TOKEN);
         await syncComments(bigQueryClient, THREADS_TOKEN, accountInfo.username);
         break;
       case 'all':
