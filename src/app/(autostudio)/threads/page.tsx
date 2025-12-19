@@ -2,7 +2,7 @@ import { getThreadsInsights, type ThreadsInsightsOptions } from "@/lib/threadsIn
 import { getLightweightInsights } from "@/lib/threadsAccountSummary";
 import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
 import { getThreadsDashboard } from "@/lib/threadsDashboard";
-import { getThreadsInsightsData } from "@/lib/threadsInsightsData";
+import { getThreadsInsightsData, getDailyPostStats } from "@/lib/threadsInsightsData";
 import { resolveProjectId } from "@/lib/bigquery";
 import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
@@ -75,6 +75,8 @@ export default async function ThreadsHome({
       insightsActivity,
       currentClicks,
       previousClicks,
+      dailyPostStats,
+      previousDailyPostStats,
     ] = await Promise.all([
       needsFullInsights ? getThreadsInsights(PROJECT_ID, insightsOptions) : Promise.resolve(null),
       !needsFullInsights ? getLightweightInsights(PROJECT_ID, insightsOptions) : Promise.resolve(null),
@@ -89,6 +91,15 @@ export default async function ThreadsHome({
       }),
       getLinkClicksSummary({ startDate: rangeStartDate, endDate: rangeEndDate }),
       getLinkClicksSummary({ startDate: previousRangeStart, endDate: previousRangeEnd }),
+      // 日別集計クエリ（軽量）- チャート・概要用
+      getDailyPostStats({
+        startDate: formatDateInput(rangeStartDate),
+        endDate: formatDateInput(rangeEndDate),
+      }),
+      getDailyPostStats({
+        startDate: formatDateInput(previousRangeStart),
+        endDate: formatDateInput(previousRangeEnd),
+      }),
     ]);
 
     // 投稿タブ用のデータを統合
@@ -105,12 +116,14 @@ export default async function ThreadsHome({
 
     let lineRegistrationCount: number | null = null;
     let previousLineRegistrationCount: number | null = null;
-    let profileViewsForRange: number | null = null;
-    let previousProfileViews: number | null = null;
     let linkClicksForRange: number | null = null;
     let previousLinkClicks: number | null = null;
-    let postsCountForRange: number = effectivePostCount;
-    let previousPostsCount: number | null = null;
+
+    // 日別集計データから投稿数・インプレッションを計算（正確な値）
+    const postsCountForRange = dailyPostStats.reduce((sum, d) => sum + d.postCount, 0);
+    const previousPostsCount = previousDailyPostStats.reduce((sum, d) => sum + d.postCount, 0);
+    const profileViewsForRange = dailyPostStats.reduce((sum, d) => sum + d.impressions, 0);
+    const previousProfileViews = previousDailyPostStats.reduce((sum, d) => sum + d.impressions, 0);
 
     if (selectedRangeWindow) {
       const rangeStartKey = formatDateInput(rangeStartDate);
@@ -138,41 +151,11 @@ export default async function ThreadsHome({
         console.error('[threads/page] Failed to load LINE registrations:', lineError);
       }
 
-      const sumImpressionsWithin = (windowStart: Date, windowEnd: Date) =>
-        insightsActivity.posts.reduce((total, post) => {
-          const postedAt = new Date(post.postedAt);
-          if (Number.isNaN(postedAt.getTime())) {
-            return total;
-          }
-          if (postedAt.getTime() >= windowStart.getTime() && postedAt.getTime() <= windowEnd.getTime()) {
-            const impressions = Number(post.insights?.impressions ?? 0);
-            return total + (Number.isNaN(impressions) ? 0 : impressions);
-          }
-          return total;
-        }, 0);
-
-      profileViewsForRange = sumImpressionsWithin(rangeStartDate, rangeEndDate);
-      previousProfileViews = sumImpressionsWithin(previousRangeStart, previousRangeEnd);
-
       // Threadsカテゴリのみのクリックを取得
       const currentThreadsClicks = currentClicks.byCategory?.find((item) => item.category === 'threads')?.clicks ?? null;
       const previousThreadsClicks = previousClicks.byCategory?.find((item) => item.category === 'threads')?.clicks ?? null;
       linkClicksForRange = currentThreadsClicks;
       previousLinkClicks = previousThreadsClicks;
-
-      const countPostsWithin = (windowStart: Date, windowEnd: Date) =>
-        insightsActivity.posts.reduce((total, post) => {
-          const postedAt = new Date(post.postedAt);
-          if (Number.isNaN(postedAt.getTime())) {
-            return total;
-          }
-          return postedAt.getTime() >= windowStart.getTime() && postedAt.getTime() <= windowEnd.getTime()
-            ? total + 1
-            : total;
-        }, 0);
-
-      postsCountForRange = countPostsWithin(rangeStartDate, rangeEndDate);
-      previousPostsCount = countPostsWithin(previousRangeStart, previousRangeEnd);
     }
 
     if (lineRegistrationCount === null) {
@@ -214,13 +197,9 @@ export default async function ThreadsHome({
       }).format(value);
     };
 
-    const profileViewsDisplayValue =
-      profileViewsForRange !== null ? profileViewsForRange : effectiveAccountSummary.totalProfileViews;
+    const profileViewsDisplayValue = profileViewsForRange;
 
-    const profileViewsDeltaValue =
-      profileViewsForRange !== null && previousProfileViews !== null
-        ? profileViewsForRange - previousProfileViews
-        : effectiveAccountSummary.profileViewsChange;
+    const profileViewsDeltaValue = profileViewsForRange - previousProfileViews;
 
     const profileViewsDelta =
       profileViewsDeltaValue === undefined || profileViewsDeltaValue === null || profileViewsDeltaValue === 0
@@ -233,12 +212,7 @@ export default async function ThreadsHome({
         : resolveDeltaTone(profileViewsDeltaValue);
 
 
-    const profileViewsNumeric =
-      typeof profileViewsForRange === 'number'
-        ? profileViewsForRange
-        : typeof effectiveAccountSummary.totalProfileViews === 'number'
-          ? effectiveAccountSummary.totalProfileViews
-          : null;
+    const profileViewsNumeric = profileViewsForRange;
 
     // フォロワー増減は期間内のdailyMetricsで算出（Threadsタブ基準）
     const sortedDailyMetrics = [...insightsActivity.dailyMetrics].sort(
@@ -266,8 +240,7 @@ export default async function ThreadsHome({
     const linkClicksDeltaValue =
       previousLinkClicks !== null && totalLinkClicks !== null ? totalLinkClicks - previousLinkClicks : null;
 
-    const postsDeltaValue =
-      previousPostsCount !== null ? postsCountForRange - previousPostsCount : null;
+    const postsDeltaValue = postsCountForRange - previousPostsCount;
 
     const linkClickConversionRate = safeDivide(totalLinkClicks, profileViewsNumeric);
     const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, totalLinkClicks);
@@ -277,7 +250,7 @@ export default async function ThreadsHome({
     const postsPerDay = rangeDurationDays ? postsCountForRange / rangeDurationDays : null;
 
     const postsDeltaParts = [
-      postsDeltaValue !== null ? `${postsDeltaValue > 0 ? '+' : ''}${formatNumber(postsDeltaValue)}投稿` : null,
+      `${postsDeltaValue > 0 ? '+' : ''}${formatNumber(postsDeltaValue)}投稿`,
       postsPerDay !== null ? `${postsPerDay.toFixed(1)}件` : null,
     ].filter((part): part is string => Boolean(part));
 
@@ -314,8 +287,7 @@ export default async function ThreadsHome({
         label: '投稿数',
         value: formatNumber(postsCountForRange),
         delta: postsDeltaParts.length ? postsDeltaParts.join(' / ') : undefined,
-        deltaTone:
-          postsDeltaValue !== null ? resolveDeltaTone(postsDeltaValue) ?? 'neutral' : postsDeltaParts.length ? 'neutral' : undefined,
+        deltaTone: resolveDeltaTone(postsDeltaValue) ?? 'neutral',
       },
       {
         label: '閲覧数',
@@ -351,20 +323,14 @@ export default async function ThreadsHome({
 
     const dailyMetricsForChart = filteredDailyMetrics.length ? filteredDailyMetrics : sortedDailyMetricsForChart;
 
-    const impressionsByDate = insightsActivity.posts.reduce<Record<string, number>>((acc, post) => {
-      const postedAt = new Date(post.postedAt);
-      if (Number.isNaN(postedAt.getTime())) return acc;
-      const dateKey = postedAt.toISOString().slice(0, 10);
-      acc[dateKey] = (acc[dateKey] ?? 0) + (Number(post.insights?.impressions ?? 0) || 0);
+    // 日別集計データをマップに変換（正確な値）
+    const impressionsByDate = dailyPostStats.reduce<Record<string, number>>((acc, stat) => {
+      acc[stat.date] = stat.impressions;
       return acc;
     }, {});
 
-    // 日別投稿数を計算
-    const postCountByDate = insightsActivity.posts.reduce<Record<string, number>>((acc, post) => {
-      const postedAt = new Date(post.postedAt);
-      if (Number.isNaN(postedAt.getTime())) return acc;
-      const dateKey = postedAt.toISOString().slice(0, 10);
-      acc[dateKey] = (acc[dateKey] ?? 0) + 1;
+    const postCountByDate = dailyPostStats.reduce<Record<string, number>>((acc, stat) => {
+      acc[stat.date] = stat.postCount;
       return acc;
     }, {});
 
@@ -495,7 +461,6 @@ export default async function ThreadsHome({
           />
         ) : activeTab === 'insights' ? (
           <InsightsTab
-            posts={insightsActivity.posts}
             selectedRangeValue={rangeValueForUi}
             customStart={customStart}
             customEnd={customEnd}

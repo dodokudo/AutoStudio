@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Bar,
   CartesianGrid,
@@ -21,7 +21,7 @@ import { PostAnalysisCard } from './post-analysis-card';
 import { resolveDateRange, isUnifiedRangePreset, formatDateInput } from '@/lib/dateRangePresets';
 
 interface InsightsTabProps {
-  posts: PostInsight[];
+  posts?: PostInsight[]; // オプショナルに変更（遅延読み込み対応）
   selectedRangeValue: string;
   customStart?: string;
   customEnd?: string;
@@ -51,7 +51,7 @@ type TopContentSort = 'postedAt' | 'views' | 'likes';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function InsightsTab({
-  posts,
+  posts: initialPosts,
   selectedRangeValue,
   customStart,
   customEnd,
@@ -63,9 +63,41 @@ export function InsightsTab({
 }: InsightsTabProps) {
   const [topContentSort, setTopContentSort] = useState<TopContentSort>('views');
   const [showDailyTable, setShowDailyTable] = useState(true);
+  const [posts, setPosts] = useState<PostInsight[]>(initialPosts ?? []);
+  const [postsLoading, setPostsLoading] = useState(!initialPosts || initialPosts.length === 0);
   const numberFormatter = new Intl.NumberFormat('ja-JP');
   const dateFormatter = new Intl.DateTimeFormat('ja-JP', { month: '2-digit', day: '2-digit' });
   const fullDateFormatter = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
+
+  // 投稿データを遅延読み込み
+  useEffect(() => {
+    if (initialPosts && initialPosts.length > 0) {
+      setPosts(initialPosts);
+      setPostsLoading(false);
+      return;
+    }
+
+    const fetchPosts = async () => {
+      try {
+        const presetValue = isUnifiedRangePreset(selectedRangeValue) ? selectedRangeValue : '7d';
+        const { start, end } = resolveDateRange(presetValue, customStart, customEnd);
+        const startDate = formatDateInput(start);
+        const endDate = formatDateInput(end);
+
+        const res = await fetch(`/api/threads/posts?startDate=${startDate}&endDate=${endDate}`);
+        if (!res.ok) throw new Error('Failed to fetch posts');
+        const data = await res.json();
+        setPosts(data.posts ?? []);
+      } catch (error) {
+        console.error('[InsightsTab] Failed to load posts:', error);
+        setPosts([]);
+      } finally {
+        setPostsLoading(false);
+      }
+    };
+
+    fetchPosts();
+  }, [initialPosts, selectedRangeValue, customStart, customEnd]);
 
   const chartData = (performanceSeries ?? []).map((item) => {
     let displayDate = item.date;
@@ -344,15 +376,28 @@ export function InsightsTab({
         endDate={formatDateInput(currentRange.end)}
       />
 
-      <TimePerformanceCard
-        posts={effectiveInsights.map((post) => ({
-          postedAt: post.postedAt,
-          impressions: post.insights.impressions ?? 0,
-          likes: post.insights.likes ?? 0,
-        }))}
-      />
+      {postsLoading ? (
+        <Card className="p-6">
+          <div className="flex items-center justify-center py-12">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-[color:var(--color-border)] border-t-[color:var(--color-accent)]" />
+              <p className="text-sm text-[color:var(--color-text-secondary)]">投稿データを読み込み中...</p>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <>
+          <TimePerformanceCard
+            posts={effectiveInsights.map((post) => ({
+              postedAt: post.postedAt,
+              impressions: post.insights.impressions ?? 0,
+              likes: post.insights.likes ?? 0,
+            }))}
+          />
 
-      <TopContentCard posts={topContentData} sortOption={topContentSort} onSortChange={setTopContentSort} />
+          <TopContentCard posts={topContentData} sortOption={topContentSort} onSortChange={setTopContentSort} />
+        </>
+      )}
     </div>
   );
 }

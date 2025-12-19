@@ -33,6 +33,13 @@ export interface DailyFollowerMetric {
   followers: number;
 }
 
+export interface DailyPostStats {
+  date: string;
+  postCount: number;
+  impressions: number;
+  likes: number;
+}
+
 export interface ThreadsInsightsActivity {
   posts: PostInsight[];
   dailyMetrics: DailyFollowerMetric[];
@@ -253,4 +260,60 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
   cachedFetchedAt = now;
   cachedOptionKey = optionKey;
   return cachedActivity;
+}
+
+/**
+ * 日別の投稿数・インプレッション集計を取得（軽量クエリ）
+ * content（本文）を取得しないため、約44倍効率的
+ */
+export async function getDailyPostStats(options: ThreadsInsightsDataOptions = {}): Promise<DailyPostStats[]> {
+  try {
+    const queryConditions: string[] = [
+      'post_id IS NOT NULL',
+      "post_id != ''",
+    ];
+    const params: Record<string, unknown> = {};
+    if (options.startDate) {
+      queryConditions.push('DATE(posted_at) >= @startDate');
+      params.startDate = options.startDate;
+    }
+    if (options.endDate) {
+      queryConditions.push('DATE(posted_at) <= @endDate');
+      params.endDate = options.endDate;
+    }
+
+    const query = `
+      SELECT
+        DATE(posted_at) as date,
+        COUNT(*) as post_count,
+        SUM(COALESCE(impressions_total, 0)) as impressions,
+        SUM(COALESCE(likes_total, 0)) as likes
+      FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
+      WHERE ${queryConditions.join(' AND ')}
+      GROUP BY DATE(posted_at)
+      ORDER BY date DESC
+    `;
+
+    const [rows] = await client.query({
+      query,
+      params,
+    });
+
+    return rows
+      .map((row: Record<string, unknown>): DailyPostStats | null => {
+        const dateString = toPlain(row.date);
+        if (!dateString) return null;
+        return {
+          date: toDateOnly(dateString),
+          postCount: Number(row.post_count ?? 0) || 0,
+          impressions: Number(row.impressions ?? 0) || 0,
+          likes: Number(row.likes ?? 0) || 0,
+        };
+      })
+      .filter((item): item is DailyPostStats => item !== null)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  } catch (error) {
+    console.error('[threadsInsightsData] Failed to get daily post stats', error);
+    return [];
+  }
 }
