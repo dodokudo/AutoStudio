@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 import RedirectClient from './redirect-client';
 
 interface PageProps {
-  params: Promise<{ code: string }>;
+  params: Promise<{ code: string[] }>;
 }
 
 function getDeviceType(userAgent: string): string {
@@ -19,7 +19,8 @@ function getDeviceType(userAgent: string): string {
 }
 
 export default async function ShortLinkRedirect({ params }: PageProps) {
-  const { code } = await params;
+  const { code: codeSegments } = await params;
+  const code = codeSegments.join('/');
 
   // 短縮URLを取得
   const shortLink = await getShortLinkByCode(code);
@@ -51,7 +52,8 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
 
 // OGPメタデータ生成
 export async function generateMetadata({ params }: PageProps) {
-  const { code } = await params;
+  const { code: codeSegments } = await params;
+  const code = codeSegments.join('/');
   const shortLink = await getShortLinkByCode(code);
 
   if (!shortLink) {
