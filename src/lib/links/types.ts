@@ -116,3 +116,16 @@ export interface LinkFunnelMetrics {
   steps: LinkFunnelMetricsStep[];
   totalCount: number;
 }
+
+export interface DailyClickData {
+  date: string;
+  clicks: number;
+}
+
+export interface LinkDailyClicks {
+  linkId: string;
+  managementName?: string;
+  category?: string | null;
+  periodClicks: number;
+  dailyClicks: DailyClickData[];
+}

@@ -11,6 +11,8 @@ import type {
   LinkFunnel,
   LinkFunnelStep,
   LinkFunnelMetrics,
+  LinkDailyClicks,
+  DailyClickData,
 } from './types';
 
 const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
@@ -822,4 +824,90 @@ export async function updateShortLink(id: string, req: UpdateShortLinkRequest): 
       is_active: true,
     },
   ]);
+}
+
+export async function getLinkDailyClicks(
+  linkId: string,
+  params: { startDate: string; endDate: string },
+): Promise<LinkDailyClicks | null> {
+  let { startDate, endDate } = params;
+  if (startDate > endDate) {
+    [startDate, endDate] = [endDate, startDate];
+  }
+
+  // リンク情報を取得
+  const [linkRows] = await bigquery.query({
+    query: `
+      WITH latest_links AS (
+        SELECT
+          id,
+          management_name,
+          category,
+          ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) AS rn
+        FROM \`${projectId}.${dataset}.short_links\`
+        WHERE is_active = TRUE AND id = @linkId
+      )
+      SELECT id, management_name, category
+      FROM latest_links
+      WHERE rn = 1
+    `,
+    params: { linkId },
+  });
+
+  if (linkRows.length === 0) {
+    return null;
+  }
+
+  const linkRow = linkRows[0] as Record<string, unknown>;
+
+  // 日別クリック数を取得
+  const [clickRows] = await bigquery.query({
+    query: `
+      SELECT
+        FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(clicked_at), "Asia/Tokyo")) AS date,
+        COUNT(*) AS clicks
+      FROM \`${projectId}.${dataset}.click_logs\`
+      WHERE short_link_id = @linkId
+        AND DATE(TIMESTAMP(clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+      GROUP BY date
+      ORDER BY date ASC
+    `,
+    params: { linkId, startDate, endDate },
+  });
+
+  // 期間内の全日付を生成（クリック0の日も含める）
+  const dailyClicks: DailyClickData[] = [];
+  const clickMap = new Map<string, number>();
+
+  for (const row of clickRows as Array<Record<string, unknown>>) {
+    const dateValue = row.date;
+    const dateStr = typeof dateValue === 'object' && dateValue !== null && 'value' in dateValue
+      ? String((dateValue as { value: unknown }).value)
+      : String(dateValue);
+    clickMap.set(dateStr, Number(row.clicks));
+  }
+
+  // 期間内の全日付を生成
+  const start = new Date(`${startDate}T00:00:00+09:00`);
+  const end = new Date(`${endDate}T00:00:00+09:00`);
+  const current = new Date(start);
+
+  while (current <= end) {
+    const dateStr = current.toISOString().split('T')[0];
+    dailyClicks.push({
+      date: dateStr,
+      clicks: clickMap.get(dateStr) ?? 0,
+    });
+    current.setDate(current.getDate() + 1);
+  }
+
+  const periodClicks = dailyClicks.reduce((sum, d) => sum + d.clicks, 0);
+
+  return {
+    linkId,
+    managementName: linkRow.management_name ? String(linkRow.management_name) : undefined,
+    category: linkRow.category ? String(linkRow.category) : null,
+    periodClicks,
+    dailyClicks,
+  };
 }
