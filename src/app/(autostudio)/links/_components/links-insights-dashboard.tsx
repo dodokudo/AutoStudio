@@ -37,6 +37,30 @@ function formatCategory(category?: string | null): string {
   return CATEGORY_LABELS[normalized] ?? category;
 }
 
+function formatDateJapan(dateString: string): string {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+  return date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+}
+
+function formatTimestampJapan(value?: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+  return date.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function SummaryCard({ label, value, description }: { label: string; value: string; description?: string }) {
   return (
     <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-6">
@@ -55,9 +79,6 @@ export function LinksInsightsDashboard({ summary, links }: LinksInsightsDashboar
   const activeLinkCount = links.filter((link) => link.periodClicks > 0).length;
   const averagePerDay = summary.periodDays > 0 ? summary.totalClicks / summary.periodDays : 0;
   const periodLabel = `${summary.periodStart} 〜 ${summary.periodEnd}`;
-
-  // クリック数でソート
-  const sortedLinks = [...links].sort((a, b) => b.periodClicks - a.periodClicks);
 
   return (
     <div className="space-y-6">
@@ -82,22 +103,17 @@ export function LinksInsightsDashboard({ summary, links }: LinksInsightsDashboar
         <SummaryCard label="累計クリック数" value={formatNumber(summary.lifetimeClicks)} />
       </div>
 
-      {/* カテゴリ別クリック */}
+      {/* カテゴリ別クリック（元のUI） */}
       <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-6">
         <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">カテゴリ別クリック（期間内）</h2>
-        <div className="mt-4 flex flex-wrap gap-4">
+        <div className="mt-4 space-y-2">
           {summary.byCategory.length === 0 ? (
             <p className="text-sm text-[color:var(--color-text-secondary)]">期間内のクリックデータがありません。</p>
           ) : (
             summary.byCategory.map((item) => (
-              <div
-                key={item.category}
-                className="flex items-center gap-2 rounded-lg bg-gray-50 px-4 py-2"
-              >
-                <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
-                  {formatCategory(item.category)}
-                </span>
-                <span className="text-lg font-bold text-blue-600">
+              <div key={item.category} className="flex items-center justify-between">
+                <span className="text-sm text-[color:var(--color-text-primary)]">{formatCategory(item.category)}</span>
+                <span className="text-sm font-medium text-[color:var(--color-text-secondary)]">
                   {formatNumber(item.clicks)}
                 </span>
               </div>
@@ -106,80 +122,119 @@ export function LinksInsightsDashboard({ summary, links }: LinksInsightsDashboar
         </div>
       </div>
 
-      {/* リンク一覧（コンパクト） */}
-      <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-6">
-        <h2 className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">
-          リンク一覧（クリックで日別推移を表示）
-        </h2>
-        <div className="max-h-[400px] overflow-y-auto">
-          <div className="space-y-1">
-            {sortedLinks.length === 0 ? (
-              <p className="py-4 text-center text-sm text-[color:var(--color-text-secondary)]">
-                リンクがありません
-              </p>
-            ) : (
-              sortedLinks.map((link) => {
-                const isSelected = selectedLink?.id === link.id;
-                return (
-                  <div
-                    key={link.id}
-                    onClick={() => setSelectedLink(isSelected ? null : link)}
-                    className={`flex cursor-pointer items-center justify-between rounded-lg border px-4 py-3 transition-colors ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-[color:var(--color-border)] bg-white hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`text-sm font-medium ${
-                            isSelected ? 'text-blue-700' : 'text-[color:var(--color-text-primary)]'
-                          }`}
-                        >
-                          {link.managementName || link.shortCode}
-                        </span>
-                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+      {/* リンク一覧（元のテーブルUI、高さ制限付き） */}
+      <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white overflow-hidden">
+        <div className="max-h-[480px] overflow-auto">
+          <table className="w-full min-w-[960px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-[color:var(--color-border)] bg-gray-50">
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  管理名
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  カテゴリ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  短縮リンク
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  期間クリック
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  累計クリック
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  最終クリック時刻
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  作成日
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                  操作
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[color:var(--color-border)]">
+              {links.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-8 text-center text-sm text-[color:var(--color-text-secondary)]">
+                    表示できるリンクがありません。
+                  </td>
+                </tr>
+              ) : (
+                links.map((link) => {
+                  const isSelected = selectedLink?.id === link.id;
+                  return (
+                    <tr
+                      key={link.id}
+                      onClick={() => setSelectedLink(isSelected ? null : link)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-blue-50 hover:bg-blue-100'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                            {link.managementName || '-'}
+                          </span>
+                          <span className="text-xs text-[color:var(--color-text-secondary)]">{link.shortCode}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
                           {formatCategory(link.category)}
                         </span>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-[color:var(--color-text-muted)]">
-                        {link.destinationUrl}
-                      </p>
-                    </div>
-                    <div className="ml-4 flex items-center gap-4">
-                      <div className="text-right">
-                        <p
-                          className={`text-lg font-bold ${
-                            isSelected ? 'text-blue-700' : 'text-[color:var(--color-text-primary)]'
-                          }`}
-                        >
-                          {formatNumber(link.periodClicks)}
-                        </p>
-                        <p className="text-xs text-[color:var(--color-text-muted)]">クリック</p>
-                      </div>
-                      <div className="flex gap-2 text-xs">
-                        <Link
-                          href={`/links/${link.id}`}
-                          className="text-blue-600 hover:underline"
+                      </td>
+                      <td className="px-6 py-4">
+                        <a
+                          href={`/l/${link.shortCode}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block max-w-[320px] truncate text-sm text-blue-600 hover:underline"
+                          title={link.destinationUrl}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          詳細
-                        </Link>
-                        <Link
-                          href={`/links/${link.id}/edit`}
-                          className="text-gray-500 hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          編集
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                          {link.destinationUrl}
+                        </a>
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm font-semibold text-[color:var(--color-text-primary)]">
+                        {formatNumber(link.periodClicks)}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm text-[color:var(--color-text-secondary)]">
+                        {formatNumber(link.lifetimeClicks)}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm text-[color:var(--color-text-secondary)]">
+                        {formatTimestampJapan(link.lastClickedAt)}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm text-[color:var(--color-text-secondary)]">
+                        {formatDateJapan(link.createdAt)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex justify-end gap-3 text-sm">
+                          <Link
+                            href={`/links/${link.id}`}
+                            className="text-blue-600 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            詳細
+                          </Link>
+                          <Link
+                            href={`/links/${link.id}/edit`}
+                            className="text-gray-600 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            編集
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
