@@ -610,48 +610,46 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
   return (
     <>
-      {/* KPIカード */}
-      <div className="space-y-2">
-        {/* サマリーカード */}
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <Card className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-              売上合計
-            </p>
-            <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-              ¥{numberFormatter.format(groupedStats.totalAmount)}
-            </p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-              成功件数
-            </p>
-            <p className="mt-1 text-2xl font-bold text-green-600">
-              {numberFormatter.format(groupedStats.totalCount)}件
-            </p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-              平均単価
-            </p>
-            <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-              ¥{numberFormatter.format(averageAmount)}
-            </p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-              失敗 / 処理中
-            </p>
-            <p className="mt-1 text-2xl font-bold">
-              <span className="text-red-600">{summary.failedCount}</span>
-              <span className="text-[color:var(--color-text-muted)]"> / </span>
-              <span className="text-amber-600">{summary.pendingCount}</span>
-            </p>
-          </Card>
-        </div>
+      {/* サマリーカード */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Card className="p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            売上合計
+          </p>
+          <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+            ¥{numberFormatter.format(groupedStats.totalAmount)}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            成功件数
+          </p>
+          <p className="mt-1 text-2xl font-bold text-green-600">
+            {numberFormatter.format(groupedStats.totalCount)}件
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            平均単価
+          </p>
+          <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+            ¥{numberFormatter.format(averageAmount)}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            失敗 / 処理中
+          </p>
+          <p className="mt-1 text-2xl font-bold">
+            <span className="text-red-600">{summary.failedCount}</span>
+            <span className="text-[color:var(--color-text-muted)]"> / </span>
+            <span className="text-amber-600">{summary.pendingCount}</span>
+          </p>
+        </Card>
+      </div>
 
-        {/* 入金状況 */}
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+      {/* 入金状況 */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             入金済み
@@ -702,7 +700,6 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             )}
           </div>
         </Card>
-        </div>
       </div>
 
       {/* カテゴリ別売上 */}
