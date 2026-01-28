@@ -678,16 +678,21 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           </p>
           <div className="mt-2 space-y-1">
             {paymentStats.pendingSchedule.length > 0 ? (
-              paymentStats.pendingSchedule.map(({ date, amount }) => (
+              paymentStats.pendingSchedule.map(({ date, amount }) => {
+                // YYYY-MM-DD形式をローカル日付としてパース
+                const [y, m, d] = date.split('-').map(Number);
+                const localDate = new Date(y, m - 1, d);
+                return (
                 <div key={date} className="flex justify-between text-sm">
                   <span className="text-[color:var(--color-text-secondary)]">
-                    {new Date(date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                    {localDate.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
                   </span>
                   <span className="font-medium text-[color:var(--color-text-primary)]">
                     ¥{numberFormatter.format(amount)}
                   </span>
                 </div>
-              ))
+                );
+              })
             ) : (
               <p className="text-sm text-[color:var(--color-text-muted)]">
                 入金予定なし
