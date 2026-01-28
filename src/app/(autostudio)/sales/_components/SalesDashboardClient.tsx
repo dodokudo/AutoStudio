@@ -345,41 +345,6 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     });
   }, [dailySales]);
 
-  // カテゴリ別売上を集計
-  const categoryStats = useMemo(() => {
-    const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
-      frontend: { amount: 0, count: 0 },
-      backend: { amount: 0, count: 0 },
-      backend_renewal: { amount: 0, count: 0 },
-      analyca: { amount: 0, count: 0 },
-      corporate: { amount: 0, count: 0 },
-      other: { amount: 0, count: 0 },
-    };
-
-    // UnivaPayの売上をカテゴリ別に集計
-    const successfulCharges = charges.filter(c => c.status === 'successful');
-    for (const charge of successfulCharges) {
-      const category = categories[charge.id] ?? 'other';
-      stats[category].amount += charge.charged_amount;
-      stats[category].count += 1;
-    }
-
-    // 手動売上を追加（期間内のみ）
-    for (const sale of filteredManualSales) {
-      stats[sale.category].amount += sale.amount;
-      stats[sale.category].count += 1;
-    }
-
-    return SALES_CATEGORIES.map(cat => ({
-      ...cat,
-      ...stats[cat.id],
-    })).filter(cat => cat.amount > 0);
-  }, [charges, categories, filteredManualSales]);
-
-  // 合計（期間内の手動売上含む）
-  const totalWithManual = summary.totalAmount + filteredManualSales.reduce((sum, s) => sum + s.amount, 0);
-  const countWithManual = summary.successfulCount + filteredManualSales.length;
-
   // 統合取引一覧（UnivaPay + 手動売上）
   type UnifiedTransaction = {
     id: string;
@@ -505,10 +470,48 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     return result.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [allTransactions, groups]);
 
-  // 平均単価を計算
-  const averageAmount = countWithManual > 0
-    ? Math.round(totalWithManual / countWithManual)
-    : 0;
+  // グループ化を考慮した集計値
+  const groupedStats = useMemo(() => {
+    let totalAmount = 0;
+    let totalCount = 0;
+
+    for (const tx of displayTransactions) {
+      totalAmount += tx.amount;
+      totalCount += 1;
+    }
+
+    return {
+      totalAmount,
+      totalCount,
+      averageAmount: totalCount > 0 ? Math.round(totalAmount / totalCount) : 0,
+    };
+  }, [displayTransactions]);
+
+  // カテゴリ別売上を集計（グループ化考慮）
+  const categoryStatsGrouped = useMemo(() => {
+    const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
+      frontend: { amount: 0, count: 0 },
+      backend: { amount: 0, count: 0 },
+      backend_renewal: { amount: 0, count: 0 },
+      analyca: { amount: 0, count: 0 },
+      corporate: { amount: 0, count: 0 },
+      other: { amount: 0, count: 0 },
+    };
+
+    for (const tx of displayTransactions) {
+      const category = tx.category ?? 'other';
+      stats[category].amount += tx.amount;
+      stats[category].count += 1;
+    }
+
+    return SALES_CATEGORIES.map(cat => ({
+      ...cat,
+      ...stats[cat.id],
+    })).filter(cat => cat.amount > 0);
+  }, [displayTransactions]);
+
+  // 平均単価を計算（グループ化考慮）
+  const averageAmount = groupedStats.averageAmount;
 
   return (
     <>
@@ -519,7 +522,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             売上合計
           </p>
           <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-            ¥{numberFormatter.format(totalWithManual)}
+            ¥{numberFormatter.format(groupedStats.totalAmount)}
           </p>
         </Card>
         <Card className="p-4">
@@ -527,7 +530,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             成功件数
           </p>
           <p className="mt-1 text-2xl font-bold text-green-600">
-            {numberFormatter.format(countWithManual)}件
+            {numberFormatter.format(groupedStats.totalCount)}件
           </p>
         </Card>
         <Card className="p-4">
@@ -557,11 +560,11 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             カテゴリ別売上
           </h2>
           <div className="mt-4 h-64">
-            {categoryStats.length > 0 ? (
+            {categoryStatsGrouped.length > 0 ? (
               <ResponsiveContainer>
                 <PieChart>
                   <Pie
-                    data={categoryStats}
+                    data={categoryStatsGrouped}
                     dataKey="amount"
                     nameKey="label"
                     cx="50%"
@@ -573,7 +576,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                     }}
                     labelLine={false}
                   >
-                    {categoryStats.map((entry) => (
+                    {categoryStatsGrouped.map((entry) => (
                       <Cell key={entry.id} fill={entry.color} />
                     ))}
                   </Pie>
@@ -597,8 +600,8 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             カテゴリ別内訳
           </h2>
           <div className="mt-4 space-y-3">
-            {categoryStats.length > 0 ? (
-              categoryStats.map(cat => (
+            {categoryStatsGrouped.length > 0 ? (
+              categoryStatsGrouped.map(cat => (
                 <div key={cat.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div
