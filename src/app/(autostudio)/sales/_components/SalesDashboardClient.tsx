@@ -513,6 +513,93 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   // 平均単価を計算（グループ化考慮）
   const averageAmount = groupedStats.averageAmount;
 
+  // 入金日を計算するヘルパー関数
+  const getPaymentDate = (saleDate: Date): Date => {
+    const year = saleDate.getFullYear();
+    const month = saleDate.getMonth();
+    const day = saleDate.getDate();
+
+    let paymentDate: Date;
+
+    if (day <= 15) {
+      // 1日〜15日の売上 → 同月末
+      paymentDate = new Date(year, month + 1, 0); // 月末
+    } else {
+      // 16日〜月末の売上 → 翌月15日
+      paymentDate = new Date(year, month + 1, 15);
+    }
+
+    // 土日の場合は翌営業日（月曜日）に調整
+    const dayOfWeek = paymentDate.getDay();
+    if (dayOfWeek === 0) {
+      // 日曜日 → 月曜日
+      paymentDate.setDate(paymentDate.getDate() + 1);
+    } else if (dayOfWeek === 6) {
+      // 土曜日 → 月曜日
+      paymentDate.setDate(paymentDate.getDate() + 2);
+    }
+
+    return paymentDate;
+  };
+
+  // 入金済み・入金予定を計算
+  const paymentStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let deposited = 0; // 入金済み
+    let pending = 0; // 入金予定
+    const pendingByDate = new Map<string, number>(); // 入金予定日別
+
+    for (const tx of displayTransactions) {
+      // 支払方法を判定
+      const hasCard = tx.paymentMethods.includes('クレジットカード');
+      const hasBankTransfer = tx.paymentMethods.some(m => m !== 'クレジットカード');
+
+      if (tx.isGrouped) {
+        // グループ化された取引は内訳で計算
+        for (const item of tx.items) {
+          if (item.source === 'manual') {
+            // 銀行振込は入金済み
+            deposited += item.amount;
+          } else {
+            // カード決済は入金日で判定
+            const paymentDate = getPaymentDate(item.date);
+            if (paymentDate <= today) {
+              deposited += item.amount;
+            } else {
+              pending += item.amount;
+              const dateKey = paymentDate.toISOString().split('T')[0];
+              pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + item.amount);
+            }
+          }
+        }
+      } else {
+        if (hasBankTransfer && !hasCard) {
+          // 銀行振込のみ → 入金済み
+          deposited += tx.amount;
+        } else if (hasCard) {
+          // カード決済 → 入金日で判定
+          const paymentDate = getPaymentDate(tx.date);
+          if (paymentDate <= today) {
+            deposited += tx.amount;
+          } else {
+            pending += tx.amount;
+            const dateKey = paymentDate.toISOString().split('T')[0];
+            pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + tx.amount);
+          }
+        }
+      }
+    }
+
+    // 入金予定日別にソート
+    const pendingSchedule = Array.from(pendingByDate.entries())
+      .map(([date, amount]) => ({ date, amount }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return { deposited, pending, pendingSchedule };
+  }, [displayTransactions]);
+
   return (
     <>
       {/* サマリーカード */}
@@ -550,6 +637,55 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             <span className="text-[color:var(--color-text-muted)]"> / </span>
             <span className="text-amber-600">{summary.pendingCount}</span>
           </p>
+        </Card>
+      </div>
+
+      {/* 入金状況 */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <Card className="p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            入金済み
+          </p>
+          <p className="mt-1 text-2xl font-bold text-green-600">
+            ¥{numberFormatter.format(paymentStats.deposited)}
+          </p>
+          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+            銀行振込 + 入金済カード
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            入金予定
+          </p>
+          <p className="mt-1 text-2xl font-bold text-blue-600">
+            ¥{numberFormatter.format(paymentStats.pending)}
+          </p>
+          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+            カード決済（未入金）
+          </p>
+        </Card>
+        <Card className="p-4 col-span-2 md:col-span-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            入金予定スケジュール
+          </p>
+          <div className="mt-2 space-y-1">
+            {paymentStats.pendingSchedule.length > 0 ? (
+              paymentStats.pendingSchedule.map(({ date, amount }) => (
+                <div key={date} className="flex justify-between text-sm">
+                  <span className="text-[color:var(--color-text-secondary)]">
+                    {new Date(date).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span className="font-medium text-[color:var(--color-text-primary)]">
+                    ¥{numberFormatter.format(amount)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                入金予定なし
+              </p>
+            )}
+          </div>
         </Card>
       </div>
 
