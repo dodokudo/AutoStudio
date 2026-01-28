@@ -547,6 +547,14 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // ローカル日付をYYYY-MM-DD形式で取得
+    const toLocalDateStr = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
     let deposited = 0; // 入金済み
     let pending = 0; // 入金予定
     const pendingByDate = new Map<string, number>(); // 入金予定日別
@@ -569,7 +577,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
               deposited += item.amount;
             } else {
               pending += item.amount;
-              const dateKey = paymentDate.toISOString().split('T')[0];
+              const dateKey = toLocalDateStr(paymentDate);
               pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + item.amount);
             }
           }
@@ -585,7 +593,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             deposited += tx.amount;
           } else {
             pending += tx.amount;
-            const dateKey = paymentDate.toISOString().split('T')[0];
+            const dateKey = toLocalDateStr(paymentDate);
             pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + tx.amount);
           }
         }
