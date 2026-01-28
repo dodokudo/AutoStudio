@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getManualSales, addManualSale, deleteManualSale, SALES_CATEGORIES, type SalesCategoryId } from '@/lib/sales/categories';
+import { getManualSales, addManualSale, deleteManualSale, updateManualSale, SALES_CATEGORIES, type SalesCategoryId } from '@/lib/sales/categories';
 
 /**
  * GET /api/sales/manual?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
@@ -93,6 +93,54 @@ export async function DELETE(request: Request) {
     console.error('[api/sales/manual] Error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to delete manual sale' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/sales/manual
+ * 手動売上を更新（顧客名編集など）
+ */
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, customerName, amount, category, paymentMethod, note, transactionDate } = body as {
+      id: string;
+      customerName?: string;
+      amount?: number;
+      category?: SalesCategoryId;
+      paymentMethod?: string;
+      note?: string;
+      transactionDate?: string;
+    };
+
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    // カテゴリが指定されている場合は有効性チェック
+    if (category) {
+      const validCategories = SALES_CATEGORIES.map(c => c.id);
+      if (!validCategories.includes(category)) {
+        return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+      }
+    }
+
+    await updateManualSale(id, {
+      customerName,
+      amount,
+      category,
+      paymentMethod,
+      note,
+      transactionDate,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[api/sales/manual] PATCH Error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to update manual sale' },
       { status: 500 }
     );
   }

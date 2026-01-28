@@ -4,6 +4,7 @@ import { SalesDashboardClient } from './_components/SalesDashboardClient';
 import { SalesRangeSelector } from './_components/SalesRangeSelector';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 import { getChargeCategories, getManualSales } from '@/lib/sales/categories';
+import { getAllGroups } from '@/lib/sales/groups';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,9 +52,10 @@ export default async function SalesPage({
     const startDateStr = formatDateInput(resolvedRange.start);
     const endDateStr = formatDateInput(resolvedRange.end);
 
-    const [summary, manualSales] = await Promise.all([
+    const [summary, manualSales, groupsMap] = await Promise.all([
       getSalesSummary(startDate, endDate),
       getManualSales(startDateStr, endDateStr),
+      getAllGroups().catch(() => new Map()),
     ]);
 
     // カテゴリデータを取得
@@ -63,6 +65,16 @@ export default async function SalesPage({
     for (const [id, cat] of categoriesMap) {
       categories[id] = cat;
     }
+
+    // グループデータを変換
+    const groups = Array.from(groupsMap.values()).map(({ group, items }) => ({
+      id: group.id,
+      name: group.name,
+      items: items.map((i: { itemType: 'charge' | 'manual'; itemId: string }) => ({
+        itemType: i.itemType,
+        itemId: i.itemId,
+      })),
+    }));
 
     return (
       <div className="section-stack">
@@ -92,6 +104,7 @@ export default async function SalesPage({
             },
             categories,
             manualSales,
+            groups,
           }}
         />
       </div>

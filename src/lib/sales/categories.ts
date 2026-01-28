@@ -11,6 +11,7 @@ export const SALES_CATEGORIES = [
   { id: 'backend', label: 'バックエンド' },
   { id: 'backend_renewal', label: 'バックエンド継続' },
   { id: 'analyca', label: 'ANALYCA' },
+  { id: 'corporate', label: '法人案件' },
   { id: 'other', label: 'その他' },
 ] as const;
 
@@ -151,5 +152,59 @@ export async function deleteManualSale(id: string): Promise<void> {
   await client.query({
     query: `DELETE FROM \`${PROJECT_ID}.${DATASET}.manual_sales\` WHERE id = @id`,
     params: { id },
+  });
+}
+
+/**
+ * 手動売上を更新
+ */
+export async function updateManualSale(
+  id: string,
+  updates: Partial<{
+    customerName: string;
+    amount: number;
+    category: SalesCategoryId;
+    paymentMethod: string;
+    note: string;
+    transactionDate: string;
+  }>
+): Promise<void> {
+  const client = createBigQueryClient(PROJECT_ID);
+
+  const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
+  const params: Record<string, unknown> = { id };
+
+  if (updates.customerName !== undefined) {
+    setClauses.push('customer_name = @customerName');
+    params.customerName = updates.customerName;
+  }
+  if (updates.amount !== undefined) {
+    setClauses.push('amount = @amount');
+    params.amount = updates.amount;
+  }
+  if (updates.category !== undefined) {
+    setClauses.push('category = @category');
+    params.category = updates.category;
+  }
+  if (updates.paymentMethod !== undefined) {
+    setClauses.push('payment_method = @paymentMethod');
+    params.paymentMethod = updates.paymentMethod;
+  }
+  if (updates.note !== undefined) {
+    setClauses.push('note = @note');
+    params.note = updates.note;
+  }
+  if (updates.transactionDate !== undefined) {
+    setClauses.push('transaction_date = DATE(@transactionDate)');
+    params.transactionDate = updates.transactionDate;
+  }
+
+  await client.query({
+    query: `
+      UPDATE \`${PROJECT_ID}.${DATASET}.manual_sales\`
+      SET ${setClauses.join(', ')}
+      WHERE id = @id
+    `,
+    params,
   });
 }
