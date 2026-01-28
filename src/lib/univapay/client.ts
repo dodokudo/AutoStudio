@@ -145,7 +145,37 @@ export async function listSubscriptions(
 }
 
 /**
- * 売上サマリーを取得（期間指定）
+ * 全課金データを取得（ページネーション対応）
+ */
+export async function listAllCharges(
+  params?: Omit<ListChargesParams, 'cursor' | 'limit'>,
+): Promise<UnivaPayCharge[]> {
+  const allCharges: UnivaPayCharge[] = [];
+  let cursor: string | undefined;
+  let hasMore = true;
+
+  while (hasMore) {
+    const result = await listCharges({
+      ...params,
+      limit: 100, // 最大値
+      cursor,
+    });
+
+    allCharges.push(...result.items);
+    hasMore = result.has_more;
+
+    if (hasMore && result.items.length > 0) {
+      cursor = result.items[result.items.length - 1].id;
+    }
+
+    console.log(`[univapay] Fetched ${result.items.length} charges, total: ${allCharges.length}, has_more: ${hasMore}`);
+  }
+
+  return allCharges;
+}
+
+/**
+ * 売上サマリーを取得（期間指定）- BigQueryから取得
  */
 export async function getSalesSummary(
   startDate: string,
@@ -157,13 +187,25 @@ export async function getSalesSummary(
   pendingCount: number;
   charges: UnivaPayCharge[];
 }> {
-  const result = await listCharges({
-    from: startDate,
-    to: endDate,
-    mode: 'live',
-  });
+  // BigQueryから取得を試みる
+  const { getChargesFromBigQuery } = await import('../sales/charges');
 
-  const charges = result.items;
+  let charges: UnivaPayCharge[];
+
+  try {
+    charges = await getChargesFromBigQuery(startDate, endDate);
+    console.log(`[univapay] Loaded ${charges.length} charges from BigQuery`);
+  } catch (error) {
+    // BigQueryが使えない場合はAPIから取得（フォールバック）
+    console.warn('[univapay] BigQuery unavailable, falling back to API:', error);
+    const result = await listCharges({
+      from: startDate,
+      to: endDate,
+      mode: 'live',
+      limit: 100,
+    });
+    charges = result.items;
+  }
 
   const successful = charges.filter(c => c.status === 'successful');
   const failed = charges.filter(c => c.status === 'failed' || c.status === 'error');
