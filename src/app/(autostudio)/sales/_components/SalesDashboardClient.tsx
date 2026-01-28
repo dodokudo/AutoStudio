@@ -426,6 +426,85 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [successfulCharges, filteredManualSales, categories]);
 
+  // グループ化を考慮した表示用取引一覧
+  type DisplayTransaction = {
+    id: string;
+    groupId?: string;
+    date: Date;
+    amount: number;
+    category: SalesCategoryId | null;
+    customerName: string;
+    paymentMethods: string[];
+    isGrouped: boolean;
+    items: UnifiedTransaction[];
+    source: 'univapay' | 'manual' | 'grouped';
+  };
+
+  const displayTransactions = useMemo(() => {
+    const result: DisplayTransaction[] = [];
+    const processedIds = new Set<string>();
+
+    for (const tx of allTransactions) {
+      if (processedIds.has(tx.id)) continue;
+
+      // このアイテムが属するグループを探す
+      const itemType = tx.source === 'univapay' ? 'charge' : 'manual';
+      const group = groups.find(g => g.items.some(i => i.itemType === itemType && i.itemId === tx.id));
+
+      if (group) {
+        // グループ化されている場合、グループ内の全アイテムをまとめる
+        const groupItems: UnifiedTransaction[] = [];
+        for (const item of group.items) {
+          const found = allTransactions.find(t => {
+            const tType = t.source === 'univapay' ? 'charge' : 'manual';
+            return tType === item.itemType && t.id === item.itemId;
+          });
+          if (found) {
+            groupItems.push(found);
+            processedIds.add(found.id);
+          }
+        }
+
+        if (groupItems.length > 0) {
+          const totalAmount = groupItems.reduce((sum, i) => sum + i.amount, 0);
+          const latestDate = new Date(Math.max(...groupItems.map(i => i.date.getTime())));
+          const paymentMethods = [...new Set(groupItems.map(i => i.paymentMethod))];
+          const customerName = groupItems[0].customerName;
+          const category = groupItems.find(i => i.category)?.category ?? null;
+
+          result.push({
+            id: group.id,
+            groupId: group.id,
+            date: latestDate,
+            amount: totalAmount,
+            category,
+            customerName,
+            paymentMethods,
+            isGrouped: true,
+            items: groupItems,
+            source: 'grouped',
+          });
+        }
+      } else {
+        // グループ化されていない場合はそのまま
+        processedIds.add(tx.id);
+        result.push({
+          id: tx.id,
+          date: tx.date,
+          amount: tx.amount,
+          category: tx.category,
+          customerName: tx.customerName,
+          paymentMethods: [tx.paymentMethod],
+          isGrouped: false,
+          items: [tx],
+          source: tx.source,
+        });
+      }
+    }
+
+    return result.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [allTransactions, groups]);
+
   // 平均単価を計算
   const averageAmount = countWithManual > 0
     ? Math.round(totalWithManual / countWithManual)
@@ -746,7 +825,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           )}
         </div>
         <div className="mt-4 overflow-x-auto">
-          {allTransactions.length > 0 ? (
+          {displayTransactions.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[color:var(--color-border)] text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
@@ -760,29 +839,36 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--color-border)]">
-                {allTransactions.map((tx) => {
-                  const itemGroup = getGroupForItem(tx.source, tx.id);
-                  const itemType = tx.source === 'univapay' ? 'charge' : 'manual';
-                  const isSelected = selectedItems.has(`${itemType}:${tx.id}`);
+                {displayTransactions.map((tx) => {
                   const isEditing = editingCustomerName === tx.id;
+                  const manualItem = tx.items.find(i => i.source === 'manual');
+                  const chargeItem = tx.items.find(i => i.source === 'univapay');
+
+                  // 未グループ化アイテムの選択状態
+                  const itemType = tx.source === 'univapay' ? 'charge' : tx.source === 'manual' ? 'manual' : null;
+                  const isSelected = itemType ? selectedItems.has(`${itemType}:${tx.id}`) : false;
 
                   return (
                     <tr
                       key={tx.id}
                       className={`hover:bg-[color:var(--color-surface-muted)] ${
-                        itemGroup ? 'bg-purple-50' : ''
+                        tx.isGrouped ? 'bg-purple-50' : ''
                       } ${isSelected ? 'bg-blue-50' : ''}`}
                     >
                       <td className="px-3 py-2">
-                        {!itemGroup && (
+                        {!tx.isGrouped && (
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => toggleItemSelection(tx.source, tx.id)}
+                            onChange={() => {
+                              if (tx.source !== 'grouped') {
+                                toggleItemSelection(tx.source, tx.id);
+                              }
+                            }}
                             className="h-4 w-4 rounded border-gray-300"
                           />
                         )}
-                        {itemGroup && (
+                        {tx.isGrouped && (
                           <span className="text-purple-600 text-xs" title="グループ化済み">●</span>
                         )}
                       </td>
@@ -793,7 +879,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                         ¥{numberFormatter.format(tx.amount)}
                       </td>
                       <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
-                        {tx.source === 'manual' && isEditing ? (
+                        {isEditing && manualItem ? (
                           <div className="flex items-center gap-1">
                             <input
                               type="text"
@@ -803,7 +889,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                               autoFocus
                             />
                             <button
-                              onClick={() => handleUpdateCustomerName(tx.id, editCustomerNameValue)}
+                              onClick={() => handleUpdateCustomerName(manualItem.id, editCustomerNameValue)}
                               className="text-green-600 text-xs"
                             >
                               保存
@@ -816,26 +902,15 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                             </button>
                           </div>
                         ) : (
-                          <span
-                            className={tx.source === 'manual' ? 'cursor-pointer hover:text-blue-600' : ''}
-                            onClick={() => {
-                              if (tx.source === 'manual') {
-                                setEditingCustomerName(tx.id);
-                                setEditCustomerNameValue(tx.customerName);
-                              }
-                            }}
-                          >
-                            {tx.customerName}
-                            {tx.source === 'manual' && <span className="ml-1 text-xs text-gray-400">✎</span>}
-                          </span>
+                          <span>{tx.customerName}</span>
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        {tx.source === 'univapay' ? (
+                        {chargeItem && !tx.isGrouped ? (
                           <select
                             value={tx.category ?? ''}
-                            onChange={(e) => handleCategoryChange(tx.id, e.target.value as SalesCategoryId)}
-                            disabled={savingCategory === tx.id}
+                            onChange={(e) => handleCategoryChange(chargeItem.id, e.target.value as SalesCategoryId)}
+                            disabled={savingCategory === chargeItem.id}
                             className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm disabled:opacity-50"
                           >
                             <option value="">選択...</option>
@@ -850,36 +925,64 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                          tx.source === 'univapay'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {tx.paymentMethod}
-                        </span>
-                        {itemGroup && (
-                          <span className="ml-1 inline-flex rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">
-                            分割
-                          </span>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {tx.paymentMethods.map((method, idx) => (
+                            <span
+                              key={idx}
+                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                method === 'クレジットカード'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {method}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="px-3 py-2">
-                        {tx.source === 'manual' && (
-                          <button
-                            onClick={() => handleDeleteManualSale(tx.id)}
-                            className="text-red-600 hover:text-red-800 text-xs"
-                          >
-                            削除
-                          </button>
-                        )}
-                        {itemGroup && (
-                          <button
-                            onClick={() => handleDeleteGroup(itemGroup.id)}
-                            className="text-purple-600 hover:text-purple-800 text-xs ml-2"
-                          >
-                            解除
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {manualItem && !tx.isGrouped && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditingCustomerName(tx.id);
+                                  setEditCustomerNameValue(tx.customerName);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                編集
+                              </button>
+                              <button
+                                onClick={() => handleDeleteManualSale(manualItem.id)}
+                                className="text-red-600 hover:text-red-800 text-xs"
+                              >
+                                削除
+                              </button>
+                            </>
+                          )}
+                          {tx.isGrouped && tx.groupId && (
+                            <>
+                              {manualItem && (
+                                <button
+                                  onClick={() => {
+                                    setEditingCustomerName(tx.id);
+                                    setEditCustomerNameValue(tx.customerName);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  編集
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteGroup(tx.groupId!)}
+                                className="text-purple-600 hover:text-purple-800 text-xs"
+                              >
+                                解除
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
