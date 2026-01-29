@@ -477,6 +477,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     isGrouped: boolean;
     items: UnifiedTransaction[];
     source: 'univapay' | 'manual' | 'grouped';
+    paymentDate?: Date;
   };
 
   const displayTransactions = useMemo(() => {
@@ -537,6 +538,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           isGrouped: false,
           items: [tx],
           source: tx.source,
+          paymentDate: tx.paymentDate ?? undefined,
         });
       }
     }
