@@ -461,9 +461,6 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [successfulCharges, filteredManualSales, categories]);
 
-  const frontendPurchaseCount = useMemo(() => {
-    return allTransactions.filter(tx => tx.category === 'frontend').length;
-  }, [allTransactions]);
 
   // グループ化を考慮した表示用取引一覧
   type DisplayTransaction = {
@@ -563,20 +560,6 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     };
   }, [displayTransactions]);
 
-  const lineToFrontendRate = useMemo(() => {
-    if (lineRegistrationsInRange === null || lineRegistrationsInRange === 0) return null;
-    return (frontendPurchaseCount / lineRegistrationsInRange) * 100;
-  }, [frontendPurchaseCount, lineRegistrationsInRange]);
-
-  const backendPurchaseCount = useMemo(() => {
-    return allTransactions.filter(tx => tx.category === 'backend').length;
-  }, [allTransactions]);
-
-  const frontendToBackendRate = useMemo(() => {
-    if (frontendPurchaseCount === 0) return null;
-    return (backendPurchaseCount / frontendPurchaseCount) * 100;
-  }, [backendPurchaseCount, frontendPurchaseCount]);
-
   const mainCategoryStats = useMemo(() => {
     const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
       frontend: { amount: 0, count: 0 },
@@ -595,6 +578,21 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
     return stats;
   }, [displayTransactions]);
+
+  const frontendCountForRate = mainCategoryStats.frontend.count;
+  const backendCountForRate = mainCategoryStats.backend.count;
+  const oneTimeSalesAmount = mainCategoryStats.frontend.amount + mainCategoryStats.backend.amount;
+  const recurringSalesAmount = mainCategoryStats.backend_renewal.amount + mainCategoryStats.analyca.amount;
+
+  const lineToFrontendRate = useMemo(() => {
+    if (lineRegistrationsInRange === null || lineRegistrationsInRange === 0) return null;
+    return (frontendCountForRate / lineRegistrationsInRange) * 100;
+  }, [frontendCountForRate, lineRegistrationsInRange]);
+
+  const frontendToBackendRate = useMemo(() => {
+    if (frontendCountForRate === 0) return null;
+    return (backendCountForRate / frontendCountForRate) * 100;
+  }, [backendCountForRate, frontendCountForRate]);
 
   // カテゴリ別売上を集計（グループ化考慮）
   const categoryStatsGrouped = useMemo(() => {
@@ -792,7 +790,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       </div>
 
       {/* 入金状況 */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             入金済み
@@ -857,20 +855,62 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             )}
           </div>
         </Card>
+        <Card className="p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+            単発 / 継続 売上
+          </p>
+          <div className="mt-2 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[color:var(--color-text-secondary)]">
+                単発売上（フロント + バック）
+              </span>
+              <span className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+                ¥{numberFormatter.format(oneTimeSalesAmount)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[color:var(--color-text-secondary)]">
+                継続売上（継続 + ANALYCA）
+              </span>
+              <span className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+                ¥{numberFormatter.format(recurringSalesAmount)}
+              </span>
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* カテゴリ別売上 */}
       <Card className="p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-            カテゴリ別売上
-          </h2>
-          <div className="flex flex-wrap gap-3 text-xs text-[color:var(--color-text-muted)]">
-            <div className="rounded-full border border-[color:var(--color-border)] px-3 py-1">
-              LINE→フロント {lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+              カテゴリ別売上
+            </h2>
+            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              売上構成比と転換率をまとめて確認
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3">
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">LINE→フロント</p>
+              <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
+                {lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}
+              </p>
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                LINE登録 {lineRegistrationsInRange !== null ? numberFormatter.format(lineRegistrationsInRange) : '—'}人 /
+                フロント {numberFormatter.format(frontendCountForRate)}件
+              </p>
             </div>
-            <div className="rounded-full border border-[color:var(--color-border)] px-3 py-1">
-              フロント→バック {frontendToBackendRate !== null ? `${frontendToBackendRate.toFixed(1)}%` : '—'}
+            <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3">
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">フロント→バック</p>
+              <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
+                {frontendToBackendRate !== null ? `${frontendToBackendRate.toFixed(1)}%` : '—'}
+              </p>
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                フロント {numberFormatter.format(frontendCountForRate)}件 /
+                バック {numberFormatter.format(backendCountForRate)}件
+              </p>
             </div>
           </div>
         </div>
@@ -886,10 +926,6 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                     cx="50%"
                     cy="50%"
                     outerRadius={80}
-                    label={(props) => {
-                      const p = props as unknown as { name: string; percent: number };
-                      return `${p.name} ${(p.percent * 100).toFixed(0)}%`;
-                    }}
                     labelLine={false}
                   >
                     {categoryStatsGrouped.map((entry) => (
@@ -902,31 +938,44 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="space-y-3">
-              {categoryStatsGrouped.map(cat => (
-                <div key={cat.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <span className="text-sm text-[color:var(--color-text-secondary)]">
-                      {cat.label}
-                    </span>
-                    <span className="text-xs text-[color:var(--color-text-muted)]">
-                      {groupedStats.totalAmount > 0 ? `${((cat.amount / groupedStats.totalAmount) * 100).toFixed(1)}%` : '—'}
-                    </span>
+            <div className="space-y-4">
+              {categoryStatsGrouped.map(cat => {
+                const ratio = groupedStats.totalAmount > 0 ? (cat.amount / groupedStats.totalAmount) * 100 : 0;
+                return (
+                  <div key={cat.id} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-[color:var(--color-text-primary)]">
+                            {cat.label}
+                          </p>
+                          <p className="text-xs text-[color:var(--color-text-muted)]">
+                            {cat.count}件
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+                          ¥{numberFormatter.format(cat.amount)}
+                        </p>
+                        <p className="text-xs text-[color:var(--color-text-muted)]">
+                          {ratio.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--color-border)]">
+                      <div
+                        className="h-full"
+                        style={{ width: `${Math.min(100, ratio)}%`, backgroundColor: cat.color }}
+                      />
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium text-[color:var(--color-text-primary)]">
-                      ¥{numberFormatter.format(cat.amount)}
-                    </p>
-                    <p className="text-xs text-[color:var(--color-text-muted)]">
-                      {cat.count}件
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (
