@@ -29,8 +29,8 @@ export async function loadRawCsvToBigQuery(
   const headerLine = lines[1]; // 2行目がヘッダー（1行目は登録ID行）
   const headers = parseCSVLine(headerLine);
 
-  // 3. snapshot_date列を追加したヘッダーを作成
-  const normalizedHeaders = ['snapshot_date', ...headers.map(normalizeColumnName)];
+  // 3. snapshot_date列を追加したヘッダーを作成（重複名はサフィックス付与）
+  const normalizedHeaders = deduplicateHeaders(['snapshot_date', ...headers.map(normalizeColumnName)]);
 
   const dataLines = lines.slice(2).filter((line) => line.trim() !== '');
 
@@ -157,6 +157,18 @@ function normalizeColumnName(name: string): string {
     .replace(/TAI:個別相談会実施/g, 'tai_consultation_done')
     .replace(/TAI：成約/g, 'tai_contracted')
     .replace(/TAI:成約/g, 'tai_contracted')
+    .replace(/TAI2:動画LP遷移/g, 'tai2_video_lp')
+    .replace(/TAI2：動画LP遷移/g, 'tai2_video_lp')
+    .replace(/TAI2：勉強会回答フォーム遷移/g, 'tai2_study_form')
+    .replace(/TAI2:勉強会回答フォーム遷移/g, 'tai2_study_form')
+    .replace(/TAI2:勉強会申込済み/g, 'tai2_study_applied')
+    .replace(/TAI2：勉強会申込済み/g, 'tai2_study_applied')
+    .replace(/TAI2：勉強会参加/g, 'tai2_study_joined')
+    .replace(/TAI2:勉強会参加/g, 'tai2_study_joined')
+    .replace(/TAI2：特典受け取り/g, 'tai2_bonus_received')
+    .replace(/TAI2:特典受け取り/g, 'tai2_bonus_received')
+    .replace(/TAI2:購入/g, 'tai2_purchased')
+    .replace(/TAI2：購入/g, 'tai2_purchased')
     .replace(/^男$/g, 'gender_male')
     .replace(/^女$/g, 'gender_female')
     .replace(/アンケート：フォーム流入/g, 'survey_form_inflow')
@@ -208,6 +220,19 @@ function normalizeColumnName(name: string): string {
     .toLowerCase();
 
   return normalized;
+}
+
+function deduplicateHeaders(headers: string[]): string[] {
+  const counts: Record<string, number> = {};
+  return headers.map((name) => {
+    const key = name || 'unnamed';
+    if (counts[key] === undefined) {
+      counts[key] = 0;
+      return key;
+    }
+    counts[key] += 1;
+    return `${key}_${counts[key] + 1}`;
+  });
 }
 
 async function uploadFileToGcs(

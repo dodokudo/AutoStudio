@@ -174,7 +174,7 @@ export async function getChargesFromBigQuery(
         status,
         metadata,
         mode,
-        FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E3SZ', created_on) as created_on,
+        FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E3S+09:00', created_on, 'Asia/Tokyo') as created_on,
         descriptor,
         error_code,
         error_message

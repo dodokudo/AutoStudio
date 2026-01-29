@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import {
   Bar,
@@ -54,6 +54,11 @@ interface TransactionGroup {
   items: Array<{ itemType: 'charge' | 'manual'; itemId: string }>;
 }
 
+interface LineDailyRegistration {
+  date: string;
+  registrations: number;
+}
+
 interface SalesDashboardClientProps {
   initialData: {
     summary: {
@@ -70,6 +75,7 @@ interface SalesDashboardClientProps {
     categories: Record<string, string>;
     manualSales: ManualSale[];
     groups?: TransactionGroup[];
+    lineDailyRegistrations?: LineDailyRegistration[];
   };
 }
 
@@ -115,6 +121,15 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   // 顧客名編集機能
   const [editingCustomerName, setEditingCustomerName] = useState<string | null>(null);
   const [editCustomerNameValue, setEditCustomerNameValue] = useState('');
+
+  // 期間変更時に初期データを同期
+  useEffect(() => {
+    setCategories(initialData.categories as Record<string, SalesCategoryId>);
+    setManualSales(initialData.manualSales);
+    setGroups(initialData.groups ?? []);
+    setSelectedItems(new Set());
+    setEditingCustomerName(null);
+  }, [initialData.categories, initialData.manualSales, initialData.groups, initialData.dateRange.from, initialData.dateRange.to]);
 
   // カテゴリを保存
   const handleCategoryChange = useCallback(async (chargeId: string, category: SalesCategoryId) => {
@@ -272,13 +287,25 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
   const successfulCharges = charges.filter((c) => c.status === 'successful');
 
+  const lineRegistrationsInRange = useMemo(() => {
+    if (!initialData.lineDailyRegistrations || initialData.lineDailyRegistrations.length === 0) {
+      return null;
+    }
+    const startDate = new Date(dateRange.from + 'T00:00:00');
+    const endDate = new Date(dateRange.to + 'T00:00:00');
+    return initialData.lineDailyRegistrations
+      .filter((item) => {
+        const target = new Date(item.date + 'T00:00:00');
+        return target >= startDate && target <= endDate;
+      })
+      .reduce((sum, item) => sum + item.registrations, 0);
+  }, [dateRange.from, dateRange.to, initialData.lineDailyRegistrations]);
+
   // 期間内の手動売上をフィルタリング
   const filteredManualSales = useMemo(() => {
-    const startDate = new Date(dateRange.from);
-    const endDate = new Date(dateRange.to);
+    // dateRangeはYYYY-MM-DD形式のローカル日付文字列
     return manualSales.filter(sale => {
-      const txDate = new Date(sale.transactionDate + 'T12:00:00'); // ローカル日付として解釈
-      return txDate >= startDate && txDate <= endDate;
+      return sale.transactionDate >= dateRange.from && sale.transactionDate <= dateRange.to;
     });
   }, [manualSales, dateRange]);
 
@@ -294,9 +321,9 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       return `${y}-${m}-${day}`;
     };
 
-    // 期間内の全日付を初期化
-    const startDate = new Date(dateRange.from);
-    const endDate = new Date(dateRange.to);
+    // 期間内の全日付を初期化（ローカル時間として解釈）
+    const startDate = new Date(dateRange.from + 'T00:00:00');
+    const endDate = new Date(dateRange.to + 'T00:00:00');
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dateStr = toLocalDateStr(d);
       dailyMap.set(dateStr, { date: dateStr, amount: 0, count: 0 });
@@ -390,6 +417,10 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     // 日付の新しい順にソート
     return transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [successfulCharges, filteredManualSales, categories]);
+
+  const frontendPurchaseCount = useMemo(() => {
+    return allTransactions.filter(tx => tx.category === 'frontend').length;
+  }, [allTransactions]);
 
   // グループ化を考慮した表示用取引一覧
   type DisplayTransaction = {
@@ -485,6 +516,30 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       totalCount,
       averageAmount: totalCount > 0 ? Math.round(totalAmount / totalCount) : 0,
     };
+  }, [displayTransactions]);
+
+  const lineToFrontendRate = useMemo(() => {
+    if (lineRegistrationsInRange === null || lineRegistrationsInRange === 0) return null;
+    return (frontendPurchaseCount / lineRegistrationsInRange) * 100;
+  }, [frontendPurchaseCount, lineRegistrationsInRange]);
+
+  const mainCategoryStats = useMemo(() => {
+    const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
+      frontend: { amount: 0, count: 0 },
+      backend: { amount: 0, count: 0 },
+      backend_renewal: { amount: 0, count: 0 },
+      analyca: { amount: 0, count: 0 },
+      corporate: { amount: 0, count: 0 },
+      other: { amount: 0, count: 0 },
+    };
+
+    for (const tx of displayTransactions) {
+      const category = tx.category ?? 'other';
+      stats[category].amount += tx.amount;
+      stats[category].count += 1;
+    }
+
+    return stats;
   }, [displayTransactions]);
 
   // カテゴリ別売上を集計（グループ化考慮）
@@ -611,7 +666,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   return (
     <>
       {/* サマリーカード */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             売上合計
@@ -622,7 +677,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-            成功件数
+            取引件数
           </p>
           <p className="mt-1 text-2xl font-bold text-green-600">
             {numberFormatter.format(groupedStats.totalCount)}件
@@ -636,20 +691,6 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             ¥{numberFormatter.format(averageAmount)}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-            失敗 / 処理中
-          </p>
-          <p className="mt-1 text-2xl font-bold">
-            <span className="text-red-600">{summary.failedCount}</span>
-            <span className="text-[color:var(--color-text-muted)]"> / </span>
-            <span className="text-amber-600">{summary.pendingCount}</span>
-          </p>
-        </Card>
-      </div>
-
-      {/* 入金状況 */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             入金済み
@@ -672,7 +713,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             カード決済（未入金）
           </p>
         </Card>
-        <Card className="p-4 col-span-2 md:col-span-1">
+        <Card className="p-4 col-span-2 md:col-span-2">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             入金予定スケジュール
           </p>
@@ -700,6 +741,45 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             )}
           </div>
         </Card>
+      </div>
+
+      {/* フロント転換率 */}
+      <Card className="p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+          LINE登録 → フロント購入率
+        </p>
+        <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+          {lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}
+        </p>
+        <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+          LINE登録 {lineRegistrationsInRange !== null ? numberFormatter.format(lineRegistrationsInRange) : '—'}人 /
+          フロント購入 {numberFormatter.format(frontendPurchaseCount)}件
+        </p>
+      </Card>
+
+      {/* 主要カテゴリ売上 */}
+      <div className="grid gap-4 md:grid-cols-4">
+        {(['frontend', 'backend', 'backend_renewal', 'analyca'] as const).map((id) => {
+          const category = SALES_CATEGORIES.find(c => c.id === id);
+          if (!category) return null;
+          const stats = mainCategoryStats[id];
+          return (
+            <Card key={id} className="p-4">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  {category.label}
+                </p>
+              </div>
+              <p className="mt-2 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                ¥{numberFormatter.format(stats.amount)}
+              </p>
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                {numberFormatter.format(stats.count)}件
+              </p>
+            </Card>
+          );
+        })}
       </div>
 
       {/* カテゴリ別売上 */}

@@ -15,6 +15,19 @@ gcloud builds submit --tag "${IMAGE_NAME}" --project="${PROJECT_ID}"
 
 echo "=== Creating/Updating Cloud Run Job ==="
 # ジョブが存在するかチェック
+SECRETS="THREADS_TOKEN=THREADS_TOKEN:latest"
+SECRETS="${SECRETS},THREADS_BUSINESS_ID=THREADS_BUSINESS_ID:latest"
+SECRETS="${SECRETS},THREADS_USERNAME=THREADS_USERNAME:latest"
+SECRETS="${SECRETS},GOOGLE_APPLICATION_CREDENTIALS_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest"
+SECRETS="${SECRETS},ALERT_EMAIL_ENABLED=ALERT_EMAIL_ENABLED:latest"
+SECRETS="${SECRETS},ALERT_EMAIL_TO=ALERT_EMAIL_TO:latest"
+SECRETS="${SECRETS},ALERT_EMAIL_FROM=ALERT_EMAIL_FROM:latest"
+SECRETS="${SECRETS},ALERT_SMTP_HOST=ALERT_SMTP_HOST:latest"
+SECRETS="${SECRETS},ALERT_SMTP_PORT=ALERT_SMTP_PORT:latest"
+SECRETS="${SECRETS},ALERT_SMTP_SECURE=ALERT_SMTP_SECURE:latest"
+SECRETS="${SECRETS},ALERT_SMTP_USER=ALERT_SMTP_USER:latest"
+SECRETS="${SECRETS},ALERT_SMTP_PASS=ALERT_SMTP_PASS:latest"
+
 if gcloud run jobs describe "${JOB_NAME}" --project="${PROJECT_ID}" --region="${REGION}" > /dev/null 2>&1; then
   echo "Updating existing job..."
   gcloud run jobs update "${JOB_NAME}" \
@@ -22,9 +35,9 @@ if gcloud run jobs describe "${JOB_NAME}" --project="${PROJECT_ID}" --region="${
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
     --memory=1Gi \
-    --timeout=600 \
+    --task-timeout=600 \
     --max-retries=1 \
-    --set-secrets="THREADS_TOKEN=THREADS_TOKEN:latest,THREADS_BUSINESS_ID=THREADS_BUSINESS_ID:latest,THREADS_USERNAME=THREADS_USERNAME:latest,GOOGLE_APPLICATION_CREDENTIALS_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest"
+    --set-secrets="${SECRETS}"
 else
   echo "Creating new job..."
   gcloud run jobs create "${JOB_NAME}" \
@@ -32,9 +45,9 @@ else
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
     --memory=1Gi \
-    --timeout=600 \
+    --task-timeout=600 \
     --max-retries=1 \
-    --set-secrets="THREADS_TOKEN=THREADS_TOKEN:latest,THREADS_BUSINESS_ID=THREADS_BUSINESS_ID:latest,THREADS_USERNAME=THREADS_USERNAME:latest,GOOGLE_APPLICATION_CREDENTIALS_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest"
+    --set-secrets="${SECRETS}"
 fi
 
 echo "=== Creating Cloud Scheduler jobs ==="

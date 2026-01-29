@@ -17,6 +17,7 @@ import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 import { createBigQueryClient, getDataset } from '../lib/bigquery';
 import { BigQuery, TableField } from '@google-cloud/bigquery';
+import { notifyThreadsSyncFailure, notifyThreadsDataStale } from '../lib/notifications';
 
 loadEnv();
 loadEnv({ path: path.resolve(process.cwd(), '.env.local') });
@@ -601,6 +602,31 @@ async function ensurePostsTableColumns(bigQueryClient: BigQuery): Promise<void> 
   }
 }
 
+async function checkLatestDataDate(bigQueryClient: BigQuery): Promise<string | null> {
+  try {
+    const [rows] = await bigQueryClient.query({
+      query: `SELECT MAX(date) as latest_date FROM \`${PROJECT_ID}.${DATASET_ID}.threads_daily_metrics\``,
+    });
+    if (rows && rows.length > 0 && rows[0].latest_date) {
+      // BigQueryのDATE型は { value: 'YYYY-MM-DD' } の形式で返される
+      const latestDate = rows[0].latest_date.value || rows[0].latest_date;
+      return latestDate;
+    }
+    return null;
+  } catch (error) {
+    console.warn('[syncThreadsFromApi] Failed to check latest data date:', error);
+    return null;
+  }
+}
+
+function getExpectedDate(): string {
+  // JSTで昨日の日付を取得（アカウントインサイトは昨日のデータを取得するため）
+  const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const yesterdayJst = new Date(nowJst);
+  yesterdayJst.setDate(yesterdayJst.getDate() - 1);
+  return yesterdayJst.toISOString().split('T')[0];
+}
+
 // ============================================================================
 // メイン処理
 // ============================================================================
@@ -608,27 +634,42 @@ async function ensurePostsTableColumns(bigQueryClient: BigQuery): Promise<void> 
 type SyncMode = 'account' | 'posts' | 'comments' | 'posts-comments' | 'all';
 
 async function main() {
-  const mode = (process.argv[2] || 'all') as SyncMode;
+  const mode = (process.argv[2] || process.env.SYNC_MODE || 'all') as SyncMode;
 
   console.log(`[syncThreadsFromApi] Starting sync with mode: ${mode}`);
   console.log(`[syncThreadsFromApi] THREADS_BUSINESS_ID: ${THREADS_BUSINESS_ID ? 'set' : 'NOT SET'}`);
   console.log(`[syncThreadsFromApi] THREADS_TOKEN: ${THREADS_TOKEN ? 'set' : 'NOT SET'}`);
 
   if (!THREADS_TOKEN) {
-    throw new Error('THREADS_TOKEN is required');
+    const error = 'THREADS_TOKEN is required';
+    await notifyThreadsSyncFailure(mode, error);
+    throw new Error(error);
   }
+
+  const bigQueryClient = createBigQueryClient(PROJECT_ID);
 
   // まずアカウント情報を取得してユーザー名とIDを確認
   console.log('[syncThreadsFromApi] Fetching account info...');
-  const accountInfo = await getThreadsAccountInfo(THREADS_TOKEN);
-  console.log(`[syncThreadsFromApi] Account: ${accountInfo.username} (ID: ${accountInfo.id})`);
+  let accountInfo;
+  try {
+    accountInfo = await getThreadsAccountInfo(THREADS_TOKEN);
+    console.log(`[syncThreadsFromApi] Account: ${accountInfo.username} (ID: ${accountInfo.id})`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[syncThreadsFromApi] Failed to fetch account info:', errorMessage);
 
-  const bigQueryClient = createBigQueryClient(PROJECT_ID);
+    // トークン期限切れの可能性が高いのでメール通知
+    await notifyThreadsSyncFailure(mode, `アカウント情報の取得に失敗: ${errorMessage}`);
+    process.exitCode = 1;
+    return;
+  }
 
   try {
     switch (mode) {
       case 'account':
         await syncAccountInsights(bigQueryClient, THREADS_TOKEN, accountInfo.id);
+        // アカウントインサイト同期後にデータの鮮度をチェック
+        await checkDataFreshness(bigQueryClient);
         break;
       case 'posts':
         await syncPosts(bigQueryClient, THREADS_TOKEN);
@@ -645,13 +686,40 @@ async function main() {
         await syncAccountInsights(bigQueryClient, THREADS_TOKEN, accountInfo.id);
         await syncPosts(bigQueryClient, THREADS_TOKEN);
         await syncComments(bigQueryClient, THREADS_TOKEN, accountInfo.username);
+        // 全モードの場合もデータの鮮度をチェック
+        await checkDataFreshness(bigQueryClient);
         break;
     }
 
     console.log('[syncThreadsFromApi] Sync completed successfully');
   } catch (error) {
-    console.error('[syncThreadsFromApi] Sync failed:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[syncThreadsFromApi] Sync failed:', errorMessage);
+
+    // 同期失敗をメール通知
+    await notifyThreadsSyncFailure(mode, errorMessage);
     process.exitCode = 1;
+  }
+}
+
+async function checkDataFreshness(bigQueryClient: BigQuery): Promise<void> {
+  const latestDate = await checkLatestDataDate(bigQueryClient);
+  const expectedDate = getExpectedDate();
+
+  console.log(`[syncThreadsFromApi] Data freshness check: latest=${latestDate}, expected=${expectedDate}`);
+
+  if (!latestDate) {
+    console.warn('[syncThreadsFromApi] No data found in threads_daily_metrics');
+    await notifyThreadsDataStale('データなし', expectedDate);
+    return;
+  }
+
+  // 最新データが期待日より古い場合は通知
+  if (latestDate < expectedDate) {
+    console.warn(`[syncThreadsFromApi] Data is stale: latest=${latestDate}, expected=${expectedDate}`);
+    await notifyThreadsDataStale(latestDate, expectedDate);
+  } else {
+    console.log('[syncThreadsFromApi] Data is up to date');
   }
 }
 

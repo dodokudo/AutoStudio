@@ -58,3 +58,31 @@ export async function notifyGenerateFailure(errorMessage: string) {
   const body = `Claudeへの生成リクエストに失敗しました。\nエラーメッセージ: ${errorMessage}\n発生時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`;
   await sendAlertEmail(subject, body);
 }
+
+export async function notifyThreadsSyncFailure(mode: string, errorMessage: string) {
+  const subject = `[Threadsデータ同期] 同期に失敗しました (${mode})`;
+  const body = `Threadsデータの同期に失敗しました。
+
+同期モード: ${mode}
+エラーメッセージ: ${errorMessage}
+発生時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+
+トークンの有効期限が切れている可能性があります。
+Meta for Developersでトークンを更新してください。
+`;
+  await sendAlertEmail(subject, body);
+}
+
+export async function notifyThreadsDataStale(lastDataDate: string, expectedDate: string) {
+  const subject = `[Threadsデータ同期] データが更新されていません`;
+  const body = `Threadsのデータが最新ではありません。
+
+最新データ日付: ${lastDataDate}
+期待される日付: ${expectedDate}
+確認時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+
+トークンの有効期限が切れている可能性があります。
+Meta for Developersでトークンを更新してください。
+`;
+  await sendAlertEmail(subject, body);
+}

@@ -5,10 +5,16 @@ import { SalesRangeSelector } from './_components/SalesRangeSelector';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 import { getChargeCategories, getManualSales } from '@/lib/sales/categories';
 import { getAllGroups } from '@/lib/sales/groups';
+import { getLstepAnalytics } from '@/lib/lstep/analytics';
+import { resolveProjectId } from '@/lib/bigquery';
 
 export const dynamic = 'force-dynamic';
 
 const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
+const LSTEP_PROJECT_ID = (() => {
+  const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
+  return preferred ? resolveProjectId(preferred) : undefined;
+})();
 
 export default async function SalesPage({
   searchParams,
@@ -52,10 +58,11 @@ export default async function SalesPage({
     const startDateStr = formatDateInput(resolvedRange.start);
     const endDateStr = formatDateInput(resolvedRange.end);
 
-    const [summary, manualSales, groupsMap] = await Promise.all([
+    const [summary, manualSales, groupsMap, lstepAnalytics] = await Promise.all([
       getSalesSummary(startDate, endDate),
       getManualSales(startDateStr, endDateStr),
       getAllGroups().catch(() => new Map()),
+      LSTEP_PROJECT_ID ? getLstepAnalytics(LSTEP_PROJECT_ID).catch(() => null) : Promise.resolve(null),
     ]);
 
     // カテゴリデータを取得
@@ -99,12 +106,13 @@ export default async function SalesPage({
             },
             charges: summary.charges,
             dateRange: {
-              from: startDate,
-              to: endDate,
+              from: startDateStr,
+              to: endDateStr,
             },
             categories,
             manualSales,
             groups,
+            lineDailyRegistrations: lstepAnalytics?.dailyRegistrations ?? [],
           }}
         />
       </div>
