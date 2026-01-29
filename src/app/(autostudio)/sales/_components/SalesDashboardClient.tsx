@@ -27,6 +27,40 @@ const SALES_CATEGORIES = [
   { id: 'other', label: 'その他', color: '#6b7280' },
 ] as const;
 
+const JP_HOLIDAYS = new Set([
+  // 2025
+  '2025-01-01', '2025-01-02', '2025-01-03', '2025-01-13',
+  '2025-02-11', '2025-02-23', '2025-02-24',
+  '2025-03-20',
+  '2025-04-29',
+  '2025-05-03', '2025-05-04', '2025-05-05', '2025-05-06',
+  '2025-07-21',
+  '2025-08-11',
+  '2025-09-15', '2025-09-23',
+  '2025-10-13',
+  '2025-11-03', '2025-11-23', '2025-11-24',
+  // 2026
+  '2026-01-01', '2026-01-02', '2026-01-03', '2026-01-12',
+  '2026-02-11', '2026-02-23',
+  '2026-03-20',
+  '2026-04-29',
+  '2026-05-03', '2026-05-04', '2026-05-05', '2026-05-06',
+  '2026-07-20',
+  '2026-08-11',
+  '2026-09-21', '2026-09-23',
+  '2026-10-12',
+  '2026-11-03', '2026-11-23',
+]);
+
+const toLocalDateKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const isJapaneseHoliday = (date: Date) => JP_HOLIDAYS.has(toLocalDateKey(date));
+
 type SalesCategoryId = typeof SALES_CATEGORIES[number]['id'];
 
 interface Charge {
@@ -46,6 +80,7 @@ interface ManualSale {
   paymentMethod: string;
   note: string;
   transactionDate: string;
+  paymentDate?: string | null;
 }
 
 interface TransactionGroup {
@@ -68,6 +103,7 @@ interface SalesDashboardClientProps {
       pendingCount: number;
     };
     charges: Charge[];
+    cashflowCharges?: Charge[];
     dateRange: {
       from: string;
       to: string;
@@ -110,6 +146,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     paymentMethod: '銀行振込',
     note: '',
     transactionDate: new Date().toISOString().split('T')[0],
+    paymentDate: '',
   });
   const [submittingManual, setSubmittingManual] = useState(false);
 
@@ -165,6 +202,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           paymentMethod: manualFormData.paymentMethod,
           note: manualFormData.note,
           transactionDate: manualFormData.transactionDate,
+          paymentDate: manualFormData.paymentDate || undefined,
         }),
       });
 
@@ -178,6 +216,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           paymentMethod: manualFormData.paymentMethod,
           note: manualFormData.note,
           transactionDate: manualFormData.transactionDate,
+          paymentDate: manualFormData.paymentDate || null,
         }]);
         setManualFormData({
           amount: '',
@@ -186,6 +225,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           paymentMethod: '銀行振込',
           note: '',
           transactionDate: new Date().toISOString().split('T')[0],
+          paymentDate: '',
         });
         setShowManualForm(false);
       }
@@ -382,6 +422,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     source: 'univapay' | 'manual';
     paymentMethod: string;
     note?: string;
+    paymentDate?: Date | null;
   };
 
   const allTransactions = useMemo(() => {
@@ -402,6 +443,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
     // 手動売上を追加（期間内のみ）
     for (const sale of filteredManualSales) {
+      const paymentDate = sale.paymentDate ? new Date(sale.paymentDate + 'T00:00:00') : null;
       transactions.push({
         id: sale.id,
         date: new Date(sale.transactionDate),
@@ -411,6 +453,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
         source: 'manual',
         paymentMethod: sale.paymentMethod,
         note: sale.note,
+        paymentDate,
       });
     }
 
@@ -523,6 +566,15 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     return (frontendPurchaseCount / lineRegistrationsInRange) * 100;
   }, [frontendPurchaseCount, lineRegistrationsInRange]);
 
+  const backendPurchaseCount = useMemo(() => {
+    return allTransactions.filter(tx => tx.category === 'backend').length;
+  }, [allTransactions]);
+
+  const frontendToBackendRate = useMemo(() => {
+    if (frontendPurchaseCount === 0) return null;
+    return (backendPurchaseCount / frontendPurchaseCount) * 100;
+  }, [backendPurchaseCount, frontendPurchaseCount]);
+
   const mainCategoryStats = useMemo(() => {
     const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
       frontend: { amount: 0, count: 0 },
@@ -584,14 +636,14 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       paymentDate = new Date(year, month + 1, 15);
     }
 
-    // 土日の場合は翌営業日（月曜日）に調整
-    const dayOfWeek = paymentDate.getDay();
-    if (dayOfWeek === 0) {
-      // 日曜日 → 月曜日
+    // 土日・祝日は翌営業日に調整
+    const isNonBusinessDay = (date: Date) => {
+      const dayOfWeek = date.getDay();
+      return dayOfWeek === 0 || dayOfWeek === 6 || isJapaneseHoliday(date);
+    };
+
+    while (isNonBusinessDay(paymentDate)) {
       paymentDate.setDate(paymentDate.getDate() + 1);
-    } else if (dayOfWeek === 6) {
-      // 土曜日 → 月曜日
-      paymentDate.setDate(paymentDate.getDate() + 2);
     }
 
     return paymentDate;
@@ -601,56 +653,88 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   const paymentStats = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const cardFeeRate = 0.036;
+    const applyCardFee = (amount: number) => Math.round(amount * (1 - cardFeeRate));
+    const rangeStart = new Date(dateRange.from + 'T00:00:00');
+    const rangeEnd = new Date(dateRange.to + 'T00:00:00');
+    const currentMonthKey = `${rangeStart.getFullYear()}-${String(rangeStart.getMonth() + 1).padStart(2, '0')}`;
+    const prevMonthDate = new Date(rangeStart.getFullYear(), rangeStart.getMonth() - 1, 1);
+    const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
     // ローカル日付をYYYY-MM-DD形式で取得
-    const toLocalDateStr = (date: Date) => {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    };
+    const toLocalDateStr = toLocalDateKey;
 
-    let deposited = 0; // 入金済み
-    let pending = 0; // 入金予定
+    let deposited = 0; // 入金済み（入金日ベース）
+    let pending = 0; // 入金予定（売上日ベース）
+    let depositedBankTransfer = 0;
+    const depositedPrevMonthCardByDate = new Map<string, number>();
     const pendingByDate = new Map<string, number>(); // 入金予定日別
 
-    for (const tx of displayTransactions) {
-      // 支払方法を判定
-      const hasCard = tx.paymentMethods.includes('クレジットカード');
-      const hasBankTransfer = tx.paymentMethods.some(m => m !== 'クレジットカード');
+    const addDepositedByPaymentDate = (paymentDate: Date, amount: number, isCard: boolean, saleDate?: Date) => {
+      if (paymentDate < rangeStart || paymentDate > rangeEnd) return;
+      const adjustedAmount = isCard ? applyCardFee(amount) : amount;
+      if (paymentDate <= today) {
+        deposited += adjustedAmount;
+        if (!isCard) {
+          depositedBankTransfer += adjustedAmount;
+        } else if (saleDate) {
+          const saleMonthKey = `${saleDate.getFullYear()}-${String(saleDate.getMonth() + 1).padStart(2, '0')}`;
+          if (saleMonthKey === prevMonthKey) {
+            const dateKey = toLocalDateStr(paymentDate);
+            depositedPrevMonthCardByDate.set(dateKey, (depositedPrevMonthCardByDate.get(dateKey) ?? 0) + adjustedAmount);
+          }
+        }
+      }
+    };
 
+    // 入金済み（入金日ベース）はキャッシュフロー用データで計算
+    const cashflowCharges = (initialData.cashflowCharges ?? charges).filter(c => c.status === 'successful');
+    for (const charge of cashflowCharges) {
+      const saleDate = new Date(charge.created_on);
+      const paymentDate = getPaymentDate(saleDate);
+      addDepositedByPaymentDate(paymentDate, charge.charged_amount, true, saleDate);
+    }
+    for (const sale of manualSales) {
+      const paymentDateStr = sale.paymentDate || sale.transactionDate;
+      const paymentDate = new Date(paymentDateStr + 'T00:00:00');
+      addDepositedByPaymentDate(paymentDate, sale.amount, false, paymentDate);
+    }
+
+    // 入金予定（売上日ベース）は表示期間の売上から計算
+    for (const tx of displayTransactions) {
       if (tx.isGrouped) {
-        // グループ化された取引は内訳で計算
         for (const item of tx.items) {
-          if (item.source === 'manual') {
-            // 銀行振込は入金済み
-            deposited += item.amount;
-          } else {
-            // カード決済は入金日で判定
+          if (item.source !== 'manual') {
             const paymentDate = getPaymentDate(item.date);
-            if (paymentDate <= today) {
-              deposited += item.amount;
-            } else {
-              pending += item.amount;
+            if (paymentDate > today) {
+              const adjustedAmount = applyCardFee(item.amount);
+              pending += adjustedAmount;
               const dateKey = toLocalDateStr(paymentDate);
+              pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + adjustedAmount);
+            }
+          } else {
+            const manualPaymentDate = item.paymentDate ?? item.date;
+            if (manualPaymentDate > today && manualPaymentDate >= rangeStart && manualPaymentDate <= rangeEnd) {
+              pending += item.amount;
+              const dateKey = toLocalDateStr(manualPaymentDate);
               pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + item.amount);
             }
           }
         }
-      } else {
-        if (hasBankTransfer && !hasCard) {
-          // 銀行振込のみ → 入金済み
-          deposited += tx.amount;
-        } else if (hasCard) {
-          // カード決済 → 入金日で判定
-          const paymentDate = getPaymentDate(tx.date);
-          if (paymentDate <= today) {
-            deposited += tx.amount;
-          } else {
-            pending += tx.amount;
-            const dateKey = toLocalDateStr(paymentDate);
-            pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + tx.amount);
-          }
+      } else if (tx.source === 'univapay') {
+        const paymentDate = getPaymentDate(tx.date);
+        if (paymentDate > today) {
+          const adjustedAmount = applyCardFee(tx.amount);
+          pending += adjustedAmount;
+          const dateKey = toLocalDateStr(paymentDate);
+          pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + adjustedAmount);
+        }
+      } else if (tx.source === 'manual') {
+        const manualPaymentDate = tx.paymentDate ?? tx.date;
+        if (manualPaymentDate > today && manualPaymentDate >= rangeStart && manualPaymentDate <= rangeEnd) {
+          pending += tx.amount;
+          const dateKey = toLocalDateStr(manualPaymentDate);
+          pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + tx.amount);
         }
       }
     }
@@ -660,13 +744,25 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       .map(([date, amount]) => ({ date, amount }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    return { deposited, pending, pendingSchedule };
-  }, [displayTransactions]);
+    const prevMonthCardSchedule = Array.from(depositedPrevMonthCardByDate.entries())
+      .map(([date, amount]) => ({ date, amount }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      deposited,
+      pending,
+      pendingSchedule,
+      depositedBankTransfer,
+      prevMonthCardSchedule,
+      prevMonthKey,
+      currentMonthKey,
+    };
+  }, [displayTransactions, manualSales, dateRange.from, dateRange.to, initialData.cashflowCharges, charges]);
 
   return (
     <>
       {/* サマリーカード */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             売上合計
@@ -691,6 +787,10 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             ¥{numberFormatter.format(averageAmount)}
           </p>
         </Card>
+      </div>
+
+      {/* 入金状況 */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             入金済み
@@ -698,9 +798,35 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           <p className="mt-1 text-2xl font-bold text-green-600">
             ¥{numberFormatter.format(paymentStats.deposited)}
           </p>
-          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-            銀行振込 + 入金済カード
-          </p>
+          <div className="mt-2 space-y-2 text-xs text-[color:var(--color-text-muted)]">
+            <div className="flex items-center justify-between">
+              <span>銀行振込（{paymentStats.currentMonthKey}）</span>
+              <span className="font-medium text-[color:var(--color-text-primary)]">
+                ¥{numberFormatter.format(paymentStats.depositedBankTransfer)}
+              </span>
+            </div>
+            <div>
+              <p className="text-[color:var(--color-text-secondary)]">カード入金（{paymentStats.prevMonthKey} 売上）</p>
+              {paymentStats.prevMonthCardSchedule.length > 0 ? (
+                <div className="mt-1 space-y-1">
+                  {paymentStats.prevMonthCardSchedule.map(({ date, amount }) => {
+                    const [y, m, d] = date.split('-').map(Number);
+                    const localDate = new Date(y, m - 1, d);
+                    return (
+                      <div key={date} className="flex items-center justify-between">
+                        <span>{localDate.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}</span>
+                        <span className="font-medium text-[color:var(--color-text-primary)]">
+                          ¥{numberFormatter.format(amount)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-1">該当なし</p>
+              )}
+            </div>
+          </div>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
@@ -709,87 +835,46 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           <p className="mt-1 text-2xl font-bold text-blue-600">
             ¥{numberFormatter.format(paymentStats.pending)}
           </p>
-          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-            カード決済（未入金）
-          </p>
-        </Card>
-        <Card className="p-4 col-span-2 md:col-span-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-            入金予定スケジュール
-          </p>
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 space-y-1 text-xs text-[color:var(--color-text-muted)]">
             {paymentStats.pendingSchedule.length > 0 ? (
               paymentStats.pendingSchedule.map(({ date, amount }) => {
                 // YYYY-MM-DD形式をローカル日付としてパース
                 const [y, m, d] = date.split('-').map(Number);
                 const localDate = new Date(y, m - 1, d);
                 return (
-                <div key={date} className="flex justify-between text-sm">
-                  <span className="text-[color:var(--color-text-secondary)]">
-                    {localDate.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
-                  </span>
-                  <span className="font-medium text-[color:var(--color-text-primary)]">
-                    ¥{numberFormatter.format(amount)}
-                  </span>
-                </div>
+                  <div key={date} className="flex items-center justify-between">
+                    <span>{localDate.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}</span>
+                    <span className="font-medium text-[color:var(--color-text-primary)]">
+                      ¥{numberFormatter.format(amount)}
+                    </span>
+                  </div>
                 );
               })
             ) : (
-              <p className="text-sm text-[color:var(--color-text-muted)]">
-                入金予定なし
-              </p>
+              <p>入金予定なし</p>
             )}
           </div>
         </Card>
       </div>
 
-      {/* フロント転換率 */}
-      <Card className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-          LINE登録 → フロント購入率
-        </p>
-        <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-          {lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}
-        </p>
-        <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-          LINE登録 {lineRegistrationsInRange !== null ? numberFormatter.format(lineRegistrationsInRange) : '—'}人 /
-          フロント購入 {numberFormatter.format(frontendPurchaseCount)}件
-        </p>
-      </Card>
-
-      {/* 主要カテゴリ売上 */}
-      <div className="grid gap-4 md:grid-cols-4">
-        {(['frontend', 'backend', 'backend_renewal', 'analyca'] as const).map((id) => {
-          const category = SALES_CATEGORIES.find(c => c.id === id);
-          if (!category) return null;
-          const stats = mainCategoryStats[id];
-          return (
-            <Card key={id} className="p-4">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
-                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  {category.label}
-                </p>
-              </div>
-              <p className="mt-2 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                ¥{numberFormatter.format(stats.amount)}
-              </p>
-              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                {numberFormatter.format(stats.count)}件
-              </p>
-            </Card>
-          );
-        })}
-      </div>
-
       {/* カテゴリ別売上 */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-6">
+      <Card className="p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
             カテゴリ別売上
           </h2>
-          <div className="mt-4 h-64">
-            {categoryStatsGrouped.length > 0 ? (
+          <div className="flex flex-wrap gap-3 text-xs text-[color:var(--color-text-muted)]">
+            <div className="rounded-full border border-[color:var(--color-border)] px-3 py-1">
+              LINE→フロント {lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}
+            </div>
+            <div className="rounded-full border border-[color:var(--color-border)] px-3 py-1">
+              フロント→バック {frontendToBackendRate !== null ? `${frontendToBackendRate.toFixed(1)}%` : '—'}
+            </div>
+          </div>
+        </div>
+        {categoryStatsGrouped.length > 0 ? (
+          <div className="mt-4 grid gap-6 md:grid-cols-2">
+            <div className="h-64">
               <ResponsiveContainer>
                 <PieChart>
                   <Pie
@@ -814,23 +899,9 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                   />
                 </PieChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <p className="text-sm text-[color:var(--color-text-muted)]">
-                  カテゴリが設定された取引がありません
-                </p>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-            カテゴリ別内訳
-          </h2>
-          <div className="mt-4 space-y-3">
-            {categoryStatsGrouped.length > 0 ? (
-              categoryStatsGrouped.map(cat => (
+            </div>
+            <div className="space-y-3">
+              {categoryStatsGrouped.map(cat => (
                 <div key={cat.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div
@@ -839,6 +910,9 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                     />
                     <span className="text-sm text-[color:var(--color-text-secondary)]">
                       {cat.label}
+                    </span>
+                    <span className="text-xs text-[color:var(--color-text-muted)]">
+                      {groupedStats.totalAmount > 0 ? `${((cat.amount / groupedStats.totalAmount) * 100).toFixed(1)}%` : '—'}
                     </span>
                   </div>
                   <div className="text-right">
@@ -850,15 +924,17 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                     </p>
                   </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-sm text-[color:var(--color-text-muted)]">
-                取引一覧からカテゴリを設定してください
-              </p>
-            )}
+              ))}
+            </div>
           </div>
-        </Card>
-      </div>
+        ) : (
+          <div className="mt-6">
+            <p className="text-sm text-[color:var(--color-text-muted)]">
+              取引一覧からカテゴリを設定してください
+            </p>
+          </div>
+        )}
+      </Card>
 
       {/* 売上推移グラフ */}
       <Card className="p-6">
@@ -981,6 +1057,17 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                   type="date"
                   value={manualFormData.transactionDate}
                   onChange={(e) => setManualFormData(prev => ({ ...prev, transactionDate: e.target.value }))}
+                  className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+                  入金予定日（任意）
+                </label>
+                <input
+                  type="date"
+                  value={manualFormData.paymentDate}
+                  onChange={(e) => setManualFormData(prev => ({ ...prev, paymentDate: e.target.value }))}
                   className="mt-1 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
                 />
               </div>

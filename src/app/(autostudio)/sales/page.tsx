@@ -57,9 +57,13 @@ export default async function SalesPage({
     const endDate = resolvedRange.end.toISOString();
     const startDateStr = formatDateInput(resolvedRange.start);
     const endDateStr = formatDateInput(resolvedRange.end);
+    const cashflowStart = new Date(resolvedRange.start);
+    cashflowStart.setDate(cashflowStart.getDate() - 31);
+    const cashflowStartDate = cashflowStart.toISOString();
 
-    const [summary, manualSales, groupsMap, lstepAnalytics] = await Promise.all([
+    const [summary, cashflowSummary, manualSales, groupsMap, lstepAnalytics] = await Promise.all([
       getSalesSummary(startDate, endDate),
+      getSalesSummary(cashflowStartDate, endDate),
       getManualSales(startDateStr, endDateStr),
       getAllGroups().catch(() => new Map()),
       LSTEP_PROJECT_ID ? getLstepAnalytics(LSTEP_PROJECT_ID).catch(() => null) : Promise.resolve(null),
@@ -105,6 +109,7 @@ export default async function SalesPage({
               pendingCount: summary.pendingCount,
             },
             charges: summary.charges,
+            cashflowCharges: cashflowSummary.charges,
             dateRange: {
               from: startDateStr,
               to: endDateStr,

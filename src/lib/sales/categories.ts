@@ -80,6 +80,7 @@ export interface ManualSale {
   paymentMethod: string;
   note: string;
   transactionDate: string;
+  paymentDate?: string | null;
   createdAt: string;
 }
 
@@ -96,6 +97,7 @@ export async function getManualSales(startDate: string, endDate: string): Promis
         payment_method,
         note,
         CAST(transaction_date AS STRING) as transaction_date,
+        CAST(payment_date AS STRING) as payment_date,
         CAST(created_at AS STRING) as created_at
       FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
       WHERE transaction_date BETWEEN @startDate AND @endDate
@@ -112,6 +114,7 @@ export async function getManualSales(startDate: string, endDate: string): Promis
     paymentMethod: String(row.payment_method ?? ''),
     note: String(row.note ?? ''),
     transactionDate: String(row.transaction_date),
+    paymentDate: row.payment_date ? String(row.payment_date) : null,
     createdAt: String(row.created_at),
   }));
 }
@@ -126,8 +129,8 @@ export async function addManualSale(sale: Omit<ManualSale, 'id' | 'createdAt'>):
   await client.query({
     query: `
       INSERT INTO \`${PROJECT_ID}.${DATASET}.manual_sales\`
-      (id, amount, category, customer_name, payment_method, note, transaction_date, created_at, updated_at)
-      VALUES (@id, @amount, @category, @customerName, @paymentMethod, @note, DATE(@transactionDate), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+      (id, amount, category, customer_name, payment_method, note, transaction_date, payment_date, created_at, updated_at)
+      VALUES (@id, @amount, @category, @customerName, @paymentMethod, @note, DATE(@transactionDate), DATE(@paymentDate), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
     `,
     params: {
       id,
@@ -137,6 +140,7 @@ export async function addManualSale(sale: Omit<ManualSale, 'id' | 'createdAt'>):
       paymentMethod: sale.paymentMethod,
       note: sale.note,
       transactionDate: sale.transactionDate,
+      paymentDate: sale.paymentDate ?? sale.transactionDate,
     },
   });
 
@@ -160,14 +164,15 @@ export async function deleteManualSale(id: string): Promise<void> {
  */
 export async function updateManualSale(
   id: string,
-  updates: Partial<{
-    customerName: string;
-    amount: number;
-    category: SalesCategoryId;
-    paymentMethod: string;
-    note: string;
-    transactionDate: string;
-  }>
+    updates: Partial<{
+      customerName: string;
+      amount: number;
+      category: SalesCategoryId;
+      paymentMethod: string;
+      note: string;
+      transactionDate: string;
+      paymentDate: string;
+    }>
 ): Promise<void> {
   const client = createBigQueryClient(PROJECT_ID);
 
@@ -197,6 +202,10 @@ export async function updateManualSale(
   if (updates.transactionDate !== undefined) {
     setClauses.push('transaction_date = DATE(@transactionDate)');
     params.transactionDate = updates.transactionDate;
+  }
+  if (updates.paymentDate !== undefined) {
+    setClauses.push('payment_date = DATE(@paymentDate)');
+    params.paymentDate = updates.paymentDate;
   }
 
   await client.query({

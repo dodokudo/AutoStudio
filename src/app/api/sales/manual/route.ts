@@ -33,13 +33,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { amount, category, customerName, paymentMethod, note, transactionDate } = body as {
+    const { amount, category, customerName, paymentMethod, note, transactionDate, paymentDate } = body as {
       amount: number;
       category: SalesCategoryId;
       customerName?: string;
       paymentMethod?: string;
       note?: string;
       transactionDate: string;
+      paymentDate?: string;
     };
 
     if (!amount || !category || !transactionDate) {
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
       paymentMethod: paymentMethod ?? '銀行振込',
       note: note ?? '',
       transactionDate,
+      paymentDate,
     });
 
     return NextResponse.json({ success: true, id });
@@ -105,7 +107,7 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { id, customerName, amount, category, paymentMethod, note, transactionDate } = body as {
+    const { id, customerName, amount, category, paymentMethod, note, transactionDate, paymentDate } = body as {
       id: string;
       customerName?: string;
       amount?: number;
@@ -113,6 +115,7 @@ export async function PATCH(request: Request) {
       paymentMethod?: string;
       note?: string;
       transactionDate?: string;
+      paymentDate?: string;
     };
 
     if (!id) {
@@ -134,6 +137,7 @@ export async function PATCH(request: Request) {
       paymentMethod,
       note,
       transactionDate,
+      paymentDate,
     });
 
     return NextResponse.json({ success: true });
