@@ -3,7 +3,7 @@
  */
 import { createBigQueryClient, resolveProjectId } from '../bigquery';
 import { getChargeCategories, getManualSales, type SalesCategoryId } from '@/lib/sales/categories';
-import { getAllGroups } from '@/lib/sales/groups';
+import { getAllGroups, type TransactionGroupItem } from '@/lib/sales/groups';
 import { getThreadsInsightsData } from '@/lib/threadsInsightsData';
 
 const PROJECT_ID = resolveProjectId();
@@ -156,7 +156,7 @@ async function loadGroupedTransactions(startDate: string, endDate: string): Prom
     if (groupId) {
       const groupItems = groupList.find((group) => group.id === groupId)?.items ?? [];
       const matched = groupItems
-        .map((item) => {
+        .map((item: TransactionGroupItem) => {
           const source = item.itemType === 'charge' ? 'univapay' : 'manual';
           return transactionMap.get(`${source}:${item.itemId}`) ?? null;
         })
