@@ -34,6 +34,7 @@ const SOURCE_COLORS: Record<string, string> = {
   Instagram: 'bg-pink-500',
   YouTube: 'bg-red-500',
   その他: 'bg-gray-400',
+  オーガニック: 'bg-emerald-500',
   organic: 'bg-gray-400',
 };
 
@@ -69,7 +70,7 @@ export function LineSourceBreakdown({ data }: LineSourceBreakdownProps) {
   return (
     <Card className="p-6">
       <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-        LINE登録 流入元別（今月）
+        LINE登録 流入元別（期間内）
       </h2>
       <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
         合計 {formatNumber(total)}件

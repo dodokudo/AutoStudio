@@ -9,8 +9,8 @@ import {
   listContentScripts,
   type StoredContentScript,
 } from '@/lib/youtube/bigquery';
-import { getLineDashboardData, countLineSourceRegistrations } from '@/lib/lstep/dashboard';
-import { getLstepAnalyticsByDateRange, countLineRegistrationsByDateRange } from '@/lib/lstep/analytics';
+import { getLineDashboardData } from '@/lib/lstep/dashboard';
+import { getLstepAnalyticsByDateRange, countLineRegistrationsByDateRange, countLineRegistrationsBySource } from '@/lib/lstep/analytics';
 import { getLinkClicksSummary } from '@/lib/links/analytics';
 import { formatDateInput } from '@/lib/dateRangePresets';
 import type { YoutubeVideoSummary } from '@/lib/youtube/dashboard';
@@ -289,24 +289,19 @@ export async function getHomeDashboardData(options: {
     },
   ];
 
-  const lineRegistrationSources: Array<{ key: string; label: string }> = [
-    { key: 'Threads', label: 'Threads' },
-    { key: 'Instagram', label: 'Instagram' },
-    { key: 'Youtube', label: 'YouTube' },
-    { key: 'Organic', label: 'オーガニック' },
-    { key: 'Other', label: 'その他' },
-  ];
-
-  const lineRegistrationBySource = await Promise.all(
-    lineRegistrationSources.map(async ({ key, label }) => {
-      const count = await countLineSourceRegistrations(PROJECT_ID, {
-        sourceName: key,
-        startDate: toDateKey(periodStart),
-        endDate: toDateKey(periodEnd),
-      });
-      return { source: label, registrations: count };
-    }),
+  const lineSourceCounts = await countLineRegistrationsBySource(
+    PROJECT_ID,
+    toDateKey(periodStart),
+    toDateKey(periodEnd),
   );
+
+  const lineRegistrationBySource = [
+    { source: 'Threads', registrations: lineSourceCounts.threads },
+    { source: 'Instagram', registrations: lineSourceCounts.instagram },
+    { source: 'YouTube', registrations: lineSourceCounts.youtube },
+    { source: 'その他', registrations: lineSourceCounts.other },
+    { source: 'オーガニック', registrations: lineSourceCounts.organic },
+  ];
 
   const lineFollowerLatest = lineAudienceTotal ?? 0;
   // KPIカードのdeltaはLINEタブと同じlstep_friends_rawテーブルから取得

@@ -16,6 +16,7 @@ import {
   PieChart,
   Pie,
   Legend,
+  LineChart,
 } from 'recharts';
 
 const SALES_CATEGORIES = [
@@ -112,6 +113,14 @@ interface SalesDashboardClientProps {
     manualSales: ManualSale[];
     groups?: TransactionGroup[];
     lineDailyRegistrations?: LineDailyRegistration[];
+    monthlyData?: {
+      charges: Charge[];
+      categories: Record<string, string>;
+      manualSales: ManualSale[];
+      groups?: TransactionGroup[];
+      rangeStart: string;
+      rangeEnd: string;
+    };
   };
 }
 
@@ -579,10 +588,168 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     return stats;
   }, [displayTransactions]);
 
+  const monthlyCounts = useMemo(() => {
+    if (!initialData.monthlyData) return [];
+    const { charges: monthlyCharges, categories: monthlyCategories, manualSales: monthlyManual, groups: monthlyGroups, rangeStart, rangeEnd } = initialData.monthlyData;
+    const start = new Date(rangeStart + 'T00:00:00');
+    const end = new Date(rangeEnd + 'T00:00:00');
+
+    const toMonthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const last = new Date(end.getFullYear(), end.getMonth(), 1);
+    const map = new Map<string, { month: string; frontend: number; backend: number }>();
+
+    while (cursor <= last) {
+      const key = toMonthKey(cursor);
+      map.set(key, { month: key, frontend: 0, backend: 0 });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    const mergedCategories = { ...initialData.categories, ...monthlyCategories } as Record<string, SalesCategoryId>;
+    const groupList = monthlyGroups ?? initialData.groups ?? [];
+
+    const buildMonthlyDisplayTransactions = () => {
+      const successfulCharges = monthlyCharges.filter((c) => c.status === 'successful');
+      const transactions: Array<{
+        id: string;
+        date: Date;
+        category: SalesCategoryId | null;
+        source: 'univapay' | 'manual';
+        paymentMethod: string;
+      }> = [];
+
+      for (const charge of successfulCharges) {
+        transactions.push({
+          id: charge.id,
+          date: new Date(charge.created_on),
+          category: mergedCategories[charge.id] ?? null,
+          source: 'univapay',
+          paymentMethod: 'クレジットカード',
+        });
+      }
+
+      for (const sale of monthlyManual) {
+        transactions.push({
+          id: sale.id,
+          date: new Date(sale.transactionDate + 'T00:00:00'),
+          category: sale.category ?? null,
+          source: 'manual',
+          paymentMethod: sale.paymentMethod,
+        });
+      }
+
+      const result: Array<{
+        id: string;
+        date: Date;
+        category: SalesCategoryId | null;
+        source: 'univapay' | 'manual' | 'grouped';
+        items?: Array<{
+          id: string;
+          date: Date;
+          category: SalesCategoryId | null;
+          source: 'univapay' | 'manual';
+        }>;
+      }> = [];
+      const processed = new Set<string>();
+
+      for (const tx of transactions) {
+        const key = `${tx.source}:${tx.id}`;
+        if (processed.has(key)) continue;
+
+        const itemType = tx.source === 'univapay' ? 'charge' : 'manual';
+        const group = groupList.find(g => g.items.some(i => i.itemType === itemType && i.itemId === tx.id));
+
+        if (group) {
+          const groupItems = group.items
+            .map((item) => {
+              const found = transactions.find(t => {
+                const tType = t.source === 'univapay' ? 'charge' : 'manual';
+                return tType === item.itemType && t.id === item.itemId;
+              });
+              return found ?? null;
+            })
+            .filter(Boolean) as typeof transactions;
+
+          if (groupItems.length > 0) {
+            const latestDate = new Date(Math.max(...groupItems.map(i => i.date.getTime())));
+            const category = groupItems.find(i => i.category)?.category ?? null;
+            result.push({
+              id: group.id,
+              date: latestDate,
+              category,
+              source: 'grouped',
+              items: groupItems.map(i => ({ ...i })),
+            });
+            for (const item of groupItems) {
+              processed.add(`${item.source}:${item.id}`);
+            }
+          }
+        } else {
+          processed.add(key);
+          result.push({
+            id: tx.id,
+            date: tx.date,
+            category: tx.category,
+            source: tx.source,
+          });
+        }
+      }
+
+      return result;
+    };
+
+    const monthlyDisplayTransactions = buildMonthlyDisplayTransactions();
+
+    for (const tx of monthlyDisplayTransactions) {
+      const key = toMonthKey(tx.date);
+      const entry = map.get(key);
+      if (!entry) continue;
+      if (tx.category === 'frontend') entry.frontend += 1;
+      if (tx.category === 'backend') entry.backend += 1;
+    }
+
+    return Array.from(map.values()).map((entry) => ({
+      ...entry,
+      frontendToBackendRate: entry.frontend > 0 ? (entry.backend / entry.frontend) * 100 : null,
+    }));
+  }, [initialData.monthlyData, initialData.categories, initialData.groups]);
+
   const frontendCountForRate = mainCategoryStats.frontend.count;
   const backendCountForRate = mainCategoryStats.backend.count;
   const oneTimeSalesAmount = mainCategoryStats.frontend.amount + mainCategoryStats.backend.amount;
   const recurringSalesAmount = mainCategoryStats.backend_renewal.amount + mainCategoryStats.analyca.amount;
+  const totalSalesAmount = groupedStats.totalAmount;
+
+  const paymentMethodStats = useMemo(() => {
+    let cardAmount = 0;
+    let bankAmount = 0;
+
+    for (const tx of displayTransactions) {
+      if (tx.isGrouped) {
+        for (const item of tx.items) {
+          if (item.source === 'manual') {
+            bankAmount += item.amount;
+          } else {
+            cardAmount += item.amount;
+          }
+        }
+        continue;
+      }
+      if (tx.source === 'manual') {
+        bankAmount += tx.amount;
+      } else {
+        cardAmount += tx.amount;
+      }
+    }
+
+    const total = cardAmount + bankAmount;
+    return {
+      cardAmount,
+      bankAmount,
+      cardRate: total > 0 ? (cardAmount / total) * 100 : 0,
+      bankRate: total > 0 ? (bankAmount / total) * 100 : 0,
+    };
+  }, [displayTransactions]);
 
   const lineToFrontendRate = useMemo(() => {
     if (lineRegistrationsInRange === null || lineRegistrationsInRange === 0) return null;
@@ -770,27 +937,12 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
           <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
             ¥{numberFormatter.format(groupedStats.totalAmount)}
           </p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-            取引件数
-          </p>
-          <p className="mt-1 text-2xl font-bold text-green-600">
-            {numberFormatter.format(groupedStats.totalCount)}件
+          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+            取引件数 {numberFormatter.format(groupedStats.totalCount)}件
+            <br />
+            平均単価 ¥{numberFormatter.format(averageAmount)}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-            平均単価
-          </p>
-          <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-            ¥{numberFormatter.format(averageAmount)}
-          </p>
-        </Card>
-      </div>
-
-      {/* 入金状況 */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
             入金済み
@@ -855,34 +1007,11 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             )}
           </div>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-            単発 / 継続 売上
-          </p>
-          <div className="mt-2 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[color:var(--color-text-secondary)]">
-                単発売上（フロント + バック）
-              </span>
-              <span className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-                ¥{numberFormatter.format(oneTimeSalesAmount)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[color:var(--color-text-secondary)]">
-                継続売上（継続 + ANALYCA）
-              </span>
-              <span className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-                ¥{numberFormatter.format(recurringSalesAmount)}
-              </span>
-            </div>
-          </div>
-        </Card>
       </div>
 
       {/* カテゴリ別売上 */}
       <Card className="p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
               カテゴリ別売上
@@ -891,54 +1020,122 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
               売上構成比と転換率をまとめて確認
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3">
-              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">LINE→フロント</p>
-              <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
-                {lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}
-              </p>
-              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                LINE登録 {lineRegistrationsInRange !== null ? numberFormatter.format(lineRegistrationsInRange) : '—'}人 /
-                フロント {numberFormatter.format(frontendCountForRate)}件
-              </p>
-            </div>
-            <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3">
-              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">フロント→バック</p>
-              <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
-                {frontendToBackendRate !== null ? `${frontendToBackendRate.toFixed(1)}%` : '—'}
-              </p>
-              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                フロント {numberFormatter.format(frontendCountForRate)}件 /
-                バック {numberFormatter.format(backendCountForRate)}件
-              </p>
-            </div>
-          </div>
         </div>
         {categoryStatsGrouped.length > 0 ? (
           <div className="mt-4 grid gap-6 md:grid-cols-2">
-            <div className="h-64">
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={categoryStatsGrouped}
-                    dataKey="amount"
-                    nameKey="label"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    labelLine={false}
-                  >
-                    {categoryStatsGrouped.map((entry) => (
-                      <Cell key={entry.id} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) => `¥${numberFormatter.format(value)}`}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="space-y-4">
+              <div className="h-64">
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={categoryStatsGrouped}
+                      dataKey="amount"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      labelLine={false}
+                    >
+                      {categoryStatsGrouped.map((entry) => (
+                        <Cell key={entry.id} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number) => `¥${numberFormatter.format(value)}`}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
+                <p className="text-xs font-medium text-[color:var(--color-text-muted)]">銀行振込 / カード 比率</p>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[color:var(--color-text-secondary)]">銀行振込</span>
+                    <span className="font-semibold text-[color:var(--color-text-primary)]">
+                      ¥{numberFormatter.format(paymentMethodStats.bankAmount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
+                    <span>割合</span>
+                    <span>{paymentMethodStats.bankRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[color:var(--color-text-secondary)]">カード</span>
+                    <span className="font-semibold text-[color:var(--color-text-primary)]">
+                      ¥{numberFormatter.format(paymentMethodStats.cardAmount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
+                    <span>割合</span>
+                    <span>{paymentMethodStats.cardRate.toFixed(1)}%</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
+                <p className="text-xs font-medium text-[color:var(--color-text-muted)]">単発 / 継続 売上</p>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[color:var(--color-text-secondary)]">単発売上</span>
+                    <span className="font-semibold text-[color:var(--color-text-primary)]">
+                      ¥{numberFormatter.format(oneTimeSalesAmount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
+                    <span>割合</span>
+                    <span>{totalSalesAmount > 0 ? `${((oneTimeSalesAmount / totalSalesAmount) * 100).toFixed(1)}%` : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-[color:var(--color-text-secondary)]">継続売上</span>
+                    <span className="font-semibold text-[color:var(--color-text-primary)]">
+                      ¥{numberFormatter.format(recurringSalesAmount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
+                    <span>割合</span>
+                    <span>{totalSalesAmount > 0 ? `${((recurringSalesAmount / totalSalesAmount) * 100).toFixed(1)}%` : '—'}</span>
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="space-y-4">
+              <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-3">
+                <div className="grid items-center gap-2 md:grid-cols-5">
+                  <div>
+                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">LINE登録</p>
+                    <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
+                      {lineRegistrationsInRange !== null ? numberFormatter.format(lineRegistrationsInRange) : '—'}人
+                    </p>
+                  </div>
+                  <div className="text-center text-xs text-[color:var(--color-text-muted)]">
+                    <div className="text-base text-[color:var(--color-text-secondary)]">→</div>
+                    <div>{lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}</div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">フロント成約</p>
+                    <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
+                      {numberFormatter.format(frontendCountForRate)}件
+                    </p>
+                  </div>
+                  <div className="text-center text-xs text-[color:var(--color-text-muted)]">
+                    <div className="text-base text-[color:var(--color-text-secondary)]">→</div>
+                    <div>{frontendToBackendRate !== null ? `${frontendToBackendRate.toFixed(1)}%` : '—'}</div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">バック成約</p>
+                    <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
+                      {numberFormatter.format(backendCountForRate)}件
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 border-t border-[color:var(--color-border)] pt-2 text-xs text-[color:var(--color-text-muted)]">
+                  全体転換率（LINE→バック）：
+                  <span className="ml-1 font-medium text-[color:var(--color-text-primary)]">
+                    {lineRegistrationsInRange && lineRegistrationsInRange > 0
+                      ? `${((backendCountForRate / lineRegistrationsInRange) * 100).toFixed(1)}%`
+                      : '—'}
+                  </span>
+                </div>
+              </div>
               {categoryStatsGrouped.map(cat => {
                 const ratio = groupedStats.totalAmount > 0 ? (cat.amount / groupedStats.totalAmount) * 100 : 0;
                 return (
@@ -985,6 +1182,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             </p>
           </div>
         )}
+        <div className="mt-6"></div>
       </Card>
 
       {/* 売上推移グラフ */}
@@ -1051,6 +1249,84 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
               <p className="text-sm text-[color:var(--color-text-muted)]">
                 選択した期間に売上データがありません
+              </p>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* 月別 成約数/転換率 推移 */}
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+          月別 成約数 / 転換率 推移
+        </h2>
+        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+          日付フィルタの対象外（直近12ヶ月）
+        </p>
+        <div className="mt-4 h-72">
+          {monthlyCounts.length > 0 ? (
+            <ResponsiveContainer>
+              <ComposedChart data={monthlyCounts} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  yAxisId="left"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tickFormatter={(value) => `${value}%`}
+                  domain={[0, 100]}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => {
+                    if (name === 'フロント→バック率') return [`${value.toFixed(1)}%`, name];
+                    return [value, name];
+                  }}
+                />
+                <Bar
+                  yAxisId="left"
+                  dataKey="frontend"
+                  name="フロント件数"
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                  opacity={0.85}
+                />
+                <Bar
+                  yAxisId="left"
+                  dataKey="backend"
+                  name="バック件数"
+                  fill="#10b981"
+                  radius={[4, 4, 0, 0]}
+                  opacity={0.85}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="frontendToBackendRate"
+                  name="フロント→バック率"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                成約数データがありません
               </p>
             </div>
           )}

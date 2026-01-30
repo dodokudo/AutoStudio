@@ -68,6 +68,7 @@ function SummaryCard({
   paceStatus,
   formatValue = formatNumber,
   unit = '',
+  hasTarget,
 }: {
   label: string;
   actual: number;
@@ -76,7 +77,9 @@ function SummaryCard({
   paceStatus: 'on_track' | 'behind' | 'ahead';
   formatValue?: (value: number) => string;
   unit?: string;
+  hasTarget?: boolean;
 }) {
+  const resolvedHasTarget = hasTarget ?? target > 0;
   const statusColor = getStatusColor(paceStatus);
   const statusLabel = getStatusLabel(paceStatus);
 
@@ -85,27 +88,37 @@ function SummaryCard({
       <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">
         {label}
       </p>
-      <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-        {formatValue(actual)}{unit}
-      </p>
-      <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-        / {formatValue(target)}{unit}
-      </p>
+      <div className="mt-3 flex items-baseline gap-3">
+        <p className="text-2xl font-semibold text-[color:var(--color-text-primary)]">
+          {formatValue(actual)}{unit}
+        </p>
+        <p className="text-sm text-[color:var(--color-text-secondary)]">
+          {resolvedHasTarget ? `/ ${formatValue(target)}${unit}` : '目標 未設定'}
+        </p>
+      </div>
       <div className="mt-3 flex items-center justify-between">
-        <span className="text-lg font-bold text-[color:var(--color-text-primary)]">
-          {achievementRate.toFixed(0)}%
-        </span>
-        <span className={`text-xs font-medium ${statusColor}`}>
-          {paceStatus === 'behind' ? '▼' : paceStatus === 'ahead' ? '▲' : '●'} {statusLabel}
-        </span>
+        {resolvedHasTarget ? (
+          <>
+            <span className="text-lg font-bold text-[color:var(--color-text-primary)]">
+              {achievementRate.toFixed(0)}%
+            </span>
+            <span className={`text-xs font-medium ${statusColor}`}>
+              {paceStatus === 'behind' ? '▼' : paceStatus === 'ahead' ? '▲' : '●'} {statusLabel}
+            </span>
+          </>
+        ) : (
+          <span className="text-sm text-[color:var(--color-text-muted)]">目標を設定すると達成率が表示されます</span>
+        )}
       </div>
       {/* プログレスバー */}
-      <div className="mt-2 h-2 w-full rounded-full bg-[color:var(--color-border)]">
-        <div
-          className="h-full rounded-full bg-[color:var(--color-accent)] transition-all duration-300"
-          style={{ width: `${Math.min(100, achievementRate)}%` }}
-        />
-      </div>
+      {resolvedHasTarget ? (
+        <div className="mt-2 h-2 w-full rounded-full bg-[color:var(--color-border)]">
+          <div
+            className="h-full rounded-full bg-[color:var(--color-accent)] transition-all duration-300"
+            style={{ width: `${Math.min(100, achievementRate)}%` }}
+          />
+        </div>
+      ) : null}
     </Card>
   );
 }

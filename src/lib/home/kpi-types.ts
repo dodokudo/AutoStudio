@@ -16,6 +16,8 @@ export interface KpiTargetInput {
   targetSeminarParticipants: number;
   targetFrontendPurchases: number;
   targetBackendPurchases: number;
+  targetThreadsFollowers: number;
+  targetInstagramFollowers: number;
 }
 
 /** KPI目標（DB保存型） */
@@ -140,5 +142,7 @@ export function getDefaultKpiTarget(month: string): KpiTargetInput {
     targetSeminarParticipants: 0,
     targetFrontendPurchases: 0,
     targetBackendPurchases: 0,
+    targetThreadsFollowers: 0,
+    targetInstagramFollowers: 0,
   };
 }

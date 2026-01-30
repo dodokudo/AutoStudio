@@ -2,6 +2,9 @@
  * 月次実績データ取得
  */
 import { createBigQueryClient, resolveProjectId } from '../bigquery';
+import { getChargeCategories, getManualSales, type SalesCategoryId } from '@/lib/sales/categories';
+import { getAllGroups } from '@/lib/sales/groups';
+import { getThreadsInsightsData } from '@/lib/threadsInsightsData';
 
 const PROJECT_ID = resolveProjectId();
 
@@ -22,8 +25,23 @@ export interface DailyActuals {
   date: string; // 'YYYY-MM-DD'
   revenue: number;
   lineRegistrations: number;
+  threadsFollowerDelta: number;
   frontendPurchases: number;
   backendPurchases: number;
+}
+
+interface SalesTransaction {
+  id: string;
+  date: string;
+  category: SalesCategoryId | null;
+  source: 'univapay' | 'manual';
+}
+
+interface GroupedTransaction {
+  id: string;
+  date: string;
+  category: SalesCategoryId | null;
+  source: 'univapay' | 'manual' | 'grouped';
 }
 
 // ============================================================
@@ -68,6 +86,124 @@ async function getMonthlyRevenue(month: string): Promise<number> {
     console.error('[monthly-actuals] Failed to get revenue:', error);
     return 0;
   }
+}
+
+async function loadGroupedTransactions(startDate: string, endDate: string): Promise<GroupedTransaction[]> {
+  const client = createBigQueryClient(PROJECT_ID);
+  const salesDataset = process.env.SALES_BQ_DATASET ?? 'autostudio_sales';
+
+  const [chargeRows] = await client.query({
+    query: `
+      SELECT
+        id,
+        CAST(DATE(created_on, 'Asia/Tokyo') AS STRING) AS date
+      FROM \`${PROJECT_ID}.${salesDataset}.charges\`
+      WHERE status = 'successful'
+        AND DATE(created_on, 'Asia/Tokyo') BETWEEN @startDate AND @endDate
+    `,
+    params: { startDate, endDate },
+  });
+
+  const charges = (chargeRows as Array<{ id: string; date: string }>).map((row) => ({
+    id: String(row.id),
+    date: String(row.date),
+  }));
+
+  const manualSales = await getManualSales(startDate, endDate);
+  const categoriesMap = await getChargeCategories(charges.map((charge) => charge.id));
+  const groupsMap = await getAllGroups().catch(() => new Map());
+  const groupList = Array.from(groupsMap.values()).map(({ group, items }) => ({
+    id: group.id,
+    items,
+  }));
+
+  const transactions: SalesTransaction[] = [
+    ...charges.map((charge) => ({
+      id: charge.id,
+      date: charge.date,
+      category: categoriesMap.get(charge.id) ?? null,
+      source: 'univapay' as const,
+    })),
+    ...manualSales.map((sale) => ({
+      id: sale.id,
+      date: sale.transactionDate,
+      category: sale.category ?? null,
+      source: 'manual' as const,
+    })),
+  ];
+
+  const transactionMap = new Map<string, SalesTransaction>();
+  for (const tx of transactions) {
+    transactionMap.set(`${tx.source}:${tx.id}`, tx);
+  }
+
+  const itemToGroup = new Map<string, string>();
+  for (const group of groupList) {
+    for (const item of group.items) {
+      const source = item.itemType === 'charge' ? 'univapay' : 'manual';
+      itemToGroup.set(`${source}:${item.itemId}`, group.id);
+    }
+  }
+
+  const grouped: GroupedTransaction[] = [];
+  const processed = new Set<string>();
+
+  for (const tx of transactions) {
+    const key = `${tx.source}:${tx.id}`;
+    if (processed.has(key)) continue;
+
+    const groupId = itemToGroup.get(key);
+    if (groupId) {
+      const groupItems = groupList.find((group) => group.id === groupId)?.items ?? [];
+      const matched = groupItems
+        .map((item) => {
+          const source = item.itemType === 'charge' ? 'univapay' : 'manual';
+          return transactionMap.get(`${source}:${item.itemId}`) ?? null;
+        })
+        .filter(Boolean) as SalesTransaction[];
+
+      if (matched.length > 0) {
+        const latestDate = matched.reduce((max, item) => (item.date > max ? item.date : max), matched[0].date);
+        const category = matched.find((item) => item.category)?.category ?? null;
+        grouped.push({
+          id: groupId,
+          date: latestDate,
+          category,
+          source: 'grouped',
+        });
+        for (const item of matched) {
+          processed.add(`${item.source}:${item.id}`);
+        }
+        continue;
+      }
+    }
+
+    processed.add(key);
+    grouped.push({
+      id: tx.id,
+      date: tx.date,
+      category: tx.category,
+      source: tx.source,
+    });
+  }
+
+  return grouped;
+}
+
+export async function getPurchaseCountsByDateRange(
+  startDate: string,
+  endDate: string,
+): Promise<{ frontend: number; backend: number }> {
+  const groupedTransactions = await loadGroupedTransactions(startDate, endDate);
+  let frontend = 0;
+  let backend = 0;
+
+  for (const tx of groupedTransactions) {
+    if (tx.category === 'frontend') frontend += 1;
+    if (tx.category === 'backend') backend += 1;
+  }
+
+  return { frontend, backend };
 }
 
 /**
@@ -143,61 +279,12 @@ async function getMonthlySeminarParticipants(month: string): Promise<number> {
  * 月次の購入数を取得（カテゴリ別）
  */
 async function getMonthlyPurchases(month: string): Promise<{ frontend: number; backend: number }> {
-  const client = createBigQueryClient(PROJECT_ID);
-  const salesDataset = process.env.SALES_BQ_DATASET ?? 'autostudio_sales';
-
   const [year, monthNum] = month.split('-').map(Number);
   const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
   const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0];
 
   try {
-    // UnivaPayの課金をカテゴリでカウント
-    const [rows] = await client.query({
-      query: `
-        WITH univa_purchases AS (
-          SELECT
-            cc.category,
-            COUNT(*) AS count
-          FROM \`${PROJECT_ID}.${salesDataset}.charges\` c
-          INNER JOIN \`${PROJECT_ID}.${salesDataset}.charge_categories\` cc ON c.id = cc.charge_id
-          WHERE c.status = 'successful'
-            AND DATE(c.created_on, 'Asia/Tokyo') BETWEEN @startDate AND @endDate
-            AND cc.category IN ('frontend', 'backend')
-          GROUP BY cc.category
-        ),
-        manual_purchases AS (
-          SELECT
-            category,
-            COUNT(*) AS count
-          FROM \`${PROJECT_ID}.${salesDataset}.manual_sales\`
-          WHERE transaction_date BETWEEN @startDate AND @endDate
-            AND category IN ('frontend', 'backend')
-          GROUP BY category
-        ),
-        combined AS (
-          SELECT category, count FROM univa_purchases
-          UNION ALL
-          SELECT category, count FROM manual_purchases
-        )
-        SELECT
-          category,
-          SUM(count) AS total
-        FROM combined
-        GROUP BY category
-      `,
-      params: { startDate, endDate },
-    });
-
-    const typedRows = rows as Array<{ category: string; total: number }>;
-    let frontend = 0;
-    let backend = 0;
-
-    for (const row of typedRows) {
-      if (row.category === 'frontend') frontend = Number(row.total);
-      if (row.category === 'backend') backend = Number(row.total);
-    }
-
-    return { frontend, backend };
+    return await getPurchaseCountsByDateRange(startDate, endDate);
   } catch (error) {
     console.error('[monthly-actuals] Failed to get purchases:', error);
     return { frontend: 0, backend: 0 };
@@ -309,61 +396,22 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
       params: { startDate, endDate },
     });
 
-    // 購入（日別）
-    const [purchaseRows] = await client.query({
-      query: `
-        WITH dates AS (
-          SELECT date FROM UNNEST(GENERATE_DATE_ARRAY(@startDate, @endDate)) AS date
-        ),
-        univa_purchases AS (
-          SELECT
-            DATE(c.created_on, 'Asia/Tokyo') AS date,
-            cc.category,
-            COUNT(*) AS count
-          FROM \`${PROJECT_ID}.${salesDataset}.charges\` c
-          INNER JOIN \`${PROJECT_ID}.${salesDataset}.charge_categories\` cc ON c.id = cc.charge_id
-          WHERE c.status = 'successful'
-            AND DATE(c.created_on, 'Asia/Tokyo') BETWEEN @startDate AND @endDate
-            AND cc.category IN ('frontend', 'backend')
-          GROUP BY date, category
-        ),
-        manual_purchases AS (
-          SELECT
-            transaction_date AS date,
-            category,
-            COUNT(*) AS count
-          FROM \`${PROJECT_ID}.${salesDataset}.manual_sales\`
-          WHERE transaction_date BETWEEN @startDate AND @endDate
-            AND category IN ('frontend', 'backend')
-          GROUP BY date, category
-        ),
-        combined AS (
-          SELECT date, category, count FROM univa_purchases
-          UNION ALL
-          SELECT date, category, count FROM manual_purchases
-        ),
-        daily_purchases AS (
-          SELECT
-            date,
-            SUM(CASE WHEN category = 'frontend' THEN count ELSE 0 END) AS frontend,
-            SUM(CASE WHEN category = 'backend' THEN count ELSE 0 END) AS backend
-          FROM combined
-          GROUP BY date
-        )
-        SELECT
-          CAST(d.date AS STRING) AS date,
-          COALESCE(dp.frontend, 0) AS frontend,
-          COALESCE(dp.backend, 0) AS backend
-        FROM dates d
-        LEFT JOIN daily_purchases dp ON d.date = dp.date
-        ORDER BY d.date
-      `,
-      params: { startDate, endDate },
-    });
+    const threadsInsights = await getThreadsInsightsData();
+    const threadsDaily = [...threadsInsights.dailyMetrics].sort((a, b) => a.date.localeCompare(b.date));
+    const threadsDeltaMap = new Map<string, number>();
+    let previousFollowers: number | null = null;
+    for (const metric of threadsDaily) {
+      const delta = previousFollowers === null ? 0 : Math.max(0, metric.followers - previousFollowers);
+      threadsDeltaMap.set(metric.date, delta);
+      previousFollowers = metric.followers;
+    }
+
+    const groupedTransactions = await loadGroupedTransactions(startDate, endDate);
 
     // データを結合
     const revenueMap = new Map<string, number>();
     const lineMap = new Map<string, number>();
+    const threadsMap = new Map<string, number>();
     const frontendMap = new Map<string, number>();
     const backendMap = new Map<string, number>();
 
@@ -373,15 +421,28 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
     for (const row of lineRows as Array<{ date: string; registrations: number }>) {
       lineMap.set(row.date, Number(row.registrations));
     }
-    for (const row of purchaseRows as Array<{ date: string; frontend: number; backend: number }>) {
-      frontendMap.set(row.date, Number(row.frontend));
-      backendMap.set(row.date, Number(row.backend));
+    for (const date of dates) {
+      threadsMap.set(date, threadsDeltaMap.get(date) ?? 0);
+    }
+    for (const date of dates) {
+      frontendMap.set(date, 0);
+      backendMap.set(date, 0);
+    }
+    for (const tx of groupedTransactions) {
+      if (!frontendMap.has(tx.date)) continue;
+      if (tx.category === 'frontend') {
+        frontendMap.set(tx.date, (frontendMap.get(tx.date) ?? 0) + 1);
+      }
+      if (tx.category === 'backend') {
+        backendMap.set(tx.date, (backendMap.get(tx.date) ?? 0) + 1);
+      }
     }
 
     return dates.map((date) => ({
       date,
       revenue: revenueMap.get(date) ?? 0,
       lineRegistrations: lineMap.get(date) ?? 0,
+      threadsFollowerDelta: threadsMap.get(date) ?? 0,
       frontendPurchases: frontendMap.get(date) ?? 0,
       backendPurchases: backendMap.get(date) ?? 0,
     }));
@@ -392,6 +453,7 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
       date,
       revenue: 0,
       lineRegistrations: 0,
+      threadsFollowerDelta: 0,
       frontendPurchases: 0,
       backendPurchases: 0,
     }));

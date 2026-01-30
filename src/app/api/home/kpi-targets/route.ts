@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
       'targetSeminarParticipants',
       'targetFrontendPurchases',
       'targetBackendPurchases',
+      'targetThreadsFollowers',
+      'targetInstagramFollowers',
     ];
 
     for (const field of required) {
@@ -94,6 +96,8 @@ export async function POST(request: NextRequest) {
       targetSeminarParticipants: Number(body.targetSeminarParticipants),
       targetFrontendPurchases: Number(body.targetFrontendPurchases),
       targetBackendPurchases: Number(body.targetBackendPurchases),
+      targetThreadsFollowers: Number(body.targetThreadsFollowers),
+      targetInstagramFollowers: Number(body.targetInstagramFollowers),
     };
 
     // 数値バリデーション

@@ -12,13 +12,14 @@ interface DailyData {
   date: string;
   revenue: number;
   lineRegistrations: number;
+  threadsFollowerDelta: number;
   frontendPurchases: number;
   backendPurchases: number;
 }
 
 interface DailyDetailsTableProps {
   data: DailyData[];
-  kpiTarget: KpiTarget;
+  kpiTarget?: KpiTarget | null;
 }
 
 // ============================================================
@@ -61,21 +62,29 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
     return data.filter((d) => d.date <= today);
   }, [data, today]);
 
+  const sortedData = useMemo(() => {
+    return [...filteredData].sort((a, b) => a.date.localeCompare(b.date));
+  }, [filteredData]);
+
   // 合計を計算
   const totals = useMemo(() => {
     return filteredData.reduce(
       (acc, d) => ({
         revenue: acc.revenue + d.revenue,
         lineRegistrations: acc.lineRegistrations + d.lineRegistrations,
+        threadsFollowerDelta: acc.threadsFollowerDelta + d.threadsFollowerDelta,
         frontendPurchases: acc.frontendPurchases + d.frontendPurchases,
         backendPurchases: acc.backendPurchases + d.backendPurchases,
       }),
-      { revenue: 0, lineRegistrations: 0, frontendPurchases: 0, backendPurchases: 0 }
+      { revenue: 0, lineRegistrations: 0, threadsFollowerDelta: 0, frontendPurchases: 0, backendPurchases: 0 }
     );
   }, [filteredData]);
 
   // 達成率を計算
   const achievementRates = useMemo(() => {
+    if (!kpiTarget) {
+      return null;
+    }
     return {
       revenue: kpiTarget.targetRevenue > 0
         ? (totals.revenue / kpiTarget.targetRevenue) * 100
@@ -119,7 +128,7 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
                 日付
               </th>
               <th className="px-3 py-2 text-right font-medium text-[color:var(--color-text-secondary)]">
-                売上
+                Threads
               </th>
               <th className="px-3 py-2 text-right font-medium text-[color:var(--color-text-secondary)]">
                 LINE登録
@@ -130,42 +139,18 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
               <th className="px-3 py-2 text-right font-medium text-[color:var(--color-text-secondary)]">
                 バック
               </th>
+              <th className="px-3 py-2 text-right font-medium text-[color:var(--color-text-secondary)]">
+                売上
+              </th>
             </tr>
           </thead>
           <tbody>
-            {filteredData.map((d) => (
-              <tr
-                key={d.date}
-                className={`border-b border-[color:var(--color-border)]/50 ${
-                  isWeekend(d.date) ? 'bg-[color:var(--color-surface-muted)]/50' : ''
-                }`}
-              >
-                <td className="px-3 py-2 text-[color:var(--color-text-primary)]">
-                  {formatDate(d.date)}
-                </td>
-                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
-                  {d.revenue > 0 ? formatCurrency(d.revenue) : '-'}
-                </td>
-                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
-                  {d.lineRegistrations > 0 ? `${formatNumber(d.lineRegistrations)}件` : '-'}
-                </td>
-                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
-                  {d.frontendPurchases > 0 ? `${formatNumber(d.frontendPurchases)}件` : '-'}
-                </td>
-                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
-                  {d.backendPurchases > 0 ? `${formatNumber(d.backendPurchases)}件` : '-'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            {/* 合計行 */}
             <tr className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]">
               <td className="px-3 py-2 font-semibold text-[color:var(--color-text-primary)]">
                 合計
               </td>
               <td className="px-3 py-2 text-right font-semibold text-[color:var(--color-text-primary)]">
-                {formatCurrency(totals.revenue)}
+                {formatNumber(totals.threadsFollowerDelta)}人
               </td>
               <td className="px-3 py-2 text-right font-semibold text-[color:var(--color-text-primary)]">
                 {formatNumber(totals.lineRegistrations)}件
@@ -176,52 +161,98 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
               <td className="px-3 py-2 text-right font-semibold text-[color:var(--color-text-primary)]">
                 {formatNumber(totals.backendPurchases)}件
               </td>
-            </tr>
-            {/* 目標行 */}
-            <tr className="border-b border-[color:var(--color-border)]">
-              <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
-                目標
-              </td>
-              <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
-                {formatCurrency(kpiTarget.targetRevenue)}
-              </td>
-              <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
-                {formatNumber(kpiTarget.targetLineRegistrations)}件
-              </td>
-              <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
-                {formatNumber(kpiTarget.targetFrontendPurchases)}件
-              </td>
-              <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
-                {formatNumber(kpiTarget.targetBackendPurchases)}件
+              <td className="px-3 py-2 text-right font-semibold text-[color:var(--color-text-primary)]">
+                {formatCurrency(totals.revenue)}
               </td>
             </tr>
-            {/* 達成率行 */}
-            <tr>
-              <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
-                達成率
-              </td>
-              <td className={`px-3 py-2 text-right font-semibold ${
-                achievementRates.revenue >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
-              }`}>
-                {achievementRates.revenue.toFixed(1)}%
-              </td>
-              <td className={`px-3 py-2 text-right font-semibold ${
-                achievementRates.lineRegistrations >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
-              }`}>
-                {achievementRates.lineRegistrations.toFixed(1)}%
-              </td>
-              <td className={`px-3 py-2 text-right font-semibold ${
-                achievementRates.frontendPurchases >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
-              }`}>
-                {achievementRates.frontendPurchases.toFixed(1)}%
-              </td>
-              <td className={`px-3 py-2 text-right font-semibold ${
-                achievementRates.backendPurchases >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
-              }`}>
-                {achievementRates.backendPurchases.toFixed(1)}%
-              </td>
-            </tr>
-          </tfoot>
+
+            {kpiTarget ? (
+              <>
+                <tr className="border-b border-[color:var(--color-border)]">
+                  <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
+                    目標
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                    {formatNumber(kpiTarget.targetThreadsFollowers)}人
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                    {formatNumber(kpiTarget.targetLineRegistrations)}件
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                    {formatNumber(kpiTarget.targetFrontendPurchases)}件
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                    {formatNumber(kpiTarget.targetBackendPurchases)}件
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                    {formatCurrency(kpiTarget.targetRevenue)}
+                  </td>
+                </tr>
+                {achievementRates ? (
+                  <tr className="border-b border-[color:var(--color-border)]">
+                    <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
+                      達成率
+                    </td>
+                    <td className={`px-3 py-2 text-right font-semibold ${
+                      kpiTarget.targetThreadsFollowers > 0 && totals.threadsFollowerDelta >= kpiTarget.targetThreadsFollowers ? 'text-green-600' : 'text-[color:var(--color-accent)]'
+                    }`}>
+                      {kpiTarget.targetThreadsFollowers > 0
+                        ? `${((totals.threadsFollowerDelta / kpiTarget.targetThreadsFollowers) * 100).toFixed(1)}%`
+                        : '—'}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-semibold ${
+                      achievementRates.lineRegistrations >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
+                    }`}>
+                      {kpiTarget.targetLineRegistrations > 0 ? `${achievementRates.lineRegistrations.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-semibold ${
+                      achievementRates.frontendPurchases >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
+                    }`}>
+                      {kpiTarget.targetFrontendPurchases > 0 ? `${achievementRates.frontendPurchases.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-semibold ${
+                      achievementRates.backendPurchases >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
+                    }`}>
+                      {kpiTarget.targetBackendPurchases > 0 ? `${achievementRates.backendPurchases.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-semibold ${
+                      achievementRates.revenue >= 100 ? 'text-green-600' : 'text-[color:var(--color-accent)]'
+                    }`}>
+                      {kpiTarget.targetRevenue > 0 ? `${achievementRates.revenue.toFixed(1)}%` : '—'}
+                    </td>
+                  </tr>
+                ) : null}
+              </>
+            ) : null}
+
+            {sortedData.map((d) => (
+              <tr
+                key={d.date}
+                className={`border-b border-[color:var(--color-border)]/50 ${
+                  isWeekend(d.date) ? 'bg-[color:var(--color-surface-muted)]/50' : ''
+                }`}
+              >
+                <td className="px-3 py-2 text-[color:var(--color-text-primary)]">
+                  {formatDate(d.date)}
+                </td>
+                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                  {formatNumber(d.threadsFollowerDelta)}人
+                </td>
+                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                  {d.lineRegistrations > 0 ? `${formatNumber(d.lineRegistrations)}件` : '-'}
+                </td>
+                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                  {d.frontendPurchases > 0 ? `${formatNumber(d.frontendPurchases)}件` : '-'}
+                </td>
+                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                  {d.backendPurchases > 0 ? `${formatNumber(d.backendPurchases)}件` : '-'}
+                </td>
+                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                  {d.revenue > 0 ? formatCurrency(d.revenue) : '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </Card>

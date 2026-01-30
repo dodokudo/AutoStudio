@@ -2,7 +2,7 @@ import { Banner } from '@/components/ui/banner';
 import { getHomeDashboardData } from '@/lib/home/dashboard';
 import { getKpiTarget } from '@/lib/home/kpi-targets';
 import { HomeDashboardClient } from './_components/HomeDashboardClient';
-import { resolveDateRange, isUnifiedRangePreset } from '@/lib/dateRangePresets';
+import { resolveDateRange, isUnifiedRangePreset, formatDateInput } from '@/lib/dateRangePresets';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +21,11 @@ export default async function HomePage({
   const startParam = typeof params?.start === 'string' ? params.start : undefined;
   const endParam = typeof params?.end === 'string' ? params.end : undefined;
 
-  const selectedValue = isUnifiedRangePreset(rangeParam) ? rangeParam : '7d';
-  const resolvedRange = resolveDateRange(selectedValue, startParam, endParam);
+  const selectedValue = isUnifiedRangePreset(rangeParam) ? rangeParam : 'this-month';
+  const resolvedRange = resolveDateRange(selectedValue, startParam, endParam, { includeToday: true });
+  const rangeValueForUi = resolvedRange.preset;
+  const customStart = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.start) : startParam;
+  const customEnd = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.end) : endParam;
 
   const currentMonth = getCurrentMonth();
 
@@ -43,6 +46,9 @@ export default async function HomePage({
           initialDashboardData={dashboardData}
           initialKpiTarget={kpiTarget}
           currentMonth={currentMonth}
+          selectedRange={rangeValueForUi}
+          customStart={customStart}
+          customEnd={customEnd}
         />
       </div>
     );

@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useTransition, useCallback } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
+import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import type { KpiTarget, KpiTargetInput } from '@/lib/home/kpi-types';
 import type { HomeDashboardData } from '@/lib/home/dashboard';
 import { KpiTargetTab } from './KpiTargetTab';
 import { DashboardTab } from './DashboardTab';
+import { UNIFIED_RANGE_OPTIONS, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 // ============================================================
 // 型定義
@@ -34,6 +37,9 @@ export interface HomeDashboardClientProps {
   initialDashboardData: HomeDashboardData;
   initialKpiTarget: KpiTarget | null;
   currentMonth: string; // 'YYYY-MM'
+  selectedRange: string;
+  customStart?: string;
+  customEnd?: string;
 }
 
 // ============================================================
@@ -44,7 +50,13 @@ export function HomeDashboardClient({
   initialDashboardData,
   initialKpiTarget,
   currentMonth,
+  selectedRange,
+  customStart,
+  customEnd,
 }: HomeDashboardClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   // タブ状態
   const [activeTab, setActiveTab] = useState<HomeTabKey>('dashboard');
   const [pendingTab, setPendingTab] = useState<HomeTabKey | null>(null);
@@ -71,6 +83,35 @@ export function HomeDashboardClient({
       });
     }, TAB_SKELETON_DELAY_MS);
   }, [activeTab]);
+
+  const handleRangeChange = useCallback((value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    const preset = isUnifiedRangePreset(value) ? value : 'this-month';
+    params.set('range', preset);
+    if (preset !== 'custom') {
+      params.delete('start');
+      params.delete('end');
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const handleCustomRangeChange = useCallback((start: string, end: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('range', 'custom');
+    if (start) {
+      params.set('start', start);
+    } else {
+      params.delete('start');
+    }
+    if (end) {
+      params.set('end', end);
+    } else {
+      params.delete('end');
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   // KPI目標保存ハンドラ
   const handleKpiSave = useCallback(async (input: KpiTargetInput) => {
@@ -123,6 +164,17 @@ export function HomeDashboardClient({
           onChange={handleTabChange}
           className="flex-1 min-w-[160px]"
         />
+        {activeTab === 'dashboard' ? (
+          <DashboardDateRangePicker
+            options={UNIFIED_RANGE_OPTIONS}
+            value={selectedRange}
+            onChange={handleRangeChange}
+            allowCustom
+            customStart={customStart}
+            customEnd={customEnd}
+            onCustomChange={handleCustomRangeChange}
+          />
+        ) : null}
       </div>
 
       {/* タブコンテンツ */}

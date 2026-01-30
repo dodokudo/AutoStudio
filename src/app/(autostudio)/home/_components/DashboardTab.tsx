@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import useSWR from 'swr';
 import { Card } from '@/components/ui/card';
 import { dashboardCardClass } from '@/components/dashboard/styles';
@@ -10,7 +10,7 @@ import { calculateAchievementRate, getPaceStatus } from '@/lib/home/kpi-types';
 import { MonthlySummaryCards } from './MonthlySummaryCards';
 import { PacePredictionCard } from './PacePredictionCard';
 import { LineSourceBreakdown } from './LineSourceBreakdown';
-import { FunnelConversionCard } from './FunnelConversionCard';
+import { HomeFunnelPanel } from './HomeFunnelPanel';
 import { DailyTrendChart } from './DailyTrendChart';
 import { DailyDetailsTable } from './DailyDetailsTable';
 
@@ -37,6 +37,7 @@ interface MonthlyActualsResponse {
       date: string;
       revenue: number;
       lineRegistrations: number;
+      threadsFollowerDelta: number;
       frontendPurchases: number;
       backendPurchases: number;
     }>;
@@ -114,42 +115,48 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
 
   // KPI進捗計算
   const summaryData = useMemo(() => {
-    if (!kpiTarget) {
-      return null;
-    }
+    const targetRevenue = kpiTarget?.targetRevenue ?? 0;
+    const targetLine = kpiTarget?.targetLineRegistrations ?? 0;
+    const targetFrontend = kpiTarget?.targetFrontendPurchases ?? 0;
+    const targetBackend = kpiTarget?.targetBackendPurchases ?? 0;
+
+    const safePace = (actual: number, target: number) => {
+      if (target <= 0) return 'on_track' as const;
+      return getPaceStatus(actual, target, daysElapsed, totalDays);
+    };
 
     return {
       revenue: {
         metric: 'revenue',
         label: '売上',
         actual: actuals.revenue,
-        target: kpiTarget.targetRevenue,
-        achievementRate: calculateAchievementRate(actuals.revenue, kpiTarget.targetRevenue),
-        paceStatus: getPaceStatus(actuals.revenue, kpiTarget.targetRevenue, daysElapsed, totalDays),
+        target: targetRevenue,
+        achievementRate: calculateAchievementRate(actuals.revenue, targetRevenue),
+        paceStatus: safePace(actuals.revenue, targetRevenue),
       },
       lineRegistrations: {
         metric: 'lineRegistrations',
         label: 'LINE登録',
         actual: actuals.lineRegistrations,
-        target: kpiTarget.targetLineRegistrations,
-        achievementRate: calculateAchievementRate(actuals.lineRegistrations, kpiTarget.targetLineRegistrations),
-        paceStatus: getPaceStatus(actuals.lineRegistrations, kpiTarget.targetLineRegistrations, daysElapsed, totalDays),
+        target: targetLine,
+        achievementRate: calculateAchievementRate(actuals.lineRegistrations, targetLine),
+        paceStatus: safePace(actuals.lineRegistrations, targetLine),
       },
       frontendPurchases: {
         metric: 'frontendPurchases',
         label: 'フロント購入',
         actual: actuals.frontendPurchases,
-        target: kpiTarget.targetFrontendPurchases,
-        achievementRate: calculateAchievementRate(actuals.frontendPurchases, kpiTarget.targetFrontendPurchases),
-        paceStatus: getPaceStatus(actuals.frontendPurchases, kpiTarget.targetFrontendPurchases, daysElapsed, totalDays),
+        target: targetFrontend,
+        achievementRate: calculateAchievementRate(actuals.frontendPurchases, targetFrontend),
+        paceStatus: safePace(actuals.frontendPurchases, targetFrontend),
       },
       backendPurchases: {
         metric: 'backendPurchases',
         label: 'バックエンド',
         actual: actuals.backendPurchases,
-        target: kpiTarget.targetBackendPurchases,
-        achievementRate: calculateAchievementRate(actuals.backendPurchases, kpiTarget.targetBackendPurchases),
-        paceStatus: getPaceStatus(actuals.backendPurchases, kpiTarget.targetBackendPurchases, daysElapsed, totalDays),
+        target: targetBackend,
+        achievementRate: calculateAchievementRate(actuals.backendPurchases, targetBackend),
+        paceStatus: safePace(actuals.backendPurchases, targetBackend),
       },
     };
   }, [kpiTarget, actuals, daysElapsed, totalDays]);
@@ -191,29 +198,8 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
   }, [data.lineRegistrationBySource]);
 
   // ファネル転換率
-  const funnelData = useMemo(() => {
-    return data.lineFunnel || [];
-  }, [data.lineFunnel]);
 
   // KPI目標が設定されていない場合
-  if (!kpiTarget) {
-    return (
-      <div className="space-y-6">
-        <Card className={`${dashboardCardClass} text-center py-12`}>
-          <p className="text-[color:var(--color-text-secondary)]">
-            KPI目標が設定されていません。
-          </p>
-          <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-            「KPI目標設定」タブで目標を入力してください。
-          </p>
-        </Card>
-
-        <LineSourceBreakdown data={lineSourceData} />
-        <FunnelConversionCard stages={funnelData} />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* ローディング表示 */}
@@ -233,6 +219,17 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
       {/* 今月サマリー */}
       <MonthlySummaryCards summary={summaryData} />
 
+      {!kpiTarget && (
+        <Card className={`${dashboardCardClass} text-center py-6`}>
+          <p className="text-[color:var(--color-text-secondary)]">
+            KPI目標が設定されていません。
+          </p>
+          <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
+            「KPI目標設定」タブで目標を入力してください。
+          </p>
+        </Card>
+      )}
+
       {/* 今月ペース予測 */}
       {pacePredictions && (
         <PacePredictionCard
@@ -245,8 +242,8 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
       {/* LINE登録流入元別 */}
       <LineSourceBreakdown data={lineSourceData} />
 
-      {/* ファネル転換率 */}
-      <FunnelConversionCard stages={funnelData} />
+      {/* ファネル（ホーム専用表示） */}
+      <HomeFunnelPanel startDate={data.period.start} endDate={data.period.end} />
 
       {/* デイリー推移グラフ */}
       <DailyTrendChart data={dailyData} />

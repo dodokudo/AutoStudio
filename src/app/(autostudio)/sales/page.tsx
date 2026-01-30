@@ -60,11 +60,23 @@ export default async function SalesPage({
     const cashflowStart = new Date(resolvedRange.start);
     cashflowStart.setDate(cashflowStart.getDate() - 31);
     const cashflowStartDate = cashflowStart.toISOString();
+    const monthlyStart = new Date();
+    monthlyStart.setHours(0, 0, 0, 0);
+    monthlyStart.setMonth(monthlyStart.getMonth() - 11);
+    monthlyStart.setDate(1);
+    const monthlyEnd = new Date();
+    monthlyEnd.setHours(0, 0, 0, 0);
+    const monthlyStartDate = monthlyStart.toISOString();
+    const monthlyEndDate = monthlyEnd.toISOString();
+    const monthlyStartDateStr = formatDateInput(monthlyStart);
+    const monthlyEndDateStr = formatDateInput(monthlyEnd);
 
-    const [summary, cashflowSummary, manualSales, groupsMap, lstepAnalytics] = await Promise.all([
+    const [summary, cashflowSummary, monthlySummary, manualSales, monthlyManualSales, groupsMap, lstepAnalytics] = await Promise.all([
       getSalesSummary(startDate, endDate),
       getSalesSummary(cashflowStartDate, endDate),
+      getSalesSummary(monthlyStartDate, monthlyEndDate),
       getManualSales(startDateStr, endDateStr),
+      getManualSales(monthlyStartDateStr, monthlyEndDateStr),
       getAllGroups().catch(() => new Map()),
       LSTEP_PROJECT_ID ? getLstepAnalytics(LSTEP_PROJECT_ID).catch(() => null) : Promise.resolve(null),
     ]);
@@ -75,6 +87,13 @@ export default async function SalesPage({
     const categories: Record<string, string> = {};
     for (const [id, cat] of categoriesMap) {
       categories[id] = cat;
+    }
+
+    const monthlyChargeIds = monthlySummary.charges.map(c => c.id);
+    const monthlyCategoriesMap = await getChargeCategories(monthlyChargeIds);
+    const monthlyCategories: Record<string, string> = {};
+    for (const [id, cat] of monthlyCategoriesMap) {
+      monthlyCategories[id] = cat;
     }
 
     // グループデータを変換
@@ -118,6 +137,14 @@ export default async function SalesPage({
             manualSales,
             groups,
             lineDailyRegistrations: lstepAnalytics?.dailyRegistrations ?? [],
+            monthlyData: {
+              charges: monthlySummary.charges,
+              categories: monthlyCategories,
+              manualSales: monthlyManualSales,
+              groups,
+              rangeStart: monthlyStartDateStr,
+              rangeEnd: monthlyEndDateStr,
+            },
           }}
         />
       </div>
