@@ -1,9 +1,15 @@
 import { Banner } from '@/components/ui/banner';
 import { getHomeDashboardData } from '@/lib/home/dashboard';
-import { HomeDashboardShell } from './_components/HomeDashboardShell';
-import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset } from '@/lib/dateRangePresets';
+import { getKpiTarget } from '@/lib/home/kpi-targets';
+import { HomeDashboardClient } from './_components/HomeDashboardClient';
+import { resolveDateRange, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 export const dynamic = 'force-dynamic';
+
+function getCurrentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export default async function HomePage({
   searchParams,
@@ -18,21 +24,25 @@ export default async function HomePage({
   const selectedValue = isUnifiedRangePreset(rangeParam) ? rangeParam : '7d';
   const resolvedRange = resolveDateRange(selectedValue, startParam, endParam);
 
+  const currentMonth = getCurrentMonth();
+
   try {
-    const data = await getHomeDashboardData({
-      startDate: resolvedRange.start,
-      endDate: resolvedRange.end,
-      rangeValue: resolvedRange.preset,
-    });
+    // 並列でデータを取得
+    const [dashboardData, kpiTarget] = await Promise.all([
+      getHomeDashboardData({
+        startDate: resolvedRange.start,
+        endDate: resolvedRange.end,
+        rangeValue: resolvedRange.preset,
+      }),
+      getKpiTarget(currentMonth).catch(() => null),
+    ]);
 
     return (
       <div className="section-stack">
-        <HomeDashboardShell
-          data={data}
-          rangeOptions={UNIFIED_RANGE_OPTIONS}
-          selectedRange={resolvedRange.preset}
-          customStart={startParam}
-          customEnd={endParam}
+        <HomeDashboardClient
+          initialDashboardData={dashboardData}
+          initialKpiTarget={kpiTarget}
+          currentMonth={currentMonth}
         />
       </div>
     );
