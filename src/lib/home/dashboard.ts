@@ -61,6 +61,10 @@ export interface HomeDashboardData {
     end: string;
   };
   selectedRange: string;
+  followerStarts: {
+    threads: number;
+    instagram: number;
+  };
   followerBreakdown: HomeFollowerBreakdown[];
   totalFollowers: number;
   highlights: HomeHighlight[];
@@ -394,6 +398,10 @@ export async function getHomeDashboardData(options: {
       end: toDateKey(periodEnd),
     },
     selectedRange: selectedRangeValue,
+    followerStarts: {
+      threads: threadsFollowerStart,
+      instagram: instagramFollowerStart,
+    },
     followerBreakdown,
     totalFollowers,
     highlights,

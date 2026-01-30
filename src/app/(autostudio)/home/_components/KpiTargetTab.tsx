@@ -61,21 +61,6 @@ function parseNumberInput(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getMonthOptions(): Array<{ value: string; label: string }> {
-  const options: Array<{ value: string; label: string }> = [];
-  const now = new Date();
-
-  // 過去3ヶ月 + 今月 + 未来3ヶ月
-  for (let i = -3; i <= 3; i++) {
-    const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const label = `${date.getFullYear()}年${date.getMonth() + 1}月`;
-    options.push({ value, label });
-  }
-
-  return options;
-}
-
 function getDaysInMonth(month: string): number {
   const [year, monthNum] = month.split('-').map(Number);
   return new Date(year, monthNum, 0).getDate();
@@ -121,8 +106,6 @@ export function KpiTargetTab({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // 月選択オプション
-  const monthOptions = useMemo(() => getMonthOptions(), []);
 
   // 現在の入力値からKpiTargetInputを生成
   const currentInput = useMemo<KpiTargetInput>(() => ({
@@ -200,6 +183,43 @@ export function KpiTargetTab({
     }
   }, [currentInput, onSave]);
 
+  const handleReset = useCallback(async () => {
+    const confirmed = window.confirm('目標をリセットしますか？（すべて0で保存されます）');
+    if (!confirmed) return;
+
+    setTargetRevenueInput('');
+    setTargetLineInput('');
+    setTargetSeminarInput('');
+    setTargetFrontendInput('');
+    setTargetBackendInput('');
+    setTargetThreadsFollowersInput('');
+    setTargetInstagramFollowersInput('');
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    try {
+      await onSave({
+        targetMonth,
+        workingDays,
+        targetRevenue: 0,
+        targetLineRegistrations: 0,
+        targetSeminarParticipants: 0,
+        targetFrontendPurchases: 0,
+        targetBackendPurchases: 0,
+        targetThreadsFollowers: 0,
+        targetInstagramFollowers: 0,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : '保存に失敗しました');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [onSave, targetMonth, workingDays]);
+
   return (
     <div className="space-y-6">
       {/* ヘッダー: 対象月・稼働日数 */}
@@ -209,17 +229,12 @@ export function KpiTargetTab({
             <label className="text-sm font-medium text-[color:var(--color-text-secondary)]">
               対象月
             </label>
-            <select
+            <input
+              type="month"
               value={targetMonth}
               onChange={(e) => handleMonthChange(e.target.value)}
               className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
-            >
-              {monthOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div className="flex items-center gap-3">
@@ -449,6 +464,14 @@ export function KpiTargetTab({
           className="px-6"
         >
           {isSaving ? '保存中...' : '保存'}
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={handleReset}
+          disabled={isSaving}
+          className="px-6"
+        >
+          目標リセット
         </Button>
 
         {saveSuccess && (

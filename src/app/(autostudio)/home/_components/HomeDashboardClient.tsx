@@ -9,6 +9,7 @@ import type { KpiTarget, KpiTargetInput } from '@/lib/home/kpi-types';
 import type { HomeDashboardData } from '@/lib/home/dashboard';
 import { KpiTargetTab } from './KpiTargetTab';
 import { DashboardTab } from './DashboardTab';
+import { ReportTab } from './ReportTab';
 import { UNIFIED_RANGE_OPTIONS, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 // ============================================================
@@ -18,6 +19,7 @@ import { UNIFIED_RANGE_OPTIONS, isUnifiedRangePreset } from '@/lib/dateRangePres
 const HOME_TABS = [
   { id: 'dashboard', label: 'ダッシュボード' },
   { id: 'kpi_settings', label: 'KPI目標設定' },
+  { id: 'report', label: 'レポート' },
 ] as const;
 
 type HomeTabKey = (typeof HOME_TABS)[number]['id'];
@@ -25,6 +27,7 @@ type HomeTabKey = (typeof HOME_TABS)[number]['id'];
 const TAB_SKELETON_SECTIONS: Record<HomeTabKey, number> = {
   dashboard: 4,
   kpi_settings: 2,
+  report: 3,
 };
 
 const TAB_SKELETON_DELAY_MS = 240;
@@ -196,6 +199,9 @@ export function HomeDashboardClient({
               onSave={handleKpiSave}
               onMonthChange={handleMonthChange}
             />
+          )}
+          {activeTab === 'report' && (
+            <ReportTab currentMonth={selectedMonth} />
           )}
         </>
       )}

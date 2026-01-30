@@ -121,11 +121,16 @@ interface SalesDashboardClientProps {
       rangeStart: string;
       rangeEnd: string;
     };
+    deferred?: boolean;
   };
 }
 
 export function SalesDashboardClient({ initialData }: SalesDashboardClientProps) {
-  const { summary, charges, dateRange } = initialData;
+  const [fullData, setFullData] = useState<typeof initialData | null>(initialData.deferred ? null : initialData);
+  const [summaryState, setSummaryState] = useState(initialData.summary);
+  const { dateRange } = initialData;
+  const summary = summaryState;
+  const charges = fullData?.charges ?? initialData.charges;
   const numberFormatter = new Intl.NumberFormat('ja-JP');
   const dateFormatter = new Intl.DateTimeFormat('ja-JP', {
     year: 'numeric',
@@ -141,7 +146,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
   // カテゴリ管理（初期値をpropsから取得）
   const [categories, setCategories] = useState<Record<string, SalesCategoryId>>(
-    initialData.categories as Record<string, SalesCategoryId>
+    (fullData?.categories ?? initialData.categories) as Record<string, SalesCategoryId>
   );
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
 
@@ -170,12 +175,52 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
   // 期間変更時に初期データを同期
   useEffect(() => {
-    setCategories(initialData.categories as Record<string, SalesCategoryId>);
-    setManualSales(initialData.manualSales);
-    setGroups(initialData.groups ?? []);
+    const source = fullData ?? initialData;
+    setCategories(source.categories as Record<string, SalesCategoryId>);
+    setManualSales(source.manualSales);
+    setGroups(source.groups ?? []);
     setSelectedItems(new Set());
     setEditingCustomerName(null);
-  }, [initialData.categories, initialData.manualSales, initialData.groups, initialData.dateRange.from, initialData.dateRange.to]);
+  }, [fullData, initialData]);
+
+  useEffect(() => {
+    if (!initialData.deferred) return;
+    let canceled = false;
+
+    const loadSummary = async () => {
+      try {
+        const res = await fetch(`/api/sales/summary?start=${dateRange.from}&end=${dateRange.to}`);
+        if (!res.ok) return;
+        const payload = await res.json();
+        if (!canceled && payload?.data) {
+          setSummaryState(payload.data);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const loadFull = async () => {
+      try {
+        const res = await fetch(`/api/sales/dashboard?start=${dateRange.from}&end=${dateRange.to}`);
+        if (!res.ok) return;
+        const payload = await res.json();
+        if (!canceled && payload?.data) {
+          setFullData({ ...payload.data, deferred: false });
+          setSummaryState(payload.data.summary);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    loadSummary();
+    loadFull();
+
+    return () => {
+      canceled = true;
+    };
+  }, [initialData.deferred, dateRange.from, dateRange.to]);
 
   // カテゴリを保存
   const handleCategoryChange = useCallback(async (chargeId: string, category: SalesCategoryId) => {
@@ -337,18 +382,19 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   const successfulCharges = charges.filter((c) => c.status === 'successful');
 
   const lineRegistrationsInRange = useMemo(() => {
-    if (!initialData.lineDailyRegistrations || initialData.lineDailyRegistrations.length === 0) {
+    const source = fullData?.lineDailyRegistrations ?? initialData.lineDailyRegistrations;
+    if (!source || source.length === 0) {
       return null;
     }
     const startDate = new Date(dateRange.from + 'T00:00:00');
     const endDate = new Date(dateRange.to + 'T00:00:00');
-    return initialData.lineDailyRegistrations
+    return source
       .filter((item) => {
         const target = new Date(item.date + 'T00:00:00');
         return target >= startDate && target <= endDate;
       })
       .reduce((sum, item) => sum + item.registrations, 0);
-  }, [dateRange.from, dateRange.to, initialData.lineDailyRegistrations]);
+  }, [dateRange.from, dateRange.to, fullData, initialData.lineDailyRegistrations]);
 
   // 期間内の手動売上をフィルタリング
   const filteredManualSales = useMemo(() => {
@@ -589,8 +635,9 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   }, [displayTransactions]);
 
   const monthlyCounts = useMemo(() => {
-    if (!initialData.monthlyData) return [];
-    const { charges: monthlyCharges, categories: monthlyCategories, manualSales: monthlyManual, groups: monthlyGroups, rangeStart, rangeEnd } = initialData.monthlyData;
+    const monthlyData = fullData?.monthlyData ?? initialData.monthlyData;
+    if (!monthlyData) return [];
+    const { charges: monthlyCharges, categories: monthlyCategories, manualSales: monthlyManual, groups: monthlyGroups, rangeStart, rangeEnd } = monthlyData;
     const start = new Date(rangeStart + 'T00:00:00');
     const end = new Date(rangeEnd + 'T00:00:00');
 
@@ -605,8 +652,8 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       cursor.setMonth(cursor.getMonth() + 1);
     }
 
-    const mergedCategories = { ...initialData.categories, ...monthlyCategories } as Record<string, SalesCategoryId>;
-    const groupList = monthlyGroups ?? initialData.groups ?? [];
+    const mergedCategories = { ...(fullData?.categories ?? initialData.categories), ...monthlyCategories } as Record<string, SalesCategoryId>;
+    const groupList = monthlyGroups ?? fullData?.groups ?? initialData.groups ?? [];
 
     const buildMonthlyDisplayTransactions = () => {
       const successfulCharges = monthlyCharges.filter((c) => c.status === 'successful');
@@ -712,7 +759,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       ...entry,
       frontendToBackendRate: entry.frontend > 0 ? (entry.backend / entry.frontend) * 100 : null,
     }));
-  }, [initialData.monthlyData, initialData.categories, initialData.groups]);
+  }, [fullData, initialData]);
 
   const frontendCountForRate = mainCategoryStats.frontend.count;
   const backendCountForRate = mainCategoryStats.backend.count;
@@ -855,7 +902,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     };
 
     // 入金済み（入金日ベース）はキャッシュフロー用データで計算
-    const cashflowCharges = (initialData.cashflowCharges ?? charges).filter(c => c.status === 'successful');
+    const cashflowCharges = ((fullData?.cashflowCharges ?? initialData.cashflowCharges) ?? charges).filter(c => c.status === 'successful');
     for (const charge of cashflowCharges) {
       const saleDate = new Date(charge.created_on);
       const paymentDate = getPaymentDate(saleDate);
@@ -924,7 +971,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       prevMonthKey,
       currentMonthKey,
     };
-  }, [displayTransactions, manualSales, dateRange.from, dateRange.to, initialData.cashflowCharges, charges]);
+  }, [displayTransactions, manualSales, dateRange.from, dateRange.to, fullData, initialData.cashflowCharges, charges]);
 
   return (
     <>

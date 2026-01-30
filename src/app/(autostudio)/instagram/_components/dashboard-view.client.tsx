@@ -15,12 +15,12 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer
 } from 'recharts';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
+import { InsightsCard } from '@/app/(autostudio)/threads/_components/insights-card';
 
 interface Props {
   data: InstagramDashboardData;
@@ -160,10 +160,14 @@ export function InstagramDashboardView({ data }: Props) {
   const [customStartDate, setCustomStartDate] = useState(() => formatDateForInput(dateRange.start));
   const [customEndDate, setCustomEndDate] = useState(() => formatDateForInput(dateRange.end));
   const [mounted, setMounted] = useState(false);
+  const [showDailyTable, setShowDailyTable] = useState(true);
   const [reelSortBy, setReelSortBy] = useState('date');
   const [reelSortOrder, setReelSortOrder] = useState<'asc' | 'desc'>('desc');
   const [storySortBy, setStorySortBy] = useState<'date' | 'reach' | 'views' | 'viewRate' | 'reactions'>('reach');
   const [storySortOrder, setStorySortOrder] = useState<'asc' | 'desc'>('desc');
+  const numberFormatter = new Intl.NumberFormat('ja-JP');
+  const dateFormatter = new Intl.DateTimeFormat('ja-JP', { month: '2-digit', day: '2-digit' });
+  const fullDateFormatter = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
 
   useEffect(() => {
     setMounted(true);
@@ -260,6 +264,39 @@ export function InstagramDashboardView({ data }: Props) {
     }, {});
   }, [data.followerSeries]);
 
+  const reelPostCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const reel of data.reels) {
+      if (!reel.timestamp) continue;
+      const date = parseDate(reel.timestamp);
+      if (!date) continue;
+      const key = formatDateKey(date);
+      if (!key) continue;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [data.reels]);
+
+  const storyDailyStats = useMemo(() => {
+    const stats: Record<string, { count: number; views: number }> = {};
+    for (const story of data.stories) {
+      if (!story.timestamp) continue;
+      const date = parseDate(story.timestamp);
+      if (!date) continue;
+      const key = formatDateKey(date);
+      if (!key) continue;
+      if (!stats[key]) {
+        stats[key] = { count: 0, views: 0 };
+      }
+      stats[key].count += 1;
+      const storyViews = story.reach ?? 0;
+      if (storyViews > stats[key].views) {
+        stats[key].views = storyViews;
+      }
+    }
+    return stats;
+  }, [data.stories]);
+
   const followerSeriesWithDelta = useMemo(() => {
     const sorted = [...data.followerSeries].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -269,19 +306,73 @@ export function InstagramDashboardView({ data }: Props) {
       lineRegistrationMap.set(point.date, point.count);
     });
 
+    const linkClickMap = new Map<string, number>();
+    data.linkClickSeries.forEach((point) => {
+      linkClickMap.set(point.date, point.count);
+    });
+
     return sorted.map((point, index) => {
       const delta = index === 0
         ? 0
         : (point.followers ?? 0) - (sorted[index - 1].followers ?? 0);
       const followerDelta = Math.max(0, delta); // マイナスの場合は0にする
       const lineRegistrations = lineRegistrationMap.get(point.date) ?? 0;
+      const linkClicks = linkClickMap.get(point.date) ?? 0;
+      const postCount = reelPostCounts[point.date] ?? 0;
+      const storyStats = storyDailyStats[point.date];
+      const storyPostCount = storyStats?.count ?? 0;
+      const storyViews = storyStats?.views ?? 0;
+      const followerCount = point.followers ?? 0;
+      const storyViewRate = followerCount > 0 && storyViews > 0 ? storyViews / followerCount : null;
       return {
         ...point,
         followerDelta,
         lineRegistrations,
+        linkClicks,
+        postCount,
+        storyPostCount,
+        storyViews,
+        storyViewRate,
       };
     });
-  }, [data.followerSeries, data.lineRegistrationSeries]);
+  }, [data.followerSeries, data.lineRegistrationSeries, data.linkClickSeries, reelPostCounts, storyDailyStats]);
+
+  const chartRange = useMemo(() => {
+    const startKey = formatDateKey(dateRange.start);
+    const endKey = formatDateKey(dateRange.end);
+    const useAllRange = dateRange.preset === 'all';
+    return { startKey, endKey, useAllRange } as const;
+  }, [dateRange.start, dateRange.end, dateRange.preset]);
+
+  const chartData = useMemo(() => {
+    const filteredSeries = chartRange.useAllRange
+      ? followerSeriesWithDelta
+      : followerSeriesWithDelta.filter((point) => isWithinDateRange(point.date, chartRange.startKey, chartRange.endKey));
+    return filteredSeries.map((item) => {
+      let displayDate = item.date;
+      const parsed = new Date(item.date);
+      if (!Number.isNaN(parsed.getTime())) {
+        displayDate = dateFormatter.format(parsed);
+      }
+      return {
+        ...item,
+        displayDate,
+        followers: item.followers ?? 0,
+        impressions: item.reach ?? 0,
+        linkClicks: item.linkClicks ?? 0,
+      };
+    });
+  }, [followerSeriesWithDelta, dateFormatter, chartRange]);
+
+  const hasChartData = chartData.length > 0;
+  const impressionsAxisMax = (() => {
+    const localMax = chartData.reduce((max, item) => Math.max(max, item.impressions), 0);
+    return localMax > 0 ? Math.ceil(localMax * 1.1) : 1;
+  })();
+  const followerAxisMax = (() => {
+    const localMax = chartData.reduce((max, item) => Math.max(max, item.followerDelta), 0);
+    return localMax > 0 ? Math.ceil(localMax * 1.1) : 1;
+  })();
 
   const resolveFollowerCount = useCallback((timestamp?: string | null): number | null => {
     if (!timestamp) return null;
@@ -378,7 +469,7 @@ export function InstagramDashboardView({ data }: Props) {
         : 0;
 
     const reachTotal = followerSeriesInRange.reduce((sum, point) => sum + (point.reach ?? 0), 0);
-    const engagementTotal = followerSeriesInRange.reduce((sum, point) => sum + (point.engagement ?? 0), 0);
+    const postCount = useAllRange ? data.reels.length : filteredReels.length;
 
     let lineRegistrations: number | null = null;
     if (data.lineRegistrationSeries.length > 0) {
@@ -404,13 +495,51 @@ export function InstagramDashboardView({ data }: Props) {
       currentFollowers: latestFollowerPoint?.followers ?? 0,
       followerGrowth,
       latestReach: reachTotal,
-      latestEngagement: engagementTotal,
+      postCount,
       totalReels: filteredReels.length,
       totalStories: filteredStories.length,
       lineRegistrations,
       linkClicks,
     };
   }, [data, dateRange, filteredReels, filteredStories]);
+
+  const summaryStats = useMemo(() => {
+    const followerDeltaText =
+      summary.followerGrowth === 0
+        ? '増減 ±0'
+        : `増減 ${summary.followerGrowth > 0 ? '+' : ''}${summary.followerGrowth.toLocaleString()}`;
+    const lineRate =
+      summary.lineRegistrations !== null && summary.latestReach > 0
+        ? `遷移率 ${(summary.lineRegistrations / summary.latestReach * 100).toFixed(2)}%`
+        : '期間内合計';
+    return [
+      {
+        label: 'フォロワー',
+        value: summary.currentFollowers.toLocaleString(),
+        delta: followerDeltaText,
+      },
+      {
+        label: 'リーチ',
+        value: summary.latestReach.toLocaleString(),
+        delta: '期間内合計',
+      },
+      {
+        label: '投稿数',
+        value: summary.postCount.toLocaleString(),
+        delta: '期間内合計',
+      },
+      {
+        label: 'リンククリック数',
+        value: summary.linkClicks !== null ? summary.linkClicks.toLocaleString() : '—',
+        delta: '期間内合計',
+      },
+      {
+        label: 'LINE登録数',
+        value: summary.lineRegistrations !== null ? summary.lineRegistrations.toLocaleString() : '—',
+        delta: lineRate,
+      },
+    ];
+  }, [summary]);
 
   const tabItems = [
     { value: 'dashboard', label: '概要' },
@@ -492,92 +621,184 @@ export function InstagramDashboardView({ data }: Props) {
         <>
       {activeTab === 'dashboard' && (
         <>
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">アカウント概要</h2>
-            <div className="mt-4 grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">フォロワー</p>
-                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                  {summary.currentFollowers.toLocaleString()}
-                </p>
-                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                  増減 {summary.followerGrowth === 0 ? '±0' : `${summary.followerGrowth > 0 ? '+' : ''}${summary.followerGrowth.toLocaleString()}`}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">リーチ</p>
-                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                  {summary.latestReach.toLocaleString()}
-                </p>
-                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">期間内合計</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">エンゲージメント</p>
-                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                  {summary.latestEngagement.toLocaleString()}
-                </p>
-                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">期間内合計</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">リンククリック数</p>
-                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                  {summary.linkClicks !== null ? summary.linkClicks.toLocaleString() : '—'}
-                </p>
-                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">期間内合計</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">LINE登録数</p>
-                <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">
-                  {summary.lineRegistrations !== null ? summary.lineRegistrations.toLocaleString() : '—'}
-                </p>
-                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                  {summary.lineRegistrations !== null && summary.latestReach > 0
-                    ? `遷移率 ${(summary.lineRegistrations / summary.latestReach * 100).toFixed(2)}%`
-                    : '期間内合計'}
-                </p>
-              </div>
-            </div>
-          </Card>
+          <InsightsCard
+            title="アカウント概要"
+            stats={summaryStats}
+          />
 
           <Card className="p-6">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">フォロワー推移</h2>
-              <span className="text-xs text-[color:var(--color-text-muted)]">
-                最新 {data.followerSeries.length > 0 ? data.followerSeries[0].date : '—'}
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">フォロワー推移</h2>
+                <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                  日別のリーチ（折れ線）、フォロワー増加数とLINE登録数（棒グラフ）を直近30日で確認できます。
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDailyTable(!showDailyTable)}
+                className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+              >
+                {showDailyTable ? '表を閉じる' : '日別データを表示'}
+              </button>
             </div>
-            <div className="mt-4 h-72">
-              {followerSeriesWithDelta.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={followerSeriesWithDelta} margin={{ top: 12, right: 60, left: 60, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={{ stroke: '#D1D5DB' }} />
+
+            {showDailyTable && hasChartData && (
+              <div className="mt-4 overflow-x-auto rounded-[var(--radius-md)] border border-[color:var(--color-border)]">
+                <table className="w-full table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[140px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[70px]" />
+                    <col className="w-[70px]" />
+                    <col className="w-[90px]" />
+                    <col className="w-[80px]" />
+                    <col className="w-[80px]" />
+                    <col className="w-[100px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[80px]" />
+                  </colgroup>
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr className="border-b border-[color:var(--color-border)] text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
+                      <th className="px-3 py-2">日付</th>
+                      <th className="px-3 py-2 text-right">フォロワー数</th>
+                      <th className="px-3 py-2 text-right">増加</th>
+                      <th className="px-3 py-2 text-right">投稿</th>
+                      <th className="px-3 py-2 text-right">リーチ</th>
+                      <th className="px-3 py-2 text-right">クリック</th>
+                      <th className="px-3 py-2 text-right">LINE</th>
+                      <th className="px-3 py-2 text-right">ストーリー投稿</th>
+                      <th className="px-3 py-2 text-right">ストーリー閲覧</th>
+                      <th className="px-3 py-2 text-right">閲覧率</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[color:var(--color-border)]">
+                    {[...chartData].reverse().map((item) => {
+                      const parsed = new Date(item.date);
+                      const displayFullDate = !Number.isNaN(parsed.getTime())
+                        ? fullDateFormatter.format(parsed)
+                        : item.date;
+                      const lineRegs = item.lineRegistrations ?? 0;
+                      const storyRate = item.storyViewRate !== null
+                        ? `${(item.storyViewRate * 100).toFixed(1)}%`
+                        : '-';
+                      return (
+                        <tr key={item.date} className="hover:bg-[color:var(--color-surface-muted)]">
+                          <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">
+                            {displayFullDate}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-primary)]">
+                            {numberFormatter.format(item.followers ?? 0)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            <span className={item.followerDelta > 0 ? 'text-green-600' : 'text-[color:var(--color-text-secondary)]'}>
+                              {item.followerDelta > 0 ? `+${numberFormatter.format(item.followerDelta)}` : '0'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-secondary)]">
+                            {item.postCount ?? 0}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-primary)]">
+                            {numberFormatter.format(item.impressions ?? 0)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-primary)]">
+                            {numberFormatter.format(item.linkClicks ?? 0)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            <span className={lineRegs > 0 ? 'text-amber-600' : 'text-[color:var(--color-text-secondary)]'}>
+                              {lineRegs > 0 ? `+${numberFormatter.format(lineRegs)}` : '0'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-secondary)]">
+                            {item.storyPostCount ?? 0}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-primary)]">
+                            {numberFormatter.format(item.storyViews ?? 0)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-secondary)]">
+                            {storyRate}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-6 h-72">
+              {hasChartData ? (
+                <ResponsiveContainer>
+                  <ComposedChart data={chartData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="displayDate"
+                      tick={{ fontSize: 12, fill: '#475569' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
                     <YAxis
                       yAxisId="left"
-                      domain={[0, 'auto']}
-                      tick={{ fontSize: 12, fill: '#6B7280' }}
-                      axisLine={{ stroke: '#D1D5DB' }}
-                      tickFormatter={(value) => value.toLocaleString()}
-                      label={{ value: 'リーチ', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#6B7280' } }}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: '#475569' }}
+                      tickFormatter={(value) => numberFormatter.format(value as number)}
+                      domain={[0, impressionsAxisMax]}
                     />
                     <YAxis
                       yAxisId="right"
                       orientation="right"
-                      domain={[0, 'auto']}
-                      tick={{ fontSize: 12, fill: '#6B7280' }}
-                      axisLine={{ stroke: '#D1D5DB' }}
-                      tickFormatter={(value) => value.toLocaleString()}
-                      label={{ value: 'フォロワー増加数 / LINE登録', angle: 90, position: 'insideRight', style: { fontSize: 12, fill: '#6B7280' } }}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: '#475569' }}
+                      tickFormatter={(value) => numberFormatter.format(value as number)}
+                      domain={[0, followerAxisMax]}
+                      allowDecimals={false}
                     />
-                    <Tooltip />
-                    <Legend />
-                    <Bar yAxisId="right" dataKey="followerDelta" fill="#8B5CF6" name="フォロワー増加数" />
-                    <Bar yAxisId="right" dataKey="lineRegistrations" fill="#F59E0B" name="LINE登録数" />
-                    <Line yAxisId="left" type="monotone" dataKey="reach" stroke="#10B981" name="リーチ" strokeWidth={2} />
+                    <Tooltip
+                      formatter={(value, name) => [
+                        numberFormatter.format(value as number),
+                        name,
+                      ]}
+                      labelFormatter={(_, payload) => {
+                        const originalDate = payload?.[0]?.payload?.date;
+                        const parsed = originalDate ? new Date(originalDate) : null;
+                        return parsed && !Number.isNaN(parsed.getTime())
+                          ? `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+                          : originalDate ?? '';
+                      }}
+                    />
+                    <Bar
+                      yAxisId="right"
+                      dataKey="followerDelta"
+                      name="フォロワー増加"
+                      fill="var(--color-accent)"
+                      opacity={0.6}
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      yAxisId="right"
+                      dataKey="lineRegistrations"
+                      name="LINE登録数"
+                      fill="#F59E0B"
+                      opacity={0.7}
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="impressions"
+                      name="リーチ"
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 5 }}
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-[color:var(--color-text-muted)]">データがありません</div>
+                <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
+                  <p className="text-sm text-[color:var(--color-text-muted)]">表示できるデータがまだありません。</p>
+                </div>
               )}
             </div>
           </Card>

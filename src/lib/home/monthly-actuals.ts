@@ -5,6 +5,7 @@ import { createBigQueryClient, resolveProjectId } from '../bigquery';
 import { getChargeCategories, getManualSales, type SalesCategoryId } from '@/lib/sales/categories';
 import { getAllGroups, type TransactionGroupItem } from '@/lib/sales/groups';
 import { getThreadsInsightsData } from '@/lib/threadsInsightsData';
+import { getInstagramDashboardData } from '@/lib/instagram/dashboard';
 
 const PROJECT_ID = resolveProjectId();
 
@@ -26,6 +27,7 @@ export interface DailyActuals {
   revenue: number;
   lineRegistrations: number;
   threadsFollowerDelta: number;
+  instagramFollowerDelta: number;
   frontendPurchases: number;
   backendPurchases: number;
 }
@@ -315,22 +317,19 @@ export async function getMonthlyActuals(month: string): Promise<MonthlyActuals> 
 /**
  * 日別実績データを取得
  */
-export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
+export async function getDailyActualsByRange(startDate: string, endDate: string): Promise<DailyActuals[]> {
   const client = createBigQueryClient(PROJECT_ID);
   const salesDataset = process.env.SALES_BQ_DATASET ?? 'autostudio_sales';
   const lstepDataset = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 
-  const [year, monthNum] = month.split('-').map(Number);
-  const daysInMonth = new Date(year, monthNum, 0).getDate();
-
   // 日付配列を生成
   const dates: string[] = [];
-  for (let d = 1; d <= daysInMonth; d++) {
-    dates.push(`${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  const cursor = new Date(`${startDate}T00:00:00`);
+  const last = new Date(`${endDate}T00:00:00`);
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
   }
-
-  const startDate = dates[0];
-  const endDate = dates[dates.length - 1];
 
   try {
     // 売上（日別）
@@ -396,7 +395,10 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
       params: { startDate, endDate },
     });
 
-    const threadsInsights = await getThreadsInsightsData();
+    const [threadsInsights, instagramData] = await Promise.all([
+      getThreadsInsightsData(),
+      getInstagramDashboardData(PROJECT_ID),
+    ]);
     const threadsDaily = [...threadsInsights.dailyMetrics].sort((a, b) => a.date.localeCompare(b.date));
     const threadsDeltaMap = new Map<string, number>();
     let previousFollowers: number | null = null;
@@ -406,12 +408,22 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
       previousFollowers = metric.followers;
     }
 
+    const instagramDaily = [...(instagramData.followerSeries ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+    const instagramDeltaMap = new Map<string, number>();
+    let previousInstagram: number | null = null;
+    for (const metric of instagramDaily) {
+      const delta = previousInstagram === null ? 0 : Math.max(0, metric.followers - previousInstagram);
+      instagramDeltaMap.set(metric.date, delta);
+      previousInstagram = metric.followers;
+    }
+
     const groupedTransactions = await loadGroupedTransactions(startDate, endDate);
 
     // データを結合
     const revenueMap = new Map<string, number>();
     const lineMap = new Map<string, number>();
     const threadsMap = new Map<string, number>();
+    const instagramMap = new Map<string, number>();
     const frontendMap = new Map<string, number>();
     const backendMap = new Map<string, number>();
 
@@ -423,8 +435,7 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
     }
     for (const date of dates) {
       threadsMap.set(date, threadsDeltaMap.get(date) ?? 0);
-    }
-    for (const date of dates) {
+      instagramMap.set(date, instagramDeltaMap.get(date) ?? 0);
       frontendMap.set(date, 0);
       backendMap.set(date, 0);
     }
@@ -443,6 +454,7 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
       revenue: revenueMap.get(date) ?? 0,
       lineRegistrations: lineMap.get(date) ?? 0,
       threadsFollowerDelta: threadsMap.get(date) ?? 0,
+      instagramFollowerDelta: instagramMap.get(date) ?? 0,
       frontendPurchases: frontendMap.get(date) ?? 0,
       backendPurchases: backendMap.get(date) ?? 0,
     }));
@@ -454,8 +466,116 @@ export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
       revenue: 0,
       lineRegistrations: 0,
       threadsFollowerDelta: 0,
+      instagramFollowerDelta: 0,
       frontendPurchases: 0,
       backendPurchases: 0,
     }));
   }
+}
+
+export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
+  const [year, monthNum] = month.split('-').map(Number);
+  const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
+  const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0];
+  return getDailyActualsByRange(startDate, endDate);
+}
+
+export async function getActualsByRange(startDate: string, endDate: string) {
+  const daily = await getDailyActualsByRange(startDate, endDate);
+  const totals = daily.reduce(
+    (acc, d) => ({
+      revenue: acc.revenue + d.revenue,
+      lineRegistrations: acc.lineRegistrations + d.lineRegistrations,
+      threadsFollowerDelta: acc.threadsFollowerDelta + d.threadsFollowerDelta,
+      instagramFollowerDelta: acc.instagramFollowerDelta + d.instagramFollowerDelta,
+      frontendPurchases: acc.frontendPurchases + d.frontendPurchases,
+      backendPurchases: acc.backendPurchases + d.backendPurchases,
+    }),
+    {
+      revenue: 0,
+      lineRegistrations: 0,
+      threadsFollowerDelta: 0,
+      instagramFollowerDelta: 0,
+      frontendPurchases: 0,
+      backendPurchases: 0,
+    },
+  );
+
+  return { totals, daily };
+}
+
+function findFollowerOnOrBefore(series: Array<{ date: string; followers: number }>, targetDate: string): number | null {
+  for (const point of series) {
+    if (point.date <= targetDate) {
+      return point.followers;
+    }
+  }
+  return null;
+}
+
+export async function getTotalsByRange(startDate: string, endDate: string) {
+  const client = createBigQueryClient(PROJECT_ID);
+  const salesDataset = process.env.SALES_BQ_DATASET ?? 'autostudio_sales';
+  const lstepDataset = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
+
+  const [revenueRows] = await client.query({
+    query: `
+      WITH univa AS (
+        SELECT COALESCE(SUM(charged_amount), 0) AS total
+        FROM \`${PROJECT_ID}.${salesDataset}.charges\`
+        WHERE status = 'successful'
+          AND DATE(created_on, 'Asia/Tokyo') BETWEEN @startDate AND @endDate
+      ),
+      manual AS (
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM \`${PROJECT_ID}.${salesDataset}.manual_sales\`
+        WHERE transaction_date BETWEEN @startDate AND @endDate
+      )
+      SELECT (SELECT total FROM univa) + (SELECT total FROM manual) AS total_revenue
+    `,
+    params: { startDate, endDate },
+  });
+  const revenue = Number((revenueRows as Array<{ total_revenue: number }>)[0]?.total_revenue ?? 0);
+
+  const lstepClient = createBigQueryClient(PROJECT_ID, process.env.LSTEP_BQ_LOCATION);
+  const [lineRows] = await lstepClient.query({
+    query: `
+      WITH latest AS (
+        SELECT MAX(snapshot_date) AS snapshot_date FROM \`${PROJECT_ID}.${lstepDataset}.user_core\`
+      )
+      SELECT COUNT(DISTINCT user_id) AS registrations
+      FROM \`${PROJECT_ID}.${lstepDataset}.user_core\`
+      WHERE snapshot_date = (SELECT snapshot_date FROM latest)
+        AND DATE(TIMESTAMP(friend_added_at), 'Asia/Tokyo') BETWEEN @startDate AND @endDate
+    `,
+    params: { startDate, endDate },
+  });
+  const lineRegistrations = Number((lineRows as Array<{ registrations: number }>)[0]?.registrations ?? 0);
+
+  const purchases = await getPurchaseCountsByDateRange(startDate, endDate);
+
+  const [threadsInsights, instagramData] = await Promise.all([
+    getThreadsInsightsData(),
+    getInstagramDashboardData(PROJECT_ID),
+  ]);
+
+  const threadsSeries = [...threadsInsights.dailyMetrics].sort((a, b) => a.date.localeCompare(b.date));
+  const instagramSeries = [...(instagramData.followerSeries ?? [])].sort((a, b) => a.date.localeCompare(b.date));
+
+  const threadsStart = findFollowerOnOrBefore(threadsSeries, startDate) ?? threadsSeries[threadsSeries.length - 1]?.followers ?? 0;
+  const threadsEnd = findFollowerOnOrBefore(threadsSeries, endDate) ?? threadsSeries[0]?.followers ?? threadsStart;
+  const instagramStart = findFollowerOnOrBefore(instagramSeries, startDate) ?? instagramSeries[instagramSeries.length - 1]?.followers ?? 0;
+  const instagramEnd = findFollowerOnOrBefore(instagramSeries, endDate) ?? instagramSeries[0]?.followers ?? instagramStart;
+
+  const threadsFollowerDelta = Math.max(0, threadsEnd - threadsStart);
+  const instagramFollowerDelta = Math.max(0, instagramEnd - instagramStart);
+
+  return {
+    revenue,
+    lineRegistrations,
+    threadsFollowerDelta,
+    instagramFollowerDelta,
+    frontendPurchases: purchases.frontend,
+    backendPurchases: purchases.backend,
+  };
 }

@@ -14,6 +14,9 @@ interface MonthlySummaryCardsProps {
     lineRegistrations: KpiProgress;
     frontendPurchases: KpiProgress;
     backendPurchases: KpiProgress;
+    threadsFollowers: KpiProgress;
+    instagramFollowers: KpiProgress;
+    notes?: Partial<Record<'revenue' | 'lineRegistrations' | 'frontendPurchases' | 'backendPurchases' | 'threadsFollowers' | 'instagramFollowers', string>>;
   } | null;
 }
 
@@ -69,6 +72,7 @@ function SummaryCard({
   formatValue = formatNumber,
   unit = '',
   hasTarget,
+  note,
 }: {
   label: string;
   actual: number;
@@ -78,6 +82,7 @@ function SummaryCard({
   formatValue?: (value: number) => string;
   unit?: string;
   hasTarget?: boolean;
+  note?: string;
 }) {
   const resolvedHasTarget = hasTarget ?? target > 0;
   const statusColor = getStatusColor(paceStatus);
@@ -119,6 +124,11 @@ function SummaryCard({
           />
         </div>
       ) : null}
+      {note ? (
+        <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+          {note}
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -133,7 +143,7 @@ export function MonthlySummaryCards({ summary }: MonthlySummaryCardsProps) {
       <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)] mb-4">
         今月サマリー
       </h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <SummaryCard
           label="売上"
           actual={summary.revenue.actual}
@@ -141,14 +151,7 @@ export function MonthlySummaryCards({ summary }: MonthlySummaryCardsProps) {
           achievementRate={summary.revenue.achievementRate}
           paceStatus={summary.revenue.paceStatus}
           formatValue={formatCurrency}
-        />
-        <SummaryCard
-          label="LINE登録"
-          actual={summary.lineRegistrations.actual}
-          target={summary.lineRegistrations.target}
-          achievementRate={summary.lineRegistrations.achievementRate}
-          paceStatus={summary.lineRegistrations.paceStatus}
-          unit="件"
+          note={summary.notes?.revenue}
         />
         <SummaryCard
           label="フロント購入"
@@ -157,6 +160,7 @@ export function MonthlySummaryCards({ summary }: MonthlySummaryCardsProps) {
           achievementRate={summary.frontendPurchases.achievementRate}
           paceStatus={summary.frontendPurchases.paceStatus}
           unit="件"
+          note={summary.notes?.frontendPurchases}
         />
         <SummaryCard
           label="バックエンド"
@@ -165,6 +169,34 @@ export function MonthlySummaryCards({ summary }: MonthlySummaryCardsProps) {
           achievementRate={summary.backendPurchases.achievementRate}
           paceStatus={summary.backendPurchases.paceStatus}
           unit="件"
+          note={summary.notes?.backendPurchases}
+        />
+        <SummaryCard
+          label="LINE登録"
+          actual={summary.lineRegistrations.actual}
+          target={summary.lineRegistrations.target}
+          achievementRate={summary.lineRegistrations.achievementRate}
+          paceStatus={summary.lineRegistrations.paceStatus}
+          unit="件"
+          note={summary.notes?.lineRegistrations}
+        />
+        <SummaryCard
+          label="Threads"
+          actual={summary.threadsFollowers.actual}
+          target={summary.threadsFollowers.target}
+          achievementRate={summary.threadsFollowers.achievementRate}
+          paceStatus={summary.threadsFollowers.paceStatus}
+          unit="人"
+          note={summary.notes?.threadsFollowers}
+        />
+        <SummaryCard
+          label="Instagram"
+          actual={summary.instagramFollowers.actual}
+          target={summary.instagramFollowers.target}
+          achievementRate={summary.instagramFollowers.achievementRate}
+          paceStatus={summary.instagramFollowers.paceStatus}
+          unit="人"
+          note={summary.notes?.instagramFollowers}
         />
       </div>
     </div>

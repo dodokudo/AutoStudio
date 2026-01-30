@@ -13,6 +13,7 @@ interface DailyData {
   revenue: number;
   lineRegistrations: number;
   threadsFollowerDelta: number;
+  instagramFollowerDelta: number;
   frontendPurchases: number;
   backendPurchases: number;
 }
@@ -20,6 +21,14 @@ interface DailyData {
 interface DailyDetailsTableProps {
   data: DailyData[];
   kpiTarget?: KpiTarget | null;
+  daysElapsed: number;
+  totalDays: number;
+  followerTotals: {
+    threadsCurrent: number;
+    instagramCurrent: number;
+    threadsStart: number;
+    instagramStart: number;
+  };
 }
 
 // ============================================================
@@ -55,7 +64,7 @@ function isWeekend(dateStr: string): boolean {
 // コンポーネント
 // ============================================================
 
-export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
+export function DailyDetailsTable({ data, kpiTarget, daysElapsed, totalDays, followerTotals }: DailyDetailsTableProps) {
   // 今日までのデータのみフィルタ
   const today = new Date().toISOString().split('T')[0];
   const filteredData = useMemo(() => {
@@ -73,10 +82,11 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
         revenue: acc.revenue + d.revenue,
         lineRegistrations: acc.lineRegistrations + d.lineRegistrations,
         threadsFollowerDelta: acc.threadsFollowerDelta + d.threadsFollowerDelta,
+        instagramFollowerDelta: acc.instagramFollowerDelta + d.instagramFollowerDelta,
         frontendPurchases: acc.frontendPurchases + d.frontendPurchases,
         backendPurchases: acc.backendPurchases + d.backendPurchases,
       }),
-      { revenue: 0, lineRegistrations: 0, threadsFollowerDelta: 0, frontendPurchases: 0, backendPurchases: 0 }
+      { revenue: 0, lineRegistrations: 0, threadsFollowerDelta: 0, instagramFollowerDelta: 0, frontendPurchases: 0, backendPurchases: 0 }
     );
   }, [filteredData]);
 
@@ -100,6 +110,7 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
         : 0,
     };
   }, [totals, kpiTarget]);
+
 
   if (data.length === 0) {
     return (
@@ -131,6 +142,9 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
                 Threads
               </th>
               <th className="px-3 py-2 text-right font-medium text-[color:var(--color-text-secondary)]">
+                Instagram
+              </th>
+              <th className="px-3 py-2 text-right font-medium text-[color:var(--color-text-secondary)]">
                 LINE登録
               </th>
               <th className="px-3 py-2 text-right font-medium text-[color:var(--color-text-secondary)]">
@@ -153,6 +167,9 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
                 {formatNumber(totals.threadsFollowerDelta)}人
               </td>
               <td className="px-3 py-2 text-right font-semibold text-[color:var(--color-text-primary)]">
+                {formatNumber(totals.instagramFollowerDelta)}人
+              </td>
+              <td className="px-3 py-2 text-right font-semibold text-[color:var(--color-text-primary)]">
                 {formatNumber(totals.lineRegistrations)}件
               </td>
               <td className="px-3 py-2 text-right font-semibold text-[color:var(--color-text-primary)]">
@@ -168,12 +185,15 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
 
             {kpiTarget ? (
               <>
-                <tr className="border-b border-[color:var(--color-border)]">
+                <tr className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]/40">
                   <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
                     目標
                   </td>
                   <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
                     {formatNumber(kpiTarget.targetThreadsFollowers)}人
+                  </td>
+                  <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                    {formatNumber(kpiTarget.targetInstagramFollowers)}人
                   </td>
                   <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
                     {formatNumber(kpiTarget.targetLineRegistrations)}件
@@ -189,7 +209,7 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
                   </td>
                 </tr>
                 {achievementRates ? (
-                  <tr className="border-b border-[color:var(--color-border)]">
+                  <tr className="border-b border-[color:var(--color-border)] bg-[color:var(--color-accent)]/5">
                     <td className="px-3 py-2 text-[color:var(--color-text-secondary)]">
                       達成率
                     </td>
@@ -198,6 +218,13 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
                     }`}>
                       {kpiTarget.targetThreadsFollowers > 0
                         ? `${((totals.threadsFollowerDelta / kpiTarget.targetThreadsFollowers) * 100).toFixed(1)}%`
+                        : '—'}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-semibold ${
+                      kpiTarget.targetInstagramFollowers > 0 && totals.instagramFollowerDelta >= kpiTarget.targetInstagramFollowers ? 'text-green-600' : 'text-[color:var(--color-accent)]'
+                    }`}>
+                      {kpiTarget.targetInstagramFollowers > 0
+                        ? `${((totals.instagramFollowerDelta / kpiTarget.targetInstagramFollowers) * 100).toFixed(1)}%`
                         : '—'}
                     </td>
                     <td className={`px-3 py-2 text-right font-semibold ${
@@ -237,6 +264,9 @@ export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
                 </td>
                 <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
                   {formatNumber(d.threadsFollowerDelta)}人
+                </td>
+                <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                  {formatNumber(d.instagramFollowerDelta)}人
                 </td>
                 <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
                   {d.lineRegistrations > 0 ? `${formatNumber(d.lineRegistrations)}件` : '-'}
