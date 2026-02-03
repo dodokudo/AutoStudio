@@ -199,6 +199,9 @@ export async function insertScheduledPost(params: {
       comment1: params.comment1,
       comment2: params.comment2,
     },
+    types: {
+      planId: 'STRING',
+    },
   });
   return getScheduledPostById(params.scheduleId);
 }
@@ -237,6 +240,14 @@ export async function updateScheduledPost(
       mainText: params.mainText ?? null,
       comment1: params.comment1 ?? null,
       comment2: params.comment2 ?? null,
+    },
+    types: {
+      planId: 'STRING',
+      scheduledTime: 'TIMESTAMP',
+      status: 'STRING',
+      mainText: 'STRING',
+      comment1: 'STRING',
+      comment2: 'STRING',
     },
   });
   return getScheduledPostById(scheduleId);
