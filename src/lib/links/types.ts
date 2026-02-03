@@ -6,7 +6,7 @@ export interface ShortLink {
   description?: string;
   ogpImageUrl?: string;
   managementName?: string;
-  category?: 'threads' | 'instagram' | 'youtube' | 'ad' | 'line';
+  category?: 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' | 'note';
   createdAt: string;
   createdBy?: string;
   isActive: boolean;
@@ -40,7 +40,7 @@ export interface CreateShortLinkRequest {
   description?: string;
   ogpImageUrl?: string;
   managementName?: string;
-  category?: 'threads' | 'instagram' | 'youtube' | 'ad' | 'line';
+  category?: 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' | 'note';
 }
 
 export interface UpdateShortLinkRequest {
@@ -49,7 +49,7 @@ export interface UpdateShortLinkRequest {
   description?: string;
   ogpImageUrl?: string;
   managementName?: string;
-  category?: 'threads' | 'instagram' | 'youtube' | 'ad' | 'line';
+  category?: 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' | 'note';
 }
 
 export interface LinkInsightsSummary {
