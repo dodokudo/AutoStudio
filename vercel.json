@@ -8,11 +8,18 @@
     },
     "src/app/api/plans/update/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/threads/schedule/run/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
     {
       "path": "/api/threads/cron/run",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/threads/schedule/run",
       "schedule": "* * * * *"
     },
     {

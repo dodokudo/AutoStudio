@@ -8,6 +8,7 @@ import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { CompetitorTabLight } from "./_components/competitor-tab-light";
 import { ReportTab } from "./_components/report-tab";
+import { ScheduleTab } from "./_components/schedule-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getLinkClicksSummary, getThreadsLinkClicksByRange } from "@/lib/links/analytics";
@@ -22,7 +23,7 @@ export const dynamic = 'force-dynamic';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-type ThreadsTabKey = 'post' | 'insights' | 'competitor' | 'report';
+type ThreadsTabKey = 'post' | 'schedule' | 'insights' | 'competitor' | 'report';
 
 export default async function ThreadsHome({
   searchParams,
@@ -52,7 +53,7 @@ export default async function ThreadsHome({
 
   const tabParamRaw = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : undefined;
   const normalizedTabParam = tabParamRaw === 'overview' ? 'insights' : tabParamRaw;
-  const allowedTabs: ThreadsTabKey[] = ['insights', 'post', 'competitor', 'report'];
+  const allowedTabs: ThreadsTabKey[] = ['insights', 'post', 'schedule', 'competitor', 'report'];
   const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'insights';
 
   try {
@@ -427,6 +428,7 @@ export default async function ThreadsHome({
       [
         { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
         { id: 'post' as ThreadsTabKey, label: '投稿' },
+        { id: 'schedule' as ThreadsTabKey, label: '予約投稿' },
         { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
         { id: 'report' as ThreadsTabKey, label: 'レポート' },
       ] satisfies Array<{ id: ThreadsTabKey; label: string }>
@@ -459,6 +461,8 @@ export default async function ThreadsHome({
             templateOptions={templateOptions}
             recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
           />
+        ) : activeTab === 'schedule' ? (
+          <ScheduleTab />
         ) : activeTab === 'insights' ? (
           <InsightsTab
             selectedRangeValue={rangeValueForUi}
