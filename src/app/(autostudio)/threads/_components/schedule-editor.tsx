@@ -28,6 +28,7 @@ type ScheduleEditorProps = {
   selectedDate: string;
   selectedItem: ScheduledPost | null;
   isSaving?: boolean;
+  isPublishing?: boolean;
   onSave: (payload: {
     scheduleId?: string;
     scheduledAt: string;
@@ -35,6 +36,11 @@ type ScheduleEditorProps = {
     comment1: string;
     comment2: string;
     status: 'draft' | 'scheduled';
+  }) => Promise<void>;
+  onPublishNow: (payload: {
+    mainText: string;
+    comment1: string;
+    comment2: string;
   }) => Promise<void>;
   generatedContent: GeneratedContent | null;
   onGeneratedContentConsumed: () => void;
@@ -44,7 +50,9 @@ export function ScheduleEditor({
   selectedDate,
   selectedItem,
   isSaving,
+  isPublishing,
   onSave,
+  onPublishNow,
   generatedContent,
   onGeneratedContentConsumed,
 }: ScheduleEditorProps) {
@@ -87,7 +95,7 @@ export function ScheduleEditor({
   const comment1Length = comment1.length;
   const comment2Length = comment2.length;
 
-  const isValid = useMemo(() => {
+  const isValidForSchedule = useMemo(() => {
     return (
       scheduledAt &&
       mainText.trim().length > 0 &&
@@ -99,8 +107,19 @@ export function ScheduleEditor({
     );
   }, [scheduledAt, mainText, comment1, comment2, mainLength, comment1Length, comment2Length]);
 
+  const isValidForPublish = useMemo(() => {
+    return (
+      mainText.trim().length > 0 &&
+      comment1.trim().length > 0 &&
+      comment2.trim().length > 0 &&
+      mainLength <= MAX_LENGTH &&
+      comment1Length <= MAX_LENGTH &&
+      comment2Length <= MAX_LENGTH
+    );
+  }, [mainText, comment1, comment2, mainLength, comment1Length, comment2Length]);
+
   const handleSubmit = async (status: 'draft' | 'scheduled') => {
-    if (!isValid) {
+    if (!isValidForSchedule) {
       setError('未入力の項目があります。');
       return;
     }
@@ -115,6 +134,19 @@ export function ScheduleEditor({
     });
   };
 
+  const handlePublishNow = async () => {
+    if (!isValidForPublish) {
+      setError('メイン投稿とコメントを入力してください。');
+      return;
+    }
+    setError(null);
+    await onPublishNow({
+      mainText,
+      comment1,
+      comment2,
+    });
+  };
+
   return (
     <section className="ui-card h-fit">
       <header className="mb-4">
@@ -125,15 +157,28 @@ export function ScheduleEditor({
       </header>
 
       <div className="space-y-4">
-        <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
-          予約日時（JST）
-          <input
-            type="datetime-local"
-            value={scheduledAt}
-            onChange={(event) => setScheduledAt(event.target.value)}
-            className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+            予約日時（JST）
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(event) => setScheduledAt(event.target.value)}
+              className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
+            />
+          </label>
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">即時投稿</span>
+            <button
+              type="button"
+              className="mt-2 h-[42px] rounded-[var(--radius-lg)] bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              disabled={isPublishing || isSaving}
+              onClick={handlePublishNow}
+            >
+              {isPublishing ? '投稿中...' : '今すぐ投稿'}
+            </button>
+          </div>
+        </div>
 
         <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
           メイン投稿（必須）

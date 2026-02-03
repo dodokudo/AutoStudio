@@ -62,6 +62,7 @@ export function ScheduleTab() {
   const [selectedItem, setSelectedItem] = useState<ScheduledPost | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // AI生成関連の状態
@@ -226,6 +227,35 @@ export function ScheduleTab() {
     }
   };
 
+  const handlePublishNow = async (payload: {
+    mainText: string;
+    comment1: string;
+    comment2: string;
+  }) => {
+    if (!confirm('今すぐ投稿しますか？')) return;
+    setPublishing(true);
+    try {
+      const res = await fetch('/api/threads/schedule/publish-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mainText: payload.mainText,
+          comment1: payload.comment1,
+          comment2: payload.comment2,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || '投稿に失敗しました');
+      }
+      alert('投稿が完了しました！');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '投稿に失敗しました');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {error ? (
@@ -256,7 +286,9 @@ export function ScheduleTab() {
           selectedDate={selectedDate}
           selectedItem={selectedItem}
           isSaving={saving}
+          isPublishing={publishing}
           onSave={handleSave}
+          onPublishNow={handlePublishNow}
           generatedContent={generatedContent}
           onGeneratedContentConsumed={clearGeneratedContent}
         />
