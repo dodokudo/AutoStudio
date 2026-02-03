@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { classNames } from '@/lib/classNames';
 import type { ScheduledPost } from './schedule-types';
 
@@ -71,6 +72,8 @@ export function ScheduleCalendar({
   onThemeInputChange,
   onGenerate,
 }: ScheduleCalendarProps) {
+  const [detailItem, setDetailItem] = useState<ScheduledPost | null>(null);
+
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
   const monthLabel = currentMonth.toLocaleDateString('ja-JP', {
@@ -224,7 +227,9 @@ export function ScheduleCalendar({
             {selectedItems.map((item) => (
               <div
                 key={item.scheduleId}
-                className="flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-3"
+                className="flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-3 cursor-pointer hover:bg-[color:var(--color-surface-muted)] transition-colors"
+                onDoubleClick={() => setDetailItem(item)}
+                title="ダブルクリックで詳細を表示"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-semibold text-[color:var(--color-text-primary)]">
@@ -273,6 +278,78 @@ export function ScheduleCalendar({
           </div>
         )}
       </section>
+
+      {/* 詳細モーダル */}
+      {detailItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setDetailItem(null)}
+        >
+          <div
+            className="mx-4 max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-[var(--radius-lg)] bg-[color:var(--color-surface)] p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">
+                  投稿内容
+                </h3>
+                <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
+                  {detailItem.scheduledAtJst.replace('T', ' ').slice(0, 16)} JST
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full p-2 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-surface-muted)]"
+                onClick={() => setDetailItem(null)}
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h4 className="mb-2 text-xs font-semibold text-[color:var(--color-text-secondary)]">
+                  メイン投稿
+                </h4>
+                <div className="whitespace-pre-wrap rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 text-sm text-[color:var(--color-text-primary)]">
+                  {detailItem.mainText || '（なし）'}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="mb-2 text-xs font-semibold text-[color:var(--color-text-secondary)]">
+                  コメント1
+                </h4>
+                <div className="whitespace-pre-wrap rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 text-sm text-[color:var(--color-text-primary)]">
+                  {detailItem.comment1 || '（なし）'}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="mb-2 text-xs font-semibold text-[color:var(--color-text-secondary)]">
+                  コメント2
+                </h4>
+                <div className="whitespace-pre-wrap rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 text-sm text-[color:var(--color-text-primary)]">
+                  {detailItem.comment2 || '（なし）'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="ui-button-secondary"
+                onClick={() => setDetailItem(null)}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
