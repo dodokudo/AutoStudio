@@ -95,13 +95,46 @@ function buildPrompt({
   theme: string | null;
   monguchiExamples: string;
 }) {
-  const hookBlock = hook
-    ? `## フック\n以下のフック（冒頭の一文）を絶対に変更せずにそのまま使用してください: ${hook}\n\n`
-    : '';
   const themeBlock = theme
     ? `## テーマ\n${theme}\n\n`
     : '## テーマ\n（未指定。Threads運用に関する有益なテーマを自分で設定してください。）\n\n';
 
+  // フックが指定されている場合は、コメント1と2のみ生成する
+  if (hook) {
+    return `${THREADS_OPERATION_PROMPT}
+
+# 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿）
+以下の投稿の構成・文体・リズム・表現を完全にトレースしてThreads運用系の投稿を作成してください。
+特に以下の要素を真似る:
+- 体験談の入れ方
+- 数値の見せ方
+- 箇条書きの使い方
+- 改行のリズム
+- 関西弁のトーン
+- Before→Afterの訴求方法
+
+${monguchiExamples}
+
+# 今回の生成依頼
+## メイン投稿（ユーザー指定）
+以下のメイン投稿が既に決まっています。このメイン投稿に続くコメント1とコメント2だけを生成してください:
+「${hook}」
+
+${themeBlock}## 重要な指示
+- メイン投稿（mainPost）は上記のユーザー指定のテキストをそのまま返してください。一切変更・追加しないでください。
+- あなたが生成するのはコメント1（comment1）とコメント2（comment2）のみです。
+- コメント1と2はメイン投稿の内容を補足・展開する形で作成してください。
+
+## 出力形式
+以下のJSON形式で返してください（markdown不要）:
+{
+  "mainPost": "（ユーザー指定のメイン投稿をそのまま返す）",
+  "comment1": "コメント1: 必ず400文字以上、最大500文字",
+  "comment2": "コメント2: 必ず400文字以上、最大500文字"
+}`;
+  }
+
+  // フックが指定されていない場合は、全て生成する
   return `${THREADS_OPERATION_PROMPT}
 
 # 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿）
@@ -118,7 +151,7 @@ function buildPrompt({
 ${monguchiExamples}
 
 # 今回の生成依頼
-${hookBlock}${themeBlock}## 出力形式
+${themeBlock}## 出力形式
 以下のJSON形式で返してください（markdown不要）:
 {
   "mainPost": "メイン投稿150-200文字",
@@ -189,16 +222,18 @@ export async function POST(request: NextRequest) {
 
     const parsed = JSON.parse(cleanContent);
 
-    if (!parsed?.mainPost || !parsed?.comment1 || !parsed?.comment2) {
+    if (!parsed?.comment1 || !parsed?.comment2) {
       throw new Error('Claude response is missing required fields');
     }
 
-    if (hook && typeof parsed.mainPost === 'string' && !parsed.mainPost.startsWith(hook)) {
-      throw new Error('Claude response does not start with the provided hook');
+    // フックが指定されている場合は、フックをそのままmainPostとして使う
+    const mainPost = hook ? hook : parsed.mainPost;
+    if (!mainPost) {
+      throw new Error('Claude response is missing mainPost');
     }
 
     return NextResponse.json({
-      mainPost: parsed.mainPost,
+      mainPost,
       comment1: parsed.comment1,
       comment2: parsed.comment2,
     }, { status: 200 });

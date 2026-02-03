@@ -193,7 +193,7 @@ export async function insertScheduledPost(params: {
     params: {
       scheduleId: params.scheduleId,
       planId: params.planId ?? null,
-      scheduledTime: params.scheduledTimeIso,
+      scheduledTime: new Date(params.scheduledTimeIso),
       status: params.status,
       mainText: params.mainText,
       comment1: params.comment1,
@@ -218,37 +218,54 @@ export async function updateScheduledPost(
   },
 ) {
   await ensureScheduledPostsTable();
+
+  // 動的にSETクエリを構築
+  const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
+  const queryParams: Record<string, unknown> = { scheduleId };
+  const types: Record<string, string> = {};
+
+  if (params.planId !== undefined) {
+    setClauses.push('plan_id = @planId');
+    queryParams.planId = params.planId;
+    types.planId = 'STRING';
+  }
+  if (params.scheduledTimeIso !== undefined && params.scheduledTimeIso !== null) {
+    setClauses.push('scheduled_time = @scheduledTime');
+    // BigQueryはTIMESTAMP型にDateオブジェクトを必要とする
+    queryParams.scheduledTime = new Date(params.scheduledTimeIso);
+    types.scheduledTime = 'TIMESTAMP';
+  }
+  if (params.status !== undefined) {
+    setClauses.push('status = @status');
+    queryParams.status = params.status;
+    types.status = 'STRING';
+  }
+  if (params.mainText !== undefined) {
+    setClauses.push('main_text = @mainText');
+    queryParams.mainText = params.mainText;
+    types.mainText = 'STRING';
+  }
+  if (params.comment1 !== undefined) {
+    setClauses.push('comment1 = @comment1');
+    queryParams.comment1 = params.comment1;
+    types.comment1 = 'STRING';
+  }
+  if (params.comment2 !== undefined) {
+    setClauses.push('comment2 = @comment2');
+    queryParams.comment2 = params.comment2;
+    types.comment2 = 'STRING';
+  }
+
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-    SET
-      plan_id = COALESCE(@planId, plan_id),
-      scheduled_time = COALESCE(@scheduledTime, scheduled_time),
-      status = COALESCE(@status, status),
-      main_text = COALESCE(@mainText, main_text),
-      comment1 = COALESCE(@comment1, comment1),
-      comment2 = COALESCE(@comment2, comment2),
-      updated_at = CURRENT_TIMESTAMP()
+    SET ${setClauses.join(', ')}
     WHERE schedule_id = @scheduleId
   `;
+
   await client.query({
     query: sql,
-    params: {
-      scheduleId,
-      planId: params.planId ?? null,
-      scheduledTime: params.scheduledTimeIso ?? null,
-      status: params.status ?? null,
-      mainText: params.mainText ?? null,
-      comment1: params.comment1 ?? null,
-      comment2: params.comment2 ?? null,
-    },
-    types: {
-      planId: 'STRING',
-      scheduledTime: 'TIMESTAMP',
-      status: 'STRING',
-      mainText: 'STRING',
-      comment1: 'STRING',
-      comment2: 'STRING',
-    },
+    params: queryParams,
+    types: Object.keys(types).length > 0 ? types : undefined,
   });
   return getScheduledPostById(scheduleId);
 }
