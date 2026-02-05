@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { resolveProjectId } from '@/lib/bigquery';
 import {
   analyzeFunnel,
@@ -17,6 +18,24 @@ function isValidDate(value: string | null): value is string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+const getCachedFunnelList = unstable_cache(
+  async (projectId: string) => {
+    return listFunnelDefinitions(projectId);
+  },
+  ['line-funnel-list'],
+  { revalidate: 1800 }
+);
+
+const getCachedAnalysis = unstable_cache(
+  async (projectId: string, definitionJson: string, startDate?: string, endDate?: string) => {
+    const definition = JSON.parse(definitionJson) as FunnelDefinition;
+    const options = startDate && endDate ? { startDate, endDate } : undefined;
+    return analyzeFunnel(projectId, definition, options);
+  },
+  ['line-funnel-analysis'],
+  { revalidate: 1800 }
+);
+
 /**
  * GET: ファネル定義一覧を取得
  */
@@ -26,7 +45,7 @@ export async function GET() {
   }
 
   try {
-    const customFunnels = await listFunnelDefinitions(PROJECT_ID);
+    const customFunnels = await getCachedFunnelList(PROJECT_ID);
 
     return NextResponse.json({
       custom: customFunnels,
@@ -100,7 +119,12 @@ export async function POST(request: Request) {
       dateOptions = { startDate, endDate };
     }
 
-    const result = await analyzeFunnel(PROJECT_ID, definition, dateOptions);
+    const result = await getCachedAnalysis(
+      PROJECT_ID,
+      JSON.stringify(definition),
+      dateOptions?.startDate,
+      dateOptions?.endDate,
+    );
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {

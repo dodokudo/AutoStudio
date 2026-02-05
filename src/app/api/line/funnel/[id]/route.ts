@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { resolveProjectId } from '@/lib/bigquery';
 import {
   getFunnelDefinition,
@@ -14,6 +15,14 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+const getCachedFunnelDefinition = unstable_cache(
+  async (projectId: string, funnelId: string) => {
+    return getFunnelDefinition(projectId, funnelId);
+  },
+  ['line-funnel-definition'],
+  { revalidate: 1800 }
+);
+
 /**
  * GET: ファネル定義を取得
  */
@@ -25,7 +34,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
   const { id } = await params;
 
   try {
-    const funnel = await getFunnelDefinition(PROJECT_ID, id);
+    const funnel = await getCachedFunnelDefinition(PROJECT_ID, id);
 
     if (!funnel) {
       return NextResponse.json({ error: 'Funnel not found' }, { status: 404 });
