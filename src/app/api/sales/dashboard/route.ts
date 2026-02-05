@@ -109,7 +109,7 @@ const getCachedDashboard = unstable_cache(
     };
   },
   ['sales-dashboard'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 export async function GET(request: Request) {

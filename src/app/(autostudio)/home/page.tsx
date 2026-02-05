@@ -14,7 +14,7 @@ const getCachedHomeDashboardData = unstable_cache(
     });
   },
   ['home-dashboard'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedKpiTarget = unstable_cache(

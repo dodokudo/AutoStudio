@@ -44,7 +44,7 @@ const getCachedSummary = unstable_cache(
     };
   },
   ['sales-summary'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 export async function GET(request: Request) {
