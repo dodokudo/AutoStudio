@@ -16,11 +16,11 @@
   "crons": [
     {
       "path": "/api/threads/cron/run",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/3 * * * *"
     },
     {
       "path": "/api/threads/schedule/run",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/3 * * * *"
     },
     {
       "path": "/api/sales/cron/sync",
