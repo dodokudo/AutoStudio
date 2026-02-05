@@ -25,7 +25,7 @@ const getCachedThreadsInsights = unstable_cache(
     return getThreadsInsights(projectId, { startDate, endDate, rangeDays });
   },
   ['threads-insights'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedLightweightInsights = unstable_cache(
@@ -33,7 +33,7 @@ const getCachedLightweightInsights = unstable_cache(
     return getLightweightInsights(projectId, { startDate, endDate, rangeDays });
   },
   ['threads-lightweight-insights'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedSeedPlansIfNeeded = unstable_cache(
@@ -65,7 +65,7 @@ const getCachedThreadsInsightsData = unstable_cache(
     return getThreadsInsightsData({ startDate, endDate });
   },
   ['threads-insights-data'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedDailyPostStats = unstable_cache(
@@ -73,7 +73,7 @@ const getCachedDailyPostStats = unstable_cache(
     return getDailyPostStats({ startDate, endDate });
   },
   ['threads-daily-post-stats'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedLinkClicksSummary = unstable_cache(
@@ -81,7 +81,7 @@ const getCachedLinkClicksSummary = unstable_cache(
     return getLinkClicksSummary({ startDate: new Date(startDateISO), endDate: new Date(endDateISO) });
   },
   ['threads-link-clicks-summary'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedCountLineSourceRegistrations = unstable_cache(
@@ -89,7 +89,7 @@ const getCachedCountLineSourceRegistrations = unstable_cache(
     return countLineSourceRegistrations(projectId, { startDate, endDate, sourceName });
   },
   ['threads-count-line-source-registrations'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedListLineSourceRegistrations = unstable_cache(
@@ -97,7 +97,7 @@ const getCachedListLineSourceRegistrations = unstable_cache(
     return listLineSourceRegistrations(projectId, { startDate, endDate, sourceName });
   },
   ['threads-list-line-source-registrations'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const getCachedThreadsLinkClicksByRange = unstable_cache(
@@ -105,7 +105,7 @@ const getCachedThreadsLinkClicksByRange = unstable_cache(
     return getThreadsLinkClicksByRange(new Date(startISO), new Date(endISO));
   },
   ['threads-link-clicks-by-range'],
-  { revalidate: 300 }
+  { revalidate: 1800 }
 );
 
 const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
