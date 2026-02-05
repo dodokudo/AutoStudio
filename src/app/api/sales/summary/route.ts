@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 
 const PROJECT_ID = resolveProjectId();
@@ -10,16 +11,8 @@ function isValidDate(value: string | null): value is string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const start = searchParams.get('start');
-  const end = searchParams.get('end');
-
-  if (!isValidDate(start) || !isValidDate(end)) {
-    return NextResponse.json({ error: 'start/end (YYYY-MM-DD) are required' }, { status: 400 });
-  }
-
-  try {
+const getCachedSummary = unstable_cache(
+  async (start: string, end: string) => {
     const client = createBigQueryClient(PROJECT_ID);
     const [rows] = await client.query({
       query: `
@@ -43,14 +36,32 @@ export async function GET(request: Request) {
       pending_count?: number;
     };
 
+    return {
+      totalAmount: Number(row?.total_amount ?? 0),
+      successfulCount: Number(row?.successful_count ?? 0),
+      failedCount: Number(row?.failed_count ?? 0),
+      pendingCount: Number(row?.pending_count ?? 0),
+    };
+  },
+  ['sales-summary'],
+  { revalidate: 300 }
+);
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const start = searchParams.get('start');
+  const end = searchParams.get('end');
+
+  if (!isValidDate(start) || !isValidDate(end)) {
+    return NextResponse.json({ error: 'start/end (YYYY-MM-DD) are required' }, { status: 400 });
+  }
+
+  try {
+    const data = await getCachedSummary(start, end);
+
     return NextResponse.json({
       success: true,
-      data: {
-        totalAmount: Number(row?.total_amount ?? 0),
-        successfulCount: Number(row?.successful_count ?? 0),
-        failedCount: Number(row?.failed_count ?? 0),
-        pendingCount: Number(row?.pending_count ?? 0),
-      },
+      data,
     });
   } catch (error) {
     console.error('[api/sales/summary] Error:', error);

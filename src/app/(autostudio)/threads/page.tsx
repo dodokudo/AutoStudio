@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { getThreadsInsights, type ThreadsInsightsOptions } from "@/lib/threadsInsights";
 import { getLightweightInsights } from "@/lib/threadsAccountSummary";
 import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
@@ -16,6 +17,96 @@ import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
 const PROJECT_ID = resolveProjectId();
+
+// --- unstable_cache wrappers for BigQuery data functions ---
+
+const getCachedThreadsInsights = unstable_cache(
+  async (projectId: string, startDate?: string, endDate?: string, rangeDays?: number) => {
+    return getThreadsInsights(projectId, { startDate, endDate, rangeDays });
+  },
+  ['threads-insights'],
+  { revalidate: 300 }
+);
+
+const getCachedLightweightInsights = unstable_cache(
+  async (projectId: string, startDate?: string, endDate?: string, rangeDays?: number) => {
+    return getLightweightInsights(projectId, { startDate, endDate, rangeDays });
+  },
+  ['threads-lightweight-insights'],
+  { revalidate: 300 }
+);
+
+const getCachedSeedPlansIfNeeded = unstable_cache(
+  async () => {
+    return seedPlansIfNeeded();
+  },
+  ['threads-seed-plans'],
+  { revalidate: 300 }
+);
+
+const getCachedListPlanSummaries = unstable_cache(
+  async () => {
+    return listPlanSummaries();
+  },
+  ['threads-plan-summaries'],
+  { revalidate: 300 }
+);
+
+const getCachedThreadsDashboard = unstable_cache(
+  async () => {
+    return getThreadsDashboard();
+  },
+  ['threads-dashboard'],
+  { revalidate: 300 }
+);
+
+const getCachedThreadsInsightsData = unstable_cache(
+  async (startDate?: string, endDate?: string) => {
+    return getThreadsInsightsData({ startDate, endDate });
+  },
+  ['threads-insights-data'],
+  { revalidate: 300 }
+);
+
+const getCachedDailyPostStats = unstable_cache(
+  async (startDate?: string, endDate?: string) => {
+    return getDailyPostStats({ startDate, endDate });
+  },
+  ['threads-daily-post-stats'],
+  { revalidate: 300 }
+);
+
+const getCachedLinkClicksSummary = unstable_cache(
+  async (startDateISO: string, endDateISO: string) => {
+    return getLinkClicksSummary({ startDate: new Date(startDateISO), endDate: new Date(endDateISO) });
+  },
+  ['threads-link-clicks-summary'],
+  { revalidate: 300 }
+);
+
+const getCachedCountLineSourceRegistrations = unstable_cache(
+  async (projectId: string, startDate?: string, endDate?: string, sourceName?: string) => {
+    return countLineSourceRegistrations(projectId, { startDate, endDate, sourceName });
+  },
+  ['threads-count-line-source-registrations'],
+  { revalidate: 300 }
+);
+
+const getCachedListLineSourceRegistrations = unstable_cache(
+  async (projectId: string, startDate?: string, endDate?: string, sourceName?: string) => {
+    return listLineSourceRegistrations(projectId, { startDate, endDate, sourceName });
+  },
+  ['threads-list-line-source-registrations'],
+  { revalidate: 300 }
+);
+
+const getCachedThreadsLinkClicksByRange = unstable_cache(
+  async (startISO: string, endISO: string) => {
+    return getThreadsLinkClicksByRange(new Date(startISO), new Date(endISO));
+  },
+  ['threads-link-clicks-by-range'],
+  { revalidate: 300 }
+);
 
 const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 
@@ -77,28 +168,28 @@ export default async function ThreadsHome({
       dailyPostStats,
       previousDailyPostStats,
     ] = await Promise.all([
-      needsFullInsights ? getThreadsInsights(PROJECT_ID, insightsOptions) : Promise.resolve(null),
-      !needsFullInsights ? getLightweightInsights(PROJECT_ID, insightsOptions) : Promise.resolve(null),
+      needsFullInsights ? getCachedThreadsInsights(PROJECT_ID, insightsOptions.startDate, insightsOptions.endDate, insightsOptions.rangeDays) : Promise.resolve(null),
+      !needsFullInsights ? getCachedLightweightInsights(PROJECT_ID, insightsOptions.startDate, insightsOptions.endDate) : Promise.resolve(null),
       (async () => {
-        await seedPlansIfNeeded();
-        return listPlanSummaries();
+        await getCachedSeedPlansIfNeeded();
+        return getCachedListPlanSummaries();
       })(),
-      getThreadsDashboard(),
-      getThreadsInsightsData({
-        startDate: postsQueryStartKey,
-        endDate: postsQueryEndKey,
-      }),
-      getLinkClicksSummary({ startDate: rangeStartDate, endDate: rangeEndDate }),
-      getLinkClicksSummary({ startDate: previousRangeStart, endDate: previousRangeEnd }),
+      getCachedThreadsDashboard(),
+      getCachedThreadsInsightsData(
+        postsQueryStartKey,
+        postsQueryEndKey,
+      ),
+      getCachedLinkClicksSummary(rangeStartDate.toISOString(), rangeEndDate.toISOString()),
+      getCachedLinkClicksSummary(previousRangeStart.toISOString(), previousRangeEnd.toISOString()),
       // 日別集計クエリ（軽量）- チャート・概要用
-      getDailyPostStats({
-        startDate: formatDateInput(rangeStartDate),
-        endDate: formatDateInput(rangeEndDate),
-      }),
-      getDailyPostStats({
-        startDate: formatDateInput(previousRangeStart),
-        endDate: formatDateInput(previousRangeEnd),
-      }),
+      getCachedDailyPostStats(
+        formatDateInput(rangeStartDate),
+        formatDateInput(rangeEndDate),
+      ),
+      getCachedDailyPostStats(
+        formatDateInput(previousRangeStart),
+        formatDateInput(previousRangeEnd),
+      ),
     ]);
 
     // 投稿タブ用のデータを統合
@@ -133,16 +224,16 @@ export default async function ThreadsHome({
         const previousRangeEndKey = formatDateInput(previousRangeEnd);
 
         const [currentLineCount, prevLineCount] = await Promise.all([
-          countLineSourceRegistrations(PROJECT_ID, {
-            startDate: rangeStartKey,
-            endDate: rangeEndKey,
-            sourceName: 'Threads',
-          }),
-          countLineSourceRegistrations(PROJECT_ID, {
-            startDate: previousRangeStartKey,
-            endDate: previousRangeEndKey,
-            sourceName: 'Threads',
-          }),
+          getCachedCountLineSourceRegistrations(PROJECT_ID,
+            rangeStartKey,
+            rangeEndKey,
+            'Threads',
+          ),
+          getCachedCountLineSourceRegistrations(PROJECT_ID,
+            previousRangeStartKey,
+            previousRangeEndKey,
+            'Threads',
+          ),
         ]);
         lineRegistrationCount = currentLineCount;
         previousLineRegistrationCount = prevLineCount;
@@ -159,9 +250,11 @@ export default async function ThreadsHome({
 
     if (lineRegistrationCount === null) {
       try {
-        lineRegistrationCount = await countLineSourceRegistrations(PROJECT_ID, {
-          sourceName: 'Threads',
-        });
+        lineRegistrationCount = await getCachedCountLineSourceRegistrations(PROJECT_ID,
+          undefined,
+          undefined,
+          'Threads',
+        );
       } catch (lineError) {
         console.error('[threads/page] Failed to load default LINE registrations:', lineError);
       }
@@ -336,11 +429,11 @@ export default async function ThreadsHome({
     // Threads経由のLINE登録数を日別で取得
     let lineRegistrationsByDate: Record<string, number> = {};
     try {
-      const lineRegistrationSeries = await listLineSourceRegistrations(PROJECT_ID, {
-        sourceName: 'Threads',
-        startDate: formatDateInput(chartWindowStart),
-        endDate: formatDateInput(chartWindowEnd),
-      });
+      const lineRegistrationSeries = await getCachedListLineSourceRegistrations(PROJECT_ID,
+        formatDateInput(chartWindowStart),
+        formatDateInput(chartWindowEnd),
+        'Threads',
+      );
       lineRegistrationsByDate = lineRegistrationSeries.reduce<Record<string, number>>((acc, point) => {
         acc[point.date] = point.count;
         return acc;
@@ -352,7 +445,7 @@ export default async function ThreadsHome({
     // Threadsカテゴリのリンククリック数を日別で取得
     let linkClicksByDate: Record<string, number> = {};
     try {
-      const linkClicksSeries = await getThreadsLinkClicksByRange(chartWindowStart, chartWindowEnd);
+      const linkClicksSeries = await getCachedThreadsLinkClicksByRange(chartWindowStart.toISOString(), chartWindowEnd.toISOString());
       linkClicksByDate = linkClicksSeries.reduce<Record<string, number>>((acc, point) => {
         acc[point.date] = point.clicks;
         return acc;

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { getSalesSummary } from '@/lib/univapay/client';
 import { getChargeCategories, getManualSales } from '@/lib/sales/categories';
 import { getAllGroups } from '@/lib/sales/groups';
@@ -16,16 +17,8 @@ function isValidDate(value: string | null): value is string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const startParam = searchParams.get('start');
-  const endParam = searchParams.get('end');
-
-  if (!isValidDate(startParam) || !isValidDate(endParam)) {
-    return NextResponse.json({ error: 'start/end (YYYY-MM-DD) are required' }, { status: 400 });
-  }
-
-  try {
+const getCachedDashboard = unstable_cache(
+  async (startParam: string, endParam: string) => {
     const startDate = new Date(`${startParam}T00:00:00`);
     const endDate = new Date(`${endParam}T23:59:59`);
 
@@ -88,34 +81,52 @@ export async function GET(request: Request) {
       })),
     }));
 
+    return {
+      summary: {
+        totalAmount: summary.totalAmount,
+        successfulCount: summary.successfulCount,
+        failedCount: summary.failedCount,
+        pendingCount: summary.pendingCount,
+      },
+      charges: summary.charges,
+      cashflowCharges: cashflowSummary.charges,
+      dateRange: {
+        from: startDateStr,
+        to: endDateStr,
+      },
+      categories,
+      manualSales,
+      groups,
+      lineDailyRegistrations: lstepAnalytics?.dailyRegistrations ?? [],
+      monthlyData: {
+        charges: monthlySummary.charges,
+        categories: monthlyCategories,
+        manualSales: monthlyManualSales,
+        groups,
+        rangeStart: monthlyStartDateStr,
+        rangeEnd: monthlyEndDateStr,
+      },
+    };
+  },
+  ['sales-dashboard'],
+  { revalidate: 300 }
+);
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const startParam = searchParams.get('start');
+  const endParam = searchParams.get('end');
+
+  if (!isValidDate(startParam) || !isValidDate(endParam)) {
+    return NextResponse.json({ error: 'start/end (YYYY-MM-DD) are required' }, { status: 400 });
+  }
+
+  try {
+    const data = await getCachedDashboard(startParam, endParam);
+
     return NextResponse.json({
       success: true,
-      data: {
-        summary: {
-          totalAmount: summary.totalAmount,
-          successfulCount: summary.successfulCount,
-          failedCount: summary.failedCount,
-          pendingCount: summary.pendingCount,
-        },
-        charges: summary.charges,
-        cashflowCharges: cashflowSummary.charges,
-        dateRange: {
-          from: startDateStr,
-          to: endDateStr,
-        },
-        categories,
-        manualSales,
-        groups,
-        lineDailyRegistrations: lstepAnalytics?.dailyRegistrations ?? [],
-        monthlyData: {
-          charges: monthlySummary.charges,
-          categories: monthlyCategories,
-          manualSales: monthlyManualSales,
-          groups,
-          rangeStart: monthlyStartDateStr,
-          rangeEnd: monthlyEndDateStr,
-        },
-      },
+      data,
     });
   } catch (error) {
     console.error('[api/sales/dashboard] Error:', error);

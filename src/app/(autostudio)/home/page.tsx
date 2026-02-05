@@ -1,8 +1,29 @@
+import { unstable_cache } from 'next/cache';
 import { Banner } from '@/components/ui/banner';
 import { getHomeDashboardData } from '@/lib/home/dashboard';
 import { getKpiTarget } from '@/lib/home/kpi-targets';
 import { HomeDashboardClient } from './_components/HomeDashboardClient';
 import { resolveDateRange, isUnifiedRangePreset, formatDateInput } from '@/lib/dateRangePresets';
+
+const getCachedHomeDashboardData = unstable_cache(
+  async (startDateISO: string, endDateISO: string, rangeValue: string) => {
+    return getHomeDashboardData({
+      startDate: new Date(startDateISO),
+      endDate: new Date(endDateISO),
+      rangeValue,
+    });
+  },
+  ['home-dashboard'],
+  { revalidate: 300 }
+);
+
+const getCachedKpiTarget = unstable_cache(
+  async (month: string) => {
+    return getKpiTarget(month).catch(() => null);
+  },
+  ['kpi-target'],
+  { revalidate: 1800 }
+);
 
 function getCurrentMonth(): string {
   const now = new Date();
@@ -30,12 +51,12 @@ export default async function HomePage({
   try {
     // 並列でデータを取得
     const [dashboardData, kpiTarget] = await Promise.all([
-      getHomeDashboardData({
-        startDate: resolvedRange.start,
-        endDate: resolvedRange.end,
-        rangeValue: resolvedRange.preset,
-      }),
-      getKpiTarget(currentMonth).catch(() => null),
+      getCachedHomeDashboardData(
+        resolvedRange.start.toISOString(),
+        resolvedRange.end.toISOString(),
+        resolvedRange.preset,
+      ),
+      getCachedKpiTarget(currentMonth),
     ]);
 
     return (
