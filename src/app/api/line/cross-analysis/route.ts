@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 
@@ -492,6 +493,14 @@ async function getCrossAnalysisData(
   };
 }
 
+const getCachedCrossAnalysis = unstable_cache(
+  async (projectId: string, startDate: string, endDate: string) => {
+    return getCrossAnalysisData(projectId, startDate, endDate);
+  },
+  ['line-cross-analysis'],
+  { revalidate: 1800 }
+);
+
 export async function GET(request: Request) {
   if (!PROJECT_ID) {
     return NextResponse.json({ error: 'Project ID is not configured' }, { status: 500 });
@@ -515,7 +524,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const data = await getCrossAnalysisData(PROJECT_ID, start, end);
+    const data = await getCachedCrossAnalysis(PROJECT_ID, start, end);
     return NextResponse.json({ range: { start, end }, ...data }, { status: 200 });
   } catch (error) {
     console.error('[api/line/cross-analysis] Error:', error);
