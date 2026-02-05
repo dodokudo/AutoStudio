@@ -1,8 +1,6 @@
 import { AdsDashboardShell } from './_components/AdsDashboardShell';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 
-export const dynamic = 'force-dynamic';
-
 export default async function AdsPage({
   searchParams,
 }: {

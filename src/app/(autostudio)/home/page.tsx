@@ -4,8 +4,6 @@ import { getKpiTarget } from '@/lib/home/kpi-targets';
 import { HomeDashboardClient } from './_components/HomeDashboardClient';
 import { resolveDateRange, isUnifiedRangePreset, formatDateInput } from '@/lib/dateRangePresets';
 
-export const dynamic = 'force-dynamic';
-
 function getCurrentMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

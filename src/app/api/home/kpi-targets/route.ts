@@ -6,7 +6,7 @@ import {
   type KpiTargetInput,
 } from '@/lib/home/kpi-targets';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 /**
  * GET /api/home/kpi-targets?month=YYYY-MM

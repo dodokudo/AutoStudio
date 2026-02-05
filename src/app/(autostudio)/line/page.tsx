@@ -9,7 +9,7 @@ const PROJECT_ID = (() => {
   return preferred ? resolveProjectId(preferred) : undefined;
 })();
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export default async function LineDashboardPage() {
   if (!PROJECT_ID) {

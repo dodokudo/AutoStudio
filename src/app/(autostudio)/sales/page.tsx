@@ -3,8 +3,6 @@ import { SalesDashboardClient } from './_components/SalesDashboardClient';
 import { SalesRangeSelector } from './_components/SalesRangeSelector';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 
-export const dynamic = 'force-dynamic';
-
 const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 export default async function SalesPage({
   searchParams,

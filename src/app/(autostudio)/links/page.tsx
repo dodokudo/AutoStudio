@@ -7,8 +7,6 @@ import { LinksRangeSelector } from './_components/links-range-selector';
 import { LinkFunnelsManager } from './_components/link-funnels-manager';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, isUnifiedRangePreset, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 
-export const dynamic = 'force-dynamic';
-
 interface LinksPageProps {
   searchParams?: Promise<Record<string, string>>;
 }

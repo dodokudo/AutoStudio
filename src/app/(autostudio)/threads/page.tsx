@@ -19,8 +19,6 @@ const PROJECT_ID = resolveProjectId();
 
 const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 
-export const dynamic = 'force-dynamic';
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ThreadsTabKey = 'post' | 'schedule' | 'insights' | 'competitor' | 'report';

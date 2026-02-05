@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMonthlyActuals, getDailyActuals } from '@/lib/home/monthly-actuals';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 /**
  * GET /api/home/monthly-actuals?month=YYYY-MM

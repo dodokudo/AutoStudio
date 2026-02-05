@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createGroup, deleteGroup, getAllGroups, initGroupTables } from '@/lib/sales/groups';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 /**
  * GET: グループ一覧を取得

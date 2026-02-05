@@ -4,7 +4,7 @@ import { getInstagramDashboardData } from '@/lib/instagram/dashboard';
 import { InstagramDashboardView } from './_components/dashboard-view.client';
 import { Banner } from '@/components/ui/banner';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export default async function InstagramDashboardPage() {
   try {

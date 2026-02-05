@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getLatestPrompt, listPromptVersions } from '@/lib/promptSettings';
 import { PromptEditor } from './prompt-editor';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 1800;
 
 export default async function PromptSettingsPage() {
   try {

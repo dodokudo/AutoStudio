@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getThreadsInsightsData } from '@/lib/threadsInsightsData';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export async function GET(request: NextRequest) {
   try {
