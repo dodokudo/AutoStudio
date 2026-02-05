@@ -155,7 +155,7 @@ export default async function ThreadsHome({
     const postsQueryEndKey = formatDateInput(rangeEndDate);
 
     // タブごとに必要なデータだけ取得（投稿タブと競合タブでは重いデータを取らない）
-    const needsFullInsights = activeTab === 'insights';
+    const needsFullInsights = false;
 
     const [
       insights,
