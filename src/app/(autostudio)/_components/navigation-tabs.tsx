@@ -8,10 +8,10 @@ const navItems = [
   { id: 'top', href: '/home', label: 'Top' },
   { id: 'threads', href: '/threads', label: 'Threads' },
   { id: 'instagram', href: '/instagram', label: 'Instagram' },
-  { id: 'ads', href: '/ads', label: 'Ads' },
-  { id: 'youtube', href: '/youtube', label: 'YouTube' },
   { id: 'line', href: '/line', label: 'LINE' },
   { id: 'sales', href: '/sales', label: 'Sales' },
+  { id: 'ads', href: '/ads', label: 'Ads' },
+  { id: 'youtube', href: '/youtube', label: 'YouTube' },
   { id: 'links', href: '/links', label: 'Links' },
 ];
 
