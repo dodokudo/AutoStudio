@@ -14,12 +14,15 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
           <div className="page-container flex h-16 items-center justify-between gap-3">
             <Link
               href="/home"
-              className="flex flex-col items-start text-base font-semibold text-[color:var(--color-text-primary)]"
+              className="flex items-center gap-2.5 text-base font-semibold text-[color:var(--color-text-primary)]"
             >
-              <span className="text-base">AutoStudio</span>
-              <span className="mt-0.5 text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                Autopilot System
-              </span>
+              <img src="/icon.png" alt="AutoStudio" className="h-9 w-9 rounded-lg" />
+              <div className="flex flex-col items-start">
+                <span className="text-base">AutoStudio</span>
+                <span className="mt-0.5 text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
+                  Autopilot System
+                </span>
+              </div>
             </Link>
             <NavigationTabs />
           </div>
@@ -31,12 +34,15 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
             <div className="flex h-full flex-col gap-6 px-6 py-8">
               <Link
                 href="/home"
-                className="flex flex-col items-start gap-1 text-lg font-semibold text-[color:var(--color-text-primary)]"
+                className="flex items-center gap-3 text-lg font-semibold text-[color:var(--color-text-primary)]"
               >
-                <span>AutoStudio</span>
-                <span className="text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                  Autopilot System
-                </span>
+                <img src="/icon.png" alt="AutoStudio" className="h-10 w-10 rounded-lg" />
+                <div className="flex flex-col items-start gap-1">
+                  <span>AutoStudio</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
+                    Autopilot System
+                  </span>
+                </div>
               </Link>
               <NavigationTabs />
             </div>
