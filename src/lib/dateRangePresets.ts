@@ -31,6 +31,21 @@ export const UNIFIED_RANGE_OPTIONS: Array<{ value: UnifiedRangePreset; label: st
 
 const DEFAULT_PRESET: UnifiedRangePreset = '7d';
 
+/**
+ * サーバー(UTC)・クライアント(JST)どちらで実行されても
+ * 日本時間の「今日」を返す。
+ */
+function getJstToday(): Date {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const [year, month, day] = formatter.format(new Date()).split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 const toStartOfDay = (date: Date) => {
   const atLocalStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   atLocalStart.setHours(0, 0, 0, 0);
@@ -66,7 +81,7 @@ export function resolveDateRange(
   customEnd?: string | null,
   options?: { includeToday?: boolean },
 ): { start: Date; end: Date; preset: UnifiedRangePreset } {
-  const today = new Date();
+  const today = getJstToday();
   const includeToday = options?.includeToday ?? false;
   const anchor = includeToday ? toStartOfDay(today) : toStartOfDay(addDays(today, -1)); // 基準日
   const endOfAnchor = toEndOfDay(includeToday ? today : addDays(today, -1));
