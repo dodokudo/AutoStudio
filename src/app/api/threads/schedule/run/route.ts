@@ -28,6 +28,7 @@ async function handleScheduleRun() {
         processed: result.processed,
         succeeded: result.succeeded,
         failed: result.failed,
+        recovered: result.recovered,
         results: result.results,
         timestamp: new Date().toISOString(),
       },

@@ -18,6 +18,9 @@ const SCHEDULE_TABLE_SCHEMA = [
   { name: 'comment2', type: 'STRING' },
   { name: 'created_at', type: 'TIMESTAMP' },
   { name: 'updated_at', type: 'TIMESTAMP' },
+  { name: 'main_thread_id', type: 'STRING' },
+  { name: 'comment1_thread_id', type: 'STRING' },
+  { name: 'comment2_thread_id', type: 'STRING' },
 ];
 
 async function query<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>) {
@@ -36,6 +39,18 @@ export async function ensureScheduledPostsTable() {
       const message = (error as Error)?.message || '';
       if (!message.includes('Already Exists')) {
         throw error;
+      }
+    }
+  } else {
+    // マイグレーション: 新カラムを追加（既存テーブル用）
+    const newColumns = ['main_thread_id', 'comment1_thread_id', 'comment2_thread_id'];
+    for (const col of newColumns) {
+      try {
+        await client.query({
+          query: `ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\` ADD COLUMN ${col} STRING`,
+        });
+      } catch {
+        // カラムが既に存在する場合は無視
       }
     }
   }
@@ -67,6 +82,9 @@ export type ScheduledPostRow = {
   template_id?: string | null;
   theme?: string | null;
   plan_status?: string | null;
+  main_thread_id?: string | null;
+  comment1_thread_id?: string | null;
+  comment2_thread_id?: string | null;
 };
 
 export async function listScheduledPosts(params: { startDate?: string; endDate?: string }) {
@@ -97,6 +115,9 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
       sp.comment2,
       sp.created_at,
       sp.updated_at,
+      sp.main_thread_id,
+      sp.comment1_thread_id,
+      sp.comment2_thread_id,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S+09:00', sp.scheduled_time, 'Asia/Tokyo') AS scheduled_at_jst,
       FORMAT_DATE('%Y-%m-%d', DATE(sp.scheduled_time, 'Asia/Tokyo')) AS scheduled_date,
       tp.template_id,
@@ -125,6 +146,9 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     template_id: toPlain(row.template_id) || null,
     theme: toPlain(row.theme) || null,
     plan_status: toPlain(row.plan_status) || null,
+    main_thread_id: toPlain(row.main_thread_id) || null,
+    comment1_thread_id: toPlain(row.comment1_thread_id) || null,
+    comment2_thread_id: toPlain(row.comment2_thread_id) || null,
   })) as ScheduledPostRow[];
 }
 
@@ -141,6 +165,9 @@ export async function getScheduledPostById(scheduleId: string) {
       sp.comment2,
       sp.created_at,
       sp.updated_at,
+      sp.main_thread_id,
+      sp.comment1_thread_id,
+      sp.comment2_thread_id,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S+09:00', sp.scheduled_time, 'Asia/Tokyo') AS scheduled_at_jst,
       FORMAT_DATE('%Y-%m-%d', DATE(sp.scheduled_time, 'Asia/Tokyo')) AS scheduled_date,
       tp.template_id,
@@ -170,6 +197,9 @@ export async function getScheduledPostById(scheduleId: string) {
     template_id: toPlain(row.template_id) || null,
     theme: toPlain(row.theme) || null,
     plan_status: toPlain(row.plan_status) || null,
+    main_thread_id: toPlain(row.main_thread_id) || null,
+    comment1_thread_id: toPlain(row.comment1_thread_id) || null,
+    comment2_thread_id: toPlain(row.comment2_thread_id) || null,
   } as ScheduledPostRow;
 }
 
@@ -215,6 +245,9 @@ export async function updateScheduledPost(
     mainText?: string | null;
     comment1?: string | null;
     comment2?: string | null;
+    mainThreadId?: string | null;
+    comment1ThreadId?: string | null;
+    comment2ThreadId?: string | null;
   },
 ) {
   await ensureScheduledPostsTable();
@@ -255,6 +288,21 @@ export async function updateScheduledPost(
     queryParams.comment2 = params.comment2;
     types.comment2 = 'STRING';
   }
+  if (params.mainThreadId !== undefined) {
+    setClauses.push('main_thread_id = @mainThreadId');
+    queryParams.mainThreadId = params.mainThreadId;
+    types.mainThreadId = 'STRING';
+  }
+  if (params.comment1ThreadId !== undefined) {
+    setClauses.push('comment1_thread_id = @comment1ThreadId');
+    queryParams.comment1ThreadId = params.comment1ThreadId;
+    types.comment1ThreadId = 'STRING';
+  }
+  if (params.comment2ThreadId !== undefined) {
+    setClauses.push('comment2_thread_id = @comment2ThreadId');
+    queryParams.comment2ThreadId = params.comment2ThreadId;
+    types.comment2ThreadId = 'STRING';
+  }
 
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
@@ -268,6 +316,30 @@ export async function updateScheduledPost(
     types: Object.keys(types).length > 0 ? types : undefined,
   });
   return getScheduledPostById(scheduleId);
+}
+
+/**
+ * アトミックに予約投稿をclaimする（レース条件防止）
+ * status = 'scheduled' の場合のみ 'processing' に変更し、成功したかを返す
+ */
+export async function claimScheduledPost(scheduleId: string): Promise<boolean> {
+  await ensureScheduledPostsTable();
+  const sql = `
+    UPDATE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
+    SET status = 'processing', updated_at = CURRENT_TIMESTAMP()
+    WHERE schedule_id = @scheduleId AND status = 'scheduled'
+  `;
+  const [job] = await client.createQueryJob({
+    query: sql,
+    params: { scheduleId },
+  });
+  await job.getQueryResults();
+  const [metadata] = await job.getMetadata();
+  const affected = parseInt(
+    metadata.statistics?.query?.numDmlAffectedRows || '0',
+    10,
+  );
+  return affected > 0;
 }
 
 export async function deleteScheduledPost(scheduleId: string) {
