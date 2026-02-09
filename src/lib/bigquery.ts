@@ -58,7 +58,7 @@ export function createBigQueryClient(projectId?: string, location?: string) {
     projectId: resolvedProjectId,
     credentials,
     keyFilename: credentials ? undefined : process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    location: location || process.env.LSTEP_BQ_LOCATION || 'US',
+    location: location || process.env.LSTEP_BQ_LOCATION || undefined,
   });
 }
 
