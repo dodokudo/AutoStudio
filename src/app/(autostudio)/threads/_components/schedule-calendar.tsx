@@ -73,6 +73,7 @@ export function ScheduleCalendar({
   onGenerate,
 }: ScheduleCalendarProps) {
   const [detailItem, setDetailItem] = useState<ScheduledPost | null>(null);
+  const [listFilter, setListFilter] = useState<'all' | 'scheduled' | 'posted'>('all');
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -92,6 +93,11 @@ export function ScheduleCalendar({
 
   const selectedItems = items
     .filter((item) => item.scheduledDate === selectedDate)
+    .filter((item) => {
+      if (listFilter === 'scheduled') return item.status === 'scheduled';
+      if (listFilter === 'posted') return item.status === 'posted';
+      return true;
+    })
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
   return (
@@ -215,7 +221,28 @@ export function ScheduleCalendar({
             <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">予約一覧</h3>
             <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{selectedDate} / JST</p>
           </div>
-          {isLoading ? <span className="text-xs text-[color:var(--color-text-muted)]">読み込み中...</span> : null}
+          <div className="flex items-center gap-1">
+            {isLoading ? <span className="mr-2 text-xs text-[color:var(--color-text-muted)]">読み込み中...</span> : null}
+            {([
+              { key: 'all', label: '一覧' },
+              { key: 'scheduled', label: '予約済み' },
+              { key: 'posted', label: '投稿完了' },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setListFilter(key)}
+                className={classNames(
+                  'rounded-full px-3 py-1 text-xs font-medium transition',
+                  listFilter === key
+                    ? 'bg-[color:var(--color-accent)] text-white'
+                    : 'bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)]',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </header>
 
         {selectedItems.length === 0 ? (
