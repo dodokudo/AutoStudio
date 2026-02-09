@@ -6,11 +6,6 @@ import { classNames } from '@/lib/classNames';
 
 const MAX_LENGTH = 500;
 
-function clampText(value: string) {
-  if (value.length <= MAX_LENGTH) return value;
-  return value.slice(0, MAX_LENGTH);
-}
-
 function toDateTimeLocal(value: string) {
   if (!value) return '';
   const [datePart, timePart] = value.split('T');
@@ -184,7 +179,7 @@ export function ScheduleEditor({
           メイン投稿（必須）
           <textarea
             value={mainText}
-            onChange={(event) => setMainText(clampText(event.target.value))}
+            onChange={(event) => setMainText(event.target.value)}
             rows={4}
             className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
           />
@@ -197,7 +192,7 @@ export function ScheduleEditor({
           コメント1（必須）
           <textarea
             value={comment1}
-            onChange={(event) => setComment1(clampText(event.target.value))}
+            onChange={(event) => setComment1(event.target.value)}
             rows={9}
             className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
           />
@@ -210,7 +205,7 @@ export function ScheduleEditor({
           コメント2（必須）
           <textarea
             value={comment2}
-            onChange={(event) => setComment2(clampText(event.target.value))}
+            onChange={(event) => setComment2(event.target.value)}
             rows={9}
             className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
           />
