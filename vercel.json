@@ -23,6 +23,10 @@
       "schedule": "*/3 * * * *"
     },
     {
+      "path": "/api/threads/auto-comment/check",
+      "schedule": "30 */6 * * *"
+    },
+    {
       "path": "/api/sales/cron/sync",
       "schedule": "0 15 * * *"
     }
