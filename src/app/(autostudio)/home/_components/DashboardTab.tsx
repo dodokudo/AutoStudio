@@ -190,8 +190,11 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
     };
 
     return rows.map((row) => {
-      const progressRate = row.target > 0 ? (row.current / row.target) * 100 : 0;
       const expected = row.target > 0 ? expectedValue(row.target) : 0;
+      // 目標に対する達成率（プログレスバー表示用）
+      const targetAchievementRate = row.target > 0 ? (row.current / row.target) * 100 : 0;
+      // 期待進捗に対する達成率（表示用）
+      const progressRate = expected > 0 ? (row.current / expected) * 100 : 0;
       const diff = progressRate - expectedRate;
       const status = getStatus(progressRate);
       const targetPerDay = baseDays > 0 ? row.target / baseDays : 0;
@@ -216,6 +219,7 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
           : `残り ${formatNumber(remainingPerDay)}${row.unit}/日`;
       return {
         ...row,
+        targetAchievementRate,
         progressRate,
         expected,
         expectedRate,
@@ -317,7 +321,7 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
                   <div className="relative h-2 w-full rounded-full bg-[color:var(--color-border)]">
                     <div
                       className={`h-full rounded-full transition-all ${row.status.tone === 'text-green-600' ? 'bg-green-500' : row.status.tone === 'text-red-600' ? 'bg-red-500' : 'bg-[color:var(--color-accent)]'}`}
-                      style={{ width: `${Math.min(100, Math.max(0, row.progressRate))}%` }}
+                      style={{ width: `${Math.min(100, Math.max(0, row.targetAchievementRate))}%` }}
                     />
                     <div
                       className="absolute top-[-2px] h-3 w-1 rounded-full bg-[color:var(--color-text-primary)]"
