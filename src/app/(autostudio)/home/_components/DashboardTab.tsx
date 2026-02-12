@@ -138,10 +138,11 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
     const threadsIncrease = Math.max(0, threadsCurrent - data.followerStarts.threads);
     const instagramIncrease = Math.max(0, instagramCurrent - data.followerStarts.instagram);
 
-    const getStatus = (progressRate: number) => {
-      const diff = progressRate - expectedRate;
-      if (diff >= 5) return { label: '先行', tone: 'text-green-600' };
-      if (diff <= -5) return { label: '遅れ', tone: 'text-red-600' };
+    const getStatus = (paceAchievementRate: number) => {
+      // 期待進捗に対する達成率が100%を基準とする
+      const margin = 10; // 10%のマージン
+      if (paceAchievementRate >= 100 + margin) return { label: '先行', tone: 'text-green-600' };
+      if (paceAchievementRate <= 100 - margin) return { label: '遅れ', tone: 'text-red-600' };
       return { label: '予定通り', tone: 'text-[color:var(--color-text-muted)]' };
     };
 
