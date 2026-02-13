@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { sendAlertEmail } from '@/lib/notifications';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
@@ -249,6 +250,7 @@ export async function POST() {
 
     let processedCount = 0;
     let addedCount = 0;
+    const addedPosts: { post_id: string; impressions: number; ctr: string }[] = [];
 
     for (const candidate of candidates) {
       console.log(`[threads/auto-comment/check] Processing post ${candidate.post_id}...`);
@@ -267,6 +269,11 @@ export async function POST() {
         if (scheduleId) {
           tokutenCommentAdded = true;
           addedCount++;
+          addedPosts.push({
+            post_id: candidate.post_id,
+            impressions: candidate.impressions,
+            ctr: (candidate.comment1_ctr * 100).toFixed(1),
+          });
         } else {
           console.log(`  Skipped: no comment2 found to reply to`);
         }
@@ -278,6 +285,19 @@ export async function POST() {
     }
 
     console.log(`[threads/auto-comment/check] Completed: ${processedCount} processed, ${addedCount} comments added`);
+
+    // メール通知（コメント追加があった場合のみ）
+    if (addedPosts.length > 0) {
+      const now = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+      const postList = addedPosts.map(p =>
+        `- ${p.post_id} (imp: ${p.impressions}, CTR: ${p.ctr}%)`
+      ).join('\n');
+
+      await sendAlertEmail(
+        `[Threads自動コメント] ${addedPosts.length}件の特典誘導を追加しました`,
+        `自動検知により特典誘導コメントをスケジュールしました。\n\n対象投稿:\n${postList}\n\n実行時刻: ${now}`
+      );
+    }
 
     return NextResponse.json({
       success: true,
