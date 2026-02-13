@@ -5,7 +5,8 @@ export async function GET() {
     console.log('[cron/comments] Starting scheduled comment execution cron job...');
 
     // コメント実行APIを呼び出し
-    const response = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3001'}/api/threads/comments/execute`, {
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3001';
+    const response = await fetch(`${baseUrl}/api/threads/comments/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

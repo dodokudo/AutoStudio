@@ -4,6 +4,7 @@ import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
+const MAX_RETRY_COUNT = 10;
 
 // テキストからURLを検出して分離する
 function extractUrlFromText(text: string): { textWithoutUrl: string; url: string | undefined } {
@@ -34,12 +35,13 @@ export async function POST() {
 
     const client = createBigQueryClient(PROJECT_ID);
 
-    // 実行予定時刻を過ぎた未実行のコメントを取得
+    // 実行予定時刻を過ぎた未実行のコメントを取得（リトライ上限あり）
     const getPendingCommentsQuery = `
-      SELECT schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status
+      SELECT schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status, IFNULL(retry_count, 0) as retry_count
       FROM \`${PROJECT_ID}.${DATASET}.comment_schedules\`
       WHERE (status = 'pending' OR (status = 'failed' AND TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), scheduled_time, MINUTE) >= 1))
         AND scheduled_time <= CURRENT_TIMESTAMP()
+        AND IFNULL(retry_count, 0) < ${MAX_RETRY_COUNT}
       ORDER BY scheduled_time ASC
       LIMIT 10
     `;
@@ -111,10 +113,12 @@ export async function POST() {
       } catch (error) {
         console.error(`[threads/comments/execute] Failed to post comment ${comment.comment_order}:`, error);
 
-        // エラーステータスを更新
+        // エラーステータスを更新（リトライ回数をインクリメント）
+        const newRetryCount = (comment.retry_count || 0) + 1;
+        const finalStatus = newRetryCount >= MAX_RETRY_COUNT ? 'abandoned' : 'failed';
         const updateErrorQuery = `
           UPDATE \`${PROJECT_ID}.${DATASET}.comment_schedules\`
-          SET status = 'failed', error_message = @error_message, executed_at = CURRENT_TIMESTAMP()
+          SET status = @status, error_message = @error_message, executed_at = CURRENT_TIMESTAMP(), retry_count = @retry_count
           WHERE schedule_id = @schedule_id
         `;
 
@@ -122,9 +126,15 @@ export async function POST() {
           query: updateErrorQuery,
           params: {
             schedule_id: comment.schedule_id,
-            error_message: (error as Error).message
+            error_message: (error as Error).message,
+            retry_count: newRetryCount,
+            status: finalStatus,
           }
         });
+
+        if (finalStatus === 'abandoned') {
+          console.error(`[threads/comments/execute] Comment ${comment.schedule_id} abandoned after ${MAX_RETRY_COUNT} retries`);
+        }
       }
     }
 
