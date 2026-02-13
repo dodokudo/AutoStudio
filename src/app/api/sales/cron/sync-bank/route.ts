@@ -17,6 +17,7 @@ const EXCLUDE_PATTERNS = [
   'ユニヴアペイ',
   '普通預金 利息',
   'VISAデビツトキヤツシユバツク',
+  'クドウヒロヤ',
 ];
 
 const EXCLUDE_STARTS_WITH = [
