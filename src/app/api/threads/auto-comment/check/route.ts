@@ -110,9 +110,9 @@ async function checkTokutenGuide(
     return { has_tokuten_guide: false, reason: 'no_comments' };
   }
 
-  // チェック1: 全コメント欄に特典誘導URLが含まれているか（手動追加も検知）
+  // チェック1: コメント欄2以降(depth>=1)に特典誘導URLがあるか（手動追加も検知）
   const commentWithTokutenUrl = comments.find(
-    (c: any) => c.text && c.text.includes('autostudio-self.vercel.app')
+    (c: any) => c.depth >= 1 && c.text && c.text.includes('autostudio-self.vercel.app')
   );
 
   if (commentWithTokutenUrl) {
