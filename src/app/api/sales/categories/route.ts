@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getChargeCategories, setChargeCategory, SALES_CATEGORIES, type SalesCategoryId } from '@/lib/sales/categories';
+import { getChargeCategories, setChargeCategory, autoCategorizeCharges, SALES_CATEGORIES, type SalesCategoryId } from '@/lib/sales/categories';
 
 /**
  * GET /api/sales/categories?chargeIds=id1,id2,id3
@@ -57,7 +57,10 @@ export async function POST(request: Request) {
 
     await setChargeCategory(chargeId, category);
 
-    return NextResponse.json({ success: true, chargeId, category });
+    // 同じ顧客名+金額の未設定chargeにも自動適用
+    const autoCategorized = await autoCategorizeCharges();
+
+    return NextResponse.json({ success: true, chargeId, category, autoCategorized });
   } catch (error) {
     console.error('[api/sales/categories] Error:', error);
     return NextResponse.json(

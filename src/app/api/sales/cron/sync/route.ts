@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { listAllCharges } from '@/lib/univapay/client';
 import { upsertCharges, getLastSyncedAt } from '@/lib/sales/charges';
+import { autoCategorizeCharges } from '@/lib/sales/categories';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,11 +38,18 @@ async function handleSync() {
       totalSaved += saved;
     }
 
+    // 自動カテゴリ付与
+    const autoCategorized = await autoCategorizeCharges();
+    if (autoCategorized > 0) {
+      console.log(`[sales/cron/sync] Auto-categorized: ${autoCategorized} charges`);
+    }
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
     console.log('[sales/cron/sync] Completed:', {
       chargesFetched: charges.length,
       chargesSaved: totalSaved,
+      autoCategorized,
       duration: `${duration}s`,
       timestamp: new Date().toISOString(),
     });
@@ -50,6 +58,7 @@ async function handleSync() {
       success: true,
       chargesFetched: charges.length,
       chargesSaved: totalSaved,
+      autoCategorized,
       duration: `${duration}s`,
       timestamp: new Date().toISOString(),
     });

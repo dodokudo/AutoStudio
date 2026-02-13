@@ -244,6 +244,99 @@ export async function upsertMfBankSales(sales: MfBankSale[]): Promise<number> {
 }
 
 /**
+ * UnivaPay課金の自動カテゴリ付与
+ * 同じ顧客名＋同じ金額の過去取引にカテゴリが設定済みなら、未設定の取引にも自動適用
+ */
+export async function autoCategorizeCharges(): Promise<number> {
+  const client = createBigQueryClient(PROJECT_ID);
+
+  const sourceCTE = `
+    WITH categorized_patterns AS (
+      SELECT DISTINCT
+        JSON_VALUE(c.metadata, '$."univapay-name"') as customer_name,
+        c.charged_amount,
+        cc.category
+      FROM \`${PROJECT_ID}.${DATASET}.charges\` c
+      JOIN \`${PROJECT_ID}.${DATASET}.charge_categories\` cc ON c.id = cc.charge_id
+      WHERE c.mode = 'live' AND c.status = 'successful'
+    )
+    SELECT c.id as charge_id, cp.category
+    FROM \`${PROJECT_ID}.${DATASET}.charges\` c
+    LEFT JOIN \`${PROJECT_ID}.${DATASET}.charge_categories\` existing ON c.id = existing.charge_id
+    JOIN categorized_patterns cp
+      ON JSON_VALUE(c.metadata, '$."univapay-name"') = cp.customer_name
+      AND c.charged_amount = cp.charged_amount
+    WHERE c.mode = 'live' AND c.status = 'successful'
+      AND existing.charge_id IS NULL
+  `;
+
+  // 先に対象件数を取得
+  const [countRows] = await client.query({
+    query: `SELECT COUNT(*) as cnt FROM (${sourceCTE})`,
+  });
+  const count = Number((countRows as Array<{ cnt: number }>)[0].cnt);
+  if (count === 0) return 0;
+
+  // MERGE実行
+  await client.query({
+    query: `
+      MERGE \`${PROJECT_ID}.${DATASET}.charge_categories\` T
+      USING (${sourceCTE}) S
+      ON T.charge_id = S.charge_id
+      WHEN NOT MATCHED THEN
+        INSERT (charge_id, category, updated_at)
+        VALUES (S.charge_id, S.category, CURRENT_TIMESTAMP())
+    `,
+  });
+
+  return count;
+}
+
+/**
+ * MF銀行入金の自動カテゴリ付与
+ * 同じ顧客名＋同じ金額の過去取引にカテゴリが手動設定済みなら、未設定('other')の取引にも自動適用
+ */
+export async function autoCategorizeManualSales(): Promise<number> {
+  const client = createBigQueryClient(PROJECT_ID);
+
+  // 先に対象件数を取得
+  const [countRows] = await client.query({
+    query: `
+      SELECT COUNT(*) as cnt
+      FROM \`${PROJECT_ID}.${DATASET}.manual_sales\` target
+      JOIN (
+        SELECT DISTINCT customer_name, amount, category
+        FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
+        WHERE category != 'other'
+      ) source
+      ON target.customer_name = source.customer_name
+        AND target.amount = source.amount
+      WHERE target.category = 'other'
+    `,
+  });
+  const count = Number((countRows as Array<{ cnt: number }>)[0].cnt);
+  if (count === 0) return 0;
+
+  // UPDATE実行
+  await client.query({
+    query: `
+      UPDATE \`${PROJECT_ID}.${DATASET}.manual_sales\` target
+      SET category = source.category, updated_at = CURRENT_TIMESTAMP()
+      FROM (
+        SELECT DISTINCT customer_name, amount, category
+        FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
+        WHERE category != 'other'
+      ) source
+      WHERE target.customer_name = source.customer_name
+        AND target.amount = source.amount
+        AND target.category = 'other'
+    `,
+  });
+
+  return count;
+}
+
+/**
  * 手動売上を更新
  */
 export async function updateManualSale(

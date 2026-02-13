@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
-import { upsertMfBankSales, type MfBankSale } from '@/lib/sales/categories';
+import { upsertMfBankSales, autoCategorizeManualSales, type MfBankSale } from '@/lib/sales/categories';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -107,12 +107,19 @@ async function handleSync() {
       totalSaved += await upsertMfBankSales(batch);
     }
 
+    // 自動カテゴリ付与
+    const autoCategorized = await autoCategorizeManualSales();
+    if (autoCategorized > 0) {
+      console.log(`[sales/cron/sync-bank] Auto-categorized: ${autoCategorized} manual sales`);
+    }
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
     console.log('[sales/cron/sync-bank] Completed:', {
       fetched: transactions.length,
       excluded: transactions.length - sales.length,
       synced: totalSaved,
+      autoCategorized,
       duration: `${duration}s`,
     });
 
@@ -121,6 +128,7 @@ async function handleSync() {
       fetched: transactions.length,
       excluded: transactions.length - sales.length,
       synced: totalSaved,
+      autoCategorized,
       duration: `${duration}s`,
       timestamp: new Date().toISOString(),
     });

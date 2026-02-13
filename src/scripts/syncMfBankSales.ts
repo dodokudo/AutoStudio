@@ -17,7 +17,7 @@
  */
 import 'dotenv/config';
 import { createBigQueryClient, resolveProjectId } from '../lib/bigquery';
-import { upsertMfBankSales, type MfBankSale } from '../lib/sales/categories';
+import { upsertMfBankSales, autoCategorizeManualSales, type MfBankSale } from '../lib/sales/categories';
 
 const PROJECT_ID = resolveProjectId();
 const MF_DATASET = 'moneyforward';
@@ -175,6 +175,11 @@ async function main() {
 
   const saveTime = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`[sync:bank] 保存完了: ${totalSaved}件 (${saveTime}秒)`);
+
+  // 自動カテゴリ付与
+  console.log('\n[sync:bank] 自動カテゴリ付与中...');
+  const autoCategorized = await autoCategorizeManualSales();
+  console.log(`[sync:bank] 自動カテゴリ付与: ${autoCategorized}件`);
 
   // 完了
   console.log('\n' + '='.repeat(60));

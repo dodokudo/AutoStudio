@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import { listAllCharges } from '../lib/univapay/client';
 import { initChargesTable, upsertCharges, getLastSyncedAt } from '../lib/sales/charges';
+import { autoCategorizeCharges } from '../lib/sales/categories';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -76,6 +77,11 @@ async function main() {
 
   const saveTime = ((Date.now() - saveStartTime) / 1000).toFixed(1);
   console.log(`[sync] 保存完了: ${totalSaved}件 (${saveTime}秒)`);
+
+  // 自動カテゴリ付与
+  console.log('\n[sync] 自動カテゴリ付与中...');
+  const autoCategorized = await autoCategorizeCharges();
+  console.log(`[sync] 自動カテゴリ付与: ${autoCategorized}件`);
 
   // 完了
   console.log('\n' + '='.repeat(60));

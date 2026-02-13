@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getManualSales, addManualSale, deleteManualSale, updateManualSale, SALES_CATEGORIES, type SalesCategoryId } from '@/lib/sales/categories';
+import { getManualSales, addManualSale, deleteManualSale, updateManualSale, autoCategorizeManualSales, SALES_CATEGORIES, type SalesCategoryId } from '@/lib/sales/categories';
 
 /**
  * GET /api/sales/manual?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
@@ -140,7 +140,13 @@ export async function PATCH(request: Request) {
       paymentDate,
     });
 
-    return NextResponse.json({ success: true });
+    // カテゴリ変更時、同じ顧客名+金額の未設定分にも自動適用
+    let autoCategorized = 0;
+    if (category) {
+      autoCategorized = await autoCategorizeManualSales();
+    }
+
+    return NextResponse.json({ success: true, autoCategorized });
   } catch (error) {
     console.error('[api/sales/manual] PATCH Error:', error);
     return NextResponse.json(
