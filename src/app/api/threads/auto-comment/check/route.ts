@@ -64,15 +64,12 @@ async function findTriggerCandidates(client: ReturnType<typeof createBigQueryCli
         WHEN impressions > 0 THEN IFNULL(comment1_views, 0) / impressions
         ELSE 0
       END as comment1_ctr,
-      CASE
-        WHEN impressions >= @impressions_threshold THEN 'impressions'
-        WHEN (IFNULL(comment1_views, 0) / NULLIF(impressions, 0)) >= @ctr_threshold THEN 'comment_ctr'
-        ELSE NULL
-      END as trigger_reason
+      'impressions_and_ctr' as trigger_reason
     FROM post_stats
     WHERE
       impressions >= @impressions_threshold
-      OR (impressions > 0 AND (IFNULL(comment1_views, 0) / impressions) >= @ctr_threshold)
+      AND impressions > 0
+      AND (IFNULL(comment1_views, 0) / impressions) >= @ctr_threshold
     ORDER BY posted_at DESC
   `;
 
