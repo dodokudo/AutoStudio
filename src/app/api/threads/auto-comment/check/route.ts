@@ -13,8 +13,8 @@ ${TOKUTEN_GUIDE_URL}`;
 const IMPRESSIONS_THRESHOLD = 1000; // インプレッション閾値
 const COMMENT_CTR_THRESHOLD = 0.1; // コメント1への遷移率閾値(10%)
 
-// 監視対象期間
-const MONITORING_DAYS = 7; // 投稿から7日以内を監視
+// 監視対象期間（当日+前日の2日間）
+const MONITORING_DAYS = 2;
 
 interface TriggerCandidate {
   post_id: string;
