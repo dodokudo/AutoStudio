@@ -4,11 +4,10 @@ import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
-// 特典誘導テンプレート
-const TOKUTEN_GUIDE_TEMPLATE = `2026年最新版のThreadsノウハウはこちら▼
-https://autostudio-self.vercel.app/l/th/2026
-
-3ヶ月でフォロワー3100人増やした方法は50分の動画講座とPDF50ページで固定ポストで解説してます。`;
+// 特典誘導テンプレート（文言・URLは必要に応じて変更）
+const TOKUTEN_GUIDE_URL = 'https://autostudio-self.vercel.app/l/th/2026';
+const TOKUTEN_GUIDE_TEMPLATE = `1000名以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
+${TOKUTEN_GUIDE_URL}`;
 
 // 投稿の伸び検知条件
 const IMPRESSIONS_THRESHOLD = 1000; // インプレッション閾値
