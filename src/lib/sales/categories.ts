@@ -294,46 +294,85 @@ export async function autoCategorizeCharges(): Promise<number> {
 
 /**
  * MF銀行入金の自動カテゴリ付与
- * 同じ顧客名＋同じ金額の過去取引にカテゴリが手動設定済みなら、未設定('other')の取引にも自動適用
+ *
+ * 優先順位:
+ * 1. 同じ顧客名+同じ金額で既にカテゴリ設定済み → そのカテゴリを適用
+ * 2. 同じ顧客名で1種類のカテゴリしかない → 金額が違っても適用（例: ワイツージュエリーは常にcorporate）
  */
 export async function autoCategorizeManualSales(): Promise<number> {
   const client = createBigQueryClient(PROJECT_ID);
 
-  // 先に対象件数を取得
-  const [countRows] = await client.query({
+  // Step 1: カテゴリ設定済みのパターンを取得
+  const [patternRows] = await client.query({
     query: `
-      SELECT COUNT(*) as cnt
-      FROM \`${PROJECT_ID}.${DATASET}.manual_sales\` target
-      JOIN (
-        SELECT DISTINCT customer_name, amount, category
-        FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
-        WHERE category != 'other'
-      ) source
-      ON target.customer_name = source.customer_name
-        AND target.amount = source.amount
-      WHERE target.category = 'other'
+      SELECT customer_name, amount, category
+      FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
+      WHERE category != 'other'
     `,
   });
-  const count = Number((countRows as Array<{ cnt: number }>)[0].cnt);
-  if (count === 0) return 0;
+  const patterns = patternRows as Array<{ customer_name: string; amount: number; category: string }>;
+  if (patterns.length === 0) return 0;
 
-  // UPDATE実行
+  // 顧客名+金額の完全一致ルール
+  const exactRules = new Map<string, string>();
+  for (const p of patterns) {
+    exactRules.set(`${p.customer_name}|${p.amount}`, p.category);
+  }
+
+  // 顧客名のみルール（カテゴリが1種類だけの顧客）
+  const nameCategories = new Map<string, Set<string>>();
+  for (const p of patterns) {
+    if (!nameCategories.has(p.customer_name)) {
+      nameCategories.set(p.customer_name, new Set());
+    }
+    nameCategories.get(p.customer_name)!.add(p.category);
+  }
+  const nameOnlyRules = new Map<string, string>();
+  for (const [name, cats] of nameCategories) {
+    if (cats.size === 1) {
+      nameOnlyRules.set(name, [...cats][0]);
+    }
+  }
+
+  // Step 2: 未設定のレコードを取得
+  const [uncatRows] = await client.query({
+    query: `
+      SELECT id, customer_name, amount
+      FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
+      WHERE category = 'other'
+    `,
+  });
+  const uncategorized = uncatRows as Array<{ id: string; customer_name: string; amount: number }>;
+  if (uncategorized.length === 0) return 0;
+
+  // Step 3: マッチング（exact優先、なければname_only）
+  const updates: Array<{ id: string; category: string }> = [];
+  for (const row of uncategorized) {
+    const exactKey = `${row.customer_name}|${row.amount}`;
+    const category = exactRules.get(exactKey) ?? nameOnlyRules.get(row.customer_name);
+    if (category) {
+      updates.push({ id: row.id, category });
+    }
+  }
+  if (updates.length === 0) return 0;
+
+  // Step 4: UPDATE（バッチ）
+  const caseLines = updates.map(u => `WHEN '${u.id}' THEN '${u.category}'`).join('\n            ');
+  const idList = updates.map(u => `'${u.id}'`).join(',');
+
   await client.query({
     query: `
-      UPDATE \`${PROJECT_ID}.${DATASET}.manual_sales\` target
-      SET category = source.category, updated_at = CURRENT_TIMESTAMP()
-      FROM (
-        SELECT DISTINCT customer_name, amount, category
-        FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
-        WHERE category != 'other'
-      ) source
-      WHERE target.customer_name = source.customer_name
-        AND target.amount = source.amount
-        AND target.category = 'other'
+      UPDATE \`${PROJECT_ID}.${DATASET}.manual_sales\`
+      SET
+        category = CASE id
+            ${caseLines}
+        END,
+        updated_at = CURRENT_TIMESTAMP()
+      WHERE id IN (${idList})
     `,
   });
 
-  return count;
+  return updates.length;
 }
 
 /**

@@ -18,6 +18,8 @@ const EXCLUDE_PATTERNS = [
   '普通預金 利息',
   'VISAデビツトキヤツシユバツク',
   'クドウヒロヤ',
+  'クドウ ヒロヤ',
+  'ATM',
 ];
 
 const EXCLUDE_STARTS_WITH = [

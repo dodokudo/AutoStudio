@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { unstable_cache } from 'next/cache';
 import { getSalesSummary } from '@/lib/univapay/client';
 import { getChargeCategories, getManualSales } from '@/lib/sales/categories';
 import { getAllGroups } from '@/lib/sales/groups';
@@ -17,100 +16,96 @@ function isValidDate(value: string | null): value is string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-const getCachedDashboard = unstable_cache(
-  async (startParam: string, endParam: string) => {
-    const startDate = new Date(`${startParam}T00:00:00`);
-    const endDate = new Date(`${endParam}T23:59:59`);
+async function getDashboard(startParam: string, endParam: string) {
+  const startDate = new Date(`${startParam}T00:00:00`);
+  const endDate = new Date(`${endParam}T23:59:59`);
 
-    const startDateStr = formatDateInput(startDate);
-    const endDateStr = formatDateInput(endDate);
+  const startDateStr = formatDateInput(startDate);
+  const endDateStr = formatDateInput(endDate);
 
-    const cashflowStart = new Date(startDate);
-    cashflowStart.setDate(cashflowStart.getDate() - 31);
-    const cashflowStartDate = cashflowStart.toISOString();
+  const cashflowStart = new Date(startDate);
+  cashflowStart.setDate(cashflowStart.getDate() - 31);
+  const cashflowStartDate = cashflowStart.toISOString();
 
-    const monthlyStart = new Date();
-    monthlyStart.setHours(0, 0, 0, 0);
-    monthlyStart.setMonth(monthlyStart.getMonth() - 11);
-    monthlyStart.setDate(1);
-    const monthlyEnd = new Date();
-    monthlyEnd.setHours(0, 0, 0, 0);
-    const monthlyStartDate = monthlyStart.toISOString();
-    const monthlyEndDate = monthlyEnd.toISOString();
-    const monthlyStartDateStr = formatDateInput(monthlyStart);
-    const monthlyEndDateStr = formatDateInput(monthlyEnd);
+  const monthlyStart = new Date();
+  monthlyStart.setHours(0, 0, 0, 0);
+  monthlyStart.setMonth(monthlyStart.getMonth() - 11);
+  monthlyStart.setDate(1);
+  const monthlyEnd = new Date();
+  monthlyEnd.setHours(0, 0, 0, 0);
+  const monthlyStartDate = monthlyStart.toISOString();
+  const monthlyEndDate = monthlyEnd.toISOString();
+  const monthlyStartDateStr = formatDateInput(monthlyStart);
+  const monthlyEndDateStr = formatDateInput(monthlyEnd);
 
-    const [
-      summary,
-      cashflowSummary,
-      monthlySummary,
-      manualSales,
-      monthlyManualSales,
-      groupsMap,
-      lstepAnalytics,
-    ] = await Promise.all([
-      getSalesSummary(startDate.toISOString(), endDate.toISOString()),
-      getSalesSummary(cashflowStartDate, endDate.toISOString()),
-      getSalesSummary(monthlyStartDate, monthlyEndDate),
-      getManualSales(startDateStr, endDateStr),
-      getManualSales(monthlyStartDateStr, monthlyEndDateStr),
-      getAllGroups().catch(() => new Map()),
-      LSTEP_PROJECT_ID ? getLstepAnalytics(LSTEP_PROJECT_ID).catch(() => null) : Promise.resolve(null),
-    ]);
+  const [
+    summary,
+    cashflowSummary,
+    monthlySummary,
+    manualSales,
+    monthlyManualSales,
+    groupsMap,
+    lstepAnalytics,
+  ] = await Promise.all([
+    getSalesSummary(startDate.toISOString(), endDate.toISOString()),
+    getSalesSummary(cashflowStartDate, endDate.toISOString()),
+    getSalesSummary(monthlyStartDate, monthlyEndDate),
+    getManualSales(startDateStr, endDateStr),
+    getManualSales(monthlyStartDateStr, monthlyEndDateStr),
+    getAllGroups().catch(() => new Map()),
+    LSTEP_PROJECT_ID ? getLstepAnalytics(LSTEP_PROJECT_ID).catch(() => null) : Promise.resolve(null),
+  ]);
 
-    const chargeIds = summary.charges.map(c => c.id);
-    const categoriesMap = await getChargeCategories(chargeIds);
-    const categories: Record<string, string> = {};
-    for (const [id, cat] of categoriesMap) {
-      categories[id] = cat;
-    }
+  const chargeIds = summary.charges.map(c => c.id);
+  const categoriesMap = await getChargeCategories(chargeIds);
+  const categories: Record<string, string> = {};
+  for (const [id, cat] of categoriesMap) {
+    categories[id] = cat;
+  }
 
-    const monthlyChargeIds = monthlySummary.charges.map(c => c.id);
-    const monthlyCategoriesMap = await getChargeCategories(monthlyChargeIds);
-    const monthlyCategories: Record<string, string> = {};
-    for (const [id, cat] of monthlyCategoriesMap) {
-      monthlyCategories[id] = cat;
-    }
+  const monthlyChargeIds = monthlySummary.charges.map(c => c.id);
+  const monthlyCategoriesMap = await getChargeCategories(monthlyChargeIds);
+  const monthlyCategories: Record<string, string> = {};
+  for (const [id, cat] of monthlyCategoriesMap) {
+    monthlyCategories[id] = cat;
+  }
 
-    const groups = Array.from(groupsMap.values()).map(({ group, items }) => ({
-      id: group.id,
-      name: group.name,
-      items: items.map((i: { itemType: 'charge' | 'manual'; itemId: string }) => ({
-        itemType: i.itemType,
-        itemId: i.itemId,
-      })),
-    }));
+  const groups = Array.from(groupsMap.values()).map(({ group, items }) => ({
+    id: group.id,
+    name: group.name,
+    items: items.map((i: { itemType: 'charge' | 'manual'; itemId: string }) => ({
+      itemType: i.itemType,
+      itemId: i.itemId,
+    })),
+  }));
 
-    return {
-      summary: {
-        totalAmount: summary.totalAmount,
-        successfulCount: summary.successfulCount,
-        failedCount: summary.failedCount,
-        pendingCount: summary.pendingCount,
-      },
-      charges: summary.charges,
-      cashflowCharges: cashflowSummary.charges,
-      dateRange: {
-        from: startDateStr,
-        to: endDateStr,
-      },
-      categories,
-      manualSales,
+  return {
+    summary: {
+      totalAmount: summary.totalAmount,
+      successfulCount: summary.successfulCount,
+      failedCount: summary.failedCount,
+      pendingCount: summary.pendingCount,
+    },
+    charges: summary.charges,
+    cashflowCharges: cashflowSummary.charges,
+    dateRange: {
+      from: startDateStr,
+      to: endDateStr,
+    },
+    categories,
+    manualSales,
+    groups,
+    lineDailyRegistrations: lstepAnalytics?.dailyRegistrations ?? [],
+    monthlyData: {
+      charges: monthlySummary.charges,
+      categories: monthlyCategories,
+      manualSales: monthlyManualSales,
       groups,
-      lineDailyRegistrations: lstepAnalytics?.dailyRegistrations ?? [],
-      monthlyData: {
-        charges: monthlySummary.charges,
-        categories: monthlyCategories,
-        manualSales: monthlyManualSales,
-        groups,
-        rangeStart: monthlyStartDateStr,
-        rangeEnd: monthlyEndDateStr,
-      },
-    };
-  },
-  ['sales-dashboard'],
-  { revalidate: 1800 }
-);
+      rangeStart: monthlyStartDateStr,
+      rangeEnd: monthlyEndDateStr,
+    },
+  };
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -122,7 +117,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const data = await getCachedDashboard(startParam, endParam);
+    const data = await getDashboard(startParam, endParam);
 
     return NextResponse.json({
       success: true,
