@@ -222,7 +222,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     };
   }, [initialData.deferred, dateRange.from, dateRange.to]);
 
-  // カテゴリを保存
+  // カテゴリを保存（UnivaPay charge用）
   const handleCategoryChange = useCallback(async (chargeId: string, category: SalesCategoryId) => {
     setSavingCategory(chargeId);
     setCategories(prev => ({ ...prev, [chargeId]: category }));
@@ -235,6 +235,24 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       });
     } catch (error) {
       console.error('Failed to save category:', error);
+    } finally {
+      setSavingCategory(null);
+    }
+  }, []);
+
+  // カテゴリを保存（manual_sales用）
+  const handleManualCategoryChange = useCallback(async (saleId: string, category: SalesCategoryId) => {
+    setSavingCategory(saleId);
+    setManualSales(prev => prev.map(s => s.id === saleId ? { ...s, category } : s));
+
+    try {
+      await fetch('/api/sales/manual', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: saleId, category }),
+      });
+    } catch (error) {
+      console.error('Failed to save manual sale category:', error);
     } finally {
       setSavingCategory(null);
     }
@@ -1607,6 +1625,17 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
                             className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm disabled:opacity-50"
                           >
                             <option value="">選択...</option>
+                            {SALES_CATEGORIES.map(cat => (
+                              <option key={cat.id} value={cat.id}>{cat.label}</option>
+                            ))}
+                          </select>
+                        ) : manualItem && !tx.isGrouped ? (
+                          <select
+                            value={tx.category ?? 'other'}
+                            onChange={(e) => handleManualCategoryChange(manualItem.id, e.target.value as SalesCategoryId)}
+                            disabled={savingCategory === manualItem.id}
+                            className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm disabled:opacity-50"
+                          >
                             {SALES_CATEGORIES.map(cat => (
                               <option key={cat.id} value={cat.id}>{cat.label}</option>
                             ))}

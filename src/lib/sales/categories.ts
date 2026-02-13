@@ -160,6 +160,90 @@ export async function deleteManualSale(id: string): Promise<void> {
 }
 
 /**
+ * MF銀行入金を一括upsert（MERGE: 既存は更新、新規は挿入）
+ */
+export interface MfBankSale {
+  id: string;          // mf_{mf_id}
+  amount: number;
+  customerName: string;
+  note: string;
+  transactionDate: string; // YYYY-MM-DD
+}
+
+export async function upsertMfBankSales(sales: MfBankSale[]): Promise<number> {
+  if (sales.length === 0) return 0;
+
+  const client = createBigQueryClient(PROJECT_ID);
+  const tempTableId = `manual_sales_temp_${Date.now()}`;
+  const dataset = client.dataset(DATASET);
+  const tempTable = dataset.table(tempTableId);
+
+  try {
+    await tempTable.create({
+      schema: {
+        fields: [
+          { name: 'id', type: 'STRING', mode: 'REQUIRED' },
+          { name: 'amount', type: 'INTEGER' },
+          { name: 'category', type: 'STRING' },
+          { name: 'customer_name', type: 'STRING' },
+          { name: 'payment_method', type: 'STRING' },
+          { name: 'note', type: 'STRING' },
+          { name: 'transaction_date', type: 'DATE' },
+          { name: 'payment_date', type: 'DATE' },
+          { name: 'created_at', type: 'TIMESTAMP' },
+          { name: 'updated_at', type: 'TIMESTAMP' },
+        ],
+      },
+    });
+
+    const now = new Date().toISOString();
+    const rows = sales.map(s => ({
+      id: s.id,
+      amount: s.amount,
+      category: 'other',
+      customer_name: s.customerName,
+      payment_method: 'bank_transfer',
+      note: s.note,
+      transaction_date: s.transactionDate,
+      payment_date: s.transactionDate,
+      created_at: now,
+      updated_at: now,
+    }));
+
+    await tempTable.insert(rows);
+
+    await client.query({
+      query: `
+        MERGE \`${PROJECT_ID}.${DATASET}.manual_sales\` T
+        USING \`${PROJECT_ID}.${DATASET}.${tempTableId}\` S
+        ON T.id = S.id
+        WHEN MATCHED THEN
+          UPDATE SET
+            amount = S.amount,
+            customer_name = S.customer_name,
+            note = S.note,
+            transaction_date = S.transaction_date,
+            payment_date = S.payment_date,
+            updated_at = S.updated_at
+        WHEN NOT MATCHED THEN
+          INSERT (id, amount, category, customer_name, payment_method, note,
+                  transaction_date, payment_date, created_at, updated_at)
+          VALUES (S.id, S.amount, S.category, S.customer_name, S.payment_method, S.note,
+                  S.transaction_date, S.payment_date, S.created_at, S.updated_at)
+      `,
+    });
+
+    return sales.length;
+  } finally {
+    try {
+      await tempTable.delete();
+    } catch {
+      // 削除失敗は無視
+    }
+  }
+}
+
+/**
  * 手動売上を更新
  */
 export async function updateManualSale(
