@@ -255,8 +255,8 @@ export function ScheduleCalendar({
               <div
                 key={item.scheduleId}
                 className="flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-3 cursor-pointer hover:bg-[color:var(--color-surface-muted)] transition-colors"
-                onDoubleClick={() => setDetailItem(item)}
-                title="ダブルクリックで詳細を表示"
+                onClick={() => onSelectItem(item)}
+                title="クリックで編集"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-semibold text-[color:var(--color-text-primary)]">
@@ -283,14 +283,14 @@ export function ScheduleCalendar({
                       <button
                         type="button"
                         className="ui-button-secondary px-3 py-1 text-xs"
-                        onClick={() => onSelectItem(item)}
+                        onClick={(e) => { e.stopPropagation(); onSelectItem(item); }}
                       >
                         編集
                       </button>
                       <button
                         type="button"
                         className="ui-button-secondary px-3 py-1 text-xs"
-                        onClick={() => onDeleteItem(item)}
+                        onClick={(e) => { e.stopPropagation(); onDeleteItem(item); }}
                       >
                         削除
                       </button>
