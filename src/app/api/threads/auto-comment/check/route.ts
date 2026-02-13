@@ -137,13 +137,38 @@ async function checkTokutenGuide(
 }
 
 /**
- * コメントスケジュールに追加
+ * コメント欄2（depth=1）の最後のcomment_idを取得
+ */
+async function getLastComment2Id(
+  client: ReturnType<typeof createBigQueryClient>,
+  postId: string
+): Promise<string | null> {
+  const query = `
+    SELECT comment_id
+    FROM \`${PROJECT_ID}.${DATASET}.threads_comments\`
+    WHERE parent_post_id = @post_id AND depth = 1
+    ORDER BY timestamp DESC
+    LIMIT 1
+  `;
+  const [rows] = await client.query({ query, params: { post_id: postId } });
+  return rows.length > 0 ? rows[0].comment_id : null;
+}
+
+/**
+ * コメントスケジュールに追加（コメント欄3 = depth=2 として追加）
  */
 async function scheduleComment(
   client: ReturnType<typeof createBigQueryClient>,
   postId: string,
   commentText: string
-): Promise<string> {
+): Promise<string | null> {
+  // コメント欄2のIDを取得（これにリプライしてdepth=2にする）
+  const comment2Id = await getLastComment2Id(client, postId);
+  if (!comment2Id) {
+    console.log(`[auto-comment] No comment2 found for post ${postId}, skipping`);
+    return null;
+  }
+
   const scheduleId = `auto_${postId}_${Date.now()}`;
   const planId = `auto_comment_${postId}`;
 
@@ -158,8 +183,8 @@ async function scheduleComment(
     params: {
       schedule_id: scheduleId,
       plan_id: planId,
-      parent_thread_id: postId,
-      comment_order: 1, // コメント欄1として追加
+      parent_thread_id: comment2Id, // コメント欄2のIDにリプライ → depth=2になる
+      comment_order: 1,
       comment_text: commentText,
     },
   });
@@ -226,12 +251,16 @@ export async function POST() {
 
       let tokutenCommentAdded = false;
 
-      // 3. 特典誘導がない場合は追加
+      // 3. 特典誘導がない場合は追加（コメント欄2の下 = depth=2に追加）
       if (!tokutenCheck.has_tokuten_guide) {
-        console.log(`  Adding tokuten guide comment...`);
-        await scheduleComment(client, candidate.post_id, TOKUTEN_GUIDE_TEMPLATE);
-        tokutenCommentAdded = true;
-        addedCount++;
+        console.log(`  Adding tokuten guide comment to comment3 (depth=2)...`);
+        const scheduleId = await scheduleComment(client, candidate.post_id, TOKUTEN_GUIDE_TEMPLATE);
+        if (scheduleId) {
+          tokutenCommentAdded = true;
+          addedCount++;
+        } else {
+          console.log(`  Skipped: no comment2 found to reply to`);
+        }
       }
 
       // 4. 実行履歴を記録
