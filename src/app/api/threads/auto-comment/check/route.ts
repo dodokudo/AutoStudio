@@ -119,13 +119,13 @@ async function checkTokutenGuide(
     return { has_tokuten_guide: true, reason: `tokuten_url_at_depth${commentWithTokutenUrl.depth}` };
   }
 
-  // チェック2: コメント欄2(depth=1)にURLが含まれているか
-  const comment2WithUrl = comments.find(
-    (c: any) => c.depth === 1 && c.text && c.text.includes('http')
+  // チェック2: コメント欄2以降(depth>=1)にURLが含まれているか
+  const commentWithUrl = comments.find(
+    (c: any) => c.depth >= 1 && c.text && c.text.includes('http')
   );
 
-  if (comment2WithUrl) {
-    return { has_tokuten_guide: true, reason: 'url_in_comment2' };
+  if (commentWithUrl) {
+    return { has_tokuten_guide: true, reason: `url_at_depth${commentWithUrl.depth}` };
   }
 
   // チェック3: 固定ポスト誘導の文言があるか（全コメント対象）
