@@ -110,7 +110,16 @@ async function checkTokutenGuide(
     return { has_tokuten_guide: false, reason: 'no_comments' };
   }
 
-  // チェック1: コメント欄2(depth=1)にURLが含まれているか
+  // チェック1: 全コメント欄に特典誘導URLが含まれているか（手動追加も検知）
+  const commentWithTokutenUrl = comments.find(
+    (c: any) => c.text && c.text.includes('autostudio-self.vercel.app')
+  );
+
+  if (commentWithTokutenUrl) {
+    return { has_tokuten_guide: true, reason: `tokuten_url_at_depth${commentWithTokutenUrl.depth}` };
+  }
+
+  // チェック2: コメント欄2(depth=1)にURLが含まれているか
   const comment2WithUrl = comments.find(
     (c: any) => c.depth === 1 && c.text && c.text.includes('http')
   );
@@ -119,7 +128,7 @@ async function checkTokutenGuide(
     return { has_tokuten_guide: true, reason: 'url_in_comment2' };
   }
 
-  // チェック2: 固定ポスト誘導の文言があるか
+  // チェック3: 固定ポスト誘導の文言があるか（全コメント対象）
   const fixedPostPattern = /固定ポスト.*配.*受け取/;
   const hasFixedPostGuide = comments.some(
     (c: any) => c.text && (
