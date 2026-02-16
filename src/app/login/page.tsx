@@ -54,7 +54,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 rounded-[var(--radius-md)] bg-text-primary text-white font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="w-full py-3 rounded-[var(--radius-md)] bg-accent text-white font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
         >
           {loading ? 'ログイン中...' : 'ログイン'}
         </button>
