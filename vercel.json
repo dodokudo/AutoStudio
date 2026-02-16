@@ -37,6 +37,14 @@
     {
       "path": "/api/sales/cron/sync-bank",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/line-report/daily",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/line-report/weekly",
+      "schedule": "0 22 * * 0"
     }
   ]
 }
