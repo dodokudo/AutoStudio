@@ -518,8 +518,8 @@ export default async function ThreadsHome({
     const tabItems = (
       [
         { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
-        { id: 'post' as ThreadsTabKey, label: '投稿' },
         { id: 'schedule' as ThreadsTabKey, label: '予約投稿' },
+        { id: 'post' as ThreadsTabKey, label: '投稿' },
         { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
         { id: 'report' as ThreadsTabKey, label: 'レポート' },
       ] satisfies Array<{ id: ThreadsTabKey; label: string }>
