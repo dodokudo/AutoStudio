@@ -208,7 +208,13 @@ export function ScheduleTab() {
       }
       const savedItem = data.item ? mapItem(data.item) : null;
       if (savedItem) {
-        setSelectedItem(savedItem);
+        if (hasId) {
+          // 既存の予約を編集した場合：そのまま編集モードを維持
+          setSelectedItem(savedItem);
+        } else {
+          // 新規作成した場合：エディタを新規モードにリセット
+          setSelectedItem(null);
+        }
         if (savedItem.scheduledDate) {
           setSelectedDate(savedItem.scheduledDate);
           if (monthKey(savedItem.scheduledDate) !== monthKey(formatDateKey(currentMonth))) {
