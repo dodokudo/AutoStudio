@@ -73,7 +73,7 @@ export function ScheduleCalendar({
   onGenerate,
 }: ScheduleCalendarProps) {
   const [detailItem, setDetailItem] = useState<ScheduledPost | null>(null);
-  const [listFilter, setListFilter] = useState<'all' | 'scheduled' | 'posted'>('all');
+  const [listFilter, setListFilter] = useState<'all' | 'scheduled' | 'posted'>('scheduled');
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
