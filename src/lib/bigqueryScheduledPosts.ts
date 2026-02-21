@@ -102,6 +102,8 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     queryParams.endDate = params.endDate;
   }
 
+  conditions.push("sp.status = 'scheduled'");
+
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const sql = `
