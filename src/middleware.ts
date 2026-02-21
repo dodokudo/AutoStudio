@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   '/api/threads/cron/',
   '/api/threads/schedule/run',
   '/api/threads/auto-comment/check',
+  '/api/threads/comments/execute',
   '/api/sales/cron/',
 ];
 
