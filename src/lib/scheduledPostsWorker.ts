@@ -67,9 +67,9 @@ async function fetchOnePendingPost(): Promise<ScheduledPostRow | undefined> {
 
   const items = await listScheduledPosts({ startDate, endDate });
 
-  // 最初の投稿可能な1件だけ返す
+  // 最初の投稿可能な1件だけ返す（partial = コメント未投稿のリトライ対象）
   return items.find((item) => {
-    return item.status === 'scheduled' && isScheduledTimePassed(item.scheduled_time);
+    return (item.status === 'scheduled' || item.status === 'partial') && isScheduledTimePassed(item.scheduled_time);
   });
 }
 
@@ -114,24 +114,33 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
   console.log(`[scheduledPostsWorker] Executing: ${post.schedule_id}`);
   console.log(`[scheduledPostsWorker] Scheduled time (JST): ${post.scheduled_at_jst}`);
 
-  try {
-    // 1. メイン投稿（既に投稿済みならスキップ）
-    let mainThreadId = post.main_thread_id || undefined;
-    if (!mainThreadId) {
+  const errors: string[] = [];
+
+  // 1. メイン投稿（既に投稿済みならスキップ）
+  let mainThreadId = post.main_thread_id || undefined;
+  if (!mainThreadId) {
+    try {
       console.log('[scheduledPostsWorker] Posting main thread...');
       mainThreadId = await postThreadWithRetry(post.main_text);
       console.log(`[scheduledPostsWorker] Main thread posted: ${mainThreadId}`);
       // 進捗を即座にBigQueryへ保存
       await updateScheduledPost(post.schedule_id, { mainThreadId });
-    } else {
-      console.log(`[scheduledPostsWorker] Main thread already posted: ${mainThreadId}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[scheduledPostsWorker] Main thread failed: ${post.schedule_id}`, errorMessage);
+      await updateScheduledPost(post.schedule_id, { status: 'failed', errorMessage: `Main: ${errorMessage}` });
+      return { success: false, error: errorMessage };
     }
+  } else {
+    console.log(`[scheduledPostsWorker] Main thread already posted: ${mainThreadId}`);
+  }
 
-    let replyToId = mainThreadId;
+  let replyToId = mainThreadId;
 
-    // 2. コメント1（既に投稿済みならスキップ）
-    let comment1ThreadId = post.comment1_thread_id || undefined;
-    if (!comment1ThreadId && post.comment1?.trim()) {
+  // 2. コメント1（既に投稿済みならスキップ）
+  let comment1ThreadId = post.comment1_thread_id || undefined;
+  if (!comment1ThreadId && post.comment1?.trim()) {
+    try {
       const delay1 = Math.floor(Math.random() * 60000) + 30000;
       console.log(
         `[scheduledPostsWorker] Waiting ${(delay1 / 1000).toFixed(1)}s before comment1...`,
@@ -143,14 +152,20 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       console.log(`[scheduledPostsWorker] Comment1 posted: ${comment1ThreadId}`);
       await updateScheduledPost(post.schedule_id, { comment1ThreadId });
       replyToId = comment1ThreadId;
-    } else if (comment1ThreadId) {
-      console.log(`[scheduledPostsWorker] Comment1 already posted: ${comment1ThreadId}`);
-      replyToId = comment1ThreadId;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[scheduledPostsWorker] Comment1 failed: ${post.schedule_id}`, errorMessage);
+      errors.push(`Comment1: ${errorMessage}`);
     }
+  } else if (comment1ThreadId) {
+    console.log(`[scheduledPostsWorker] Comment1 already posted: ${comment1ThreadId}`);
+    replyToId = comment1ThreadId;
+  }
 
-    // 3. コメント2（既に投稿済みならスキップ）
-    let comment2ThreadId = post.comment2_thread_id || undefined;
-    if (!comment2ThreadId && post.comment2?.trim()) {
+  // 3. コメント2（既に投稿済みならスキップ）
+  let comment2ThreadId = post.comment2_thread_id || undefined;
+  if (!comment2ThreadId && post.comment2?.trim()) {
+    try {
       const delay2 = Math.floor(Math.random() * 60000) + 30000;
       console.log(
         `[scheduledPostsWorker] Waiting ${(delay2 / 1000).toFixed(1)}s before comment2...`,
@@ -161,19 +176,27 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       comment2ThreadId = await postThreadWithRetry(post.comment2, replyToId);
       console.log(`[scheduledPostsWorker] Comment2 posted: ${comment2ThreadId}`);
       await updateScheduledPost(post.schedule_id, { comment2ThreadId });
-    } else if (comment2ThreadId) {
-      console.log(`[scheduledPostsWorker] Comment2 already posted: ${comment2ThreadId}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[scheduledPostsWorker] Comment2 failed: ${post.schedule_id}`, errorMessage);
+      errors.push(`Comment2: ${errorMessage}`);
     }
+  } else if (comment2ThreadId) {
+    console.log(`[scheduledPostsWorker] Comment2 already posted: ${comment2ThreadId}`);
+  }
 
+  // 結果判定
+  if (errors.length > 0) {
+    // メインは成功したがコメントが失敗 → partial
+    const combinedError = errors.join('; ');
+    await updateScheduledPost(post.schedule_id, { status: 'partial', errorMessage: combinedError });
+    console.log(`[scheduledPostsWorker] Partial completion: ${post.schedule_id} (${combinedError})`);
+    return { success: true, mainThreadId, comment1ThreadId, comment2ThreadId, error: combinedError };
+  } else {
     // 全完了
     await updateScheduledPost(post.schedule_id, { status: 'posted' });
     console.log(`[scheduledPostsWorker] Successfully completed: ${post.schedule_id}`);
     return { success: true, mainThreadId, comment1ThreadId, comment2ThreadId };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[scheduledPostsWorker] Failed: ${post.schedule_id}`, errorMessage);
-    await updateScheduledPost(post.schedule_id, { status: 'failed' });
-    return { success: false, error: errorMessage };
   }
 }
 

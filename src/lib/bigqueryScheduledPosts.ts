@@ -21,6 +21,7 @@ const SCHEDULE_TABLE_SCHEMA = [
   { name: 'main_thread_id', type: 'STRING' },
   { name: 'comment1_thread_id', type: 'STRING' },
   { name: 'comment2_thread_id', type: 'STRING' },
+  { name: 'error_message', type: 'STRING' },
 ];
 
 async function query<T = Record<string, unknown>>(sql: string, params?: Record<string, unknown>) {
@@ -43,7 +44,7 @@ export async function ensureScheduledPostsTable() {
     }
   } else {
     // マイグレーション: 新カラムを追加（既存テーブル用）
-    const newColumns = ['main_thread_id', 'comment1_thread_id', 'comment2_thread_id'];
+    const newColumns = ['main_thread_id', 'comment1_thread_id', 'comment2_thread_id', 'error_message'];
     for (const col of newColumns) {
       try {
         await client.query({
@@ -85,6 +86,7 @@ export type ScheduledPostRow = {
   main_thread_id?: string | null;
   comment1_thread_id?: string | null;
   comment2_thread_id?: string | null;
+  error_message?: string | null;
 };
 
 export async function listScheduledPosts(params: { startDate?: string; endDate?: string }) {
@@ -118,6 +120,7 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
       sp.main_thread_id,
       sp.comment1_thread_id,
       sp.comment2_thread_id,
+      sp.error_message,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S+09:00', sp.scheduled_time, 'Asia/Tokyo') AS scheduled_at_jst,
       FORMAT_DATE('%Y-%m-%d', DATE(sp.scheduled_time, 'Asia/Tokyo')) AS scheduled_date,
       tp.template_id,
@@ -149,6 +152,7 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     main_thread_id: toPlain(row.main_thread_id) || null,
     comment1_thread_id: toPlain(row.comment1_thread_id) || null,
     comment2_thread_id: toPlain(row.comment2_thread_id) || null,
+    error_message: toPlain(row.error_message) || null,
   })) as ScheduledPostRow[];
 }
 
@@ -168,6 +172,7 @@ export async function getScheduledPostById(scheduleId: string) {
       sp.main_thread_id,
       sp.comment1_thread_id,
       sp.comment2_thread_id,
+      sp.error_message,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S+09:00', sp.scheduled_time, 'Asia/Tokyo') AS scheduled_at_jst,
       FORMAT_DATE('%Y-%m-%d', DATE(sp.scheduled_time, 'Asia/Tokyo')) AS scheduled_date,
       tp.template_id,
@@ -200,6 +205,7 @@ export async function getScheduledPostById(scheduleId: string) {
     main_thread_id: toPlain(row.main_thread_id) || null,
     comment1_thread_id: toPlain(row.comment1_thread_id) || null,
     comment2_thread_id: toPlain(row.comment2_thread_id) || null,
+    error_message: toPlain(row.error_message) || null,
   } as ScheduledPostRow;
 }
 
@@ -248,6 +254,7 @@ export async function updateScheduledPost(
     mainThreadId?: string | null;
     comment1ThreadId?: string | null;
     comment2ThreadId?: string | null;
+    errorMessage?: string | null;
   },
 ) {
   await ensureScheduledPostsTable();
@@ -303,6 +310,11 @@ export async function updateScheduledPost(
     queryParams.comment2ThreadId = params.comment2ThreadId;
     types.comment2ThreadId = 'STRING';
   }
+  if (params.errorMessage !== undefined) {
+    setClauses.push('error_message = @errorMessage');
+    queryParams.errorMessage = params.errorMessage;
+    types.errorMessage = 'STRING';
+  }
 
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
@@ -327,7 +339,7 @@ export async function claimScheduledPost(scheduleId: string): Promise<boolean> {
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
     SET status = 'processing', updated_at = CURRENT_TIMESTAMP()
-    WHERE schedule_id = @scheduleId AND status = 'scheduled'
+    WHERE schedule_id = @scheduleId AND status IN ('scheduled', 'partial')
   `;
   const [job] = await client.createQueryJob({
     query: sql,

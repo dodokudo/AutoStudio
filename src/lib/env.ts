@@ -1,5 +1,4 @@
 const requiredEnvVars = [
-  'THREADS_TOKEN',
   'THREADS_BUSINESS_ID',
   'THREADS_ACCOUNT_ID',
   'CLAUDE_API_KEY',

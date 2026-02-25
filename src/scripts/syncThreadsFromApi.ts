@@ -30,8 +30,31 @@ const PROJECT_ID = 'mark-454114';
 const DATASET_ID = 'autostudio_threads';
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 
-const THREADS_TOKEN = process.env.THREADS_TOKEN?.trim();
 const THREADS_BUSINESS_ID = process.env.THREADS_BUSINESS_ID?.trim();
+
+// ANALYCAのBigQueryからトークンを取得（環境変数はフォールバック）
+async function resolveThreadsToken(): Promise<string> {
+  try {
+    const bq = createBigQueryClient(PROJECT_ID);
+    const userId = THREADS_BUSINESS_ID || '10012809578833342';
+    const [rows] = await bq.query({
+      query: `SELECT threads_access_token FROM \`mark-454114.analyca.users\` WHERE user_id = @userId AND threads_access_token IS NOT NULL AND threads_token_expires_at > CURRENT_TIMESTAMP() LIMIT 1`,
+      params: { userId },
+    });
+    if (rows.length > 0 && rows[0].threads_access_token) {
+      console.log('[syncThreadsFromApi] Token fetched from ANALYCA BigQuery');
+      return rows[0].threads_access_token;
+    }
+  } catch (err) {
+    console.warn('[syncThreadsFromApi] Failed to fetch token from ANALYCA BigQuery:', err instanceof Error ? err.message : err);
+  }
+  const envToken = process.env.THREADS_TOKEN?.trim();
+  if (envToken) {
+    console.warn('[syncThreadsFromApi] Using fallback env THREADS_TOKEN');
+    return envToken;
+  }
+  throw new Error('No valid Threads token available (ANALYCA BigQuery and env both failed)');
+}
 
 // ============================================================================
 // 型定義
@@ -638,10 +661,13 @@ async function main() {
 
   console.log(`[syncThreadsFromApi] Starting sync with mode: ${mode}`);
   console.log(`[syncThreadsFromApi] THREADS_BUSINESS_ID: ${THREADS_BUSINESS_ID ? 'set' : 'NOT SET'}`);
-  console.log(`[syncThreadsFromApi] THREADS_TOKEN: ${THREADS_TOKEN ? 'set' : 'NOT SET'}`);
 
-  if (!THREADS_TOKEN) {
-    const error = 'THREADS_TOKEN is required';
+  let THREADS_TOKEN: string;
+  try {
+    THREADS_TOKEN = await resolveThreadsToken();
+    console.log(`[syncThreadsFromApi] THREADS_TOKEN: resolved`);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
     await notifyThreadsSyncFailure(mode, error);
     throw new Error(error);
   }
