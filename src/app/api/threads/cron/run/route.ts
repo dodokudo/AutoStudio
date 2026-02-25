@@ -1,40 +1,18 @@
 import { NextResponse } from 'next/server';
-import { processNextJob } from '@/lib/threadsWorker';
-import { updateTemplateScores } from '@/lib/templateScores';
+// import { processNextJob } from '@/lib/threadsWorker';
+// import { updateTemplateScores } from '@/lib/templateScores';
 
+/**
+ * Threads投稿cronエンドポイント
+ *
+ * 🚨 緊急停止: アプリ連携解除のため一時停止 (2026-02-26)
+ */
 async function handleCronRun() {
-  try {
-    console.log('[threads/cron/run] Started at', new Date().toISOString());
-    const jobResults = [] as Array<{ status: string; jobId?: string; error?: string }>;
-    // Process up to 5 jobs per invocation to avoid long-running requests
-    for (let i = 0; i < 5; i += 1) {
-      const result = await processNextJob();
-      if (result.status === 'idle') {
-        break;
-      }
-      jobResults.push(result);
-    }
-
-    const scores = await updateTemplateScores();
-
-    console.log('[threads/cron/run] Completed:', {
-      jobCount: jobResults.length,
-      templateScoresInserted: scores.inserted,
-      timestamp: new Date().toISOString()
-    });
-
-    return NextResponse.json(
-      {
-        jobResults,
-        templateScoresInserted: scores.inserted,
-        timestamp: new Date().toISOString()
-      },
-      { status: 200 },
-    );
-  } catch (error) {
-    console.error('[threads/cron/run] failed', error);
-    return NextResponse.json({ error: 'Cron run failed' }, { status: 500 });
-  }
+  console.log('[threads/cron/run] PAUSED - App disconnected. Skipping at', new Date().toISOString());
+  return NextResponse.json(
+    { paused: true, reason: 'App disconnected - cron paused', timestamp: new Date().toISOString() },
+    { status: 200 },
+  );
 }
 
 export async function GET() {
