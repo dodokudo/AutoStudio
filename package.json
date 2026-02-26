@@ -24,12 +24,14 @@
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
+    "lstep:init-metrics": "tsx src/scripts/initMessageMetricsBQ.ts",
     "lstep:check": "tsx src/scripts/checkLstepSetup.ts",
     "youtube:sync": "tsx src/scripts/runYoutubeSync.ts",
     "notion:test": "tsx src/scripts/testNotionSync.ts",
     "links:init": "tsx src/scripts/initLinkManagement.ts",
     "sales:sync": "tsx src/scripts/syncUnivaPayCharges.ts",
-    "sales:sync:bank": "tsx src/scripts/syncMfBankSales.ts"
+    "sales:sync:bank": "tsx src/scripts/syncMfBankSales.ts",
+    "lstep:metrics": "npx tsx src/scripts/runMessageMetrics.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
