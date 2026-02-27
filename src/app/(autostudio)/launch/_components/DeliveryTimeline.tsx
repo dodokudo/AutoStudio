@@ -125,8 +125,10 @@ export function DeliveryTimeline({
     return m;
   }, [segments]);
 
-  const dayWidth = Math.max(120, containerWidth > 0 ? containerWidth / Math.min(totalDays + 1, 14) : 120);
-  const timelineWidth = dayWidth * (totalDays + 1);
+  const dayWidth = containerWidth > 0
+    ? Math.max(80, containerWidth / dateTicks.length)
+    : 120;
+  const timelineWidth = Math.max(dayWidth * dateTicks.length, dateTicks.length * 80);
 
   if (deliveries.length === 0) {
     return (
