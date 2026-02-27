@@ -338,8 +338,8 @@ export async function scrapeTagCounts(
     throw new CookieExpiredError('タグページでログインリダイレクトを検出');
   }
 
-  // Click on the target folder
-  const folderLink = page.locator(`a, span, div`).filter({ hasText: folderName }).first();
+  // Click on the target folder (use text= locator for exact match on SPAN)
+  const folderLink = page.locator(`text=${folderName}`).first();
   const folderExists = await folderLink.count();
 
   if (folderExists === 0) {
