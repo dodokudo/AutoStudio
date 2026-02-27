@@ -196,6 +196,13 @@ function getOpenRateBgColor(rate: number): string {
   return '#FEE2E2';
 }
 
+// Channel display config
+const CHANNEL_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  line: { label: 'LINE', color: '#06C755', bg: '#06C75515', border: '#06C75540' },
+  threads: { label: 'Threads', color: '#000000', bg: '#00000010', border: '#00000030' },
+  instagram: { label: 'Instagram', color: '#E1306C', bg: '#E1306C15', border: '#E1306C40' },
+};
+
 // ------- Component -------
 
 export function LaunchDetailClient({
@@ -219,7 +226,65 @@ export function LaunchDetailClient({
     return m;
   }, [funnel.segments]);
 
-  // Stats (single-pass calculation)
+  // Extract unique channels from segments
+  const availableChannels = useMemo(() => {
+    const channels = new Map<string, number>();
+    const segChannels = new Map<string, string>(); // segmentId -> channel
+    for (const seg of funnel.segments) {
+      const ch = seg.channel || 'line';
+      segChannels.set(seg.id, ch);
+    }
+    // Count deliveries per channel
+    for (const d of deliveriesWithMetrics) {
+      const segIds = d.segmentIds || [d.segmentId];
+      const dChannels = new Set(segIds.map((sid) => segChannels.get(sid) || 'line'));
+      for (const ch of dChannels) {
+        channels.set(ch, (channels.get(ch) || 0) + 1);
+      }
+    }
+    return channels;
+  }, [funnel.segments, deliveriesWithMetrics]);
+
+  // Channel filter state — default to 'line' only
+  const [selectedChannels, setSelectedChannels] = useState<Set<string>>(() => new Set(['line']));
+
+  const toggleChannel = useCallback((ch: string) => {
+    setSelectedChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(ch)) {
+        // Don't allow deselecting all
+        if (next.size <= 1) return prev;
+        next.delete(ch);
+      } else {
+        next.add(ch);
+      }
+      return next;
+    });
+  }, []);
+
+  // Build segment→channel map for filtering
+  const segmentChannelMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const seg of funnel.segments) {
+      m.set(seg.id, seg.channel || 'line');
+    }
+    return m;
+  }, [funnel.segments]);
+
+  // Channel-filtered deliveries
+  const channelFilteredDeliveries = useMemo(() => {
+    return deliveriesWithMetrics.filter((d) => {
+      const segIds = d.segmentIds || [d.segmentId];
+      return segIds.some((sid) => selectedChannels.has(segmentChannelMap.get(sid) || 'line'));
+    });
+  }, [deliveriesWithMetrics, selectedChannels, segmentChannelMap]);
+
+  // Channel-filtered segments (for analysis tab dropdown)
+  const channelFilteredSegments = useMemo(() => {
+    return funnel.segments.filter((s) => selectedChannels.has(s.channel || 'line'));
+  }, [funnel.segments, selectedChannels]);
+
+  // Stats from channel-filtered deliveries
   const stats = useMemo(() => {
     let total = 0;
     let withMetrics = 0;
@@ -228,7 +293,7 @@ export function LaunchDetailClient({
     let withClick = 0;
     let sumClickRate = 0;
 
-    for (const d of deliveriesWithMetrics) {
+    for (const d of channelFilteredDeliveries) {
       total++;
       if (d.latestMetric) {
         withMetrics++;
@@ -244,7 +309,7 @@ export function LaunchDetailClient({
     const avgOpenRate = withMetrics > 0 ? sumOpenRate / withMetrics : 0;
     const avgClickRate = withClick > 0 ? sumClickRate / withClick : 0;
     return { total, withMetrics, avgOpenRate, totalSent, withClick, avgClickRate };
-  }, [deliveriesWithMetrics]);
+  }, [channelFilteredDeliveries]);
 
   const handleDeliveryClick = useCallback((d: DeliveryWithMetrics) => {
     setExpandedId((prev) => (prev === d.id ? null : d.id));
@@ -363,6 +428,44 @@ export function LaunchDetailClient({
         </div>
       </div>
 
+      {/* Channel filter toggle */}
+      {availableChannels.size > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-[color:var(--color-text-muted)]">チャネル:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from(availableChannels.entries())
+              .sort(([a], [b]) => {
+                const order = ['line', 'threads', 'instagram'];
+                return order.indexOf(a) - order.indexOf(b);
+              })
+              .map(([ch, count]) => {
+                const config = CHANNEL_CONFIG[ch] || CHANNEL_CONFIG.line;
+                const isSelected = selectedChannels.has(ch);
+                return (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => toggleChannel(ch)}
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all"
+                    style={{
+                      color: isSelected ? config.color : 'var(--color-text-muted)',
+                      backgroundColor: isSelected ? config.bg : 'transparent',
+                      border: `1.5px solid ${isSelected ? config.border : 'var(--color-border)'}`,
+                      opacity: isSelected ? 1 : 0.6,
+                    }}
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: isSelected ? config.color : 'var(--color-text-muted)' }}
+                    />
+                    {config.label} ({count})
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <DashboardTabsInteractive
         items={[...TABS]}
@@ -374,8 +477,8 @@ export function LaunchDetailClient({
       {/* Tab content */}
       {activeTab === 'overview' && (
         <OverviewTab
-          deliveries={deliveriesWithMetrics}
-          segments={funnel.segments}
+          deliveries={channelFilteredDeliveries}
+          segments={channelFilteredSegments}
           startDate={funnel.startDate}
           endDate={funnel.endDate}
           onDeliveryClick={handleDeliveryClick}
@@ -383,8 +486,8 @@ export function LaunchDetailClient({
       )}
       {activeTab === 'analysis' && (
         <AnalysisTab
-          deliveries={deliveriesWithMetrics}
-          segments={funnel.segments}
+          deliveries={channelFilteredDeliveries}
+          segments={channelFilteredSegments}
           segmentMap={segmentMap}
           expandedId={expandedId}
           onToggle={toggleExpand}

@@ -36,9 +36,8 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
   const chartData = useMemo(() => {
     if (!timeSeries || timeSeries.length === 0) return [];
 
-    // Map each standard point to the closest available data point
-    return STANDARD_POINTS.map((targetMin, idx) => {
-      // Find the closest data point
+    // Try standard point matching first
+    const standardMatched = STANDARD_POINTS.map((targetMin, idx) => {
       let closest: BroadcastMetric | null = null;
       let minDist = Infinity;
       for (const point of timeSeries) {
@@ -48,8 +47,6 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
           closest = point;
         }
       }
-
-      // Only include if reasonably close (within 50% of the target)
       const threshold = targetMin * 0.5;
       if (closest && minDist <= threshold) {
         return {
@@ -60,14 +57,29 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
           delivery_count: closest.delivery_count,
         };
       }
-      return {
-        label: STANDARD_LABELS[idx],
-        elapsed_minutes: targetMin,
-        open_rate: null as number | null,
-        open_count: null as number | null,
-        delivery_count: null as number | null,
-      };
-    }).filter((d) => d.open_rate !== null);
+      return null;
+    }).filter(Boolean) as { label: string; elapsed_minutes: number; open_rate: number; open_count: number; delivery_count: number }[];
+
+    // If standard matching yields 2+ points, use it
+    if (standardMatched.length >= 2) return standardMatched;
+
+    // Fallback: use raw data points sorted by elapsed_minutes
+    const sorted = [...timeSeries].sort((a, b) => a.elapsed_minutes - b.elapsed_minutes);
+    // Deduplicate by picking the latest measurement per unique elapsed_minutes bucket (round to 15min)
+    const seen = new Map<number, BroadcastMetric>();
+    for (const p of sorted) {
+      const bucket = Math.round(p.elapsed_minutes / 15) * 15;
+      seen.set(bucket, p); // later measurement overwrites earlier
+    }
+    return Array.from(seen.values())
+      .sort((a, b) => a.elapsed_minutes - b.elapsed_minutes)
+      .map((p) => ({
+        label: formatElapsedLabel(p.elapsed_minutes),
+        elapsed_minutes: p.elapsed_minutes,
+        open_rate: p.open_rate,
+        open_count: p.open_count,
+        delivery_count: p.delivery_count,
+      }));
   }, [timeSeries]);
 
   const hasChart = chartData.length >= 2;

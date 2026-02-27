@@ -6,6 +6,7 @@ export interface Segment {
   description?: string;
   color: string;
   isDefault?: boolean;
+  channel?: 'line' | 'threads' | 'instagram';
 }
 
 export interface FlexButton {
