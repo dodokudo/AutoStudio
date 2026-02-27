@@ -37,11 +37,18 @@ export const LineMessagePreview = memo(function LineMessagePreview({
         flexShrink: 0,
       }}
     >
-      {/* Notification text */}
+      {/* Messages */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {messages.map((msg) => (
+          <MessageItem key={msg.id} message={msg} />
+        ))}
+      </div>
+
+      {/* Notification text — below messages */}
       {notificationText && (
         <div
           style={{
-            marginBottom: 8,
+            marginTop: 8,
             padding: '5px 8px',
             backgroundColor: 'rgba(0,0,0,0.15)',
             borderRadius: 6,
@@ -73,13 +80,6 @@ export const LineMessagePreview = memo(function LineMessagePreview({
           </span>
         </div>
       )}
-
-      {/* Messages */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {messages.map((msg) => (
-          <MessageItem key={msg.id} message={msg} />
-        ))}
-      </div>
     </div>
   );
 });
