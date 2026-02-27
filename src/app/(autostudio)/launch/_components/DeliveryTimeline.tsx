@@ -1,27 +1,18 @@
 'use client';
 
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import type { DeliveryWithMetrics, Segment } from '@/types/launch';
-
-// Type icons
-const TYPE_ICONS: Record<string, string> = {
-  message: '\u2709\uFE0F',  // envelope
-  video: '\uD83C\uDFA5',    // movie camera
-  sale: '\uD83D\uDCB0',     // money bag
-  reminder: '\u23F0',       // alarm clock
-  branch: '\uD83D\uDD00',   // shuffle
-};
 
 // Open rate color thresholds
 function getOpenRateColor(rate: number | undefined): string {
-  if (rate === undefined) return '#9CA3AF'; // gray
-  if (rate >= 40) return '#16A34A'; // green
-  if (rate >= 20) return '#CA8A04'; // yellow
-  return '#DC2626'; // red
+  if (rate === undefined) return 'var(--color-text-muted)';
+  if (rate >= 40) return '#16A34A';
+  if (rate >= 20) return '#CA8A04';
+  return '#DC2626';
 }
 
 function getOpenRateBgColor(rate: number | undefined): string {
-  if (rate === undefined) return '#F3F4F6';
+  if (rate === undefined) return 'var(--color-surface-muted)';
   if (rate >= 40) return '#DCFCE7';
   if (rate >= 20) return '#FEF9C3';
   return '#FEE2E2';
@@ -45,10 +36,20 @@ function formatDate(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+function formatWeekday(dateStr: string): string {
+  const d = parseDate(dateStr);
+  return ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+}
+
 function daysBetween(a: string, b: string): number {
   const da = parseDate(a);
   const db = parseDate(b);
   return Math.round((db.getTime() - da.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getTodayStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 export function DeliveryTimeline({
@@ -60,19 +61,39 @@ export function DeliveryTimeline({
 }: DeliveryTimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+
+  const totalDays = daysBetween(startDate, endDate);
+  const today = getTodayStr();
+
+  // Track scroll state
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 2);
+    setCanScrollLeft(scrollLeft > 2);
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
       setContainerWidth(el.clientWidth);
+      updateScrollState();
     });
     observer.observe(el);
     setContainerWidth(el.clientWidth);
-    return () => observer.disconnect();
-  }, []);
 
-  const totalDays = daysBetween(startDate, endDate);
+    el.addEventListener('scroll', updateScrollState, { passive: true });
+    updateScrollState();
+
+    return () => {
+      observer.disconnect();
+      el.removeEventListener('scroll', updateScrollState);
+    };
+  }, [updateScrollState]);
 
   // Group deliveries by date
   const byDate = useMemo(() => {
@@ -85,38 +106,37 @@ export function DeliveryTimeline({
     return map;
   }, [deliveries]);
 
-  // Build date ticks (with thinning for long periods)
+  // Build date ticks - only show dates with deliveries (compact view)
   const dateTicks = useMemo(() => {
-    const allTicks: string[] = [];
+    const allDates: string[] = [];
     const start = parseDate(startDate);
     for (let i = 0; i <= totalDays; i++) {
       const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
-      allTicks.push(`${y}-${m}-${day}`);
+      allDates.push(`${y}-${m}-${day}`);
     }
 
-    // For long periods (>30 days), only show days with deliveries + adjacent days
-    if (totalDays > 30) {
+    // Only show dates that have deliveries for cleaner view
+    if (totalDays > 14) {
       const deliveryDates = new Set(deliveries.map(d => d.date));
       const visibleDates = new Set<string>();
       for (const date of deliveryDates) {
-        const idx = allTicks.indexOf(date);
-        if (idx >= 0) {
-          if (idx > 0) visibleDates.add(allTicks[idx - 1]);
-          visibleDates.add(allTicks[idx]);
-          if (idx < allTicks.length - 1) visibleDates.add(allTicks[idx + 1]);
-        }
+        visibleDates.add(date);
       }
       // Always include first and last day
-      visibleDates.add(allTicks[0]);
-      visibleDates.add(allTicks[allTicks.length - 1]);
-      return allTicks.filter(d => visibleDates.has(d));
+      visibleDates.add(allDates[0]);
+      visibleDates.add(allDates[allDates.length - 1]);
+      // Include today if in range
+      if (allDates.includes(today)) {
+        visibleDates.add(today);
+      }
+      return allDates.filter(d => visibleDates.has(d));
     }
 
-    return allTicks;
-  }, [startDate, totalDays, deliveries]);
+    return allDates;
+  }, [startDate, totalDays, deliveries, today]);
 
   // Segment color map
   const segmentMap = useMemo(() => {
@@ -125,10 +145,23 @@ export function DeliveryTimeline({
     return m;
   }, [segments]);
 
+  // Column width: wider for readability (140px min)
   const dayWidth = containerWidth > 0
-    ? Math.max(80, containerWidth / dateTicks.length)
-    : 120;
-  const timelineWidth = Math.max(dayWidth * dateTicks.length, dateTicks.length * 80);
+    ? Math.max(140, containerWidth / dateTicks.length)
+    : 140;
+  const timelineWidth = Math.max(dayWidth * dateTicks.length, dateTicks.length * 140);
+
+  // Auto-scroll to today on mount
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || containerWidth === 0) return;
+
+    const todayIdx = dateTicks.indexOf(today);
+    if (todayIdx >= 0) {
+      const targetScroll = Math.max(0, todayIdx * dayWidth - containerWidth / 3);
+      el.scrollTo({ left: targetScroll, behavior: 'smooth' });
+    }
+  }, [containerWidth, dateTicks, today, dayWidth]);
 
   if (deliveries.length === 0) {
     return (
@@ -139,204 +172,173 @@ export function DeliveryTimeline({
   }
 
   return (
-    <div
-      ref={scrollRef}
-      className="overflow-x-auto"
-      style={{ scrollbarWidth: 'thin' }}
-    >
-      <div style={{ minWidth: timelineWidth, position: 'relative' }}>
-        {/* Date axis */}
-        <div
-          style={{
-            display: 'flex',
-            borderBottom: '2px solid #E5E7EB',
-            position: 'sticky',
-            top: 0,
-            backgroundColor: 'white',
-            zIndex: 2,
-          }}
-        >
-          {dateTicks.map((date) => {
-            const hasDeliveries = byDate.has(date);
-            return (
-              <div
-                key={date}
-                style={{
-                  width: dayWidth,
-                  flexShrink: 0,
-                  padding: '8px 4px',
-                  textAlign: 'center',
-                  fontSize: 11,
-                  fontWeight: hasDeliveries ? 600 : 400,
-                  color: hasDeliveries ? '#111' : '#9CA3AF',
-                  borderRight: '1px solid #F3F4F6',
-                }}
-              >
-                {formatDate(date)}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Delivery cards in columns */}
-        <div style={{ display: 'flex', minHeight: 200 }}>
-          {dateTicks.map((date) => {
-            const items = byDate.get(date) || [];
-
-            // Empty day: render lightweight empty column
-            if (items.length === 0) {
+    <div className="relative">
+      {/* Scroll container */}
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto scrollbar-hide"
+      >
+        <div style={{ minWidth: timelineWidth, position: 'relative' }}>
+          {/* Date axis */}
+          <div
+            className="flex border-b-2 border-[color:var(--color-border)]"
+            style={{ position: 'sticky', top: 0, zIndex: 2 }}
+          >
+            {dateTicks.map((date) => {
+              const hasDeliveries = byDate.has(date);
+              const isToday = date === today;
               return (
                 <div
                   key={date}
+                  className="shrink-0 border-r border-[color:var(--color-border)]/30 px-1 py-2 text-center"
                   style={{
                     width: dayWidth,
-                    flexShrink: 0,
-                    borderRight: '1px solid #F9FAFB',
-                    minHeight: 200,
+                    backgroundColor: isToday ? 'var(--color-accent-muted)' : 'var(--color-surface)',
                   }}
-                />
+                >
+                  <div
+                    className="text-[11px] font-medium"
+                    style={{
+                      fontWeight: hasDeliveries || isToday ? 600 : 400,
+                      color: isToday
+                        ? 'var(--color-accent)'
+                        : hasDeliveries
+                          ? 'var(--color-text-primary)'
+                          : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {formatDate(date)}
+                  </div>
+                  <div
+                    className="text-[9px]"
+                    style={{
+                      color: isToday ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    {isToday ? '今日' : formatWeekday(date)}
+                  </div>
+                </div>
               );
-            }
+            })}
+          </div>
 
-            return (
-              <div
-                key={date}
-                style={{
-                  width: dayWidth,
-                  flexShrink: 0,
-                  padding: '6px 4px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 4,
-                  borderRight: '1px solid #F9FAFB',
-                }}
-              >
-                {items.map((item) => {
-                  const openRate = item.latestMetric?.open_rate;
-                  const rateColor = getOpenRateColor(openRate);
-                  const rateBgColor = getOpenRateBgColor(openRate);
-                  const itemSegments = (item.segmentIds || [item.segmentId])
-                    .map((sid) => segmentMap.get(sid))
-                    .filter(Boolean) as Segment[];
+          {/* Delivery cards in columns */}
+          <div className="flex">
+            {dateTicks.map((date) => {
+              const items = byDate.get(date) || [];
+              const isToday = date === today;
 
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => onDeliveryClick?.(item)}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '6px 8px',
-                        borderRadius: 6,
-                        border: '1px solid #E5E7EB',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        transition: 'box-shadow 0.15s',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.boxShadow =
-                          '0 2px 8px rgba(0,0,0,0.1)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.boxShadow = 'none';
-                      }}
-                    >
-                      {/* Title row */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 3,
-                          marginBottom: 3,
-                        }}
+              if (items.length === 0) {
+                return (
+                  <div
+                    key={date}
+                    className="shrink-0 border-r border-[color:var(--color-border)]/10"
+                    style={{
+                      width: dayWidth,
+                      minHeight: 60,
+                      backgroundColor: isToday ? 'rgba(10, 122, 255, 0.02)' : undefined,
+                    }}
+                  />
+                );
+              }
+
+              return (
+                <div
+                  key={date}
+                  className="flex shrink-0 flex-col gap-1.5 border-r border-[color:var(--color-border)]/10 p-1.5"
+                  style={{
+                    width: dayWidth,
+                    backgroundColor: isToday ? 'rgba(10, 122, 255, 0.02)' : undefined,
+                  }}
+                >
+                  {items.map((item) => {
+                    const openRate = item.latestMetric?.open_rate;
+                    const rateColor = getOpenRateColor(openRate);
+                    const rateBgColor = getOpenRateBgColor(openRate);
+                    const itemSegments = (item.segmentIds || [item.segmentId])
+                      .map((sid) => segmentMap.get(sid))
+                      .filter(Boolean) as Segment[];
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onDeliveryClick?.(item)}
+                        className="block w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-left transition-shadow hover:shadow-md"
                       >
-                        <span style={{ fontSize: 12 }}>
-                          {TYPE_ICONS[item.type] || '\u2709\uFE0F'}
-                        </span>
-                        <span
+                        {/* Title - 2 lines */}
+                        <div
+                          className="mb-1 text-[11px] font-semibold leading-tight text-[color:var(--color-text-primary)]"
                           style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: '#111',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            flex: 1,
                           }}
                         >
                           {item.title}
-                        </span>
-                      </div>
+                        </div>
 
-                      {/* Segment badges */}
-                      {itemSegments.length > 0 && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 2,
-                            marginBottom: 3,
-                          }}
-                        >
-                          {itemSegments.map((seg) => (
-                            <span
-                              key={seg.id}
-                              style={{
-                                fontSize: 9,
-                                fontWeight: 500,
-                                color: seg.color,
-                                backgroundColor: `${seg.color}18`,
-                                border: `1px solid ${seg.color}40`,
-                                borderRadius: 3,
-                                padding: '0 4px',
-                                lineHeight: '16px',
-                              }}
-                            >
-                              {seg.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                        {/* Segment badges */}
+                        {itemSegments.length > 0 && (
+                          <div className="mb-1 flex flex-wrap gap-0.5">
+                            {itemSegments.map((seg) => (
+                              <span
+                                key={seg.id}
+                                className="inline-flex items-center rounded px-1 text-[9px] font-medium leading-3.5"
+                                style={{
+                                  color: seg.color,
+                                  backgroundColor: `${seg.color}18`,
+                                  border: `1px solid ${seg.color}40`,
+                                }}
+                              >
+                                {seg.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
-                      {/* Open rate badge */}
-                      {openRate !== undefined && (
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                            fontSize: 10,
-                            fontWeight: 600,
-                            color: rateColor,
-                            backgroundColor: rateBgColor,
-                            borderRadius: 4,
-                            padding: '1px 5px',
-                          }}
-                        >
-                          <span style={{ fontSize: 8 }}>{openRate >= 40 ? '\u25B2' : openRate >= 20 ? '\u25CF' : '\u25BC'}</span>
-                          {openRate.toFixed(1)}%
-                        </div>
-                      )}
-                      {openRate === undefined && (
-                        <div
-                          style={{
-                            fontSize: 9,
-                            color: '#9CA3AF',
-                          }}
-                        >
-                          計測なし
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
+                        {/* Open rate badge */}
+                        {openRate !== undefined ? (
+                          <div
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                            style={{ color: rateColor, backgroundColor: rateBgColor }}
+                          >
+                            {openRate.toFixed(1)}%
+                          </div>
+                        ) : (
+                          <div className="text-[9px] text-[color:var(--color-text-muted)]">
+                            未計測
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
+
+      {/* Right scroll indicator */}
+      {canScrollRight && (
+        <div
+          className="pointer-events-none absolute right-0 top-0 bottom-0 w-12"
+          style={{
+            background: 'linear-gradient(to left, rgba(255,255,255,0.95), transparent)',
+          }}
+        />
+      )}
+      {/* Left scroll indicator */}
+      {canScrollLeft && (
+        <div
+          className="pointer-events-none absolute left-0 top-0 bottom-0 w-12"
+          style={{
+            background: 'linear-gradient(to right, rgba(255,255,255,0.95), transparent)',
+          }}
+        />
+      )}
     </div>
   );
 }

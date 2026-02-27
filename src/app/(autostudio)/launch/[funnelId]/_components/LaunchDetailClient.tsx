@@ -177,15 +177,15 @@ export function LaunchDetailClient({
   }, []);
 
   return (
-    <div className="section-stack">
+    <div className="flex flex-col gap-5 md:gap-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 px-6">
+      <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-muted)]">
-          <Link href="/line" className="hover:text-[color:var(--color-accent)] transition-colors">
-            LINE
+          <Link href="/launch" className="hover:text-[color:var(--color-accent)] transition-colors">
+            Launch
           </Link>
           <span>/</span>
-          <span>Launch</span>
+          <span>{funnel.name}</span>
         </div>
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
           <h1 className="text-xl font-bold text-[color:var(--color-text-primary)]">
@@ -196,118 +196,103 @@ export function LaunchDetailClient({
           </span>
         </div>
         {funnel.description && (
-          <p className="text-sm text-[color:var(--color-text-secondary)]">
+          <p className="text-sm text-[color:var(--color-text-secondary)] line-clamp-2">
             {funnel.description}
           </p>
         )}
       </div>
 
-      {/* Summary stats */}
-      <div className="px-6">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <div className={dashboardCardClass}>
-            <p className="text-xs font-medium text-[color:var(--color-text-muted)]">配信数</p>
-            <p className="mt-1 text-2xl font-bold">{stats.total}</p>
-            <p className="text-xs text-[color:var(--color-text-muted)]">
-              {stats.withMetrics} 件計測済み
-            </p>
-          </div>
-          <div className={dashboardCardClass}>
-            <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-              合計配信リーチ
-            </p>
-            <p className="mt-1 text-2xl font-bold">
-              {numberFormatter.format(stats.totalSent)}
-            </p>
-            <p className="text-xs text-[color:var(--color-text-muted)]">通</p>
-          </div>
-          <div className={dashboardCardClass}>
-            <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-              平均開封率
-            </p>
-            <p
-              className="mt-1 text-2xl font-bold"
-              style={{
-                color: stats.avgOpenRate > 0 ? getOpenRateColor(stats.avgOpenRate) : undefined,
-              }}
-            >
-              {stats.avgOpenRate > 0
-                ? `${percentFormatter.format(stats.avgOpenRate)}%`
-                : '-'}
-            </p>
-            <p className="text-xs text-[color:var(--color-text-muted)]">
-              {stats.withMetrics > 0 ? `${stats.withMetrics}件の平均` : '計測データなし'}
-            </p>
-          </div>
-          <div className={dashboardCardClass}>
-            <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-              セグメント数
-            </p>
-            <p className="mt-1 text-2xl font-bold">{funnel.segments.length}</p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {funnel.segments.slice(0, 4).map((s) => (
-                <span
-                  key={s.id}
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 500,
-                    color: s.color,
-                    backgroundColor: `${s.color}18`,
-                    border: `1px solid ${s.color}40`,
-                    borderRadius: 3,
-                    padding: '0 4px',
-                    lineHeight: '16px',
-                  }}
-                >
-                  {s.name}
-                </span>
-              ))}
-              {funnel.segments.length > 4 && (
-                <span className="text-xs text-[color:var(--color-text-muted)]">
-                  +{funnel.segments.length - 4}
-                </span>
-              )}
-            </div>
+      {/* Summary stats - always 4 columns on desktop */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className={dashboardCardClass}>
+          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">配信数</p>
+          <p className="mt-1 text-2xl font-bold">{stats.total}</p>
+          <p className="text-xs text-[color:var(--color-text-muted)]">
+            {stats.withMetrics} 件計測済み
+          </p>
+        </div>
+        <div className={dashboardCardClass}>
+          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+            合計配信リーチ
+          </p>
+          <p className="mt-1 text-2xl font-bold">
+            {numberFormatter.format(stats.totalSent)}
+          </p>
+          <p className="text-xs text-[color:var(--color-text-muted)]">通</p>
+        </div>
+        <div className={dashboardCardClass}>
+          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+            平均開封率
+          </p>
+          <p
+            className="mt-1 text-2xl font-bold"
+            style={{
+              color: stats.avgOpenRate > 0 ? getOpenRateColor(stats.avgOpenRate) : undefined,
+            }}
+          >
+            {stats.avgOpenRate > 0
+              ? `${percentFormatter.format(stats.avgOpenRate)}%`
+              : '-'}
+          </p>
+          <p className="text-xs text-[color:var(--color-text-muted)]">
+            {stats.withMetrics > 0 ? `${stats.withMetrics}件の平均` : '計測データなし'}
+          </p>
+        </div>
+        <div className={dashboardCardClass}>
+          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+            セグメント数
+          </p>
+          <p className="mt-1 text-2xl font-bold">{funnel.segments.length}</p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {funnel.segments.slice(0, 4).map((s) => (
+              <span
+                key={s.id}
+                className="inline-flex items-center rounded px-1 text-[10px] font-medium leading-4"
+                style={{
+                  color: s.color,
+                  backgroundColor: `${s.color}18`,
+                  border: `1px solid ${s.color}40`,
+                }}
+              >
+                {s.name}
+              </span>
+            ))}
+            {funnel.segments.length > 4 && (
+              <span className="text-xs text-[color:var(--color-text-muted)]">
+                +{funnel.segments.length - 4}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="px-6">
-        <DashboardTabsInteractive
-          items={[...TABS]}
-          value={activeTab}
-          onChange={(v) => setActiveTab(v as TabKey)}
-          aria-label="Launch タブ"
-        />
-      </div>
+      <DashboardTabsInteractive
+        items={[...TABS]}
+        value={activeTab}
+        onChange={(v) => setActiveTab(v as TabKey)}
+        aria-label="Launch タブ"
+      />
 
       {/* Tab content */}
-      <div className="px-6">
-        {activeTab === 'overview' && (
-          <OverviewTab
-            deliveries={deliveriesWithMetrics}
-            segments={funnel.segments}
-            startDate={funnel.startDate}
-            endDate={funnel.endDate}
-            onDeliveryClick={handleDeliveryClick}
-          />
-        )}
-        {activeTab === 'analysis' && (
-          <AnalysisTab
-            deliveries={deliveriesWithMetrics}
-            segmentMap={segmentMap}
-            expandedId={expandedId}
-            onToggle={toggleExpand}
-          />
-        )}
-      </div>
+      {activeTab === 'overview' && (
+        <OverviewTab
+          deliveries={deliveriesWithMetrics}
+          segments={funnel.segments}
+          startDate={funnel.startDate}
+          endDate={funnel.endDate}
+          onDeliveryClick={handleDeliveryClick}
+        />
+      )}
+      {activeTab === 'analysis' && (
+        <AnalysisTab
+          deliveries={deliveriesWithMetrics}
+          segments={funnel.segments}
+          segmentMap={segmentMap}
+          expandedId={expandedId}
+          onToggle={toggleExpand}
+        />
+      )}
     </div>
   );
 }
@@ -328,22 +313,20 @@ function OverviewTab({
   onDeliveryClick: (d: DeliveryWithMetrics) => void;
 }) {
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <div className="p-4">
-          <h2 className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">
-            配信タイムライン
-          </h2>
-          <DeliveryTimeline
-            deliveries={deliveries}
-            segments={segments}
-            startDate={startDate}
-            endDate={endDate}
-            onDeliveryClick={onDeliveryClick}
-          />
-        </div>
-      </Card>
-    </div>
+    <Card>
+      <div className="p-3 md:p-4">
+        <h2 className="mb-3 text-sm font-semibold text-[color:var(--color-text-primary)]">
+          配信タイムライン
+        </h2>
+        <DeliveryTimeline
+          deliveries={deliveries}
+          segments={segments}
+          startDate={startDate}
+          endDate={endDate}
+          onDeliveryClick={onDeliveryClick}
+        />
+      </div>
+    </Card>
   );
 }
 
@@ -351,185 +334,186 @@ function OverviewTab({
 
 function AnalysisTab({
   deliveries,
+  segments,
   segmentMap,
   expandedId,
   onToggle,
 }: {
   deliveries: DeliveryWithMetrics[];
+  segments: Segment[];
   segmentMap: Map<string, Segment>;
   expandedId: string | null;
   onToggle: (id: string) => void;
 }) {
-  // Sort deliveries by date
-  const sorted = useMemo(
-    () => [...deliveries].sort((a, b) => a.date.localeCompare(b.date)),
-    [deliveries]
-  );
+  const [segmentFilter, setSegmentFilter] = useState<string>('all');
+
+  // Sort deliveries by date, then filter by segment
+  const filtered = useMemo(() => {
+    const sorted = [...deliveries].sort((a, b) => a.date.localeCompare(b.date));
+    if (segmentFilter === 'all') return sorted;
+    return sorted.filter((d) => {
+      const ids = d.segmentIds || [d.segmentId];
+      return ids.includes(segmentFilter);
+    });
+  }, [deliveries, segmentFilter]);
+
+  // Group by date
+  const grouped = useMemo(() => {
+    const map = new Map<string, DeliveryWithMetrics[]>();
+    for (const d of filtered) {
+      const existing = map.get(d.date) || [];
+      existing.push(d);
+      map.set(d.date, existing);
+    }
+    return map;
+  }, [filtered]);
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs text-[color:var(--color-text-muted)]">
-        各配信をクリックすると、LINEメッセージプレビューと開封率推移を確認できます。
-      </p>
+    <div className="flex flex-col gap-4">
+      {/* Filter bar */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-[color:var(--color-text-muted)]">
+          配信をクリックでプレビュー・開封率を確認
+        </p>
+        <select
+          value={segmentFilter}
+          onChange={(e) => setSegmentFilter(e.target.value)}
+          className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-xs"
+        >
+          <option value="all">全セグメント ({deliveries.length})</option>
+          {segments.map((s) => {
+            const count = deliveries.filter((d) => {
+              const ids = d.segmentIds || [d.segmentId];
+              return ids.includes(s.id);
+            }).length;
+            return (
+              <option key={s.id} value={s.id}>
+                {s.name} ({count})
+              </option>
+            );
+          })}
+        </select>
+      </div>
 
-      {sorted.map((delivery) => {
-        const isExpanded = expandedId === delivery.id;
-        const openRate = delivery.latestMetric?.open_rate;
-        const itemSegments = (delivery.segmentIds || [delivery.segmentId])
-          .map((sid) => segmentMap.get(sid))
-          .filter(Boolean) as Segment[];
-
-        return (
-          <div key={delivery.id} className="rounded-lg border border-[color:var(--color-border)] bg-white overflow-hidden">
-            {/* Row header */}
-            <button
-              type="button"
-              onClick={() => onToggle(delivery.id)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
-            >
-              {/* Expand chevron */}
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                style={{
-                  transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.15s',
-                  flexShrink: 0,
-                }}
-              >
-                <path
-                  d="M6 4L10 8L6 12"
-                  stroke="#9CA3AF"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-
-              {/* Type icon */}
-              <span style={{ fontSize: 14, flexShrink: 0 }}>
-                {TYPE_ICONS[delivery.type] || '\u2709\uFE0F'}
-              </span>
-
-              {/* Date */}
-              <span
-                style={{
-                  fontSize: 11,
-                  color: '#6B7280',
-                  fontWeight: 500,
-                  width: 50,
-                  flexShrink: 0,
-                }}
-              >
-                {formatDate(delivery.date).slice(5)}
-              </span>
-
-              {/* Title */}
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#111',
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {delivery.title}
-              </span>
-
-              {/* Segment badges */}
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 3,
-                  flexShrink: 0,
-                }}
-              >
-                {itemSegments.slice(0, 2).map((seg) => (
-                  <span
-                    key={seg.id}
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 500,
-                      color: seg.color,
-                      backgroundColor: `${seg.color}18`,
-                      border: `1px solid ${seg.color}40`,
-                      borderRadius: 3,
-                      padding: '0 4px',
-                      lineHeight: '16px',
-                    }}
-                  >
-                    {seg.name}
-                  </span>
-                ))}
-              </div>
-
-              {/* Metrics badge */}
-              {openRate !== undefined ? (
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: getOpenRateColor(openRate),
-                    backgroundColor: getOpenRateBgColor(openRate),
-                    borderRadius: 4,
-                    padding: '2px 8px',
-                    flexShrink: 0,
-                  }}
-                >
-                  {openRate.toFixed(1)}%
-                </span>
-              ) : (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: '#9CA3AF',
-                    flexShrink: 0,
-                  }}
-                >
-                  -
-                </span>
-              )}
-
-              {/* Delivery count */}
-              {delivery.latestMetric && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: '#6B7280',
-                    flexShrink: 0,
-                    width: 60,
-                    textAlign: 'right',
-                  }}
-                >
-                  {numberFormatter.format(delivery.latestMetric.delivery_count)}通
-                </span>
-              )}
-            </button>
-
-            {/* Expanded detail */}
-            {isExpanded && (
-              <div
-                style={{
-                  borderTop: '1px solid #E5E7EB',
-                  padding: '16px 20px',
-                  backgroundColor: '#FAFAFA',
-                }}
-              >
-                <BroadcastDetail delivery={delivery} />
-              </div>
-            )}
+      {/* Grouped delivery list */}
+      {Array.from(grouped.entries()).map(([date, items]) => (
+        <div key={date} className="flex flex-col gap-1.5">
+          {/* Date header */}
+          <div className="sticky top-0 z-10 flex items-center gap-2 bg-[color:var(--color-background)] py-1">
+            <span className="text-xs font-semibold text-[color:var(--color-text-secondary)]">
+              {formatDate(date).slice(5)}
+            </span>
+            <span className="text-[10px] text-[color:var(--color-text-muted)]">
+              {items.length}件
+            </span>
+            <div className="h-px flex-1 bg-[color:var(--color-border)]" />
           </div>
-        );
-      })}
 
-      {sorted.length === 0 && (
+          {items.map((delivery) => {
+            const isExpanded = expandedId === delivery.id;
+            const openRate = delivery.latestMetric?.open_rate;
+            const itemSegments = (delivery.segmentIds || [delivery.segmentId])
+              .map((sid) => segmentMap.get(sid))
+              .filter(Boolean) as Segment[];
+
+            return (
+              <div
+                key={delivery.id}
+                className="overflow-hidden rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface)]"
+              >
+                <button
+                  type="button"
+                  onClick={() => onToggle(delivery.id)}
+                  aria-expanded={isExpanded}
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-[color:var(--color-surface-muted)] sm:gap-3 sm:px-4 sm:py-3"
+                >
+                  {/* Expand chevron */}
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden="true"
+                    className="shrink-0 transition-transform"
+                    style={{ transform: isExpanded ? 'rotate(90deg)' : undefined }}
+                  >
+                    <path
+                      d="M6 4L10 8L6 12"
+                      stroke="currentColor"
+                      className="text-[color:var(--color-text-muted)]"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+
+                  {/* Type icon */}
+                  <span className="shrink-0 text-sm">
+                    {TYPE_ICONS[delivery.type] || '\u2709\uFE0F'}
+                  </span>
+
+                  {/* Title */}
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[color:var(--color-text-primary)]">
+                    {delivery.title}
+                  </span>
+
+                  {/* Segment badges - hidden on mobile */}
+                  <div className="hidden shrink-0 gap-1.5 sm:flex">
+                    {itemSegments.slice(0, 2).map((seg) => (
+                      <span
+                        key={seg.id}
+                        className="inline-flex items-center rounded px-1 text-[10px] font-medium leading-4"
+                        style={{
+                          color: seg.color,
+                          backgroundColor: `${seg.color}18`,
+                          border: `1px solid ${seg.color}40`,
+                        }}
+                      >
+                        {seg.name}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Metrics badge */}
+                  {openRate !== undefined ? (
+                    <span
+                      className="shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold"
+                      style={{
+                        color: getOpenRateColor(openRate),
+                        backgroundColor: getOpenRateBgColor(openRate),
+                      }}
+                    >
+                      {openRate.toFixed(1)}%
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-[10px] text-[color:var(--color-text-muted)]">
+                      -
+                    </span>
+                  )}
+
+                  {/* Delivery count */}
+                  {delivery.latestMetric && (
+                    <span className="hidden w-14 shrink-0 text-right text-[11px] text-[color:var(--color-text-secondary)] sm:inline">
+                      {numberFormatter.format(delivery.latestMetric.delivery_count)}通
+                    </span>
+                  )}
+                </button>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="border-t border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-4 sm:px-5">
+                    <BroadcastDetail delivery={delivery} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      {filtered.length === 0 && (
         <div className="flex items-center justify-center py-12 text-sm text-[color:var(--color-text-muted)]">
-          配信データがありません
+          {segmentFilter === 'all' ? '配信データがありません' : 'このセグメントの配信はありません'}
         </div>
       )}
     </div>
