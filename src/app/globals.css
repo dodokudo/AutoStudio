@@ -91,6 +91,10 @@ a:focus-visible {
     overflow-x: clip;
   }
 
+  .page-container:has(.launch-detail-wide) {
+    width: min(1400px, 100%);
+  }
+
   .section-stack {
     display: grid;
     gap: 32px;

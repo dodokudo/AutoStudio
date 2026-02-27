@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import { DeliveryTimeline } from '../../_components/DeliveryTimeline';
 import { BroadcastDetail } from '../../_components/BroadcastDetail';
+import { LineMessagePreview } from '../../_components/LineMessagePreview';
 import type {
   FunnelData,
   BroadcastMetric,
@@ -313,7 +314,6 @@ export function LaunchDetailClient({
 
   const handleDeliveryClick = useCallback((d: DeliveryWithMetrics) => {
     setExpandedId((prev) => (prev === d.id ? null : d.id));
-    setActiveTab('analysis');
   }, []);
 
   const toggleExpand = useCallback((id: string) => {
@@ -321,7 +321,7 @@ export function LaunchDetailClient({
   }, []);
 
   return (
-    <div className="flex flex-col gap-5 md:gap-6">
+    <div className="launch-detail-wide flex flex-col gap-5 md:gap-6">
       {/* Header */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-muted)]">
@@ -479,9 +479,11 @@ export function LaunchDetailClient({
         <OverviewTab
           deliveries={channelFilteredDeliveries}
           segments={channelFilteredSegments}
+          segmentMap={segmentMap}
           startDate={funnel.startDate}
           endDate={funnel.endDate}
           onDeliveryClick={handleDeliveryClick}
+          selectedDeliveryId={expandedId}
         />
       )}
       {activeTab === 'analysis' && (
@@ -502,31 +504,201 @@ export function LaunchDetailClient({
 function OverviewTab({
   deliveries,
   segments,
+  segmentMap,
   startDate,
   endDate,
   onDeliveryClick,
+  selectedDeliveryId,
 }: {
   deliveries: DeliveryWithMetrics[];
   segments: Segment[];
+  segmentMap: Map<string, Segment>;
   startDate: string;
   endDate: string;
   onDeliveryClick: (d: DeliveryWithMetrics) => void;
+  selectedDeliveryId: string | null;
+}) {
+  const selectedDelivery = useMemo(
+    () => deliveries.find((d) => d.id === selectedDeliveryId) ?? null,
+    [deliveries, selectedDeliveryId]
+  );
+
+  const sameDateDeliveries = useMemo(() => {
+    if (!selectedDelivery) return [];
+    return deliveries.filter((d) => d.date === selectedDelivery.date && d.id !== selectedDelivery.id);
+  }, [deliveries, selectedDelivery]);
+
+  return (
+    <>
+      <Card>
+        <div className="p-3 md:p-4">
+          <h2 className="mb-3 text-sm font-semibold text-[color:var(--color-text-primary)]">
+            配信タイムライン
+          </h2>
+          <DeliveryTimeline
+            deliveries={deliveries}
+            segments={segments}
+            startDate={startDate}
+            endDate={endDate}
+            onDeliveryClick={onDeliveryClick}
+            selectedDeliveryId={selectedDeliveryId}
+          />
+        </div>
+      </Card>
+
+      {selectedDelivery && (
+        <OverviewDeliveryDetail
+          delivery={selectedDelivery}
+          sameDateDeliveries={sameDateDeliveries}
+          segmentMap={segmentMap}
+          onSwitchDelivery={onDeliveryClick}
+        />
+      )}
+    </>
+  );
+}
+
+// ------- Overview Delivery Detail -------
+
+function OverviewDeliveryDetail({
+  delivery,
+  sameDateDeliveries,
+  segmentMap,
+  onSwitchDelivery,
+}: {
+  delivery: DeliveryWithMetrics;
+  sameDateDeliveries: DeliveryWithMetrics[];
+  segmentMap: Map<string, Segment>;
+  onSwitchDelivery: (d: DeliveryWithMetrics) => void;
+}) {
+  const detailRef = useRef<HTMLDivElement>(null);
+  const { latestMetric, messages, notificationText } = delivery;
+  const itemSegments = (delivery.segmentIds || [delivery.segmentId])
+    .map((sid) => segmentMap.get(sid))
+    .filter(Boolean) as Segment[];
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [delivery.id]);
+
+  return (
+    <div ref={detailRef}>
+      <Card>
+        <div className="p-4 md:p-5">
+          {/* Header: title + segment pills */}
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="text-sm font-bold text-[color:var(--color-text-primary)]">
+              {delivery.title}
+            </h3>
+
+            {sameDateDeliveries.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {itemSegments.map((seg) => (
+                  <span
+                    key={seg.id}
+                    className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ color: 'white', backgroundColor: seg.color }}
+                  >
+                    {seg.name}
+                  </span>
+                ))}
+                {sameDateDeliveries.map((d) => {
+                  const segs = (d.segmentIds || [d.segmentId])
+                    .map((sid) => segmentMap.get(sid))
+                    .filter(Boolean) as Segment[];
+                  return segs.map((seg) => (
+                    <button
+                      key={`${d.id}-${seg.id}`}
+                      type="button"
+                      onClick={() => onSwitchDelivery(d)}
+                      className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors hover:opacity-80"
+                      style={{
+                        color: seg.color,
+                        backgroundColor: `${seg.color}18`,
+                        border: `1.5px solid ${seg.color}40`,
+                      }}
+                    >
+                      {seg.name}
+                    </button>
+                  ));
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* KPI cards */}
+          {latestMetric && (
+            <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+              <KpiCard label="配信数" value={numberFormatter.format(latestMetric.delivery_count)} />
+              <KpiCard label="開封数" value={numberFormatter.format(latestMetric.open_count)} />
+              <KpiCard
+                label="開封率"
+                value={`${latestMetric.open_rate.toFixed(1)}%`}
+                valueColor={getOpenRateColor(latestMetric.open_rate)}
+              />
+              {delivery.clickCount !== undefined && (
+                <>
+                  <KpiCard
+                    label="クリック数"
+                    value={numberFormatter.format(delivery.clickCount)}
+                    valueColor="#2563EB"
+                  />
+                  <KpiCard
+                    label="クリック率"
+                    value={`${((delivery.clickCount / latestMetric.delivery_count) * 100).toFixed(1)}%`}
+                    valueColor="#2563EB"
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* LINE message preview */}
+          {messages && messages.length > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">
+                メッセージ プレビュー
+              </p>
+              <LineMessagePreview messages={messages} notificationText={notificationText} />
+            </div>
+          )}
+
+          {/* No metrics fallback */}
+          {!latestMetric && (
+            <div className="flex items-center justify-center rounded-lg border border-dashed border-[color:var(--color-border)] py-8 text-sm text-[color:var(--color-text-muted)]">
+              メトリクスデータはまだ取得されていません
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
 }) {
   return (
-    <Card>
-      <div className="p-3 md:p-4">
-        <h2 className="mb-3 text-sm font-semibold text-[color:var(--color-text-primary)]">
-          配信タイムライン
-        </h2>
-        <DeliveryTimeline
-          deliveries={deliveries}
-          segments={segments}
-          startDate={startDate}
-          endDate={endDate}
-          onDeliveryClick={onDeliveryClick}
-        />
-      </div>
-    </Card>
+    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--color-text-muted)]">
+        {label}
+      </p>
+      <p
+        className="mt-1 text-lg font-bold"
+        style={{ color: valueColor || 'var(--color-text-primary)' }}
+      >
+        {value}
+      </p>
+    </div>
   );
 }
 

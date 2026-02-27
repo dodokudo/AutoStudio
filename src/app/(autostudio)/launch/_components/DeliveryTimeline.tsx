@@ -24,6 +24,7 @@ interface DeliveryTimelineProps {
   startDate: string;
   endDate: string;
   onDeliveryClick?: (delivery: DeliveryWithMetrics) => void;
+  selectedDeliveryId?: string | null;
 }
 
 function parseDate(dateStr: string): Date {
@@ -58,6 +59,7 @@ export function DeliveryTimeline({
   startDate,
   endDate,
   onDeliveryClick,
+  selectedDeliveryId,
 }: DeliveryTimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -255,6 +257,7 @@ export function DeliveryTimeline({
                     const openRate = item.latestMetric?.open_rate;
                     const rateColor = getOpenRateColor(openRate);
                     const rateBgColor = getOpenRateBgColor(openRate);
+                    const isSelected = item.id === selectedDeliveryId;
                     const itemSegments = (item.segmentIds || [item.segmentId])
                       .map((sid) => segmentMap.get(sid))
                       .filter(Boolean) as Segment[];
@@ -264,7 +267,11 @@ export function DeliveryTimeline({
                         key={item.id}
                         type="button"
                         onClick={() => onDeliveryClick?.(item)}
-                        className="block w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-2 text-left transition-shadow hover:shadow-md"
+                        className="block w-full rounded-md border bg-[color:var(--color-surface)] p-2 text-left transition-shadow hover:shadow-md"
+                        style={{
+                          borderColor: isSelected ? 'var(--color-accent)' : 'var(--color-border)',
+                          boxShadow: isSelected ? '0 0 0 2px var(--color-accent-muted)' : undefined,
+                        }}
                       >
                         {/* Title - 2 lines */}
                         <div
