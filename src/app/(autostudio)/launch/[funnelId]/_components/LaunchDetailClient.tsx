@@ -48,51 +48,114 @@ function formatDate(dateStr: string): string {
   }
 }
 
-/** Fuzzy match: delivery title includes broadcast_name or vice versa */
-function fuzzyMatch(deliveryTitle: string, broadcastName: string): boolean {
-  const a = deliveryTitle.toLowerCase().replace(/\s+/g, '');
-  const b = broadcastName.toLowerCase().replace(/\s+/g, '');
-  return a.includes(b) || b.includes(a);
+/** Parse date (YYYY-MM-DD) from Lステップ sent_at like "配信済み\n2026/02/26\n21:03" */
+function parseDateFromSentAt(sentAt: string): string | null {
+  const m = sentAt.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
 }
 
-/** Match deliveries with broadcast metrics */
+/** Tokenize text into meaningful words for similarity matching */
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[「」『』（）()【】[\]_:：、。…\s]+/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length >= 2)
+  );
+}
+
+/** Count common tokens between two strings */
+function tokenSimilarity(a: string, b: string): number {
+  const tokA = tokenize(a);
+  const tokB = tokenize(b);
+  let count = 0;
+  for (const t of tokA) {
+    if (tokB.has(t)) count++;
+  }
+  return count;
+}
+
+/**
+ * Match deliveries with broadcast metrics.
+ * Strategy: date-based matching with token similarity disambiguation.
+ * 1. Group metrics by broadcast_id (time-series)
+ * 2. Index broadcasts by sent date
+ * 3. For each delivery: match by date, disambiguate with token similarity
+ */
 function matchDeliveriesWithMetrics(
   deliveries: DeliveryItem[],
   metrics: BroadcastMetric[]
 ): DeliveryWithMetrics[] {
-  // Group metrics by broadcast_name
-  const metricsByName = new Map<string, BroadcastMetric[]>();
+  // Group metrics by broadcast_id
+  const metricsByBroadcast = new Map<string, BroadcastMetric[]>();
   for (const m of metrics) {
-    const key = m.broadcast_name.toLowerCase().replace(/\s+/g, '');
-    const existing = metricsByName.get(key) || [];
+    const existing = metricsByBroadcast.get(m.broadcast_id) || [];
     existing.push(m);
-    metricsByName.set(key, existing);
+    metricsByBroadcast.set(m.broadcast_id, existing);
   }
 
-  return deliveries.map((delivery) => {
-    // Try to find matching metrics
-    let matchedSeries: BroadcastMetric[] = [];
+  // Index broadcasts by date
+  const broadcastsByDate = new Map<
+    string,
+    { broadcastId: string; name: string; series: BroadcastMetric[] }[]
+  >();
+  for (const [broadcastId, series] of metricsByBroadcast) {
+    const dateStr = parseDateFromSentAt(series[0].sent_at);
+    if (!dateStr) continue;
+    const existing = broadcastsByDate.get(dateStr) || [];
+    existing.push({ broadcastId, name: series[0].broadcast_name, series });
+    broadcastsByDate.set(dateStr, existing);
+  }
 
-    for (const [key, series] of metricsByName.entries()) {
-      if (fuzzyMatch(delivery.title, series[0].broadcast_name)) {
-        matchedSeries = series;
-        break;
+  const matched = new Set<string>();
+
+  return deliveries.map((delivery) => {
+    // Find candidate broadcasts by date
+    const candidates =
+      broadcastsByDate
+        .get(delivery.date)
+        ?.filter((c) => !matched.has(c.broadcastId)) || [];
+
+    let bestSeries: BroadcastMetric[] | null = null;
+    let bestId: string | null = null;
+
+    if (candidates.length === 1) {
+      // Only one broadcast on this date — auto match
+      bestSeries = candidates[0].series;
+      bestId = candidates[0].broadcastId;
+    } else if (candidates.length > 1) {
+      // Multiple broadcasts on same date — use token similarity
+      let bestScore = -1;
+      for (const c of candidates) {
+        const score = tokenSimilarity(delivery.title, c.name);
+        if (score > bestScore) {
+          bestScore = score;
+          bestSeries = c.series;
+          bestId = c.broadcastId;
+        }
+      }
+      // Require at least 1 common token to match
+      if (bestScore < 1) {
+        bestSeries = null;
+        bestId = null;
       }
     }
 
-    // Sort by elapsed_minutes
-    const sorted = [...matchedSeries].sort(
-      (a, b) => a.elapsed_minutes - b.elapsed_minutes
-    );
+    if (bestSeries && bestId) {
+      matched.add(bestId);
+      const sorted = [...bestSeries].sort(
+        (a, b) => a.elapsed_minutes - b.elapsed_minutes
+      );
+      return {
+        ...delivery,
+        latestMetric: sorted[sorted.length - 1],
+        timeSeries: sorted,
+      };
+    }
 
-    // Latest is the one with most elapsed time
-    const latest = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
-
-    return {
-      ...delivery,
-      latestMetric: latest,
-      timeSeries: sorted.length > 0 ? sorted : undefined,
-    };
+    return { ...delivery, latestMetric: undefined, timeSeries: undefined };
   });
 }
 
