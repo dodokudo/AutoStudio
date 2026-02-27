@@ -51,7 +51,7 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
           </aside>
 
           <main className="flex-1 pb-10 pt-6 md:py-12">
-            <div className="page-container md:mx-0 md:px-0">{children}</div>
+            <div className="page-container md:px-8">{children}</div>
           </main>
         </div>
       </div>

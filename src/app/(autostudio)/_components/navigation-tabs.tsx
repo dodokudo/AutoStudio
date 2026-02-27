@@ -32,7 +32,7 @@ export function NavigationTabs() {
               'inline-flex h-10 items-center whitespace-nowrap rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2] flex-shrink-0',
               'md:h-10 md:w-full md:justify-start md:px-3 md:text-sm',
               isActive &&
-                'border-[color:var(--color-accent)] bg-[color:var(--color-text-primary)] text-white hover:bg-[color:var(--color-text-primary)]',
+                'border-[color:var(--color-accent)] max-md:bg-[color:var(--color-text-primary)] max-md:text-white max-md:hover:bg-[color:var(--color-text-primary)]',
               isActive && 'md:bg-[color:var(--color-accent-muted)] md:text-[color:var(--color-accent-dark)] md:shadow-[var(--shadow-soft)]'
             )}
           >
