@@ -200,8 +200,9 @@ export function DeliveryTimeline({
   }
 
   return (
-    <div className="relative">
+    <div>
       {/* Scroll container */}
+      <div className="relative">
       <div
         ref={scrollRef}
         className="overflow-x-auto scrollbar-hide"
@@ -369,9 +370,9 @@ export function DeliveryTimeline({
                             )}
                           </div>
 
-                          {/* KPI grid — 6 items: 2 cols × 3 rows */}
+                          {/* KPI grid — 6 items: 3 cols × 2 rows */}
                           {metric && (
-                            <div className="mt-2 grid grid-cols-2 gap-1">
+                            <div className="mt-2 grid grid-cols-3 gap-1">
                               <MiniKpi label="配信数" value={metric.delivery_count.toLocaleString()} />
                               <MiniKpi label="開封数" value={metric.open_count.toLocaleString()} />
                               <MiniKpi label="開封率" value={`${metric.open_rate.toFixed(1)}%`} color={rateColor} />
@@ -428,41 +429,46 @@ export function DeliveryTimeline({
           }}
         />
       )}
+      </div>
 
-      {/* Zoom controls — bottom right */}
+      {/* Zoom controls — sticky bottom-right, always visible while timeline is in view */}
       <div
-        className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-xl border border-[color:var(--color-border)] bg-white/90 px-1.5 py-1 shadow-lg backdrop-blur-sm"
-        style={{ zIndex: 10 }}
+        className="pointer-events-none sticky bottom-3 flex justify-end pr-3"
+        style={{ zIndex: 10, marginTop: -44 }}
       >
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.max(0.3, Math.round((z - 0.1) * 10) / 10))}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+        <div
+          className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-[color:var(--color-border)] bg-white/90 px-1.5 py-1 shadow-lg backdrop-blur-sm"
         >
-          −
-        </button>
-        <button
-          type="button"
-          onClick={() => setZoom(1)}
-          className="flex h-7 min-w-[48px] items-center justify-center rounded-lg text-[11px] font-semibold tabular-nums text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10))}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-        >
-          +
-        </button>
-        <div className="mx-0.5 h-4 w-px bg-[color:var(--color-border)]" />
-        <button
-          type="button"
-          onClick={handleFitScreen}
-          className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-        >
-          Fit
-        </button>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(0.3, Math.round((z - 0.1) * 10) / 10))}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="flex h-7 min-w-[48px] items-center justify-center rounded-lg text-[11px] font-semibold tabular-nums text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10))}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            +
+          </button>
+          <div className="mx-0.5 h-4 w-px bg-[color:var(--color-border)]" />
+          <button
+            type="button"
+            onClick={handleFitScreen}
+            className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            Fit
+          </button>
+        </div>
       </div>
     </div>
   );
