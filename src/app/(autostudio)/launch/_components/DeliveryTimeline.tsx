@@ -54,6 +54,8 @@ function getTodayStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
+const COL_MIN_WIDTH = 300;
+
 export function DeliveryTimeline({
   deliveries,
   segments,
@@ -128,10 +130,8 @@ export function DeliveryTimeline({
       for (const date of deliveryDates) {
         visibleDates.add(date);
       }
-      // Always include first and last day
       visibleDates.add(allDates[0]);
       visibleDates.add(allDates[allDates.length - 1]);
-      // Include today if in range
       if (allDates.includes(today)) {
         visibleDates.add(today);
       }
@@ -148,11 +148,11 @@ export function DeliveryTimeline({
     return m;
   }, [segments]);
 
-  // Column width: wider for readability (140px min)
+  // Column width: 300px min to fit LINE preview (280px)
   const dayWidth = containerWidth > 0
-    ? Math.max(140, containerWidth / dateTicks.length)
-    : 140;
-  const timelineWidth = Math.max(dayWidth * dateTicks.length, dateTicks.length * 140);
+    ? Math.max(COL_MIN_WIDTH, containerWidth / dateTicks.length)
+    : COL_MIN_WIDTH;
+  const timelineWidth = Math.max(dayWidth * dateTicks.length, dateTicks.length * COL_MIN_WIDTH);
 
   // Auto-scroll to today on mount
   useEffect(() => {
@@ -226,7 +226,7 @@ export function DeliveryTimeline({
           </div>
 
           {/* Delivery cards in columns */}
-          <div className="flex">
+          <div className="flex" style={{ alignItems: 'flex-start' }}>
             {dateTicks.map((date) => {
               const items = byDate.get(date) || [];
               const isToday = date === today;
@@ -248,7 +248,7 @@ export function DeliveryTimeline({
               return (
                 <div
                   key={date}
-                  className="flex shrink-0 flex-col gap-1.5 border-r border-[color:var(--color-border)]/10 p-1.5"
+                  className="flex shrink-0 flex-col gap-2 border-r border-[color:var(--color-border)]/10 p-1.5"
                   style={{
                     width: dayWidth,
                     backgroundColor: isToday ? 'rgba(10, 122, 255, 0.02)' : undefined,
@@ -264,111 +264,101 @@ export function DeliveryTimeline({
                       .filter(Boolean) as Segment[];
 
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        type="button"
-                        onClick={() => onDeliveryClick?.(item)}
-                        className="block w-full rounded-md border bg-[color:var(--color-surface)] p-2 text-left transition-shadow hover:shadow-md"
+                        className="overflow-hidden rounded-md border bg-[color:var(--color-surface)]"
                         style={{
                           borderColor: isSelected ? 'var(--color-accent)' : 'var(--color-border)',
                           boxShadow: isSelected ? '0 0 0 2px var(--color-accent-muted)' : undefined,
                         }}
                       >
-                        {/* Title - 2 lines */}
-                        <div
-                          className="mb-1 text-[11px] font-semibold leading-tight text-[color:var(--color-text-primary)]"
-                          style={{
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
+                        {/* Header — clickable for selection */}
+                        <button
+                          type="button"
+                          onClick={() => onDeliveryClick?.(item)}
+                          className="block w-full p-2 text-left transition-colors hover:bg-[color:var(--color-surface-muted)]"
                         >
-                          {item.title}
-                        </div>
-
-                        {/* Segment badges */}
-                        {itemSegments.length > 0 && (
-                          <div className="mb-1 flex flex-wrap gap-0.5">
-                            {itemSegments.map((seg) => (
-                              <span
-                                key={seg.id}
-                                className="inline-flex items-center rounded px-1 text-[9px] font-medium leading-3.5"
-                                style={{
-                                  color: seg.color,
-                                  backgroundColor: `${seg.color}18`,
-                                  border: `1px solid ${seg.color}40`,
-                                }}
-                              >
-                                {seg.name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Open rate badge */}
-                        {openRate !== undefined ? (
+                          {/* Title */}
                           <div
-                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                            style={{ color: rateColor, backgroundColor: rateBgColor }}
+                            className="mb-1 text-[11px] font-semibold leading-tight text-[color:var(--color-text-primary)]"
+                            style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
                           >
-                            {openRate.toFixed(1)}%
+                            {item.title}
                           </div>
-                        ) : (
-                          <div className="text-[9px] text-[color:var(--color-text-muted)]">
-                            未計測
-                          </div>
-                        )}
 
-                        {/* Click rate badge (only for deliveries with clickTag) */}
-                        {item.clickCount !== undefined && item.latestMetric && item.latestMetric.delivery_count > 0 && (
-                          <div
-                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                            style={{ color: '#2563EB', backgroundColor: '#DBEAFE' }}
-                          >
-                            {((item.clickCount / item.latestMetric.delivery_count) * 100).toFixed(1)}% tap
-                          </div>
-                        )}
-
-                        {/* Expanded: KPI + LINE preview inline */}
-                        {isSelected && (
-                          <div className="mt-2 border-t border-[color:var(--color-border)]/40 pt-2" onClick={(e) => e.stopPropagation()}>
-                            {/* Compact KPI */}
-                            {item.latestMetric && (
-                              <div className="mb-2 grid grid-cols-2 gap-1">
-                                <MiniKpi label="配信" value={item.latestMetric.delivery_count.toLocaleString()} />
-                                <MiniKpi label="開封" value={item.latestMetric.open_count.toLocaleString()} />
-                                <MiniKpi label="開封率" value={`${item.latestMetric.open_rate.toFixed(1)}%`} color={rateColor} />
-                                {item.clickCount !== undefined && (
-                                  <MiniKpi label="クリック" value={item.clickCount.toLocaleString()} color="#2563EB" />
-                                )}
-                              </div>
-                            )}
-                            {/* Scaled LINE preview */}
-                            {item.messages && item.messages.length > 0 && (
-                              <div
-                                style={{
-                                  width: dayWidth - 12,
-                                  overflow: 'hidden',
-                                }}
-                              >
-                                <div
+                          {/* Segment badges */}
+                          {itemSegments.length > 0 && (
+                            <div className="mb-1 flex flex-wrap gap-0.5">
+                              {itemSegments.map((seg) => (
+                                <span
+                                  key={seg.id}
+                                  className="inline-flex items-center rounded px-1 text-[9px] font-medium leading-3.5"
                                   style={{
-                                    transform: `scale(${(dayWidth - 12) / 280})`,
-                                    transformOrigin: 'top left',
-                                    width: 280,
+                                    color: seg.color,
+                                    backgroundColor: `${seg.color}18`,
+                                    border: `1px solid ${seg.color}40`,
                                   }}
                                 >
-                                  <LineMessagePreview
-                                    messages={item.messages}
-                                    notificationText={item.notificationText}
-                                  />
-                                </div>
+                                  {seg.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Rate badges */}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {openRate !== undefined ? (
+                              <div
+                                className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                style={{ color: rateColor, backgroundColor: rateBgColor }}
+                              >
+                                {openRate.toFixed(1)}%
+                              </div>
+                            ) : (
+                              <div className="text-[9px] text-[color:var(--color-text-muted)]">
+                                未計測
+                              </div>
+                            )}
+                            {item.clickCount !== undefined && item.latestMetric && item.latestMetric.delivery_count > 0 && (
+                              <div
+                                className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                style={{ color: '#2563EB', backgroundColor: '#DBEAFE' }}
+                              >
+                                {((item.clickCount / item.latestMetric.delivery_count) * 100).toFixed(1)}% tap
                               </div>
                             )}
                           </div>
+
+                          {/* KPI grid — always shown */}
+                          {item.latestMetric && (
+                            <div className="mt-2 grid grid-cols-2 gap-1">
+                              <MiniKpi label="配信" value={item.latestMetric.delivery_count.toLocaleString()} />
+                              <MiniKpi label="開封" value={item.latestMetric.open_count.toLocaleString()} />
+                              <MiniKpi label="開封率" value={`${item.latestMetric.open_rate.toFixed(1)}%`} color={rateColor} />
+                              {item.clickCount !== undefined && (
+                                <MiniKpi label="クリック" value={item.clickCount.toLocaleString()} color="#2563EB" />
+                              )}
+                            </div>
+                          )}
+                        </button>
+
+                        {/* LINE preview — always shown, zoomable */}
+                        {item.messages && item.messages.length > 0 && (
+                          <div className="border-t border-[color:var(--color-border)]/30">
+                            <ZoomablePreview>
+                              <LineMessagePreview
+                                messages={item.messages}
+                                notificationText={item.notificationText}
+                              />
+                            </ZoomablePreview>
+                          </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -395,6 +385,84 @@ export function DeliveryTimeline({
             background: 'linear-gradient(to right, rgba(255,255,255,0.95), transparent)',
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// Zoomable container — Ctrl+wheel / trackpad pinch to zoom
+function ZoomablePreview({ children }: { children: React.ReactNode }) {
+  const [zoom, setZoom] = useState(1);
+  const [baseHeight, setBaseHeight] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Measure natural height at zoom 1 for scroll containment when zoomed
+  useEffect(() => {
+    if (contentRef.current && baseHeight === 0) {
+      setBaseHeight(contentRef.current.getBoundingClientRect().height);
+    }
+  }, [baseHeight]);
+
+  // Intercept Ctrl+wheel (trackpad pinch) for zoom
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        setZoom((prev) => {
+          const delta = -e.deltaY * 0.005;
+          return Math.min(3, Math.max(0.3, prev + delta));
+        });
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  const isZoomed = Math.abs(zoom - 1) > 0.02;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        overflow: isZoomed ? 'auto' : 'visible',
+        maxHeight: isZoomed && baseHeight > 0 ? baseHeight : undefined,
+        position: 'relative',
+      }}
+    >
+      <div ref={contentRef} style={{ zoom }}>
+        {children}
+      </div>
+      {isZoomed && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoom(1);
+          }}
+          style={{
+            position: 'sticky',
+            bottom: 4,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'block',
+            margin: '4px auto 0',
+            fontSize: 9,
+            padding: '2px 8px',
+            borderRadius: 10,
+            background: 'rgba(0,0,0,0.6)',
+            color: 'white',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          {Math.round(zoom * 100)}%
+        </button>
       )}
     </div>
   );
