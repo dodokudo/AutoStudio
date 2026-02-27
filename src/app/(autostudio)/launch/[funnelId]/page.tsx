@@ -69,6 +69,31 @@ async function fetchBroadcastMetrics() {
   }
 }
 
+async function fetchTagMetrics(): Promise<Record<string, number>> {
+  if (!PROJECT_ID) return {};
+
+  const bq = createBigQueryClient(PROJECT_ID);
+  const dataset = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
+
+  try {
+    const [rows] = await bq.query({
+      query: `
+        SELECT tag_name, friend_count
+        FROM \`${PROJECT_ID}.${dataset}.tag_metrics\`
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY tag_name ORDER BY measured_at DESC) = 1
+      `,
+      useLegacySql: false,
+    });
+    const result: Record<string, number> = {};
+    for (const row of rows ?? []) {
+      result[row.tag_name] = Number(row.friend_count) || 0;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export default async function LaunchDetailPage({ params }: PageProps) {
   const { funnelId } = await params;
 
@@ -86,9 +111,10 @@ export default async function LaunchDetailPage({ params }: PageProps) {
   }
 
   try {
-    const [funnel, metrics] = await Promise.all([
+    const [funnel, metrics, tagMetrics] = await Promise.all([
       fetchFunnelData(funnelId),
       fetchBroadcastMetrics(),
+      fetchTagMetrics(),
     ]);
 
     if (!funnel) {
@@ -108,6 +134,7 @@ export default async function LaunchDetailPage({ params }: PageProps) {
       <LaunchDetailClient
         funnel={funnel}
         broadcastMetrics={metrics}
+        tagMetrics={tagMetrics}
       />
     );
   } catch (error) {

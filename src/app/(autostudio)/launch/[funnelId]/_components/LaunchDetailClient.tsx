@@ -20,6 +20,7 @@ import type {
 interface LaunchDetailClientProps {
   funnel: FunnelData;
   broadcastMetrics: BroadcastMetric[];
+  tagMetrics: Record<string, number>;
 }
 
 // ------- Tabs -------
@@ -86,7 +87,8 @@ function tokenSimilarity(a: string, b: string): number {
  */
 function matchDeliveriesWithMetrics(
   deliveries: DeliveryItem[],
-  metrics: BroadcastMetric[]
+  metrics: BroadcastMetric[],
+  tagMetrics: Record<string, number>
 ): DeliveryWithMetrics[] {
   // Group metrics by broadcast_id
   const metricsByBroadcast = new Map<string, BroadcastMetric[]>();
@@ -143,6 +145,11 @@ function matchDeliveriesWithMetrics(
       }
     }
 
+    // Look up click count from tag metrics
+    const clickCount = delivery.clickTag
+      ? tagMetrics[delivery.clickTag] ?? undefined
+      : undefined;
+
     if (bestSeries && bestId) {
       matched.add(bestId);
       const sorted = [...bestSeries].sort(
@@ -152,10 +159,11 @@ function matchDeliveriesWithMetrics(
         ...delivery,
         latestMetric: sorted[sorted.length - 1],
         timeSeries: sorted,
+        clickCount,
       };
     }
 
-    return { ...delivery, latestMetric: undefined, timeSeries: undefined };
+    return { ...delivery, latestMetric: undefined, timeSeries: undefined, clickCount };
   });
 }
 
@@ -193,14 +201,15 @@ function getOpenRateBgColor(rate: number): string {
 export function LaunchDetailClient({
   funnel,
   broadcastMetrics,
+  tagMetrics,
 }: LaunchDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Match deliveries with metrics
   const deliveriesWithMetrics = useMemo(
-    () => matchDeliveriesWithMetrics(funnel.deliveries, broadcastMetrics),
-    [funnel.deliveries, broadcastMetrics]
+    () => matchDeliveriesWithMetrics(funnel.deliveries, broadcastMetrics, tagMetrics),
+    [funnel.deliveries, broadcastMetrics, tagMetrics]
   );
 
   // Segment map
@@ -216,6 +225,8 @@ export function LaunchDetailClient({
     let withMetrics = 0;
     let sumOpenRate = 0;
     let totalSent = 0;
+    let withClick = 0;
+    let sumClickRate = 0;
 
     for (const d of deliveriesWithMetrics) {
       total++;
@@ -224,10 +235,15 @@ export function LaunchDetailClient({
         sumOpenRate += d.latestMetric.open_rate;
         totalSent += d.latestMetric.delivery_count;
       }
+      if (d.clickCount !== undefined && d.latestMetric && d.latestMetric.delivery_count > 0) {
+        withClick++;
+        sumClickRate += (d.clickCount / d.latestMetric.delivery_count) * 100;
+      }
     }
 
     const avgOpenRate = withMetrics > 0 ? sumOpenRate / withMetrics : 0;
-    return { total, withMetrics, avgOpenRate, totalSent };
+    const avgClickRate = withClick > 0 ? sumClickRate / withClick : 0;
+    return { total, withMetrics, avgOpenRate, totalSent, withClick, avgClickRate };
   }, [deliveriesWithMetrics]);
 
   const handleDeliveryClick = useCallback((d: DeliveryWithMetrics) => {
@@ -265,8 +281,8 @@ export function LaunchDetailClient({
         )}
       </div>
 
-      {/* Summary stats - always 4 columns on desktop */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {/* Summary stats - 5 columns on desktop */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <div className={dashboardCardClass}>
           <p className="text-xs font-medium text-[color:var(--color-text-muted)]">配信数</p>
           <p className="mt-1 text-2xl font-bold">{stats.total}</p>
@@ -299,6 +315,24 @@ export function LaunchDetailClient({
           </p>
           <p className="text-xs text-[color:var(--color-text-muted)]">
             {stats.withMetrics > 0 ? `${stats.withMetrics}件の平均` : '計測データなし'}
+          </p>
+        </div>
+        <div className={dashboardCardClass}>
+          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+            平均クリック率
+          </p>
+          <p
+            className="mt-1 text-2xl font-bold"
+            style={{
+              color: stats.avgClickRate > 0 ? '#2563EB' : undefined,
+            }}
+          >
+            {stats.avgClickRate > 0
+              ? `${percentFormatter.format(stats.avgClickRate)}%`
+              : '-'}
+          </p>
+          <p className="text-xs text-[color:var(--color-text-muted)]">
+            {stats.withClick > 0 ? `${stats.withClick}件の平均` : 'CTA配信なし'}
           </p>
         </div>
         <div className={dashboardCardClass}>
@@ -537,22 +571,36 @@ function AnalysisTab({
                     ))}
                   </div>
 
-                  {/* Metrics badge */}
-                  {openRate !== undefined ? (
-                    <span
-                      className="shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold"
-                      style={{
-                        color: getOpenRateColor(openRate),
-                        backgroundColor: getOpenRateBgColor(openRate),
-                      }}
-                    >
-                      {openRate.toFixed(1)}%
-                    </span>
-                  ) : (
-                    <span className="shrink-0 text-[10px] text-[color:var(--color-text-muted)]">
-                      -
-                    </span>
-                  )}
+                  {/* Metrics badges */}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {openRate !== undefined ? (
+                      <span
+                        className="rounded px-2 py-0.5 text-[11px] font-semibold"
+                        style={{
+                          color: getOpenRateColor(openRate),
+                          backgroundColor: getOpenRateBgColor(openRate),
+                        }}
+                      >
+                        {openRate.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[color:var(--color-text-muted)]">
+                        -
+                      </span>
+                    )}
+                    {delivery.clickCount !== undefined && delivery.latestMetric && delivery.latestMetric.delivery_count > 0 && (
+                      <span
+                        className="rounded px-2 py-0.5 text-[11px] font-semibold"
+                        style={{
+                          color: '#2563EB',
+                          backgroundColor: '#DBEAFE',
+                        }}
+                        title={`クリック ${delivery.clickCount}人`}
+                      >
+                        {((delivery.clickCount / delivery.latestMetric.delivery_count) * 100).toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
 
                   {/* Delivery count */}
                   {delivery.latestMetric && (

@@ -176,7 +176,7 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
             gap: 12,
           }}
         >
@@ -196,6 +196,30 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
             sub={getOpenRateLabel(latestMetric.open_rate)}
             valueColor={getOpenRateColor(latestMetric.open_rate)}
           />
+          {delivery.clickCount !== undefined && (
+            <>
+              <StatCard
+                label="クリック数"
+                value={numberFormatter.format(delivery.clickCount)}
+                sub={`タグ: ${delivery.clickTag}`}
+                valueColor="#2563EB"
+              />
+              <StatCard
+                label="クリック率"
+                value={`${((delivery.clickCount / latestMetric.delivery_count) * 100).toFixed(1)}%`}
+                sub="配信数ベース"
+                valueColor="#2563EB"
+              />
+              {latestMetric.open_count > 0 && (
+                <StatCard
+                  label="開封→クリック"
+                  value={`${((delivery.clickCount / latestMetric.open_count) * 100).toFixed(1)}%`}
+                  sub={`${delivery.clickCount}/${latestMetric.open_count}`}
+                  valueColor="#7C3AED"
+                />
+              )}
+            </>
+          )}
           <StatCard
             label="最終計測日時"
             value={formatMeasuredAt(latestMetric.measured_at)}

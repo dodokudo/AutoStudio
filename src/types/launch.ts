@@ -72,6 +72,7 @@ export interface DeliveryItem {
   type: 'message' | 'video' | 'sale' | 'reminder' | 'branch';
   messages?: LineMessage[];
   notificationText?: string;
+  clickTag?: string;  // CTAクリックで付与されるLステップタグ名
 }
 
 export interface FunnelData {
@@ -111,4 +112,5 @@ export interface UrlMetric {
 export interface DeliveryWithMetrics extends DeliveryItem {
   latestMetric?: BroadcastMetric;
   timeSeries?: BroadcastMetric[];
+  clickCount?: number;  // タグの友だち人数 = クリック数
 }

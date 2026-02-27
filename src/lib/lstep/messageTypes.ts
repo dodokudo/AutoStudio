@@ -53,6 +53,12 @@ export interface ScrapedUrlMetric {
   clickRate: number;
 }
 
+/** スクレイピングで取得したタグメトリクスの1行分 */
+export interface ScrapedTagMetric {
+  tagName: string;      // "3M:Day1閲覧"
+  friendCount: number;  // 64
+}
+
 /** 計測タイミング定義 */
 export const MEASUREMENT_POINTS = [
   { label: 'T1', elapsedMinutes: 30 },

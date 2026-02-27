@@ -311,6 +311,16 @@ export function DeliveryTimeline({
                             未計測
                           </div>
                         )}
+
+                        {/* Click rate badge (only for deliveries with clickTag) */}
+                        {item.clickCount !== undefined && item.latestMetric && item.latestMetric.delivery_count > 0 && (
+                          <div
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                            style={{ color: '#2563EB', backgroundColor: '#DBEAFE' }}
+                          >
+                            {((item.clickCount / item.latestMetric.delivery_count) * 100).toFixed(1)}% tap
+                          </div>
+                        )}
                       </button>
                     );
                   })}

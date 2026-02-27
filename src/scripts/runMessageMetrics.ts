@@ -28,6 +28,7 @@ import {
   getKnownBroadcastIds,
   insertBroadcastMetric,
   insertUrlMetrics,
+  insertTagMetrics,
   parseSentAt,
 } from '@/lib/lstep/messageScheduler';
 import type {
@@ -44,6 +45,7 @@ import type {
 interface BroadcastScrapeResult {
   broadcasts: ScrapedBroadcast[];
   urlMetrics: ScrapedUrlMetric[];
+  tagMetrics: import('@/lib/lstep/messageTypes').ScrapedTagMetric[];
 }
 
 /**
@@ -71,7 +73,7 @@ async function main(): Promise<void> {
   // -----------------------------------------------------------------------
   // Step 1: Scrape broadcasts from Lstep management screen
   // -----------------------------------------------------------------------
-  const { broadcasts, urlMetrics } = await scrapeFromLstep(storage, config);
+  const { broadcasts, urlMetrics, tagMetrics } = await scrapeFromLstep(storage, config);
   console.log(`[metrics] ${broadcasts.length}件の配信を取得`);
 
   if (broadcasts.length === 0) {
@@ -224,6 +226,14 @@ async function main(): Promise<void> {
   if (urlMetrics.length > 0) {
     await insertUrlMetrics(bq, config, urlMetrics, now);
     console.log(`[metrics] ${urlMetrics.length}件のURL計測データを保存`);
+  }
+
+  // -----------------------------------------------------------------------
+  // Step 5: Insert tag metrics from current scrape
+  // -----------------------------------------------------------------------
+  if (tagMetrics.length > 0) {
+    await insertTagMetrics(bq, config, tagMetrics, now);
+    console.log(`[metrics] ${tagMetrics.length}件のタグ計測データを保存`);
   }
 
   // -----------------------------------------------------------------------

@@ -5,6 +5,7 @@ import type {
   BroadcastMetricRow,
   ScrapedBroadcast,
   ScrapedUrlMetric,
+  ScrapedTagMetric,
 } from './messageTypes';
 import { MEASUREMENT_POINTS, ABSOLUTE_MEASUREMENT_HOURS } from './messageTypes';
 
@@ -309,6 +310,39 @@ export async function insertUrlMetrics(
         total_clicks: m.totalClicks,
         unique_visitors: m.uniqueVisitors,
         click_rate: m.clickRate,
+      },
+    });
+  }
+}
+
+/**
+ * Insert tag metric rows (tag name + friend count snapshots).
+ */
+export async function insertTagMetrics(
+  bq: BigQuery,
+  config: LstepConfig,
+  metrics: ScrapedTagMetric[],
+  measuredAt: Date,
+): Promise<void> {
+  if (metrics.length === 0) return;
+
+  const measuredAtIso = measuredAt.toISOString();
+
+  for (const m of metrics) {
+    const query = `
+      INSERT INTO \`${config.projectId}.${config.dataset}.tag_metrics\`
+        (measured_at, tag_name, friend_count)
+      VALUES
+        (TIMESTAMP(@measured_at), @tag_name, @friend_count)
+    `;
+
+    await bq.query({
+      query,
+      useLegacySql: false,
+      params: {
+        measured_at: measuredAtIso,
+        tag_name: m.tagName,
+        friend_count: m.friendCount,
       },
     });
   }

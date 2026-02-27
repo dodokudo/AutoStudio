@@ -6,7 +6,7 @@ import { Storage } from '@google-cloud/storage';
 import { LstepConfig } from './config';
 import { downloadObjectToFile, uploadFileToGcs } from './gcs';
 import { CookieExpiredError, MissingStorageStateError } from './errors';
-import type { ScrapedBroadcast, ScrapedUrlMetric } from './messageTypes';
+import type { ScrapedBroadcast, ScrapedUrlMetric, ScrapedTagMetric } from './messageTypes';
 
 // ---------------------------------------------------------------------------
 // Error
@@ -317,13 +317,111 @@ async function collectUrlIdsFromMagazinePage(page: Page): Promise<string[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Function 3: runBroadcastScrape — high-level orchestrator
+// Function 3: scrapeTagCounts — tag page scraping
+// ---------------------------------------------------------------------------
+
+export async function scrapeTagCounts(
+  page: Page,
+  folderName = '3月ローンチ',
+): Promise<ScrapedTagMetric[]> {
+  const results: ScrapedTagMetric[] = [];
+
+  console.log(`タグ計測: ${folderName} フォルダをスクレイピング中...`);
+
+  await page.goto(`${BASE_URL}/line/tag`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
+  await page.waitForTimeout(2000);
+
+  if (isLoginPage(page)) {
+    throw new CookieExpiredError('タグページでログインリダイレクトを検出');
+  }
+
+  // Click on the target folder
+  const folderLink = page.locator(`a, span, div`).filter({ hasText: folderName }).first();
+  const folderExists = await folderLink.count();
+
+  if (folderExists === 0) {
+    console.warn(`タグフォルダ「${folderName}」が見つかりません`);
+    return results;
+  }
+
+  try {
+    await folderLink.click({ timeout: 5000 });
+    await page.waitForTimeout(2000);
+  } catch {
+    console.warn(`タグフォルダ「${folderName}」のクリックに失敗`);
+    return results;
+  }
+
+  // Scrape tag rows from the table
+  const rows = page.locator('tbody tr');
+  const rowCount = await rows.count();
+
+  for (let i = 0; i < rowCount; i++) {
+    try {
+      const row = rows.nth(i);
+      const cells = row.locator('td');
+      const cellCount = await cells.count();
+      if (cellCount < 2) continue;
+
+      // Tag name is typically in the first or second cell
+      const rowText = (await row.innerText()).trim();
+
+      // Look for tag name pattern and friend count
+      // Tag rows usually show: [checkbox] [tag name] [friend count]人
+      // Extract tag name: look for text that looks like a tag name (contains 3M: or similar)
+      let tagName = '';
+      let friendCount = 0;
+
+      for (let c = 0; c < cellCount; c++) {
+        const cellText = (await cells.nth(c).innerText()).trim();
+
+        // Find tag name (contains : or is non-numeric text)
+        if (cellText.includes(':') || cellText.includes('：')) {
+          tagName = cellText.replace(/\n/g, ' ').trim();
+        }
+
+        // Find friend count (N人 pattern)
+        const countMatch = cellText.match(/(\d[\d,]*)人/);
+        if (countMatch) {
+          friendCount = parseNumber(countMatch[1]);
+        }
+      }
+
+      // Fallback: try extracting from full row text
+      if (!tagName) {
+        const nameMatch = rowText.match(/(3M[：:].+?)[\s\n]/);
+        if (nameMatch) {
+          tagName = nameMatch[1].trim();
+        }
+      }
+      if (friendCount === 0 && !tagName) {
+        const countMatch = rowText.match(/(\d[\d,]*)人/);
+        if (countMatch) friendCount = parseNumber(countMatch[1]);
+      }
+
+      if (tagName) {
+        results.push({ tagName, friendCount });
+      }
+    } catch {
+      // Non-fatal: skip row
+    }
+  }
+
+  console.log(`タグスクレイピング完了: ${results.length} 件取得`);
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Function 4: runBroadcastScrape — high-level orchestrator
 // ---------------------------------------------------------------------------
 
 export async function runBroadcastScrape(
   storage: Storage,
   config: LstepConfig,
-): Promise<{ broadcasts: ScrapedBroadcast[]; urlMetrics: ScrapedUrlMetric[] }> {
+): Promise<{ broadcasts: ScrapedBroadcast[]; urlMetrics: ScrapedUrlMetric[]; tagMetrics: ScrapedTagMetric[] }> {
   let browser: Browser | null = null;
   const workspaceDir = await mkdtemp(join(tmpdir(), 'lstep-msg-'));
   const storageStatePath = join(workspaceDir, 'storage-state.json');
@@ -375,6 +473,15 @@ export async function runBroadcastScrape(
       ? await scrapeUrlMetrics(page, urlIds)
       : [];
 
+    // 6.5. Scrape tag metrics
+    let tagMetrics: ScrapedTagMetric[] = [];
+    try {
+      tagMetrics = await scrapeTagCounts(page);
+    } catch (err) {
+      if (err instanceof CookieExpiredError) throw err;
+      console.warn('タグスクレイピングに失敗（非致命的）:', err);
+    }
+
     // 7. Save updated storageState to GCS
     await context.storageState({ path: storageStatePath });
     await uploadFileToGcs(
@@ -386,7 +493,7 @@ export async function runBroadcastScrape(
 
     await context.close();
 
-    return { broadcasts, urlMetrics };
+    return { broadcasts, urlMetrics, tagMetrics };
   } catch (error) {
     if (error instanceof CookieExpiredError || error instanceof MissingStorageStateError) {
       throw error;
