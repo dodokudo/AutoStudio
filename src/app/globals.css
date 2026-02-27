@@ -11,6 +11,8 @@
   --color-text-muted: #6c6f73;
   --color-accent: #0a7aff;
   --color-accent-hover: #005ae0;
+  --color-accent-muted: rgba(10, 122, 255, 0.08);
+  --color-accent-dark: #005ae0;
   --color-success: #19c37d;
   --color-warning: #ffb020;
   --color-error: #ff4d4f;
@@ -79,26 +81,25 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-.page-container {
-  margin: 0 auto;
-  width: min(1200px, 100%);
-  padding: 0 clamp(1rem, 2vw, 2.5rem);
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
-.section-stack {
-  display: grid;
-  gap: 32px;
-}
-
-@media (min-width: 768px) {
-  .section-stack {
-    gap: 48px;
-  }
-}
-
 @layer components {
+
+  .page-container {
+    margin: 0 auto;
+    width: min(1200px, 100%);
+    padding: 0 clamp(1rem, 2vw, 2.5rem);
+    max-width: 100%;
+  }
+
+  .section-stack {
+    display: grid;
+    gap: 32px;
+  }
+
+  @media (min-width: 768px) {
+    .section-stack {
+      gap: 48px;
+    }
+  }
 
   .break-words {
     overflow-wrap: anywhere;
