@@ -4,6 +4,9 @@ import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import type { DeliveryWithMetrics, Segment } from '@/types/launch';
 import { LineMessagePreview } from './LineMessagePreview';
 
+const BASE_COL_WIDTH = 200;
+const PREVIEW_NATIVE_WIDTH = 280;
+
 // Open rate color thresholds
 function getOpenRateColor(rate: number | undefined): string {
   if (rate === undefined) return 'var(--color-text-muted)';
@@ -54,8 +57,6 @@ function getTodayStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-const COL_MIN_WIDTH = 300;
-
 export function DeliveryTimeline({
   deliveries,
   segments,
@@ -68,9 +69,13 @@ export function DeliveryTimeline({
   const [containerWidth, setContainerWidth] = useState(0);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   const totalDays = daysBetween(startDate, endDate);
   const today = getTodayStr();
+
+  // Column width driven by global zoom
+  const dayWidth = BASE_COL_WIDTH * zoom;
 
   // Track scroll state
   const updateScrollState = useCallback(() => {
@@ -100,6 +105,24 @@ export function DeliveryTimeline({
     };
   }, [updateScrollState]);
 
+  // Global zoom via Ctrl+wheel / trackpad pinch
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = -e.deltaY * 0.003;
+        setZoom((prev) => {
+          const next = Math.round((prev + delta) * 100) / 100;
+          return Math.min(2.5, Math.max(0.3, next));
+        });
+      }
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
   // Group deliveries by date
   const byDate = useMemo(() => {
     const map = new Map<string, DeliveryWithMetrics[]>();
@@ -111,7 +134,7 @@ export function DeliveryTimeline({
     return map;
   }, [deliveries]);
 
-  // Build date ticks - only show dates with deliveries (compact view)
+  // Build date ticks
   const dateTicks = useMemo(() => {
     const allDates: string[] = [];
     const start = parseDate(startDate);
@@ -123,21 +146,15 @@ export function DeliveryTimeline({
       allDates.push(`${y}-${m}-${day}`);
     }
 
-    // Only show dates that have deliveries for cleaner view
     if (totalDays > 14) {
       const deliveryDates = new Set(deliveries.map(d => d.date));
       const visibleDates = new Set<string>();
-      for (const date of deliveryDates) {
-        visibleDates.add(date);
-      }
+      for (const date of deliveryDates) visibleDates.add(date);
       visibleDates.add(allDates[0]);
       visibleDates.add(allDates[allDates.length - 1]);
-      if (allDates.includes(today)) {
-        visibleDates.add(today);
-      }
+      if (allDates.includes(today)) visibleDates.add(today);
       return allDates.filter(d => visibleDates.has(d));
     }
-
     return allDates;
   }, [startDate, totalDays, deliveries, today]);
 
@@ -148,23 +165,31 @@ export function DeliveryTimeline({
     return m;
   }, [segments]);
 
-  // Column width: 300px min to fit LINE preview (280px)
-  const dayWidth = containerWidth > 0
-    ? Math.max(COL_MIN_WIDTH, containerWidth / dateTicks.length)
-    : COL_MIN_WIDTH;
-  const timelineWidth = Math.max(dayWidth * dateTicks.length, dateTicks.length * COL_MIN_WIDTH);
+  const timelineWidth = dayWidth * dateTicks.length;
 
   // Auto-scroll to today on mount
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || containerWidth === 0) return;
-
     const todayIdx = dateTicks.indexOf(today);
     if (todayIdx >= 0) {
       const targetScroll = Math.max(0, todayIdx * dayWidth - containerWidth / 3);
       el.scrollTo({ left: targetScroll, behavior: 'smooth' });
     }
   }, [containerWidth, dateTicks, today, dayWidth]);
+
+  // Fit all columns to screen
+  const handleFitScreen = useCallback(() => {
+    if (dateTicks.length > 0 && scrollRef.current) {
+      const w = scrollRef.current.clientWidth;
+      const fitZoom = w / (dateTicks.length * BASE_COL_WIDTH);
+      setZoom(Math.max(0.3, Math.min(2.5, Math.round(fitZoom * 100) / 100)));
+    }
+  }, [dateTicks.length]);
+
+  // Preview scale: fit 280px into card inner width
+  const cardInnerWidth = dayWidth - 14; // column padding (12) + card border (2)
+  const previewZoom = cardInnerWidth / PREVIEW_NATIVE_WIDTH;
 
   if (deliveries.length === 0) {
     return (
@@ -263,6 +288,16 @@ export function DeliveryTimeline({
                       .map((sid) => segmentMap.get(sid))
                       .filter(Boolean) as Segment[];
 
+                    const metric = item.latestMetric;
+                    const clickRate =
+                      item.clickCount !== undefined && metric && metric.delivery_count > 0
+                        ? (item.clickCount / metric.delivery_count) * 100
+                        : undefined;
+                    const openToClickRate =
+                      item.clickCount !== undefined && metric && metric.open_count > 0
+                        ? (item.clickCount / metric.open_count) * 100
+                        : undefined;
+
                     return (
                       <div
                         key={item.id}
@@ -324,38 +359,46 @@ export function DeliveryTimeline({
                                 未計測
                               </div>
                             )}
-                            {item.clickCount !== undefined && item.latestMetric && item.latestMetric.delivery_count > 0 && (
+                            {clickRate !== undefined && (
                               <div
                                 className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
                                 style={{ color: '#2563EB', backgroundColor: '#DBEAFE' }}
                               >
-                                {((item.clickCount / item.latestMetric.delivery_count) * 100).toFixed(1)}% tap
+                                {clickRate.toFixed(1)}% tap
                               </div>
                             )}
                           </div>
 
-                          {/* KPI grid — always shown */}
-                          {item.latestMetric && (
+                          {/* KPI grid — 6 items: 2 cols × 3 rows */}
+                          {metric && (
                             <div className="mt-2 grid grid-cols-2 gap-1">
-                              <MiniKpi label="配信" value={item.latestMetric.delivery_count.toLocaleString()} />
-                              <MiniKpi label="開封" value={item.latestMetric.open_count.toLocaleString()} />
-                              <MiniKpi label="開封率" value={`${item.latestMetric.open_rate.toFixed(1)}%`} color={rateColor} />
-                              {item.clickCount !== undefined && (
-                                <MiniKpi label="クリック" value={item.clickCount.toLocaleString()} color="#2563EB" />
+                              <MiniKpi label="配信数" value={metric.delivery_count.toLocaleString()} />
+                              <MiniKpi label="開封数" value={metric.open_count.toLocaleString()} />
+                              <MiniKpi label="開封率" value={`${metric.open_rate.toFixed(1)}%`} color={rateColor} />
+                              {item.clickCount !== undefined ? (
+                                <>
+                                  <MiniKpi label="クリック数" value={item.clickCount.toLocaleString()} color="#2563EB" />
+                                  <MiniKpi label="クリック率" value={`${clickRate!.toFixed(1)}%`} color="#2563EB" />
+                                  {openToClickRate !== undefined && (
+                                    <MiniKpi label="開封→tap" value={`${openToClickRate.toFixed(1)}%`} color="#7C3AED" />
+                                  )}
+                                </>
+                              ) : (
+                                <MiniKpi label="クリック" value="—" />
                               )}
                             </div>
                           )}
                         </button>
 
-                        {/* LINE preview — always shown, zoomable */}
+                        {/* LINE preview — always shown, scaled to fit column */}
                         {item.messages && item.messages.length > 0 && (
                           <div className="border-t border-[color:var(--color-border)]/30">
-                            <ZoomablePreview>
+                            <div style={{ zoom: previewZoom }}>
                               <LineMessagePreview
                                 messages={item.messages}
                                 notificationText={item.notificationText}
                               />
-                            </ZoomablePreview>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -368,7 +411,7 @@ export function DeliveryTimeline({
         </div>
       </div>
 
-      {/* Right scroll indicator */}
+      {/* Scroll indicators */}
       {canScrollRight && (
         <div
           className="pointer-events-none absolute right-0 top-0 bottom-0 w-12"
@@ -377,7 +420,6 @@ export function DeliveryTimeline({
           }}
         />
       )}
-      {/* Left scroll indicator */}
       {canScrollLeft && (
         <div
           className="pointer-events-none absolute left-0 top-0 bottom-0 w-12"
@@ -386,93 +428,51 @@ export function DeliveryTimeline({
           }}
         />
       )}
-    </div>
-  );
-}
 
-// Zoomable container — Ctrl+wheel / trackpad pinch to zoom
-function ZoomablePreview({ children }: { children: React.ReactNode }) {
-  const [zoom, setZoom] = useState(1);
-  const [baseHeight, setBaseHeight] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  // Measure natural height at zoom 1 for scroll containment when zoomed
-  useEffect(() => {
-    if (contentRef.current && baseHeight === 0) {
-      setBaseHeight(contentRef.current.getBoundingClientRect().height);
-    }
-  }, [baseHeight]);
-
-  // Intercept Ctrl+wheel (trackpad pinch) for zoom
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        setZoom((prev) => {
-          const delta = -e.deltaY * 0.005;
-          return Math.min(3, Math.max(0.3, prev + delta));
-        });
-      }
-    };
-
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  const isZoomed = Math.abs(zoom - 1) > 0.02;
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        overflow: isZoomed ? 'auto' : 'visible',
-        maxHeight: isZoomed && baseHeight > 0 ? baseHeight : undefined,
-        position: 'relative',
-      }}
-    >
-      <div ref={contentRef} style={{ zoom }}>
-        {children}
-      </div>
-      {isZoomed && (
+      {/* Zoom controls — bottom right */}
+      <div
+        className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-xl border border-[color:var(--color-border)] bg-white/90 px-1.5 py-1 shadow-lg backdrop-blur-sm"
+        style={{ zIndex: 10 }}
+      >
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setZoom(1);
-          }}
-          style={{
-            position: 'sticky',
-            bottom: 4,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'block',
-            margin: '4px auto 0',
-            fontSize: 9,
-            padding: '2px 8px',
-            borderRadius: 10,
-            background: 'rgba(0,0,0,0.6)',
-            color: 'white',
-            border: 'none',
-            cursor: 'pointer',
-          }}
+          onClick={() => setZoom((z) => Math.max(0.3, Math.round((z - 0.1) * 10) / 10))}
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom(1)}
+          className="flex h-7 min-w-[48px] items-center justify-center rounded-lg text-[11px] font-semibold tabular-nums text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
         >
           {Math.round(zoom * 100)}%
         </button>
-      )}
+        <button
+          type="button"
+          onClick={() => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10))}
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+        >
+          +
+        </button>
+        <div className="mx-0.5 h-4 w-px bg-[color:var(--color-border)]" />
+        <button
+          type="button"
+          onClick={handleFitScreen}
+          className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+        >
+          Fit
+        </button>
+      </div>
     </div>
   );
 }
 
 function MiniKpi({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="rounded bg-[color:var(--color-surface-muted)] px-1.5 py-1">
-      <div className="text-[8px] text-[color:var(--color-text-muted)]">{label}</div>
-      <div className="text-[11px] font-bold" style={{ color: color || 'var(--color-text-primary)' }}>
+    <div className="rounded bg-[color:var(--color-surface-muted)] px-1.5 py-0.5">
+      <div className="text-[7px] text-[color:var(--color-text-muted)]">{label}</div>
+      <div className="text-[10px] font-bold" style={{ color: color || 'var(--color-text-primary)' }}>
         {value}
       </div>
     </div>
