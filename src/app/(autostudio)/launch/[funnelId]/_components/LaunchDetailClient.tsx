@@ -289,16 +289,21 @@ export function LaunchDetailClient({
     let total = 0;
     let withMetrics = 0;
     let sumOpenRate = 0;
-    let totalSent = 0;
     let withClick = 0;
     let sumClickRate = 0;
+    let firstDeliveryCount = 0;
+    let lastDeliveryCount = 0;
 
-    for (const d of channelFilteredDeliveries) {
+    // Sort by date to find first/last
+    const sorted = [...channelFilteredDeliveries].sort((a, b) => a.date.localeCompare(b.date));
+
+    for (const d of sorted) {
       total++;
       if (d.latestMetric) {
         withMetrics++;
         sumOpenRate += d.latestMetric.open_rate;
-        totalSent += d.latestMetric.delivery_count;
+        if (firstDeliveryCount === 0) firstDeliveryCount = d.latestMetric.delivery_count;
+        lastDeliveryCount = d.latestMetric.delivery_count;
       }
       if (d.clickCount !== undefined && d.latestMetric && d.latestMetric.delivery_count > 0) {
         withClick++;
@@ -308,7 +313,7 @@ export function LaunchDetailClient({
 
     const avgOpenRate = withMetrics > 0 ? sumOpenRate / withMetrics : 0;
     const avgClickRate = withClick > 0 ? sumClickRate / withClick : 0;
-    return { total, withMetrics, avgOpenRate, totalSent, withClick, avgClickRate };
+    return { total, withMetrics, avgOpenRate, firstDeliveryCount, lastDeliveryCount, withClick, avgClickRate };
   }, [channelFilteredDeliveries]);
 
   const handleDeliveryClick = useCallback((d: DeliveryWithMetrics) => {
@@ -356,12 +361,18 @@ export function LaunchDetailClient({
         </div>
         <div className={dashboardCardClass}>
           <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-            合計配信リーチ
+            配信数 (初回→最終)
           </p>
           <p className="mt-1 text-2xl font-bold">
-            {numberFormatter.format(stats.totalSent)}
+            {stats.firstDeliveryCount > 0
+              ? `${numberFormatter.format(stats.firstDeliveryCount)}→${numberFormatter.format(stats.lastDeliveryCount)}`
+              : '-'}
           </p>
-          <p className="text-xs text-[color:var(--color-text-muted)]">通</p>
+          <p className="text-xs text-[color:var(--color-text-muted)]">
+            {stats.firstDeliveryCount > 0 && stats.lastDeliveryCount !== stats.firstDeliveryCount
+              ? `${stats.lastDeliveryCount > stats.firstDeliveryCount ? '+' : ''}${numberFormatter.format(stats.lastDeliveryCount - stats.firstDeliveryCount)}人`
+              : '計測データなし'}
+          </p>
         </div>
         <div className={dashboardCardClass}>
           <p className="text-xs font-medium text-[color:var(--color-text-muted)]">

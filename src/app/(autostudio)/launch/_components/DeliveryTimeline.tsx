@@ -15,13 +15,6 @@ function getOpenRateColor(rate: number | undefined): string {
   return '#DC2626';
 }
 
-function getOpenRateBgColor(rate: number | undefined): string {
-  if (rate === undefined) return 'var(--color-surface-muted)';
-  if (rate >= 40) return '#DCFCE7';
-  if (rate >= 20) return '#FEF9C3';
-  return '#FEE2E2';
-}
-
 interface DeliveryTimelineProps {
   deliveries: DeliveryWithMetrics[];
   segments: Segment[];
@@ -55,6 +48,20 @@ function daysBetween(a: string, b: string): number {
 function getTodayStr(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+/** Extract time (HH:MM) from delivery time field or sent_at */
+function getDeliveryTime(item: DeliveryWithMetrics): string | null {
+  // 1. Use item.time if available (e.g. "20:00" or "21:00")
+  if (item.time) return item.time;
+
+  // 2. Parse from sent_at: "配信済み\n2026/02/26\n21:03"
+  if (item.latestMetric?.sent_at) {
+    const m = item.latestMetric.sent_at.match(/(\d{1,2}):(\d{2})/);
+    if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
+  }
+
+  return null;
 }
 
 export function DeliveryTimeline({
@@ -201,139 +208,164 @@ export function DeliveryTimeline({
 
   return (
     <div>
+      {/* Zoom controls — top right, always visible */}
+      <div className="mb-2 flex items-center justify-end">
+        <div className="flex items-center gap-0.5 rounded-xl border border-[color:var(--color-border)] bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(0.3, Math.round((z - 0.1) * 10) / 10))}
+            className="flex h-6 w-6 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="flex h-6 min-w-[40px] items-center justify-center rounded-lg text-[11px] font-semibold tabular-nums text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10))}
+            className="flex h-6 w-6 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            +
+          </button>
+          <div className="mx-0.5 h-4 w-px bg-[color:var(--color-border)]" />
+          <button
+            type="button"
+            onClick={handleFitScreen}
+            className="flex h-6 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
+          >
+            Fit
+          </button>
+        </div>
+      </div>
+
       {/* Scroll container */}
       <div className="relative">
-      <div
-        ref={scrollRef}
-        className="overflow-x-auto scrollbar-hide"
-      >
-        <div style={{ minWidth: timelineWidth, position: 'relative' }}>
-          {/* Date axis */}
-          <div
-            className="flex border-b-2 border-[color:var(--color-border)]"
-            style={{ position: 'sticky', top: 0, zIndex: 2 }}
-          >
-            {dateTicks.map((date) => {
-              const hasDeliveries = byDate.has(date);
-              const isToday = date === today;
-              return (
-                <div
-                  key={date}
-                  className="shrink-0 border-r border-[color:var(--color-border)]/30 px-1 py-2 text-center"
-                  style={{
-                    width: dayWidth,
-                    backgroundColor: isToday ? 'var(--color-accent-muted)' : 'var(--color-surface)',
-                  }}
-                >
-                  <div
-                    className="text-[11px] font-medium"
-                    style={{
-                      fontWeight: hasDeliveries || isToday ? 600 : 400,
-                      color: isToday
-                        ? 'var(--color-accent)'
-                        : hasDeliveries
-                          ? 'var(--color-text-primary)'
-                          : 'var(--color-text-muted)',
-                    }}
-                  >
-                    {formatDate(date)}
-                  </div>
-                  <div
-                    className="text-[9px]"
-                    style={{
-                      color: isToday ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                    }}
-                  >
-                    {isToday ? '今日' : formatWeekday(date)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Delivery cards in columns */}
-          <div className="flex" style={{ alignItems: 'flex-start' }}>
-            {dateTicks.map((date) => {
-              const items = byDate.get(date) || [];
-              const isToday = date === today;
-
-              if (items.length === 0) {
+        <div
+          ref={scrollRef}
+          className="overflow-x-auto scrollbar-hide"
+        >
+          <div style={{ minWidth: timelineWidth, position: 'relative' }}>
+            {/* Date axis */}
+            <div
+              className="flex border-b-2 border-[color:var(--color-border)]"
+              style={{ position: 'sticky', top: 0, zIndex: 2 }}
+            >
+              {dateTicks.map((date) => {
+                const hasDeliveries = byDate.has(date);
+                const isToday = date === today;
                 return (
                   <div
                     key={date}
-                    className="shrink-0 border-r border-[color:var(--color-border)]/10"
+                    className="shrink-0 border-r border-[color:var(--color-border)]/30 px-1 py-2 text-center"
                     style={{
                       width: dayWidth,
-                      minHeight: 60,
+                      backgroundColor: isToday ? 'var(--color-accent-muted)' : 'var(--color-surface)',
+                    }}
+                  >
+                    <div
+                      className="text-[11px] font-medium"
+                      style={{
+                        fontWeight: hasDeliveries || isToday ? 600 : 400,
+                        color: isToday
+                          ? 'var(--color-accent)'
+                          : hasDeliveries
+                            ? 'var(--color-text-primary)'
+                            : 'var(--color-text-muted)',
+                      }}
+                    >
+                      {formatDate(date)}
+                    </div>
+                    <div
+                      className="text-[9px]"
+                      style={{
+                        color: isToday ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                      }}
+                    >
+                      {isToday ? '今日' : formatWeekday(date)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Delivery cards in columns */}
+            <div className="flex" style={{ alignItems: 'flex-start' }}>
+              {dateTicks.map((date) => {
+                const items = byDate.get(date) || [];
+                const isToday = date === today;
+
+                if (items.length === 0) {
+                  return (
+                    <div
+                      key={date}
+                      className="shrink-0 border-r border-[color:var(--color-border)]/10"
+                      style={{
+                        width: dayWidth,
+                        minHeight: 60,
+                        backgroundColor: isToday ? 'rgba(10, 122, 255, 0.02)' : undefined,
+                      }}
+                    />
+                  );
+                }
+
+                return (
+                  <div
+                    key={date}
+                    className="flex shrink-0 flex-col gap-2 border-r border-[color:var(--color-border)]/10 p-1.5"
+                    style={{
+                      width: dayWidth,
                       backgroundColor: isToday ? 'rgba(10, 122, 255, 0.02)' : undefined,
                     }}
-                  />
-                );
-              }
+                  >
+                    {items.map((item) => {
+                      const openRate = item.latestMetric?.open_rate;
+                      const rateColor = getOpenRateColor(openRate);
+                      const isSelected = item.id === selectedDeliveryId;
+                      const itemSegments = (item.segmentIds || [item.segmentId])
+                        .map((sid) => segmentMap.get(sid))
+                        .filter(Boolean) as Segment[];
 
-              return (
-                <div
-                  key={date}
-                  className="flex shrink-0 flex-col gap-2 border-r border-[color:var(--color-border)]/10 p-1.5"
-                  style={{
-                    width: dayWidth,
-                    backgroundColor: isToday ? 'rgba(10, 122, 255, 0.02)' : undefined,
-                  }}
-                >
-                  {items.map((item) => {
-                    const openRate = item.latestMetric?.open_rate;
-                    const rateColor = getOpenRateColor(openRate);
-                    const rateBgColor = getOpenRateBgColor(openRate);
-                    const isSelected = item.id === selectedDeliveryId;
-                    const itemSegments = (item.segmentIds || [item.segmentId])
-                      .map((sid) => segmentMap.get(sid))
-                      .filter(Boolean) as Segment[];
+                      const metric = item.latestMetric;
+                      const clickRate =
+                        item.clickCount !== undefined && metric && metric.delivery_count > 0
+                          ? (item.clickCount / metric.delivery_count) * 100
+                          : undefined;
+                      const openToClickRate =
+                        item.clickCount !== undefined && metric && metric.open_count > 0
+                          ? (item.clickCount / metric.open_count) * 100
+                          : undefined;
 
-                    const metric = item.latestMetric;
-                    const clickRate =
-                      item.clickCount !== undefined && metric && metric.delivery_count > 0
-                        ? (item.clickCount / metric.delivery_count) * 100
-                        : undefined;
-                    const openToClickRate =
-                      item.clickCount !== undefined && metric && metric.open_count > 0
-                        ? (item.clickCount / metric.open_count) * 100
-                        : undefined;
+                      const deliveryTime = getDeliveryTime(item);
 
-                    return (
-                      <div
-                        key={item.id}
-                        className="overflow-hidden rounded-md border bg-[color:var(--color-surface)]"
-                        style={{
-                          borderColor: isSelected ? 'var(--color-accent)' : 'var(--color-border)',
-                          boxShadow: isSelected ? '0 0 0 2px var(--color-accent-muted)' : undefined,
-                        }}
-                      >
-                        {/* Header — clickable for selection */}
-                        <button
-                          type="button"
-                          onClick={() => onDeliveryClick?.(item)}
-                          className="block w-full p-2 text-left transition-colors hover:bg-[color:var(--color-surface-muted)]"
+                      return (
+                        <div
+                          key={item.id}
+                          className="overflow-hidden rounded-md border bg-[color:var(--color-surface)]"
+                          style={{
+                            borderColor: isSelected ? 'var(--color-accent)' : 'var(--color-border)',
+                            boxShadow: isSelected ? '0 0 0 2px var(--color-accent-muted)' : undefined,
+                          }}
                         >
-                          {/* Title */}
-                          <div
-                            className="mb-1 text-[11px] font-semibold leading-tight text-[color:var(--color-text-primary)]"
-                            style={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                            }}
+                          {/* Header — clickable for selection */}
+                          <button
+                            type="button"
+                            onClick={() => onDeliveryClick?.(item)}
+                            className="block w-full p-2 text-left transition-colors hover:bg-[color:var(--color-surface-muted)]"
                           >
-                            {item.title}
-                          </div>
-
-                          {/* Segment badges */}
-                          {itemSegments.length > 0 && (
-                            <div className="mb-1 flex flex-wrap gap-0.5">
+                            {/* Time + segment badges */}
+                            <div className="mb-1 flex items-center gap-1.5">
+                              <span className="text-[13px] font-bold tabular-nums text-[color:var(--color-text-primary)]">
+                                {deliveryTime || '--:--'}
+                              </span>
                               {itemSegments.map((seg) => (
                                 <span
                                   key={seg.id}
-                                  className="inline-flex items-center rounded px-1 text-[9px] font-medium leading-3.5"
+                                  className="inline-flex items-center rounded px-1 text-[8px] font-medium leading-3"
                                   style={{
                                     color: seg.color,
                                     backgroundColor: `${seg.color}18`,
@@ -344,131 +376,71 @@ export function DeliveryTimeline({
                                 </span>
                               ))}
                             </div>
-                          )}
 
-                          {/* Rate badges */}
-                          <div className="flex flex-wrap items-center gap-1">
-                            {openRate !== undefined ? (
-                              <div
-                                className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                                style={{ color: rateColor, backgroundColor: rateBgColor }}
-                              >
-                                {openRate.toFixed(1)}%
+                            {/* KPI grid — 6 items: 3 cols × 2 rows */}
+                            {metric && (
+                              <div className="grid grid-cols-3 gap-1">
+                                <MiniKpi label="配信数" value={metric.delivery_count.toLocaleString()} />
+                                <MiniKpi label="開封数" value={metric.open_count.toLocaleString()} />
+                                <MiniKpi label="開封率" value={`${metric.open_rate.toFixed(1)}%`} color={rateColor} />
+                                {item.clickCount !== undefined ? (
+                                  <>
+                                    <MiniKpi label="クリック数" value={item.clickCount.toLocaleString()} color="#2563EB" />
+                                    <MiniKpi label="クリック率" value={`${clickRate!.toFixed(1)}%`} color="#2563EB" />
+                                    {openToClickRate !== undefined && (
+                                      <MiniKpi label="開封→tap" value={`${openToClickRate.toFixed(1)}%`} color="#7C3AED" />
+                                    )}
+                                  </>
+                                ) : (
+                                  <MiniKpi label="クリック" value="—" />
+                                )}
                               </div>
-                            ) : (
+                            )}
+                            {!metric && (
                               <div className="text-[9px] text-[color:var(--color-text-muted)]">
                                 未計測
                               </div>
                             )}
-                            {clickRate !== undefined && (
-                              <div
-                                className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                                style={{ color: '#2563EB', backgroundColor: '#DBEAFE' }}
-                              >
-                                {clickRate.toFixed(1)}% tap
-                              </div>
-                            )}
-                          </div>
+                          </button>
 
-                          {/* KPI grid — 6 items: 3 cols × 2 rows */}
-                          {metric && (
-                            <div className="mt-2 grid grid-cols-3 gap-1">
-                              <MiniKpi label="配信数" value={metric.delivery_count.toLocaleString()} />
-                              <MiniKpi label="開封数" value={metric.open_count.toLocaleString()} />
-                              <MiniKpi label="開封率" value={`${metric.open_rate.toFixed(1)}%`} color={rateColor} />
-                              {item.clickCount !== undefined ? (
-                                <>
-                                  <MiniKpi label="クリック数" value={item.clickCount.toLocaleString()} color="#2563EB" />
-                                  <MiniKpi label="クリック率" value={`${clickRate!.toFixed(1)}%`} color="#2563EB" />
-                                  {openToClickRate !== undefined && (
-                                    <MiniKpi label="開封→tap" value={`${openToClickRate.toFixed(1)}%`} color="#7C3AED" />
-                                  )}
-                                </>
-                              ) : (
-                                <MiniKpi label="クリック" value="—" />
-                              )}
+                          {/* LINE preview — always shown, scaled to fit column */}
+                          {item.messages && item.messages.length > 0 && (
+                            <div className="border-t border-[color:var(--color-border)]/30">
+                              <div style={{ zoom: previewZoom }}>
+                                <LineMessagePreview
+                                  messages={item.messages}
+                                  notificationText={item.notificationText}
+                                />
+                              </div>
                             </div>
                           )}
-                        </button>
-
-                        {/* LINE preview — always shown, scaled to fit column */}
-                        {item.messages && item.messages.length > 0 && (
-                          <div className="border-t border-[color:var(--color-border)]/30">
-                            <div style={{ zoom: previewZoom }}>
-                              <LineMessagePreview
-                                messages={item.messages}
-                                notificationText={item.notificationText}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Scroll indicators */}
-      {canScrollRight && (
-        <div
-          className="pointer-events-none absolute right-0 top-0 bottom-0 w-12"
-          style={{
-            background: 'linear-gradient(to left, rgba(255,255,255,0.95), transparent)',
-          }}
-        />
-      )}
-      {canScrollLeft && (
-        <div
-          className="pointer-events-none absolute left-0 top-0 bottom-0 w-12"
-          style={{
-            background: 'linear-gradient(to right, rgba(255,255,255,0.95), transparent)',
-          }}
-        />
-      )}
-      </div>
-
-      {/* Zoom controls — sticky bottom-right, always visible while timeline is in view */}
-      <div
-        className="pointer-events-none sticky bottom-3 flex justify-end pr-3"
-        style={{ zIndex: 10, marginTop: -44 }}
-      >
-        <div
-          className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-[color:var(--color-border)] bg-white/90 px-1.5 py-1 shadow-lg backdrop-blur-sm"
-        >
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.max(0.3, Math.round((z - 0.1) * 10) / 10))}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom(1)}
-            className="flex h-7 min-w-[48px] items-center justify-center rounded-lg text-[11px] font-semibold tabular-nums text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.min(2.5, Math.round((z + 0.1) * 10) / 10))}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-          >
-            +
-          </button>
-          <div className="mx-0.5 h-4 w-px bg-[color:var(--color-border)]" />
-          <button
-            type="button"
-            onClick={handleFitScreen}
-            className="flex h-7 items-center justify-center rounded-lg px-2 text-[10px] font-medium text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-          >
-            Fit
-          </button>
-        </div>
+        {/* Scroll indicators */}
+        {canScrollRight && (
+          <div
+            className="pointer-events-none absolute right-0 top-0 bottom-0 w-12"
+            style={{
+              background: 'linear-gradient(to left, rgba(255,255,255,0.95), transparent)',
+            }}
+          />
+        )}
+        {canScrollLeft && (
+          <div
+            className="pointer-events-none absolute left-0 top-0 bottom-0 w-12"
+            style={{
+              background: 'linear-gradient(to right, rgba(255,255,255,0.95), transparent)',
+            }}
+          />
+        )}
       </div>
     </div>
   );
