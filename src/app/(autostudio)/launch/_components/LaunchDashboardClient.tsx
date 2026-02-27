@@ -140,6 +140,17 @@ export function LaunchDashboardClient() {
   );
 }
 
+/* ---------- Available funnels type ---------- */
+
+interface AvailableFunnel {
+  id: string;
+  name: string;
+}
+
+interface AvailableFunnelsResponse {
+  funnels: AvailableFunnel[];
+}
+
 /* ---------- Funnel List (Registration-based) ---------- */
 
 function FunnelList() {
@@ -150,26 +161,31 @@ function FunnelList() {
   );
 
   const [showRegister, setShowRegister] = useState(false);
-  const [registerInput, setRegisterInput] = useState('');
+  const [selectedFunnelId, setSelectedFunnelId] = useState('');
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState('');
 
+  // Available funnels for dropdown (only fetched when register form is open)
+  const { data: availableData } = useSWR<AvailableFunnelsResponse>(
+    showRegister ? '/api/launch/funnels/available' : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  // Filter out already registered funnels from dropdown
+  const registeredIds = new Set((data?.funnels ?? []).map(f => f.id));
+  const availableFunnels = (availableData?.funnels ?? []).filter(f => !registeredIds.has(f.id));
+
   const handleRegister = useCallback(async () => {
-    if (!registerInput.trim()) return;
+    if (!selectedFunnelId) return;
     setRegistering(true);
     setRegisterError('');
 
     try {
-      // ファネルIDを抽出（URLでもIDでも対応）
-      let funnelId = registerInput.trim();
-      // URLからIDを抽出: /editor/xxx or /launch/xxx
-      const urlMatch = funnelId.match(/(?:editor|launch)\/([a-zA-Z0-9_-]+)/);
-      if (urlMatch) funnelId = urlMatch[1];
-
       const res = await fetch('/api/launch/funnels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ funnelId }),
+        body: JSON.stringify({ funnelId: selectedFunnelId }),
       });
 
       if (!res.ok) {
@@ -177,7 +193,7 @@ function FunnelList() {
         throw new Error(err.error || 'Registration failed');
       }
 
-      setRegisterInput('');
+      setSelectedFunnelId('');
       setShowRegister(false);
       mutate('/api/launch/funnels');
     } catch (e: unknown) {
@@ -186,7 +202,7 @@ function FunnelList() {
     } finally {
       setRegistering(false);
     }
-  }, [registerInput]);
+  }, [selectedFunnelId]);
 
   const handleRemove = useCallback(async (funnelId: string, name: string) => {
     if (!confirm(`「${name}」を一覧から削除しますか？`)) return;
@@ -225,34 +241,43 @@ function FunnelList() {
           onClick={() => setShowRegister(!showRegister)}
           className="rounded-[var(--radius-sm)] bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
         >
-          + ローンチを登録
+          {showRegister ? '閉じる' : '+ ローンチを登録'}
         </button>
       </div>
 
-      {/* Register form */}
+      {/* Register form - dropdown */}
       {showRegister && (
         <Card>
           <div className="flex flex-col gap-3 p-4">
             <label className="text-sm font-medium text-[color:var(--color-text-primary)]">
-              ファネルIDまたはURL
+              ファネルを選択
             </label>
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={registerInput}
-                onChange={(e) => setRegisterInput(e.target.value)}
-                placeholder="funnel-xxxx or https://funnel-orcin.vercel.app/editor/funnel-xxxx"
-                className="flex-1 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-              />
+              <select
+                value={selectedFunnelId}
+                onChange={(e) => setSelectedFunnelId(e.target.value)}
+                className="flex-1 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm bg-white"
+              >
+                <option value="">-- ファネルを選択してください --</option>
+                {availableFunnels.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={handleRegister}
-                disabled={registering || !registerInput.trim()}
+                disabled={registering || !selectedFunnelId}
                 className="rounded-[var(--radius-sm)] bg-[color:var(--color-text-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
                 {registering ? '登録中...' : '登録'}
               </button>
             </div>
+            {availableFunnels.length === 0 && availableData && (
+              <p className="text-xs text-[color:var(--color-text-muted)]">
+                登録可能なファネルがありません（全て登録済みです）
+              </p>
+            )}
             {registerError && (
               <p className="text-xs text-red-600">{registerError}</p>
             )}
@@ -264,7 +289,7 @@ function FunnelList() {
       {funnels.length === 0 ? (
         <EmptyState
           title="ローンチが登録されていません"
-          description="「+ ローンチを登録」からファネルIDを入力して計測対象を追加してください。"
+          description="「+ ローンチを登録」ボタンからファネルを選択して計測対象を追加してください。"
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -272,7 +297,7 @@ function FunnelList() {
             const status = getFunnelStatus(funnel.startDate, funnel.endDate);
             return (
               <div key={funnel.id} className="relative group">
-                <Link href={`/launch/${funnel.id}`} className="block">
+                <Link href={`/launch/${funnel.id}`} prefetch={false} className="block">
                   <div
                     className={classNames(
                       dashboardCardClass,

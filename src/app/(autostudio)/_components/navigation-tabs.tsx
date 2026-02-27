@@ -27,6 +27,7 @@ export function NavigationTabs() {
           <Link
             key={item.id}
             href={item.href}
+            prefetch={false}
             className={classNames(
               'inline-flex h-10 items-center whitespace-nowrap rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2] flex-shrink-0',
               'md:h-10 md:w-full md:justify-start md:px-3 md:text-sm',
