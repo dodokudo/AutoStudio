@@ -102,7 +102,7 @@ export function BroadcastDetail({ delivery, allDeliveries }: BroadcastDetailProp
       .filter((d) => d.latestMetric)
       .map((d) => ({
         id: d.id,
-        name: d.title.length > 20 ? d.title.slice(0, 20) + '…' : d.title,
+        name: formatDateLabel(d.date),
         fullName: d.title,
         open_rate: d.latestMetric!.open_rate,
         click_rate:
@@ -402,6 +402,15 @@ function getOpenRateLabel(rate: number): string {
   if (rate >= 40) return '高い';
   if (rate >= 20) return '標準';
   return '要改善';
+}
+
+function formatDateLabel(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  } catch {
+    return dateStr;
+  }
 }
 
 function formatMeasuredAt(iso: string): string {
