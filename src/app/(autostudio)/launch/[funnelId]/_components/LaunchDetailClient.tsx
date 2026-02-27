@@ -479,7 +479,6 @@ export function LaunchDetailClient({
         <OverviewTab
           deliveries={channelFilteredDeliveries}
           segments={channelFilteredSegments}
-          segmentMap={segmentMap}
           startDate={funnel.startDate}
           endDate={funnel.endDate}
           onDeliveryClick={handleDeliveryClick}
@@ -504,7 +503,6 @@ export function LaunchDetailClient({
 function OverviewTab({
   deliveries,
   segments,
-  segmentMap,
   startDate,
   endDate,
   onDeliveryClick,
@@ -512,22 +510,11 @@ function OverviewTab({
 }: {
   deliveries: DeliveryWithMetrics[];
   segments: Segment[];
-  segmentMap: Map<string, Segment>;
   startDate: string;
   endDate: string;
   onDeliveryClick: (d: DeliveryWithMetrics) => void;
   selectedDeliveryId: string | null;
 }) {
-  const selectedDelivery = useMemo(
-    () => deliveries.find((d) => d.id === selectedDeliveryId) ?? null,
-    [deliveries, selectedDeliveryId]
-  );
-
-  const sameDateDeliveries = useMemo(() => {
-    if (!selectedDelivery) return [];
-    return deliveries.filter((d) => d.date === selectedDelivery.date && d.id !== selectedDelivery.id);
-  }, [deliveries, selectedDelivery]);
-
   return (
     <>
       <Card>
@@ -545,15 +532,6 @@ function OverviewTab({
           />
         </div>
       </Card>
-
-      {selectedDelivery && (
-        <OverviewDeliveryDetail
-          delivery={selectedDelivery}
-          sameDateDeliveries={sameDateDeliveries}
-          segmentMap={segmentMap}
-          onSwitchDelivery={onDeliveryClick}
-        />
-      )}
     </>
   );
 }

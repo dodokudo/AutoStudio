@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import type { DeliveryWithMetrics, Segment } from '@/types/launch';
+import { LineMessagePreview } from './LineMessagePreview';
 
 // Open rate color thresholds
 function getOpenRateColor(rate: number | undefined): string {
@@ -328,6 +329,45 @@ export function DeliveryTimeline({
                             {((item.clickCount / item.latestMetric.delivery_count) * 100).toFixed(1)}% tap
                           </div>
                         )}
+
+                        {/* Expanded: KPI + LINE preview inline */}
+                        {isSelected && (
+                          <div className="mt-2 border-t border-[color:var(--color-border)]/40 pt-2" onClick={(e) => e.stopPropagation()}>
+                            {/* Compact KPI */}
+                            {item.latestMetric && (
+                              <div className="mb-2 grid grid-cols-2 gap-1">
+                                <MiniKpi label="配信" value={item.latestMetric.delivery_count.toLocaleString()} />
+                                <MiniKpi label="開封" value={item.latestMetric.open_count.toLocaleString()} />
+                                <MiniKpi label="開封率" value={`${item.latestMetric.open_rate.toFixed(1)}%`} color={rateColor} />
+                                {item.clickCount !== undefined && (
+                                  <MiniKpi label="クリック" value={item.clickCount.toLocaleString()} color="#2563EB" />
+                                )}
+                              </div>
+                            )}
+                            {/* Scaled LINE preview */}
+                            {item.messages && item.messages.length > 0 && (
+                              <div
+                                style={{
+                                  width: dayWidth - 12,
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    transform: `scale(${(dayWidth - 12) / 280})`,
+                                    transformOrigin: 'top left',
+                                    width: 280,
+                                  }}
+                                >
+                                  <LineMessagePreview
+                                    messages={item.messages}
+                                    notificationText={item.notificationText}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </button>
                     );
                   })}
@@ -356,6 +396,17 @@ export function DeliveryTimeline({
           }}
         />
       )}
+    </div>
+  );
+}
+
+function MiniKpi({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="rounded bg-[color:var(--color-surface-muted)] px-1.5 py-1">
+      <div className="text-[8px] text-[color:var(--color-text-muted)]">{label}</div>
+      <div className="text-[11px] font-bold" style={{ color: color || 'var(--color-text-primary)' }}>
+        {value}
+      </div>
     </div>
   );
 }
