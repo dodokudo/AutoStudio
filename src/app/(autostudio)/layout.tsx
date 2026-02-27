@@ -14,6 +14,7 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
           <div className="page-container flex h-16 items-center justify-between gap-3">
             <Link
               href="/home"
+              prefetch={false}
               className="flex items-center gap-2.5 text-base font-semibold text-[color:var(--color-text-primary)]"
             >
               <img src="/icon.png" alt="AutoStudio" className="h-9 w-9 rounded-lg" />
@@ -34,6 +35,7 @@ export default function AutoStudioLayout({ children }: { children: ReactNode }) 
             <div className="flex h-full flex-col gap-6 px-6 py-8">
               <Link
                 href="/home"
+                prefetch={false}
                 className="flex items-center gap-3 text-lg font-semibold text-[color:var(--color-text-primary)]"
               >
                 <img src="/icon.png" alt="AutoStudio" className="h-10 w-10 rounded-lg" />
