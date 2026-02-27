@@ -716,7 +716,7 @@ function AnalysisTab({
                 {/* Expanded detail */}
                 {isExpanded && (
                   <div className="border-t border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-4 sm:px-5">
-                    <BroadcastDetail delivery={delivery} />
+                    <BroadcastDetail delivery={delivery} allDeliveries={deliveries} />
                   </div>
                 )}
               </div>

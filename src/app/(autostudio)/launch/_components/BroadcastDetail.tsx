@@ -4,11 +4,15 @@ import { useMemo } from 'react';
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  Cell,
+  ReferenceLine,
 } from 'recharts';
 import type { DeliveryWithMetrics, BroadcastMetric } from '@/types/launch';
 import { LineMessagePreview } from './LineMessagePreview';
@@ -27,9 +31,10 @@ const STANDARD_LABELS = ['30m', '1h', '12h', '24h', '2d', '3d', '4d', '5d'];
 
 interface BroadcastDetailProps {
   delivery: DeliveryWithMetrics;
+  allDeliveries?: DeliveryWithMetrics[];
 }
 
-export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
+export function BroadcastDetail({ delivery, allDeliveries }: BroadcastDetailProps) {
   const { latestMetric, timeSeries, messages, notificationText } = delivery;
 
   // Prepare chart data from time series
@@ -60,16 +65,14 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
       return null;
     }).filter(Boolean) as { label: string; elapsed_minutes: number; open_rate: number; open_count: number; delivery_count: number }[];
 
-    // If standard matching yields 2+ points, use it
     if (standardMatched.length >= 2) return standardMatched;
 
-    // Fallback: use raw data points sorted by elapsed_minutes
+    // Fallback: raw data points
     const sorted = [...timeSeries].sort((a, b) => a.elapsed_minutes - b.elapsed_minutes);
-    // Deduplicate by picking the latest measurement per unique elapsed_minutes bucket (round to 15min)
     const seen = new Map<number, BroadcastMetric>();
     for (const p of sorted) {
       const bucket = Math.round(p.elapsed_minutes / 15) * 15;
-      seen.set(bucket, p); // later measurement overwrites earlier
+      seen.set(bucket, p);
     }
     return Array.from(seen.values())
       .sort((a, b) => a.elapsed_minutes - b.elapsed_minutes)
@@ -82,114 +85,49 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
       }));
   }, [timeSeries]);
 
+  // Check if time series spans a meaningful range (> 2h gap between first and last)
+  const hasGoodTimeSeries = useMemo(() => {
+    if (chartData.length < 2) return false;
+    const range = chartData[chartData.length - 1].elapsed_minutes - chartData[0].elapsed_minutes;
+    return range > 120; // more than 2 hours span
+  }, [chartData]);
+
   const hasChart = chartData.length >= 2;
   const hasMessages = messages && messages.length > 0;
 
+  // Comparison data: all deliveries with metrics, sorted by open rate
+  const comparisonData = useMemo(() => {
+    if (!allDeliveries) return [];
+    return allDeliveries
+      .filter((d) => d.latestMetric)
+      .map((d) => ({
+        id: d.id,
+        name: d.title.length > 20 ? d.title.slice(0, 20) + '…' : d.title,
+        fullName: d.title,
+        open_rate: d.latestMetric!.open_rate,
+        click_rate:
+          d.clickCount !== undefined && d.latestMetric!.delivery_count > 0
+            ? (d.clickCount / d.latestMetric!.delivery_count) * 100
+            : null,
+        isCurrent: d.id === delivery.id,
+      }))
+      .sort((a, b) => b.open_rate - a.open_rate);
+  }, [allDeliveries, delivery.id]);
+
+  const avgOpenRate = useMemo(() => {
+    if (comparisonData.length === 0) return 0;
+    return comparisonData.reduce((sum, d) => sum + d.open_rate, 0) / comparisonData.length;
+  }, [comparisonData]);
+
   return (
-    <div className="flex flex-col gap-5">
-      {/* Main content: LEFT=messages, RIGHT=chart */}
-      <div className="flex flex-col gap-5 lg:flex-row lg:gap-6">
-        {/* LEFT: LINE message preview */}
-        {hasMessages && (
-          <div className="flex-shrink-0">
-            <p
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#6B7280',
-                marginBottom: 6,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              メッセージ プレビュー
-            </p>
-            <LineMessagePreview
-              messages={messages!}
-              notificationText={notificationText}
-            />
-          </div>
-        )}
-
-        {/* RIGHT: Time series chart */}
-        <div className="flex-1 min-w-0">
-          {hasChart ? (
-            <>
-              <p
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: '#6B7280',
-                  marginBottom: 6,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                開封率 推移
-              </p>
-              <div style={{ width: '100%', height: 220 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={chartData}
-                    margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 11, fill: '#6B7280' }}
-                      axisLine={{ stroke: '#E5E7EB' }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      domain={[0, 'auto']}
-                      tick={{ fontSize: 11, fill: '#6B7280' }}
-                      axisLine={{ stroke: '#E5E7EB' }}
-                      tickLine={false}
-                      tickFormatter={(v: number) => `${v}%`}
-                      width={48}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => [`${value.toFixed(1)}%`, '開封率']}
-                      contentStyle={{
-                        fontSize: 12,
-                        borderRadius: 6,
-                        border: '1px solid #E5E7EB',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="open_rate"
-                      stroke="#3B82F6"
-                      strokeWidth={2}
-                      dot={{ r: 4, fill: '#3B82F6', stroke: 'white', strokeWidth: 2 }}
-                      activeDot={{ r: 6, fill: '#2563EB' }}
-                      connectNulls
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </>
-          ) : (
-            <div
-              className="flex items-center justify-center rounded-lg border border-dashed border-[color:var(--color-border)]"
-              style={{ height: 220 }}
-            >
-              <span className="text-sm text-[color:var(--color-text-muted)]">
-                時系列データが不足しています
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Summary stats */}
+    <div className="flex flex-col gap-4">
+      {/* Stats cards — always at top for quick scan */}
       {latestMetric && (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-            gap: 12,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+            gap: 10,
           }}
         >
           <StatCard
@@ -233,21 +171,222 @@ export function BroadcastDetail({ delivery }: BroadcastDetailProps) {
             </>
           )}
           <StatCard
-            label="最終計測日時"
+            label="最終計測"
             value={formatMeasuredAt(latestMetric.measured_at)}
             sub={`経過 ${formatElapsedLabel(latestMetric.elapsed_minutes)}`}
           />
         </div>
       )}
 
-      {!latestMetric && (
-        <div
-          className="rounded-lg border border-dashed border-[color:var(--color-border)] px-4 py-6 text-center text-sm text-[color:var(--color-text-muted)]"
-        >
-          この配信のメトリクスデータはまだ取得されていません
+      {/* Main content: LEFT=messages, RIGHT=charts */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:gap-5">
+        {/* LEFT: LINE message preview */}
+        {hasMessages && (
+          <div className="flex-shrink-0">
+            <SectionLabel>メッセージ プレビュー</SectionLabel>
+            <LineMessagePreview
+              messages={messages!}
+              notificationText={notificationText}
+            />
+          </div>
+        )}
+
+        {/* RIGHT: Charts stacked vertically */}
+        <div className="flex flex-1 min-w-0 flex-col gap-4">
+          {/* Time series chart — only if good data */}
+          {hasChart && hasGoodTimeSeries && (
+            <div>
+              <SectionLabel>開封率 推移</SectionLabel>
+              <div style={{ width: '100%', height: 180 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={chartData}
+                    margin={{ top: 8, right: 16, left: 0, bottom: 4 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: '#6B7280' }}
+                      axisLine={{ stroke: '#E5E7EB' }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      domain={[0, 'auto']}
+                      tick={{ fontSize: 11, fill: '#6B7280' }}
+                      axisLine={{ stroke: '#E5E7EB' }}
+                      tickLine={false}
+                      tickFormatter={(v: number) => `${v}%`}
+                      width={44}
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [`${value.toFixed(1)}%`, '開封率']}
+                      contentStyle={{
+                        fontSize: 12,
+                        borderRadius: 6,
+                        border: '1px solid #E5E7EB',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="open_rate"
+                      stroke="#3B82F6"
+                      strokeWidth={2}
+                      dot={{ r: 4, fill: '#3B82F6', stroke: 'white', strokeWidth: 2 }}
+                      activeDot={{ r: 6, fill: '#2563EB' }}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Comparison bar chart — all deliveries with metrics */}
+          {comparisonData.length >= 1 && (
+            <div>
+              <SectionLabel>
+                全配信 開封率比較
+                {comparisonData.length > 1 && (
+                  <span style={{ fontWeight: 400, color: '#9CA3AF', marginLeft: 8 }}>
+                    平均 {avgOpenRate.toFixed(1)}%
+                  </span>
+                )}
+              </SectionLabel>
+              <div style={{ width: '100%', height: Math.max(160, comparisonData.length * 28 + 40) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={comparisonData}
+                    layout="vertical"
+                    margin={{ top: 4, right: 40, left: 4, bottom: 4 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      domain={[0, (max: number) => Math.ceil(Math.max(max, 50) / 10) * 10]}
+                      tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                      axisLine={{ stroke: '#E5E7EB' }}
+                      tickLine={false}
+                      tickFormatter={(v: number) => `${v}%`}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={140}
+                      tick={({ x, y, payload }) => {
+                        const item = comparisonData.find((d) => d.name === payload.value);
+                        const isCurrent = item?.isCurrent;
+                        return (
+                          <text
+                            x={x}
+                            y={y}
+                            dy={4}
+                            textAnchor="end"
+                            fontSize={11}
+                            fontWeight={isCurrent ? 700 : 400}
+                            fill={isCurrent ? '#111' : '#6B7280'}
+                          >
+                            {payload.value}
+                          </text>
+                        );
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+                      content={({ active, payload: tooltipPayload }) => {
+                        if (!active || !tooltipPayload?.length) return null;
+                        const d = tooltipPayload[0].payload;
+                        return (
+                          <div
+                            style={{
+                              background: 'white',
+                              border: '1px solid #E5E7EB',
+                              borderRadius: 6,
+                              padding: '8px 12px',
+                              fontSize: 12,
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            }}
+                          >
+                            <div style={{ fontWeight: 600, marginBottom: 4 }}>{d.fullName}</div>
+                            <div>開封率: <strong>{d.open_rate.toFixed(1)}%</strong></div>
+                            {d.click_rate !== null && (
+                              <div style={{ color: '#2563EB' }}>
+                                クリック率: <strong>{d.click_rate.toFixed(1)}%</strong>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    {comparisonData.length > 1 && (
+                      <ReferenceLine
+                        x={avgOpenRate}
+                        stroke="#9CA3AF"
+                        strokeDasharray="4 4"
+                        strokeWidth={1}
+                      />
+                    )}
+                    <Bar dataKey="open_rate" radius={[0, 4, 4, 0]} barSize={16}>
+                      {comparisonData.map((entry) => (
+                        <Cell
+                          key={entry.id}
+                          fill={entry.isCurrent ? '#3B82F6' : '#E5E7EB'}
+                          stroke={entry.isCurrent ? '#2563EB' : 'none'}
+                          strokeWidth={entry.isCurrent ? 1 : 0}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Fallback: no time series AND no comparison data */}
+          {!hasChart && comparisonData.length === 0 && !latestMetric && (
+            <div
+              className="flex items-center justify-center rounded-lg border border-dashed border-[color:var(--color-border)]"
+              style={{ height: 120 }}
+            >
+              <span className="text-sm text-[color:var(--color-text-muted)]">
+                メトリクスデータはまだ取得されていません
+              </span>
+            </div>
+          )}
+
+          {/* Time series note when data exists but isn't great */}
+          {hasChart && !hasGoodTimeSeries && latestMetric && (
+            <div
+              className="rounded-md px-3 py-2 text-xs text-[color:var(--color-text-muted)]"
+              style={{ backgroundColor: '#F9FAFB', border: '1px solid #F3F4F6' }}
+            >
+              計測開始から時間が経過すると、30m→1h→12h→24h→2d〜5dの推移チャートが表示されます
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
+  );
+}
+
+// ------- Sub components -------
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        color: '#6B7280',
+        marginBottom: 6,
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+      }}
+    >
+      {children}
+    </p>
   );
 }
 
@@ -288,7 +427,7 @@ function StatCard({
   return (
     <div
       style={{
-        padding: '10px 14px',
+        padding: '8px 12px',
         borderRadius: 8,
         border: '1px solid #E5E7EB',
         backgroundColor: '#FAFAFA',
@@ -299,10 +438,10 @@ function StatCard({
       </p>
       <p
         style={{
-          fontSize: 20,
+          fontSize: 18,
           fontWeight: 700,
           color: valueColor || '#111',
-          margin: '4px 0 0',
+          margin: '3px 0 0',
           lineHeight: 1.2,
         }}
       >
