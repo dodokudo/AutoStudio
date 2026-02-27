@@ -28,6 +28,7 @@ import {
   getKnownBroadcastIds,
   insertBroadcastMetric,
   insertUrlMetrics,
+  parseSentAt,
 } from '@/lib/lstep/messageScheduler';
 import type {
   BroadcastMetricRow,
@@ -78,6 +79,47 @@ async function main(): Promise<void> {
   }
 
   // -----------------------------------------------------------------------
+  // Step 1.5: Insert current snapshot metrics for ALL scraped broadcasts
+  // This ensures data is available immediately, not just at scheduled points
+  // -----------------------------------------------------------------------
+  const now = new Date();
+
+  if (broadcasts.length > 0) {
+    let snapshotCount = 0;
+    for (const broadcast of broadcasts) {
+      try {
+        const sentDate = parseSentAt(broadcast.sentAt);
+        const elapsedMinutes = Math.round(
+          (now.getTime() - sentDate.getTime()) / 60000,
+        );
+
+        // Only insert if we have meaningful data (delivery_count > 0)
+        if (broadcast.deliveryCount > 0) {
+          const metricRow: BroadcastMetricRow = {
+            measured_at: now.toISOString(),
+            broadcast_id: broadcast.broadcastId,
+            broadcast_name: broadcast.broadcastName,
+            sent_at: broadcast.sentAt,
+            delivery_count: broadcast.deliveryCount,
+            open_count: broadcast.openCount,
+            open_rate: broadcast.openRate,
+            elapsed_minutes: elapsedMinutes,
+          };
+
+          await insertBroadcastMetric(bq, config, metricRow);
+          snapshotCount++;
+        }
+      } catch (err) {
+        // Non-fatal: log and continue
+        console.warn(
+          `[metrics] スナップショット投入失敗 ${broadcast.broadcastName}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+    console.log(`[metrics] ${snapshotCount}件の現在メトリクスをスナップショット保存`);
+  }
+
+  // -----------------------------------------------------------------------
   // Step 2: Detect new broadcasts and register measurement schedules
   // -----------------------------------------------------------------------
   const knownIds = await getKnownBroadcastIds(bq, config);
@@ -112,7 +154,6 @@ async function main(): Promise<void> {
   const pending = await getPendingMeasurements(bq, config);
   console.log(`[metrics] ${pending.length}件の計測待ちあり`);
 
-  const now = new Date();
   let successCount = 0;
   let failCount = 0;
 

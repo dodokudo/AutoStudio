@@ -12,12 +12,18 @@ import { MEASUREMENT_POINTS, ABSOLUTE_MEASUREMENT_HOURS } from './messageTypes';
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 /**
- * Parse a Japanese datetime string like "2026/02/27 18:00" into a Date (JST).
+ * Parse a Japanese datetime string like "配信済み2026/02/27 18:00" into a Date (JST).
+ * Strips status prefixes (配信済み, 予約済み, 下書き) before parsing.
  * Falls back to ISO string parsing if the Japanese format doesn't match.
  */
-function parseSentAt(sentAt: string): Date {
-  // Try "YYYY/MM/DD HH:mm" format first
-  const jpMatch = sentAt.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{1,2}):(\d{2})$/);
+export function parseSentAt(sentAt: string): Date {
+  // Strip common status prefixes and whitespace/newlines
+  const cleaned = sentAt
+    .replace(/^(配信済み|予約済み|下書き|配信中)[\s\n]*/g, '')
+    .trim();
+
+  // Try "YYYY/MM/DD HH:mm" format (may appear anywhere in the string)
+  const jpMatch = cleaned.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
   if (jpMatch) {
     const [, year, month, day, hour, minute] = jpMatch;
     // Create UTC date that represents this JST time
@@ -32,7 +38,7 @@ function parseSentAt(sentAt: string): Date {
   }
 
   // Fallback: ISO string or other parseable format
-  const parsed = new Date(sentAt);
+  const parsed = new Date(cleaned);
   if (Number.isNaN(parsed.getTime())) {
     throw new Error(`配信日時をパースできません: ${sentAt}`);
   }

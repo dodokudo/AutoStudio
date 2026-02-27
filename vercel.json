@@ -11,6 +11,9 @@
     },
     "src/app/api/threads/schedule/run/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/cron/launch-metrics/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -45,6 +48,10 @@
     {
       "path": "/api/cron/line-report/weekly",
       "schedule": "0 22 * * 0"
+    },
+    {
+      "path": "/api/cron/launch-metrics",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
