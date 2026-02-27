@@ -131,7 +131,7 @@ export function LaunchDetailClient({
   funnel,
   broadcastMetrics,
 }: LaunchDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Match deliveries with metrics
@@ -147,20 +147,23 @@ export function LaunchDetailClient({
     return m;
   }, [funnel.segments]);
 
-  // Stats
+  // Stats (single-pass calculation)
   const stats = useMemo(() => {
-    const total = deliveriesWithMetrics.length;
-    const withMetrics = deliveriesWithMetrics.filter((d) => d.latestMetric).length;
-    const avgOpenRate =
-      withMetrics > 0
-        ? deliveriesWithMetrics
-            .filter((d) => d.latestMetric)
-            .reduce((sum, d) => sum + (d.latestMetric?.open_rate || 0), 0) / withMetrics
-        : 0;
-    const totalSent = deliveriesWithMetrics
-      .filter((d) => d.latestMetric)
-      .reduce((sum, d) => sum + (d.latestMetric?.delivery_count || 0), 0);
+    let total = 0;
+    let withMetrics = 0;
+    let sumOpenRate = 0;
+    let totalSent = 0;
 
+    for (const d of deliveriesWithMetrics) {
+      total++;
+      if (d.latestMetric) {
+        withMetrics++;
+        sumOpenRate += d.latestMetric.open_rate;
+        totalSent += d.latestMetric.delivery_count;
+      }
+    }
+
+    const avgOpenRate = withMetrics > 0 ? sumOpenRate / withMetrics : 0;
     return { total, withMetrics, avgOpenRate, totalSent };
   }, [deliveriesWithMetrics]);
 
@@ -280,7 +283,7 @@ export function LaunchDetailClient({
         <DashboardTabsInteractive
           items={[...TABS]}
           value={activeTab}
-          onChange={setActiveTab}
+          onChange={(v) => setActiveTab(v as TabKey)}
           aria-label="Launch タブ"
         />
       </div>

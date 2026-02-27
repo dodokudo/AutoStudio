@@ -85,19 +85,38 @@ export function DeliveryTimeline({
     return map;
   }, [deliveries]);
 
-  // Build date ticks
+  // Build date ticks (with thinning for long periods)
   const dateTicks = useMemo(() => {
-    const ticks: string[] = [];
+    const allTicks: string[] = [];
     const start = parseDate(startDate);
     for (let i = 0; i <= totalDays; i++) {
       const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
-      ticks.push(`${y}-${m}-${day}`);
+      allTicks.push(`${y}-${m}-${day}`);
     }
-    return ticks;
-  }, [startDate, totalDays]);
+
+    // For long periods (>30 days), only show days with deliveries + adjacent days
+    if (totalDays > 30) {
+      const deliveryDates = new Set(deliveries.map(d => d.date));
+      const visibleDates = new Set<string>();
+      for (const date of deliveryDates) {
+        const idx = allTicks.indexOf(date);
+        if (idx >= 0) {
+          if (idx > 0) visibleDates.add(allTicks[idx - 1]);
+          visibleDates.add(allTicks[idx]);
+          if (idx < allTicks.length - 1) visibleDates.add(allTicks[idx + 1]);
+        }
+      }
+      // Always include first and last day
+      visibleDates.add(allTicks[0]);
+      visibleDates.add(allTicks[allTicks.length - 1]);
+      return allTicks.filter(d => visibleDates.has(d));
+    }
+
+    return allTicks;
+  }, [startDate, totalDays, deliveries]);
 
   // Segment color map
   const segmentMap = useMemo(() => {
@@ -161,6 +180,22 @@ export function DeliveryTimeline({
         <div style={{ display: 'flex', minHeight: 200 }}>
           {dateTicks.map((date) => {
             const items = byDate.get(date) || [];
+
+            // Empty day: render lightweight empty column
+            if (items.length === 0) {
+              return (
+                <div
+                  key={date}
+                  style={{
+                    width: dayWidth,
+                    flexShrink: 0,
+                    borderRight: '1px solid #F9FAFB',
+                    minHeight: 200,
+                  }}
+                />
+              );
+            }
+
             return (
               <div
                 key={date}

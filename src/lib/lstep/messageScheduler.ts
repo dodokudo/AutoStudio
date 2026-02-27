@@ -145,6 +145,7 @@ export async function getPendingMeasurements(
 
 /**
  * Insert new schedule rows for a detected broadcast.
+ * Uses parameterized queries to prevent SQL injection.
  */
 export async function insertSchedule(
   bq: BigQuery,
@@ -153,21 +154,28 @@ export async function insertSchedule(
 ): Promise<void> {
   if (rows.length === 0) return;
 
-  const values = rows
-    .map(
-      (r) =>
-        `('${r.id}', '${r.broadcast_id}', '${escapeSql(r.broadcast_name)}', TIMESTAMP('${r.sent_at}'), TIMESTAMP('${r.measure_at}'), ${r.elapsed_minutes}, '${r.status}', NULL, NULL)`,
-    )
-    .join(',\n    ');
+  for (const r of rows) {
+    const query = `
+      INSERT INTO \`${config.projectId}.${config.dataset}.measurement_schedule\`
+        (id, broadcast_id, broadcast_name, sent_at, measure_at, elapsed_minutes, status, completed_at, error_message)
+      VALUES
+        (@id, @broadcast_id, @broadcast_name, TIMESTAMP(@sent_at), TIMESTAMP(@measure_at), @elapsed_minutes, @status, NULL, NULL)
+    `;
 
-  const query = `
-    INSERT INTO \`${config.projectId}.${config.dataset}.measurement_schedule\`
-      (id, broadcast_id, broadcast_name, sent_at, measure_at, elapsed_minutes, status, completed_at, error_message)
-    VALUES
-    ${values}
-  `;
-
-  await bq.query({ query, useLegacySql: false });
+    await bq.query({
+      query,
+      useLegacySql: false,
+      params: {
+        id: r.id,
+        broadcast_id: r.broadcast_id,
+        broadcast_name: r.broadcast_name,
+        sent_at: r.sent_at,
+        measure_at: r.measure_at,
+        elapsed_minutes: r.elapsed_minutes,
+        status: r.status,
+      },
+    });
+  }
 }
 
 /**
@@ -264,7 +272,8 @@ export async function insertBroadcastMetric(
 }
 
 /**
- * Insert URL click metric rows in batch.
+ * Insert URL click metric rows.
+ * Uses parameterized queries to prevent SQL injection.
  */
 export async function insertUrlMetrics(
   bq: BigQuery,
@@ -276,26 +285,25 @@ export async function insertUrlMetrics(
 
   const measuredAtIso = measuredAt.toISOString();
 
-  const values = metrics
-    .map(
-      (m) =>
-        `(TIMESTAMP('${measuredAtIso}'), '${m.urlId}', '${escapeSql(m.urlName)}', ${m.totalClicks}, ${m.uniqueVisitors}, ${m.clickRate}, 0)`,
-    )
-    .join(',\n    ');
+  for (const m of metrics) {
+    const query = `
+      INSERT INTO \`${config.projectId}.${config.dataset}.url_click_metrics\`
+        (measured_at, url_id, url_name, total_clicks, unique_visitors, click_rate, elapsed_minutes)
+      VALUES
+        (TIMESTAMP(@measured_at), @url_id, @url_name, @total_clicks, @unique_visitors, @click_rate, 0)
+    `;
 
-  const query = `
-    INSERT INTO \`${config.projectId}.${config.dataset}.url_click_metrics\`
-      (measured_at, url_id, url_name, total_clicks, unique_visitors, click_rate, elapsed_minutes)
-    VALUES
-    ${values}
-  `;
-
-  await bq.query({ query, useLegacySql: false });
-}
-
-/**
- * Escape single quotes for SQL string literals.
- */
-function escapeSql(value: string): string {
-  return value.replace(/'/g, "''");
+    await bq.query({
+      query,
+      useLegacySql: false,
+      params: {
+        measured_at: measuredAtIso,
+        url_id: m.urlId,
+        url_name: m.urlName,
+        total_clicks: m.totalClicks,
+        unique_visitors: m.uniqueVisitors,
+        click_rate: m.clickRate,
+      },
+    });
+  }
 }

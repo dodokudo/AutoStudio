@@ -177,6 +177,43 @@ async function createMeasurementScheduleTable() {
   }
 }
 
+async function createLaunchRegistrationsTable() {
+  if (!PROJECT_ID) {
+    throw new Error('Project ID is required');
+  }
+
+  const client = createBigQueryClient(PROJECT_ID, LOCATION);
+  const dataset = client.dataset(DATASET_ID);
+  const table = dataset.table('launch_registrations');
+
+  try {
+    const [exists] = await table.exists();
+    if (exists) {
+      console.log('Table launch_registrations already exists');
+      return;
+    }
+
+    console.log('Creating table launch_registrations...');
+
+    const schema = [
+      { name: 'funnel_id', type: 'STRING', mode: 'REQUIRED' as const, description: 'ファネルID' },
+      { name: 'label', type: 'STRING', mode: 'NULLABLE' as const, description: '表示ラベル' },
+      { name: 'status', type: 'STRING', mode: 'NULLABLE' as const, description: 'active / archived' },
+      { name: 'created_at', type: 'TIMESTAMP', mode: 'REQUIRED' as const, description: '登録日時' },
+    ];
+
+    await table.create({
+      schema,
+      description: 'Launchタブに登録されたファネルの一覧',
+    });
+
+    console.log('Table launch_registrations created');
+  } catch (error) {
+    console.error(`Failed to create table launch_registrations: ${error}`);
+    throw error;
+  }
+}
+
 async function main() {
   try {
     console.log('Initializing Lstep message metrics BigQuery tables...');
@@ -189,6 +226,7 @@ async function main() {
     await createBroadcastMetricsTable();
     await createUrlClickMetricsTable();
     await createMeasurementScheduleTable();
+    await createLaunchRegistrationsTable();
 
     console.log('');
     console.log('Lstep message metrics tables initialized.');

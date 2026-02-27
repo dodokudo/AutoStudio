@@ -12,7 +12,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // Fetch funnel data
     const funnelQuery = `
       SELECT data, CAST(updated_at AS STRING) as updated_at
-      FROM \`mark-454114.marketing.funnels\`
+      FROM \`${PROJECT_ID}.marketing.funnels\`
       WHERE id = @id
     `;
     const [funnelRows] = await bq.query({

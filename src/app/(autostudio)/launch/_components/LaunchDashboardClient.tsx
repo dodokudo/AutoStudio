@@ -1,15 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Table } from '@/components/ui/table';
 import { classNames } from '@/lib/classNames';
 
 const fetcher = async (input: RequestInfo) => {
@@ -31,6 +30,8 @@ interface FunnelItem {
   deliveryCount: number;
   segmentCount: number;
   updatedAt: string;
+  label: string | null;
+  status: string | null;
 }
 
 interface FunnelsResponse {
@@ -85,7 +86,7 @@ function formatNumber(value: number): string {
 }
 
 function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
+  return `${value.toFixed(1)}%`;
 }
 
 /* ---------- Status helpers ---------- */
@@ -139,7 +140,7 @@ export function LaunchDashboardClient() {
   );
 }
 
-/* ---------- Funnel List ---------- */
+/* ---------- Funnel List (Registration-based) ---------- */
 
 function FunnelList() {
   const { data, error, isLoading } = useSWR<FunnelsResponse>(
@@ -148,13 +149,67 @@ function FunnelList() {
     { revalidateOnFocus: false }
   );
 
-  if (isLoading) return <PageSkeleton sections={3} showFilters={false} />;
+  const [showRegister, setShowRegister] = useState(false);
+  const [registerInput, setRegisterInput] = useState('');
+  const [registering, setRegistering] = useState(false);
+  const [registerError, setRegisterError] = useState('');
+
+  const handleRegister = useCallback(async () => {
+    if (!registerInput.trim()) return;
+    setRegistering(true);
+    setRegisterError('');
+
+    try {
+      // ファネルIDを抽出（URLでもIDでも対応）
+      let funnelId = registerInput.trim();
+      // URLからIDを抽出: /editor/xxx or /launch/xxx
+      const urlMatch = funnelId.match(/(?:editor|launch)\/([a-zA-Z0-9_-]+)/);
+      if (urlMatch) funnelId = urlMatch[1];
+
+      const res = await fetch('/api/launch/funnels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ funnelId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Registration failed');
+      }
+
+      setRegisterInput('');
+      setShowRegister(false);
+      mutate('/api/launch/funnels');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Registration failed';
+      setRegisterError(message);
+    } finally {
+      setRegistering(false);
+    }
+  }, [registerInput]);
+
+  const handleRemove = useCallback(async (funnelId: string, name: string) => {
+    if (!confirm(`「${name}」を一覧から削除しますか？`)) return;
+
+    try {
+      await fetch('/api/launch/funnels', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ funnelId }),
+      });
+      mutate('/api/launch/funnels');
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  if (isLoading) return <PageSkeleton sections={2} showFilters={false} />;
 
   if (error) {
     return (
       <Card>
         <p className="text-sm text-[color:var(--color-text-muted)]">
-          ファネルデータの取得に失敗しました: {error.message}
+          データの取得に失敗しました: {error.message}
         </p>
       </Card>
     );
@@ -162,80 +217,122 @@ function FunnelList() {
 
   const funnels = data?.funnels ?? [];
 
-  if (funnels.length === 0) {
-    return (
-      <EmptyState
-        title="ローンチデータがありません"
-        description="marketing.funnels テーブルにデータが存在しないか、すべてテンプレートです。"
-      />
-    );
-  }
-
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {funnels.map((funnel) => {
-        const status = getFunnelStatus(funnel.startDate, funnel.endDate);
-        return (
-          <Link key={funnel.id} href={`/launch/${funnel.id}`} className="block">
-            <div
-              className={classNames(
-                dashboardCardClass,
-                'flex flex-col gap-3 transition-shadow hover:shadow-md cursor-pointer h-full'
-              )}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)] leading-snug line-clamp-2">
-                  {funnel.name}
-                </h3>
-                <span
-                  className={classNames(
-                    'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium',
-                    statusStyles[status]
-                  )}
-                >
-                  {status}
-                </span>
-              </div>
+    <div className="space-y-4">
+      {/* Register button */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setShowRegister(!showRegister)}
+          className="rounded-[var(--radius-sm)] bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
+        >
+          + ローンチを登録
+        </button>
+      </div>
 
-              {/* Description */}
-              {funnel.description && (
-                <p className="text-xs text-[color:var(--color-text-muted)] line-clamp-2">
-                  {funnel.description}
-                </p>
-              )}
-
-              {/* Date range */}
-              <div className="text-xs text-[color:var(--color-text-secondary)]">
-                {funnel.startDate || funnel.endDate ? (
-                  <span>
-                    {formatDate(funnel.startDate)} ~ {formatDate(funnel.endDate)}
-                  </span>
-                ) : (
-                  <span>期間未設定</span>
-                )}
-              </div>
-
-              {/* Badges */}
-              <div className="mt-auto flex items-center gap-2 pt-1">
-                <span className="inline-flex items-center rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-xs text-[color:var(--color-text-secondary)]">
-                  配信 {funnel.deliveryCount}件
-                </span>
-                {funnel.segmentCount > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-xs text-[color:var(--color-text-secondary)]">
-                    セグメント {funnel.segmentCount}
-                  </span>
-                )}
-              </div>
-
-              {/* Updated */}
-              <p className="text-[10px] text-[color:var(--color-text-muted)]">
-                更新: {formatDate(funnel.updatedAt)}
-              </p>
+      {/* Register form */}
+      {showRegister && (
+        <Card>
+          <div className="flex flex-col gap-3 p-4">
+            <label className="text-sm font-medium text-[color:var(--color-text-primary)]">
+              ファネルIDまたはURL
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={registerInput}
+                onChange={(e) => setRegisterInput(e.target.value)}
+                placeholder="funnel-xxxx or https://funnel-orcin.vercel.app/editor/funnel-xxxx"
+                className="flex-1 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+              />
+              <button
+                onClick={handleRegister}
+                disabled={registering || !registerInput.trim()}
+                className="rounded-[var(--radius-sm)] bg-[color:var(--color-text-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {registering ? '登録中...' : '登録'}
+              </button>
             </div>
-          </Link>
-        );
-      })}
+            {registerError && (
+              <p className="text-xs text-red-600">{registerError}</p>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Funnel cards */}
+      {funnels.length === 0 ? (
+        <EmptyState
+          title="ローンチが登録されていません"
+          description="「+ ローンチを登録」からファネルIDを入力して計測対象を追加してください。"
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {funnels.map((funnel) => {
+            const status = getFunnelStatus(funnel.startDate, funnel.endDate);
+            return (
+              <div key={funnel.id} className="relative group">
+                <Link href={`/launch/${funnel.id}`} className="block">
+                  <div
+                    className={classNames(
+                      dashboardCardClass,
+                      'flex flex-col gap-3 transition-shadow hover:shadow-md cursor-pointer h-full'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)] leading-snug line-clamp-2">
+                        {funnel.name}
+                      </h3>
+                      <span
+                        className={classNames(
+                          'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                          statusStyles[status]
+                        )}
+                      >
+                        {status}
+                      </span>
+                    </div>
+
+                    {funnel.description && (
+                      <p className="text-xs text-[color:var(--color-text-muted)] line-clamp-2">
+                        {funnel.description}
+                      </p>
+                    )}
+
+                    <div className="text-xs text-[color:var(--color-text-secondary)]">
+                      {funnel.startDate || funnel.endDate ? (
+                        <span>
+                          {formatDate(funnel.startDate)} ~ {formatDate(funnel.endDate)}
+                        </span>
+                      ) : (
+                        <span>期間未設定</span>
+                      )}
+                    </div>
+
+                    <div className="mt-auto flex items-center gap-2 pt-1">
+                      <span className="inline-flex items-center rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-xs text-[color:var(--color-text-secondary)]">
+                        配信 {funnel.deliveryCount}件
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+
+                {/* Remove button */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleRemove(funnel.id, funnel.name);
+                  }}
+                  className="absolute top-2 right-2 hidden group-hover:flex items-center justify-center w-6 h-6 rounded-full bg-white/80 text-[color:var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors text-xs"
+                  title="一覧から削除"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -267,7 +364,7 @@ function BroadcastMetrics() {
     return (
       <EmptyState
         title="配信メトリクスがありません"
-        description="broadcast_metrics テーブルにデータが存在しません。Lステップのデータ収集バッチが実行された後に表示されます。"
+        description="Lステップの配信メトリクス収集が開始されるとここに表示されます。"
       />
     );
   }
@@ -275,51 +372,28 @@ function BroadcastMetrics() {
   return (
     <Card>
       <div className="overflow-x-auto">
-        <Table>
+        <table className="w-full text-left">
           <thead>
-            <tr className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]">
-              <th className="px-3 py-2 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">
-                配信名
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">
-                配信日時
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">
-                配信数
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">
-                開封数
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">
-                開封率
-              </th>
+            <tr className="border-b border-[color:var(--color-border)]">
+              <th className="px-3 py-2 text-xs font-medium text-[color:var(--color-text-secondary)]">配信名</th>
+              <th className="px-3 py-2 text-xs font-medium text-[color:var(--color-text-secondary)]">配信日時</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">配信数</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">開封数</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">開封率</th>
             </tr>
           </thead>
           <tbody>
             {broadcasts.map((b) => (
-              <tr
-                key={b.broadcast_id}
-                className="border-b border-[color:var(--color-border)] last:border-b-0 hover:bg-[color:var(--color-surface-muted)] transition-colors"
-              >
-                <td className="px-3 py-2 text-sm text-[color:var(--color-text-primary)]">
-                  {b.broadcast_name || b.broadcast_id}
-                </td>
-                <td className="px-3 py-2 text-sm text-[color:var(--color-text-secondary)]">
-                  {formatDate(b.sent_at)}
-                </td>
-                <td className="px-3 py-2 text-right text-sm tabular-nums text-[color:var(--color-text-primary)]">
-                  {formatNumber(b.delivery_count)}
-                </td>
-                <td className="px-3 py-2 text-right text-sm tabular-nums text-[color:var(--color-text-primary)]">
-                  {formatNumber(b.open_count)}
-                </td>
-                <td className="px-3 py-2 text-right text-sm tabular-nums font-medium text-[color:var(--color-text-primary)]">
-                  {formatPercent(b.open_rate)}
-                </td>
+              <tr key={b.broadcast_id} className="border-b border-[color:var(--color-border)] last:border-b-0">
+                <td className="px-3 py-2 text-sm">{b.broadcast_name || b.broadcast_id}</td>
+                <td className="px-3 py-2 text-sm text-[color:var(--color-text-secondary)]">{b.sent_at}</td>
+                <td className="px-3 py-2 text-right text-sm tabular-nums">{formatNumber(b.delivery_count)}</td>
+                <td className="px-3 py-2 text-right text-sm tabular-nums">{formatNumber(b.open_count)}</td>
+                <td className="px-3 py-2 text-right text-sm tabular-nums font-medium">{formatPercent(b.open_rate)}</td>
               </tr>
             ))}
           </tbody>
-        </Table>
+        </table>
       </div>
     </Card>
   );

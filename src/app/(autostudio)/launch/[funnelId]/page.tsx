@@ -21,7 +21,7 @@ async function fetchFunnelData(funnelId: string) {
   const [funnelRows] = await bq.query({
     query: `
       SELECT data, CAST(updated_at AS STRING) as updated_at
-      FROM \`mark-454114.marketing.funnels\`
+      FROM \`${PROJECT_ID}.marketing.funnels\`
       WHERE id = @id
     `,
     useLegacySql: false,
