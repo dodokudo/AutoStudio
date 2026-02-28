@@ -320,6 +320,11 @@ export function LaunchDetailClient({
     setExpandedId((prev) => (prev === d.id ? null : d.id));
   }, []);
 
+  const handleDeliveryDoubleClick = useCallback((d: DeliveryWithMetrics) => {
+    setExpandedId(d.id);
+    setActiveTab('analysis');
+  }, []);
+
   const toggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
@@ -492,6 +497,7 @@ export function LaunchDetailClient({
           startDate={funnel.startDate}
           endDate={funnel.endDate}
           onDeliveryClick={handleDeliveryClick}
+          onDeliveryDoubleClick={handleDeliveryDoubleClick}
           selectedDeliveryId={expandedId}
         />
       )}
@@ -516,6 +522,7 @@ function OverviewTab({
   startDate,
   endDate,
   onDeliveryClick,
+  onDeliveryDoubleClick,
   selectedDeliveryId,
 }: {
   deliveries: DeliveryWithMetrics[];
@@ -523,6 +530,7 @@ function OverviewTab({
   startDate: string;
   endDate: string;
   onDeliveryClick: (d: DeliveryWithMetrics) => void;
+  onDeliveryDoubleClick: (d: DeliveryWithMetrics) => void;
   selectedDeliveryId: string | null;
 }) {
   return (
@@ -538,6 +546,7 @@ function OverviewTab({
             startDate={startDate}
             endDate={endDate}
             onDeliveryClick={onDeliveryClick}
+            onDeliveryDoubleClick={onDeliveryDoubleClick}
             selectedDeliveryId={selectedDeliveryId}
           />
         </div>

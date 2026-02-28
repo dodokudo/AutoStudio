@@ -21,6 +21,7 @@ interface DeliveryTimelineProps {
   startDate: string;
   endDate: string;
   onDeliveryClick?: (delivery: DeliveryWithMetrics) => void;
+  onDeliveryDoubleClick?: (delivery: DeliveryWithMetrics) => void;
   selectedDeliveryId?: string | null;
 }
 
@@ -50,12 +51,19 @@ function getTodayStr(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-/** Extract time (HH:MM) from delivery time field or sent_at */
+/** Extract time (HH:MM) from delivery time field or sent_at.
+ *  If already delivered (sent_at contains "配信済み"), prefer actual time from Lステップ. */
 function getDeliveryTime(item: DeliveryWithMetrics): string | null {
-  // 1. Use item.time if available (e.g. "20:00" or "21:00")
+  // 1. If Lステップで配信済み → 実績時刻を優先
+  if (item.latestMetric?.sent_at && item.latestMetric.sent_at.includes('配信済み')) {
+    const m = item.latestMetric.sent_at.match(/(\d{1,2}):(\d{2})/);
+    if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
+  }
+
+  // 2. Fallback: ファネルビルダーの予定時刻
   if (item.time) return item.time;
 
-  // 2. Parse from sent_at: "配信済み\n2026/02/26\n21:03"
+  // 3. Fallback: sent_at from other statuses (予約済み etc.)
   if (item.latestMetric?.sent_at) {
     const m = item.latestMetric.sent_at.match(/(\d{1,2}):(\d{2})/);
     if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
@@ -70,6 +78,7 @@ export function DeliveryTimeline({
   startDate,
   endDate,
   onDeliveryClick,
+  onDeliveryDoubleClick,
   selectedDeliveryId,
 }: DeliveryTimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -355,6 +364,7 @@ export function DeliveryTimeline({
                           <button
                             type="button"
                             onClick={() => onDeliveryClick?.(item)}
+                            onDoubleClick={() => onDeliveryDoubleClick?.(item)}
                             className="block w-full p-2 text-left transition-colors hover:bg-[color:var(--color-surface-muted)]"
                           >
                             {/* Time + segment badges */}
