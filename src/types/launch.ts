@@ -45,7 +45,7 @@ export interface CarouselColumn {
   actions?: Array<{ label: string; color?: string }>;
 }
 
-export type LineMessageType = 'text' | 'image' | 'carousel' | 'flex' | 'richmenu';
+export type LineMessageType = 'text' | 'image' | 'carousel' | 'flex' | 'richmenu' | 'audio' | 'video';
 
 export interface LineMessage {
   id: string;
@@ -74,6 +74,9 @@ export interface DeliveryItem {
   messages?: LineMessage[];
   notificationText?: string;
   clickTag?: string;  // CTAクリックで付与されるLステップタグ名
+  // Lステップ連携（配信IDベースのメトリクスマッチングに使用）
+  lstepBroadcastId?: string; // 一斉配信ID（予約後に書き戻し）
+  lstepUrlId?: string; // URL計測ID（クリックメトリクスの紐付けに使用）
 }
 
 export interface FunnelData {

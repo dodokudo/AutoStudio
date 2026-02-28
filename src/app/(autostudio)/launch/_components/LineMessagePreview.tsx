@@ -88,6 +88,8 @@ export const LineMessagePreview = memo(function LineMessagePreview({
 const TYPE_LABELS: Partial<Record<LineMessage['type'], { label: string; color: string }>> = {
   carousel: { label: 'カルーセル', color: '#3B82F6' },
   flex: { label: 'フレックス', color: '#8B5CF6' },
+  audio: { label: '音声', color: '#F59E0B' },
+  video: { label: '動画', color: '#EF4444' },
 };
 
 const AccountIcon = memo(function AccountIcon() {
@@ -120,6 +122,10 @@ const MessageItem = memo(function MessageItem({ message }: { message: LineMessag
         return <FlexMessage message={message} />;
       case 'richmenu':
         return <RichMenuIndicator text={message.text || 'リッチメニュー切替'} />;
+      case 'audio':
+        return <AudioMessage text={message.text || '【音声メッセージ】'} />;
+      case 'video':
+        return <VideoMessage text={message.text || '【動画メッセージ】'} />;
       default:
         return null;
     }
@@ -575,6 +581,106 @@ const FlexButtonDisplay = memo(function FlexButtonDisplay({
       }}
     >
       {button.label}
+    </div>
+  );
+});
+
+// Audio message (LINE-style play button + waveform)
+const AudioMessage = memo(function AudioMessage({ text }: { text: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+      <AccountIcon />
+      <div
+        style={{
+          backgroundColor: LINE_BUBBLE_BG,
+          maxWidth: `calc(100% - 32px)`,
+          padding: '8px 10px',
+          borderRadius: '14px 14px 14px 4px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            backgroundColor: '#F59E0B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <polygon points="8,5 19,12 8,19" fill="white" />
+          </svg>
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+          {[12, 18, 8, 22, 14, 10, 20, 16, 6, 18, 12, 20, 8, 16].map((h, i) => (
+            <div
+              key={i}
+              style={{
+                width: 2,
+                height: h * 0.6,
+                backgroundColor: '#F59E0B',
+                borderRadius: 1,
+                opacity: 0.6,
+              }}
+            />
+          ))}
+        </div>
+        <span style={{ fontSize: 9, color: '#999', whiteSpace: 'nowrap' }}>{text}</span>
+      </div>
+    </div>
+  );
+});
+
+// Video message (dark player mockup)
+const VideoMessage = memo(function VideoMessage({ text }: { text: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+      <AccountIcon />
+      <div
+        style={{
+          maxWidth: `calc(100% - 32px)`,
+          borderRadius: 10,
+          overflow: 'hidden',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+        }}
+      >
+        <div
+          style={{
+            width: CONTENT_WIDTH * 0.7,
+            height: 100,
+            backgroundColor: '#1a1a1a',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <polygon points="8,5 19,12 8,19" fill="rgba(255,255,255,0.8)" />
+            </svg>
+          </div>
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>{text}</span>
+        </div>
+      </div>
     </div>
   );
 });
