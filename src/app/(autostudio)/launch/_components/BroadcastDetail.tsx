@@ -14,7 +14,7 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
-import type { DeliveryWithMetrics, BroadcastMetric } from '@/types/launch';
+import type { DeliveryWithMetrics, BroadcastMetric, Segment } from '@/types/launch';
 import { LineMessagePreview } from './LineMessagePreview';
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
@@ -32,10 +32,20 @@ const STANDARD_LABELS = ['30m', '1h', '12h', '24h', '2d', '3d', '4d', '5d'];
 interface BroadcastDetailProps {
   delivery: DeliveryWithMetrics;
   allDeliveries?: DeliveryWithMetrics[];
+  segments?: Segment[];
 }
 
-export function BroadcastDetail({ delivery, allDeliveries }: BroadcastDetailProps) {
+export function BroadcastDetail({ delivery, allDeliveries, segments }: BroadcastDetailProps) {
   const { latestMetric, timeSeries, messages, notificationText } = delivery;
+
+  // Resolve segment IDs to segment objects
+  const deliverySegments = useMemo(() => {
+    if (!segments) return [];
+    const ids = delivery.segmentIds || [delivery.segmentId];
+    return ids
+      .map((sid) => segments.find((s) => s.id === sid))
+      .filter(Boolean) as Segment[];
+  }, [segments, delivery.segmentIds, delivery.segmentId]);
 
   // Prepare chart data from time series
   const chartData = useMemo(() => {
@@ -175,6 +185,44 @@ export function BroadcastDetail({ delivery, allDeliveries }: BroadcastDetailProp
             value={formatMeasuredAt(latestMetric.measured_at)}
             sub={`経過 ${formatElapsedLabel(latestMetric.elapsed_minutes)}`}
           />
+        </div>
+      )}
+
+      {/* Delivery target info */}
+      {(deliverySegments.length > 0 || delivery.deliveryTarget) && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid #E5E7EB',
+            backgroundColor: '#F9FAFB',
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', letterSpacing: '0.05em' }}>
+            配信先
+          </span>
+          {deliverySegments.map((seg) => (
+            <span
+              key={seg.id}
+              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                color: seg.color,
+                backgroundColor: `${seg.color}18`,
+                border: `1px solid ${seg.color}40`,
+              }}
+            >
+              {seg.name}
+            </span>
+          ))}
+          {delivery.deliveryTarget && (
+            <span
+              className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium"
+              style={{ color: '#4B5563', backgroundColor: '#F3F4F6', border: '1px solid #D1D5DB' }}
+            >
+              {delivery.deliveryTarget}
+            </span>
+          )}
         </div>
       )}
 

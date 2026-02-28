@@ -77,6 +77,8 @@ export interface DeliveryItem {
   // Lステップ連携（配信IDベースのメトリクスマッチングに使用）
   lstepBroadcastId?: string; // 一斉配信ID（予約後に書き戻し）
   lstepUrlId?: string; // URL計測ID（クリックメトリクスの紐付けに使用）
+  // 配信先情報（セグメント別分析用）
+  deliveryTarget?: string; // Lステップ配信先条件（例: "全員", "タグ:3M:登録日"）
 }
 
 export interface FunnelData {
