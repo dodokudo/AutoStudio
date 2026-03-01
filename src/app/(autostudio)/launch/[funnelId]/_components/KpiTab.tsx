@@ -79,7 +79,13 @@ export function KpiTab({ funnelId }: KpiTabProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Use draft if editing, otherwise remote data, otherwise defaults
-  const kpi = draft ?? data ?? defaultKpi();
+  const rawKpi = draft ?? data ?? defaultKpi();
+  // 後方互換: 旧データに videoViewers がない場合のフォールバック
+  const kpi: LaunchKpi = {
+    ...rawKpi,
+    videoViewers: rawKpi.videoViewers ?? { target: 0, actual: 0 },
+    seminarApplications: rawKpi.seminarApplications ?? { target: 0, actual: 0 },
+  };
 
   // Ensure draft exists on first field interaction
   const ensureDraft = useCallback(() => {

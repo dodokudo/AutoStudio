@@ -49,7 +49,13 @@ export async function GET(
         return NextResponse.json({ kpi: DEFAULT_KPI, isDefault: true });
       }
 
-      const parsed: LaunchKpi = JSON.parse((rows[0] as any).data);
+      const raw = JSON.parse((rows[0] as any).data);
+      // 後方互換: 旧キー benefitReceivers → videoViewers にマイグレーション
+      if (raw.benefitReceivers && !raw.videoViewers) {
+        raw.videoViewers = raw.benefitReceivers;
+        delete raw.benefitReceivers;
+      }
+      const parsed: LaunchKpi = raw;
       return NextResponse.json({ kpi: parsed, isDefault: false });
     } catch (e: unknown) {
       const err = e as { message?: string; code?: number };

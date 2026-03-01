@@ -163,7 +163,13 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     }
   }, [funnelId, mutate]);
 
-  const kpi = data?.kpi ?? defaultKpi();
+  const rawKpi = data?.kpi ?? defaultKpi();
+  // 後方互換: 旧データに videoViewers がない場合のフォールバック
+  const kpi: LaunchKpi = {
+    ...rawKpi,
+    videoViewers: rawKpi.videoViewers ?? { target: 0, actual: 0 },
+    seminarApplications: rawKpi.seminarApplications ?? { target: 0, actual: 0 },
+  };
   const isDefault = data?.isDefault ?? false;
 
   const computed = useMemo(() => {
