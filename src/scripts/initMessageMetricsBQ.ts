@@ -177,6 +177,49 @@ async function createMeasurementScheduleTable() {
   }
 }
 
+async function createTagMetricsTable() {
+  if (!PROJECT_ID) {
+    throw new Error('Project ID is required');
+  }
+
+  const client = createBigQueryClient(PROJECT_ID, LOCATION);
+  const dataset = client.dataset(DATASET_ID);
+  const table = dataset.table('tag_metrics');
+
+  try {
+    const [exists] = await table.exists();
+    if (exists) {
+      console.log('Table tag_metrics already exists');
+      return;
+    }
+
+    console.log('Creating table tag_metrics...');
+
+    const schema = [
+      { name: 'measured_at', type: 'TIMESTAMP', mode: 'REQUIRED' as const, description: '計測日時' },
+      { name: 'tag_name', type: 'STRING', mode: 'REQUIRED' as const, description: 'タグ名（例: 3M:セミナー申込済み）' },
+      { name: 'friend_count', type: 'INT64', mode: 'REQUIRED' as const, description: 'タグ付き友だち数' },
+    ];
+
+    await table.create({
+      schema,
+      description: 'Lステップタグ別の友だち数スナップショット（KPI実績値の自動集計に使用）',
+      timePartitioning: {
+        type: 'DAY',
+        field: 'measured_at',
+      },
+      clustering: {
+        fields: ['tag_name'],
+      },
+    });
+
+    console.log('Table tag_metrics created');
+  } catch (error) {
+    console.error(`Failed to create table tag_metrics: ${error}`);
+    throw error;
+  }
+}
+
 async function createLaunchRegistrationsTable() {
   if (!PROJECT_ID) {
     throw new Error('Project ID is required');
@@ -226,6 +269,7 @@ async function main() {
     await createBroadcastMetricsTable();
     await createUrlClickMetricsTable();
     await createMeasurementScheduleTable();
+    await createTagMetricsTable();
     await createLaunchRegistrationsTable();
 
     console.log('');

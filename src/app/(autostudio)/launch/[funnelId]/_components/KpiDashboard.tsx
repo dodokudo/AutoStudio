@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import useSWR from 'swr';
+import { useMemo, useState, useCallback } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   ResponsiveContainer,
   LineChart,
@@ -135,6 +135,33 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     `/api/launch/kpi/${funnelId}`,
     fetcher,
   );
+
+  const { mutate } = useSWRConfig();
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleSyncTags = useCallback(async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch(`/api/launch/kpi/${funnelId}/sync-tags`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) {
+        setSyncResult({ success: false, message: json.error || '同期に失敗しました' });
+        return;
+      }
+      setSyncResult({
+        success: true,
+        message: `${json.tagCount}件のタグから実績値を更新しました`,
+      });
+      // KPIデータを再取得
+      mutate(`/api/launch/kpi/${funnelId}`);
+    } catch {
+      setSyncResult({ success: false, message: '通信エラーが発生しました' });
+    } finally {
+      setSyncing(false);
+    }
+  }, [funnelId, mutate]);
 
   const kpi = data?.kpi ?? defaultKpi();
   const isDefault = data?.isDefault ?? false;
@@ -299,9 +326,54 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
 
   return (
     <div className="flex flex-col gap-6">
-      {isDefault && (
-        <div className="rounded-lg border border-[color:var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[color:var(--color-text-secondary)]">
-          KPIが未設定です。KPI設定タブから入力してください。
+      {/* Header: status + sync button */}
+      <div className="flex items-center justify-between gap-4">
+        {isDefault ? (
+          <div className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[color:var(--color-text-secondary)]">
+            KPIが未設定です。KPI設定タブから入力してください。
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+        <button
+          onClick={handleSyncTags}
+          disabled={syncing || isDefault}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[color:var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            className={syncing ? 'animate-spin' : ''}
+          >
+            <path
+              d="M21 12a9 9 0 1 1-2.636-6.364"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M21 3v6h-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {syncing ? '同期中...' : 'Lstep同期'}
+        </button>
+      </div>
+
+      {syncResult && (
+        <div
+          className={`rounded-lg border px-4 py-2 text-xs ${
+            syncResult.success
+              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
+              : 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
+          }`}
+        >
+          {syncResult.message}
         </div>
       )}
 
