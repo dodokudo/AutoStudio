@@ -65,7 +65,7 @@ function defaultKpi(): LaunchKpi {
       ads: { target: 0, actual: 0, budget: 0 },
     },
     lineRegistration: { existing: 0, newTarget: 0, newActual: 0 },
-    benefitReceivers: { target: 0, actual: 0 },
+    videoViewers: { target: 0, actual: 0 },
     seminarApplications: { target: 0, actual: 0, existingTarget: 0, existingActual: 0, newTarget: 0, newActual: 0 },
     seminarDays: [],
     frontend: { unitPrice: 0, target: 0, actual: 0 },
@@ -91,7 +91,7 @@ function progressBg(rate: number): string {
 
 const CHART_COLORS = {
   lineRegistrations: '#6366F1',
-  benefitReceivers: '#8B5CF6',
+  videoViewers: '#8B5CF6',
   seminarApplications: '#F59E0B',
   seminarAttendees: '#10B981',
   frontendPurchases: '#3B82F6',
@@ -166,9 +166,9 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         sub: `既存 ${numFmt.format(kpi.lineRegistration.existing)} / 新規目標 ${numFmt.format(totalNewLineTarget)}`,
       },
       {
-        label: '特典受取',
-        target: kpi.benefitReceivers.target,
-        actual: kpi.benefitReceivers.actual,
+        label: '動画閲覧',
+        target: kpi.videoViewers.target,
+        actual: kpi.videoViewers.actual,
         prevTarget: totalLineRegTarget,
         prevActual: totalLineReg,
       },
@@ -176,8 +176,8 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         label: 'セミナー申込',
         target: kpi.seminarApplications.target,
         actual: kpi.seminarApplications.actual,
-        prevTarget: kpi.benefitReceivers.target,
-        prevActual: kpi.benefitReceivers.actual,
+        prevTarget: kpi.videoViewers.target,
+        prevActual: kpi.videoViewers.actual,
         sub: `既存 ${numFmt.format(kpi.seminarApplications.existingActual ?? 0)}/${numFmt.format(kpi.seminarApplications.existingTarget ?? 0)} / 新規 ${numFmt.format(kpi.seminarApplications.newActual ?? 0)}/${numFmt.format(kpi.seminarApplications.newTarget ?? 0)}`,
       },
       {
@@ -225,7 +225,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       date: string;
       label: string;
       lineRegistrations: number;
-      benefitReceivers: number;
+      videoViewers: number;
       seminarApplications: number;
       seminarAttendees: number;
       frontendPurchases: number;
@@ -240,7 +240,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         const m = metricsMap.get(date);
         if (m) {
           cumLine += m.lineRegistrations ?? 0;
-          cumBenefit += m.benefitReceivers ?? 0;
+          cumBenefit += m.videoViewers ?? 0;
           cumSemApp += m.seminarApplications ?? 0;
           cumSemAtt += m.seminarAttendees ?? 0;
           cumFe += m.frontendPurchases ?? 0;
@@ -250,7 +250,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
           date,
           label: shortDate(date),
           lineRegistrations: cumLine,
-          benefitReceivers: cumBenefit,
+          videoViewers: cumBenefit,
           seminarApplications: cumSemApp,
           seminarAttendees: cumSemAtt,
           frontendPurchases: cumFe,
@@ -615,9 +615,9 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                 />
                 <Line
                   type="monotone"
-                  dataKey="benefitReceivers"
-                  name="特典受取"
-                  stroke={CHART_COLORS.benefitReceivers}
+                  dataKey="videoViewers"
+                  name="動画閲覧"
+                  stroke={CHART_COLORS.videoViewers}
                   strokeWidth={2}
                   dot={{ r: 3 }}
                   activeDot={{ r: 5 }}

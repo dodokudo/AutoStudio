@@ -14,7 +14,7 @@ const DEFAULT_KPI: LaunchKpi = {
     ads: { target: 0, actual: 0, budget: 0 },
   },
   lineRegistration: { existing: 0, newTarget: 0, newActual: 0 },
-  benefitReceivers: { target: 0, actual: 0 },
+  videoViewers: { target: 0, actual: 0, existingTarget: 0, existingActual: 0, newTarget: 0, newActual: 0 },
   seminarApplications: { target: 0, actual: 0, existingTarget: 0, existingActual: 0, newTarget: 0, newActual: 0 },
   seminarDays: [],
   frontend: { unitPrice: 0, target: 0, actual: 0 },

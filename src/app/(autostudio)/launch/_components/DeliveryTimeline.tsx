@@ -1,16 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
-import type { DeliveryWithMetrics, Segment, BroadcastMetric } from '@/types/launch';
+import type { DeliveryWithMetrics, Segment } from '@/types/launch';
 import { LineMessagePreview } from './LineMessagePreview';
 
 const BASE_COL_WIDTH = 200;
@@ -32,7 +23,6 @@ interface DeliveryTimelineProps {
   onDeliveryClick?: (delivery: DeliveryWithMetrics) => void;
   onDeliveryDoubleClick?: (delivery: DeliveryWithMetrics) => void;
   selectedDeliveryId?: string | null;
-  inlineExpandedIds?: Set<string>;
 }
 
 function parseDate(dateStr: string): Date {
@@ -90,13 +80,9 @@ export function DeliveryTimeline({
   onDeliveryClick,
   onDeliveryDoubleClick,
   selectedDeliveryId,
-  inlineExpandedIds,
 }: DeliveryTimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const chartScrollRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [zoom, setZoom] = useState(1);
 
   const totalDays = daysBetween(startDate, endDate);
@@ -105,33 +91,16 @@ export function DeliveryTimeline({
   // Column width driven by global zoom
   const dayWidth = BASE_COL_WIDTH * zoom;
 
-  // Track scroll state
-  const updateScrollState = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 2);
-    setCanScrollLeft(scrollLeft > 2);
-  }, []);
-
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
       setContainerWidth(el.clientWidth);
-      updateScrollState();
     });
     observer.observe(el);
     setContainerWidth(el.clientWidth);
-
-    el.addEventListener('scroll', updateScrollState, { passive: true });
-    updateScrollState();
-
-    return () => {
-      observer.disconnect();
-      el.removeEventListener('scroll', updateScrollState);
-    };
-  }, [updateScrollState]);
+    return () => observer.disconnect();
+  }, []);
 
   // Global zoom via Ctrl+wheel / trackpad pinch
   useEffect(() => {
@@ -150,29 +119,6 @@ export function DeliveryTimeline({
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
-
-  // Sync chart strip scroll with main timeline scroll
-  useEffect(() => {
-    const main = scrollRef.current;
-    const chart = chartScrollRef.current;
-    if (!main || !chart) return;
-    let syncing = false;
-    const sync = (src: HTMLDivElement, dst: HTMLDivElement) => {
-      if (syncing) return;
-      syncing = true;
-      dst.scrollLeft = src.scrollLeft;
-      syncing = false;
-    };
-    const onMain = () => sync(main, chart);
-    const onChart = () => sync(chart, main);
-    main.addEventListener('scroll', onMain, { passive: true });
-    chart.addEventListener('scroll', onChart, { passive: true });
-    chart.scrollLeft = main.scrollLeft;
-    return () => {
-      main.removeEventListener('scroll', onMain);
-      chart.removeEventListener('scroll', onChart);
-    };
-  }, [inlineExpandedIds]);
 
   // Group deliveries by date
   const byDate = useMemo(() => {
@@ -291,8 +237,7 @@ export function DeliveryTimeline({
       <div className="relative">
         <div
           ref={scrollRef}
-          className="overflow-x-auto overflow-y-auto scrollbar-hide"
-          style={{ maxHeight: '60vh' }}
+          className="overflow-x-auto scrollbar-hide"
         >
           <div style={{ minWidth: timelineWidth, position: 'relative' }}>
             {/* Date axis */}
@@ -371,7 +316,6 @@ export function DeliveryTimeline({
                       const openRate = item.latestMetric?.open_rate;
                       const rateColor = getOpenRateColor(openRate);
                       const isSelected = item.id === selectedDeliveryId;
-                      const isExpanded = inlineExpandedIds?.has(item.id) ?? false;
                       const itemSegments = (item.segmentIds || [item.segmentId])
                         .map((sid) => segmentMap.get(sid))
                         .filter(Boolean) as Segment[];
@@ -393,8 +337,8 @@ export function DeliveryTimeline({
                           key={item.id}
                           className="overflow-hidden rounded-md border bg-[color:var(--color-surface)]"
                           style={{
-                            borderColor: isExpanded || isSelected ? 'var(--color-accent)' : 'var(--color-border)',
-                            boxShadow: isExpanded || isSelected ? '0 0 0 2px var(--color-accent-muted)' : undefined,
+                            borderColor: isSelected ? 'var(--color-accent)' : 'var(--color-border)',
+                            boxShadow: isSelected ? '0 0 0 2px var(--color-accent-muted)' : undefined,
                           }}
                         >
                           {/* Header — clickable for selection */}
@@ -473,88 +417,8 @@ export function DeliveryTimeline({
           </div>
         </div>
 
-        {/* Scroll indicators */}
-        {canScrollRight && (
-          <div
-            className="pointer-events-none absolute right-0 top-0 bottom-0 w-12"
-            style={{
-              background: 'linear-gradient(to left, rgba(255,255,255,0.95), transparent)',
-            }}
-          />
-        )}
-        {canScrollLeft && (
-          <div
-            className="pointer-events-none absolute left-0 top-0 bottom-0 w-12"
-            style={{
-              background: 'linear-gradient(to right, rgba(255,255,255,0.95), transparent)',
-            }}
-          />
-        )}
       </div>
 
-      {/* Chart comparison strip — separate scroll container synced with main */}
-      {inlineExpandedIds && inlineExpandedIds.size > 0 && (
-        <div
-          ref={chartScrollRef}
-          className="overflow-x-auto scrollbar-hide border-t-2 border-[color:var(--color-accent)]/20 rounded-b-lg"
-          style={{ backgroundColor: 'rgba(10, 122, 255, 0.03)' }}
-        >
-          <div className="flex" style={{ minWidth: timelineWidth, alignItems: 'flex-start' }}>
-            {dateTicks.map((date) => {
-              const stripItems = byDate.get(date) || [];
-              const expandedItems = stripItems.filter(i => inlineExpandedIds.has(i.id));
-
-              if (expandedItems.length === 0) {
-                return (
-                  <div
-                    key={`chart-${date}`}
-                    className="shrink-0"
-                    style={{ width: dayWidth }}
-                  />
-                );
-              }
-
-              return (
-                <div
-                  key={`chart-${date}`}
-                  className="flex shrink-0 flex-col gap-1.5 p-1.5"
-                  style={{ width: dayWidth }}
-                >
-                  {expandedItems.map((item) => {
-                    const chartTime = getDeliveryTime(item);
-                    return (
-                      <div
-                        key={`chart-${item.id}`}
-                        className="overflow-hidden rounded-md border border-[color:var(--color-accent)]/30 bg-[color:var(--color-surface)]"
-                      >
-                        <div className="flex items-center justify-between border-b border-[color:var(--color-border)]/30 px-2 py-1">
-                          <span className="truncate text-[9px] font-medium text-[color:var(--color-text-muted)]">
-                            {chartTime || '--:--'} 開封率推移
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onDeliveryClick?.(item)}
-                            className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] text-[color:var(--color-text-muted)] transition-colors hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        {item.timeSeries && item.timeSeries.length > 1 ? (
-                          <InlineMetricChart timeSeries={item.timeSeries} />
-                        ) : (
-                          <div className="px-2 py-3 text-center text-[9px] text-[color:var(--color-text-muted)]">
-                            計測データなし
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -570,62 +434,3 @@ function MiniKpi({ label, value, color }: { label: string; value: string; color?
   );
 }
 
-function formatElapsed(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  if (minutes < 1440) return `${Math.round(minutes / 60)}h`;
-  return `${Math.round(minutes / 1440)}d`;
-}
-
-function InlineMetricChart({ timeSeries }: { timeSeries: BroadcastMetric[] }) {
-  const data = useMemo(() => {
-    const sorted = [...timeSeries].sort((a, b) => a.elapsed_minutes - b.elapsed_minutes);
-    return sorted.map((m) => ({
-      label: formatElapsed(m.elapsed_minutes),
-      openRate: m.open_rate,
-      openCount: m.open_count,
-      deliveryCount: m.delivery_count,
-    }));
-  }, [timeSeries]);
-
-  return (
-    <div className="border-t border-[color:var(--color-border)]/30 px-1 py-2">
-      <div className="mb-1 text-[8px] font-medium text-[color:var(--color-text-muted)]">開封率推移</div>
-      <ResponsiveContainer width="100%" height={100}>
-        <LineChart data={data} margin={{ top: 2, right: 8, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="2 2" stroke="var(--color-border)" opacity={0.3} />
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 8, fill: 'var(--color-text-muted)' }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            tick={{ fontSize: 8, fill: 'var(--color-text-muted)' }}
-            tickLine={false}
-            axisLine={false}
-            domain={[0, 'auto']}
-            tickFormatter={(v: number) => `${v}%`}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              fontSize: 10,
-              padding: '4px 8px',
-            }}
-            formatter={(value: number) => [`${value.toFixed(1)}%`, '開封率']}
-          />
-          <Line
-            type="monotone"
-            dataKey="openRate"
-            stroke="#3B82F6"
-            strokeWidth={1.5}
-            dot={{ r: 2.5, fill: '#3B82F6' }}
-            activeDot={{ r: 4 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}

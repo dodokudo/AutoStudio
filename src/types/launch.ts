@@ -141,7 +141,7 @@ export interface SeminarDay {
 export interface DailyMetric {
   date: string;
   lineRegistrations?: number;
-  benefitReceivers?: number;
+  videoViewers?: number;
   seminarApplications?: number;
   seminarAttendees?: number;
   frontendPurchases?: number;
@@ -160,7 +160,14 @@ export interface LaunchKpi {
     newTarget: number;
     newActual: number;
   };
-  benefitReceivers: { target: number; actual: number };
+  videoViewers: {
+    target: number;
+    actual: number;
+    existingTarget?: number;
+    existingActual?: number;
+    newTarget?: number;
+    newActual?: number;
+  };
   seminarApplications: {
     target: number;
     actual: number;

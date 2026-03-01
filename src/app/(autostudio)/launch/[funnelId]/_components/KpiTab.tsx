@@ -56,7 +56,7 @@ function defaultKpi(): LaunchKpi {
       ads: { target: 0, actual: 0, budget: 0 },
     },
     lineRegistration: { existing: 0, newTarget: 0, newActual: 0 },
-    benefitReceivers: { target: 0, actual: 0 },
+    videoViewers: { target: 0, actual: 0, existingTarget: 0, existingActual: 0, newTarget: 0, newActual: 0 },
     seminarApplications: { target: 0, actual: 0, existingTarget: 0, existingActual: 0, newTarget: 0, newActual: 0 },
     seminarDays: [],
     frontend: { unitPrice: 0, target: 0, actual: 0 },
@@ -168,9 +168,9 @@ export function KpiTab({ funnelId }: KpiTabProps) {
       kpi.inflow.threads.target + kpi.inflow.instagram.target + kpi.inflow.ads.target;
     const adsCpa = safeDivide(kpi.inflow.ads.budget, kpi.inflow.ads.actual);
     const totalLineBase = totalNewLine + kpi.lineRegistration.existing;
-    const benefitRate = safeDivide(kpi.benefitReceivers.actual, totalLineBase) * 100;
+    const benefitRate = safeDivide(kpi.videoViewers.actual, totalLineBase) * 100;
     const seminarAppRate =
-      safeDivide(kpi.seminarApplications.actual, kpi.benefitReceivers.actual) * 100;
+      safeDivide(kpi.seminarApplications.actual, kpi.videoViewers.actual) * 100;
 
     // Seminar totals
     const seminarTotals = kpi.seminarDays.reduce(
@@ -472,20 +472,42 @@ export function KpiTab({ funnelId }: KpiTabProps) {
         <StepArrow />
 
         {/* Step 2: Benefit */}
-        <StepCard step={2} title="特典受取">
+        <StepCard step={2} title="動画閲覧">
           <div className="flex flex-wrap items-center gap-4">
             <TargetActualRow
-              target={kpi.benefitReceivers.target}
-              actual={kpi.benefitReceivers.actual}
-              onTargetChange={(v) => setField(['benefitReceivers', 'target'], v)}
-              onActualChange={(v) => setField(['benefitReceivers', 'actual'], v)}
+              target={kpi.videoViewers.target}
+              actual={kpi.videoViewers.actual}
+              onTargetChange={(v) => setField(['videoViewers', 'target'], v)}
+              onActualChange={(v) => setField(['videoViewers', 'actual'], v)}
               suffix="人"
             />
             <MetricPill
-              label="受取率"
+              label="閲覧率"
               value={computed.benefitRate > 0 ? pct(computed.benefitRate) : '-'}
               computed
             />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-lg border border-[color:var(--color-border)]/50 bg-[color:var(--color-surface-muted)]/30 p-3">
+            <div>
+              <div className="mb-1 text-[10px] font-medium text-[color:var(--color-text-muted)]">既存LINE</div>
+              <TargetActualRow
+                target={kpi.videoViewers.existingTarget ?? 0}
+                actual={kpi.videoViewers.existingActual ?? 0}
+                onTargetChange={(v) => setField(['videoViewers', 'existingTarget'], v)}
+                onActualChange={(v) => setField(['videoViewers', 'existingActual'], v)}
+                suffix="人"
+              />
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] font-medium text-[color:var(--color-text-muted)]">新規登録者</div>
+              <TargetActualRow
+                target={kpi.videoViewers.newTarget ?? 0}
+                actual={kpi.videoViewers.newActual ?? 0}
+                onTargetChange={(v) => setField(['videoViewers', 'newTarget'], v)}
+                onActualChange={(v) => setField(['videoViewers', 'newActual'], v)}
+                suffix="人"
+              />
+            </div>
           </div>
         </StepCard>
 

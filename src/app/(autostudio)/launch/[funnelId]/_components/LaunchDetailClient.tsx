@@ -216,7 +216,6 @@ export function LaunchDetailClient({
 }: LaunchDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('kpi');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [inlineExpandedIds, setInlineExpandedIds] = useState<Set<string>>(new Set());
 
   // Match deliveries with metrics
   const deliveriesWithMetrics = useMemo(
@@ -322,29 +321,13 @@ export function LaunchDetailClient({
   }, [channelFilteredDeliveries]);
 
   const handleDeliveryClick = useCallback((d: DeliveryWithMetrics) => {
-    if (activeTab === 'line-delivery') {
-      // LINE配信タブ: クリックでチャートストリップの展開/閉じ
-      setInlineExpandedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(d.id)) {
-          next.delete(d.id);
-        } else {
-          next.add(d.id);
-        }
-        return next;
-      });
-    } else {
-      setExpandedId((prev) => (prev === d.id ? null : d.id));
-    }
-  }, [activeTab]);
+    setExpandedId((prev) => (prev === d.id ? null : d.id));
+  }, []);
 
   const handleDeliveryDoubleClick = useCallback((d: DeliveryWithMetrics) => {
-    // 配信分析タブに遷移（LINE配信タブではクリックで展開するのでダブルクリックは不要）
-    if (activeTab !== 'line-delivery') {
-      setExpandedId(d.id);
-      setActiveTab('analysis');
-    }
-  }, [activeTab]);
+    setExpandedId(d.id);
+    setActiveTab('analysis');
+  }, []);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -521,7 +504,6 @@ export function LaunchDetailClient({
             onDeliveryClick={handleDeliveryClick}
             onDeliveryDoubleClick={handleDeliveryDoubleClick}
             selectedDeliveryId={expandedId}
-            inlineExpandedIds={inlineExpandedIds}
           />
         </>
       )}
@@ -553,7 +535,6 @@ function OverviewTab({
   onDeliveryClick,
   onDeliveryDoubleClick,
   selectedDeliveryId,
-  inlineExpandedIds,
 }: {
   deliveries: DeliveryWithMetrics[];
   segments: Segment[];
@@ -562,15 +543,11 @@ function OverviewTab({
   onDeliveryClick: (d: DeliveryWithMetrics) => void;
   onDeliveryDoubleClick: (d: DeliveryWithMetrics) => void;
   selectedDeliveryId: string | null;
-  inlineExpandedIds?: Set<string>;
 }) {
   return (
     <>
       <Card>
         <div className="p-3 md:p-4">
-          <h2 className="mb-3 text-sm font-semibold text-[color:var(--color-text-primary)]">
-            配信タイムライン
-          </h2>
           <DeliveryTimeline
             deliveries={deliveries}
             segments={segments}
@@ -579,7 +556,6 @@ function OverviewTab({
             onDeliveryClick={onDeliveryClick}
             onDeliveryDoubleClick={onDeliveryDoubleClick}
             selectedDeliveryId={selectedDeliveryId}
-            inlineExpandedIds={inlineExpandedIds}
           />
         </div>
       </Card>
