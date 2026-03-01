@@ -7,6 +7,8 @@ import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsIn
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import { DeliveryTimeline } from '../../_components/DeliveryTimeline';
 import { BroadcastDetail } from '../../_components/BroadcastDetail';
+import { KpiDashboard } from './KpiDashboard';
+import { KpiTab } from './KpiTab';
 import type {
   FunnelData,
   BroadcastMetric,
@@ -26,7 +28,9 @@ interface LaunchDetailClientProps {
 // ------- Tabs -------
 
 const TABS = [
-  { id: 'overview', label: '概要' },
+  { id: 'kpi', label: 'KPI' },
+  { id: 'kpi-settings', label: 'KPI設定' },
+  { id: 'line-delivery', label: 'LINE配信' },
   { id: 'analysis', label: '配信分析' },
 ] as const;
 
@@ -210,8 +214,9 @@ export function LaunchDetailClient({
   broadcastMetrics,
   tagMetrics,
 }: LaunchDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>('kpi');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [inlineExpandedIds, setInlineExpandedIds] = useState<Set<string>>(new Set());
 
   // Match deliveries with metrics
   const deliveriesWithMetrics = useMemo(
@@ -317,17 +322,71 @@ export function LaunchDetailClient({
   }, [channelFilteredDeliveries]);
 
   const handleDeliveryClick = useCallback((d: DeliveryWithMetrics) => {
-    setExpandedId((prev) => (prev === d.id ? null : d.id));
-  }, []);
+    if (activeTab === 'line-delivery') {
+      // LINE配信タブ: クリックでチャートストリップの展開/閉じ
+      setInlineExpandedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(d.id)) {
+          next.delete(d.id);
+        } else {
+          next.add(d.id);
+        }
+        return next;
+      });
+    } else {
+      setExpandedId((prev) => (prev === d.id ? null : d.id));
+    }
+  }, [activeTab]);
 
   const handleDeliveryDoubleClick = useCallback((d: DeliveryWithMetrics) => {
-    setExpandedId(d.id);
-    setActiveTab('analysis');
-  }, []);
+    // 配信分析タブに遷移（LINE配信タブではクリックで展開するのでダブルクリックは不要）
+    if (activeTab !== 'line-delivery') {
+      setExpandedId(d.id);
+      setActiveTab('analysis');
+    }
+  }, [activeTab]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
+
+  // Channel filter sub-component to avoid duplication
+  const channelFilter = availableChannels.size > 1 ? (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-[color:var(--color-text-muted)]">チャネル:</span>
+      <div className="flex flex-wrap gap-1.5">
+        {Array.from(availableChannels.entries())
+          .sort(([a], [b]) => {
+            const order = ['line', 'threads', 'instagram'];
+            return order.indexOf(a) - order.indexOf(b);
+          })
+          .map(([ch, count]) => {
+            const config = CHANNEL_CONFIG[ch] || CHANNEL_CONFIG.line;
+            const isSelected = selectedChannels.has(ch);
+            return (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => toggleChannel(ch)}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all"
+                style={{
+                  color: isSelected ? config.color : 'var(--color-text-muted)',
+                  backgroundColor: isSelected ? config.bg : 'transparent',
+                  border: `1.5px solid ${isSelected ? config.border : 'var(--color-border)'}`,
+                  opacity: isSelected ? 1 : 0.6,
+                }}
+              >
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: isSelected ? config.color : 'var(--color-text-muted)' }}
+                />
+                {config.label} ({count})
+              </button>
+            );
+          })}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="launch-detail-wide flex flex-col gap-5 md:gap-6">
@@ -348,140 +407,9 @@ export function LaunchDetailClient({
             {formatDate(funnel.startDate)} - {formatDate(funnel.endDate)}
           </span>
         </div>
-        {funnel.description && (
-          <p className="text-sm text-[color:var(--color-text-secondary)] line-clamp-2">
-            {funnel.description}
-          </p>
-        )}
       </div>
 
-      {/* Summary stats - 5 columns on desktop */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <div className={dashboardCardClass}>
-          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">配信数</p>
-          <p className="mt-1 text-2xl font-bold">{stats.total}</p>
-          <p className="text-xs text-[color:var(--color-text-muted)]">
-            {stats.withMetrics} 件計測済み
-          </p>
-        </div>
-        <div className={dashboardCardClass}>
-          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-            配信数 (初回→最終)
-          </p>
-          <p className="mt-1 text-2xl font-bold">
-            {stats.firstDeliveryCount > 0
-              ? `${numberFormatter.format(stats.firstDeliveryCount)}→${numberFormatter.format(stats.lastDeliveryCount)}`
-              : '-'}
-          </p>
-          <p className="text-xs text-[color:var(--color-text-muted)]">
-            {stats.firstDeliveryCount > 0 && stats.lastDeliveryCount !== stats.firstDeliveryCount
-              ? `${stats.lastDeliveryCount > stats.firstDeliveryCount ? '+' : ''}${numberFormatter.format(stats.lastDeliveryCount - stats.firstDeliveryCount)}人`
-              : '計測データなし'}
-          </p>
-        </div>
-        <div className={dashboardCardClass}>
-          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-            平均開封率
-          </p>
-          <p
-            className="mt-1 text-2xl font-bold"
-            style={{
-              color: stats.avgOpenRate > 0 ? getOpenRateColor(stats.avgOpenRate) : undefined,
-            }}
-          >
-            {stats.avgOpenRate > 0
-              ? `${percentFormatter.format(stats.avgOpenRate)}%`
-              : '-'}
-          </p>
-          <p className="text-xs text-[color:var(--color-text-muted)]">
-            {stats.withMetrics > 0 ? `${stats.withMetrics}件の平均` : '計測データなし'}
-          </p>
-        </div>
-        <div className={dashboardCardClass}>
-          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-            平均クリック率
-          </p>
-          <p
-            className="mt-1 text-2xl font-bold"
-            style={{
-              color: stats.avgClickRate > 0 ? '#2563EB' : undefined,
-            }}
-          >
-            {stats.avgClickRate > 0
-              ? `${percentFormatter.format(stats.avgClickRate)}%`
-              : '-'}
-          </p>
-          <p className="text-xs text-[color:var(--color-text-muted)]">
-            {stats.withClick > 0 ? `${stats.withClick}件の平均` : 'CTA配信なし'}
-          </p>
-        </div>
-        <div className={dashboardCardClass}>
-          <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
-            セグメント数
-          </p>
-          <p className="mt-1 text-2xl font-bold">{funnel.segments.length}</p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {funnel.segments.slice(0, 4).map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex items-center rounded px-1 text-[10px] font-medium leading-4"
-                style={{
-                  color: s.color,
-                  backgroundColor: `${s.color}18`,
-                  border: `1px solid ${s.color}40`,
-                }}
-              >
-                {s.name}
-              </span>
-            ))}
-            {funnel.segments.length > 4 && (
-              <span className="text-xs text-[color:var(--color-text-muted)]">
-                +{funnel.segments.length - 4}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Channel filter toggle */}
-      {availableChannels.size > 1 && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-[color:var(--color-text-muted)]">チャネル:</span>
-          <div className="flex flex-wrap gap-1.5">
-            {Array.from(availableChannels.entries())
-              .sort(([a], [b]) => {
-                const order = ['line', 'threads', 'instagram'];
-                return order.indexOf(a) - order.indexOf(b);
-              })
-              .map(([ch, count]) => {
-                const config = CHANNEL_CONFIG[ch] || CHANNEL_CONFIG.line;
-                const isSelected = selectedChannels.has(ch);
-                return (
-                  <button
-                    key={ch}
-                    type="button"
-                    onClick={() => toggleChannel(ch)}
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all"
-                    style={{
-                      color: isSelected ? config.color : 'var(--color-text-muted)',
-                      backgroundColor: isSelected ? config.bg : 'transparent',
-                      border: `1.5px solid ${isSelected ? config.border : 'var(--color-border)'}`,
-                      opacity: isSelected ? 1 : 0.6,
-                    }}
-                  >
-                    <span
-                      className="inline-block h-2 w-2 rounded-full"
-                      style={{ backgroundColor: isSelected ? config.color : 'var(--color-text-muted)' }}
-                    />
-                    {config.label} ({count})
-                  </button>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
+      {/* Tabs - directly below header */}
       <DashboardTabsInteractive
         items={[...TABS]}
         value={activeTab}
@@ -490,25 +418,126 @@ export function LaunchDetailClient({
       />
 
       {/* Tab content */}
-      {activeTab === 'overview' && (
-        <OverviewTab
-          deliveries={channelFilteredDeliveries}
-          segments={channelFilteredSegments}
-          startDate={funnel.startDate}
-          endDate={funnel.endDate}
-          onDeliveryClick={handleDeliveryClick}
-          onDeliveryDoubleClick={handleDeliveryDoubleClick}
-          selectedDeliveryId={expandedId}
-        />
+      {activeTab === 'kpi' && <KpiDashboard funnelId={funnel.id} startDate={funnel.startDate} endDate={funnel.endDate} baseDate={funnel.baseDate} />}
+      {activeTab === 'kpi-settings' && <KpiTab funnelId={funnel.id} />}
+      {activeTab === 'line-delivery' && (
+        <>
+          {/* Summary stats - 5 columns on desktop */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <div className={dashboardCardClass}>
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">配信数</p>
+              <p className="mt-1 text-2xl font-bold">{stats.total}</p>
+              <p className="text-xs text-[color:var(--color-text-muted)]">
+                {stats.withMetrics} 件計測済み
+              </p>
+            </div>
+            <div className={dashboardCardClass}>
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                配信数 (初回→最終)
+              </p>
+              <p className="mt-1 text-2xl font-bold">
+                {stats.firstDeliveryCount > 0
+                  ? `${numberFormatter.format(stats.firstDeliveryCount)}→${numberFormatter.format(stats.lastDeliveryCount)}`
+                  : '-'}
+              </p>
+              <p className="text-xs text-[color:var(--color-text-muted)]">
+                {stats.firstDeliveryCount > 0 && stats.lastDeliveryCount !== stats.firstDeliveryCount
+                  ? `${stats.lastDeliveryCount > stats.firstDeliveryCount ? '+' : ''}${numberFormatter.format(stats.lastDeliveryCount - stats.firstDeliveryCount)}人`
+                  : '計測データなし'}
+              </p>
+            </div>
+            <div className={dashboardCardClass}>
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                平均開封率
+              </p>
+              <p
+                className="mt-1 text-2xl font-bold"
+                style={{
+                  color: stats.avgOpenRate > 0 ? getOpenRateColor(stats.avgOpenRate) : undefined,
+                }}
+              >
+                {stats.avgOpenRate > 0
+                  ? `${percentFormatter.format(stats.avgOpenRate)}%`
+                  : '-'}
+              </p>
+              <p className="text-xs text-[color:var(--color-text-muted)]">
+                {stats.withMetrics > 0 ? `${stats.withMetrics}件の平均` : '計測データなし'}
+              </p>
+            </div>
+            <div className={dashboardCardClass}>
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                平均クリック率
+              </p>
+              <p
+                className="mt-1 text-2xl font-bold"
+                style={{
+                  color: stats.avgClickRate > 0 ? '#2563EB' : undefined,
+                }}
+              >
+                {stats.avgClickRate > 0
+                  ? `${percentFormatter.format(stats.avgClickRate)}%`
+                  : '-'}
+              </p>
+              <p className="text-xs text-[color:var(--color-text-muted)]">
+                {stats.withClick > 0 ? `${stats.withClick}件の平均` : 'CTA配信なし'}
+              </p>
+            </div>
+            <div className={dashboardCardClass}>
+              <p className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                セグメント数
+              </p>
+              <p className="mt-1 text-2xl font-bold">{funnel.segments.length}</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {funnel.segments.slice(0, 4).map((s) => (
+                  <span
+                    key={s.id}
+                    className="inline-flex items-center rounded px-1 text-[10px] font-medium leading-4"
+                    style={{
+                      color: s.color,
+                      backgroundColor: `${s.color}18`,
+                      border: `1px solid ${s.color}40`,
+                    }}
+                  >
+                    {s.name}
+                  </span>
+                ))}
+                {funnel.segments.length > 4 && (
+                  <span className="text-xs text-[color:var(--color-text-muted)]">
+                    +{funnel.segments.length - 4}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Channel filter */}
+          {channelFilter}
+
+          <OverviewTab
+            deliveries={channelFilteredDeliveries}
+            segments={channelFilteredSegments}
+            startDate={funnel.startDate}
+            endDate={funnel.endDate}
+            onDeliveryClick={handleDeliveryClick}
+            onDeliveryDoubleClick={handleDeliveryDoubleClick}
+            selectedDeliveryId={expandedId}
+            inlineExpandedIds={inlineExpandedIds}
+          />
+        </>
       )}
       {activeTab === 'analysis' && (
-        <AnalysisTab
-          deliveries={channelFilteredDeliveries}
-          segments={channelFilteredSegments}
-          segmentMap={segmentMap}
-          expandedId={expandedId}
-          onToggle={toggleExpand}
-        />
+        <>
+          {/* Channel filter */}
+          {channelFilter}
+
+          <AnalysisTab
+            deliveries={channelFilteredDeliveries}
+            segments={channelFilteredSegments}
+            segmentMap={segmentMap}
+            expandedId={expandedId}
+            onToggle={toggleExpand}
+          />
+        </>
       )}
     </div>
   );
@@ -524,6 +553,7 @@ function OverviewTab({
   onDeliveryClick,
   onDeliveryDoubleClick,
   selectedDeliveryId,
+  inlineExpandedIds,
 }: {
   deliveries: DeliveryWithMetrics[];
   segments: Segment[];
@@ -532,6 +562,7 @@ function OverviewTab({
   onDeliveryClick: (d: DeliveryWithMetrics) => void;
   onDeliveryDoubleClick: (d: DeliveryWithMetrics) => void;
   selectedDeliveryId: string | null;
+  inlineExpandedIds?: Set<string>;
 }) {
   return (
     <>
@@ -548,6 +579,7 @@ function OverviewTab({
             onDeliveryClick={onDeliveryClick}
             onDeliveryDoubleClick={onDeliveryDoubleClick}
             selectedDeliveryId={selectedDeliveryId}
+            inlineExpandedIds={inlineExpandedIds}
           />
         </div>
       </Card>

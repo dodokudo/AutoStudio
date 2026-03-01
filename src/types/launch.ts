@@ -120,3 +120,57 @@ export interface DeliveryWithMetrics extends DeliveryItem {
   timeSeries?: BroadcastMetric[];
   clickCount?: number;  // タグの友だち人数 = クリック数
 }
+
+/* ---------- Launch KPI ---------- */
+
+export interface InflowChannel {
+  target: number;
+  actual: number;
+}
+
+export interface SeminarDay {
+  date: string;
+  recruitTarget: number;
+  recruitActual: number;
+  attendTarget: number;
+  attendActual: number;
+  purchaseTarget: number;
+  purchaseCount: number;
+}
+
+export interface DailyMetric {
+  date: string;
+  lineRegistrations?: number;
+  benefitReceivers?: number;
+  seminarApplications?: number;
+  seminarAttendees?: number;
+  frontendPurchases?: number;
+  backendPurchases?: number;
+}
+
+export interface LaunchKpi {
+  kgi: { target: number; unitPrice: number };
+  inflow: {
+    threads: InflowChannel;
+    instagram: InflowChannel;
+    ads: InflowChannel & { budget: number };
+  };
+  lineRegistration: {
+    existing: number;
+    newTarget: number;
+    newActual: number;
+  };
+  benefitReceivers: { target: number; actual: number };
+  seminarApplications: {
+    target: number;
+    actual: number;
+    existingTarget?: number;
+    existingActual?: number;
+    newTarget?: number;
+    newActual?: number;
+  };
+  seminarDays: SeminarDay[];
+  frontend: { unitPrice: number; target: number; actual: number };
+  backend: { unitPrice: number; isVariable: boolean; target: number; actual: number; revenue: number };
+  dailyMetrics?: DailyMetric[];
+}

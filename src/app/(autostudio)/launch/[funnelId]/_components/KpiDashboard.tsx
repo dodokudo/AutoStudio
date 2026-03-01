@@ -1,0 +1,853 @@
+'use client';
+
+import { useMemo } from 'react';
+import useSWR from 'swr';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  ReferenceLine,
+} from 'recharts';
+import { dashboardCardClass } from '@/components/dashboard/styles';
+import type { LaunchKpi } from '@/types/launch';
+
+// ------- Props -------
+
+interface KpiDashboardProps {
+  funnelId: string;
+  startDate?: string;
+  endDate?: string;
+  baseDate?: string;
+}
+
+// ------- Fetcher -------
+
+const fetcher = async (url: string): Promise<{ kpi: LaunchKpi; isDefault: boolean }> => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(await res.text());
+  const json = await res.json();
+  return { kpi: json.kpi as LaunchKpi, isDefault: json.isDefault as boolean };
+};
+
+// ------- Formatters -------
+
+const numFmt = new Intl.NumberFormat('ja-JP');
+const pctFmt = new Intl.NumberFormat('ja-JP', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+function yen(v: number): string {
+  return `¥${numFmt.format(v)}`;
+}
+
+function pct(v: number): string {
+  return `${pctFmt.format(v)}%`;
+}
+
+function safeDivide(a: number, b: number): number {
+  return b === 0 ? 0 : a / b;
+}
+
+// ------- Defaults -------
+
+function defaultKpi(): LaunchKpi {
+  return {
+    kgi: { target: 0, unitPrice: 0 },
+    inflow: {
+      threads: { target: 0, actual: 0 },
+      instagram: { target: 0, actual: 0 },
+      ads: { target: 0, actual: 0, budget: 0 },
+    },
+    lineRegistration: { existing: 0, newTarget: 0, newActual: 0 },
+    benefitReceivers: { target: 0, actual: 0 },
+    seminarApplications: { target: 0, actual: 0, existingTarget: 0, existingActual: 0, newTarget: 0, newActual: 0 },
+    seminarDays: [],
+    frontend: { unitPrice: 0, target: 0, actual: 0 },
+    backend: { unitPrice: 0, isVariable: false, target: 0, actual: 0, revenue: 0 },
+  };
+}
+
+// ------- Color helpers -------
+
+function progressColor(rate: number): string {
+  if (rate >= 80) return '#16A34A';
+  if (rate >= 50) return '#CA8A04';
+  return '#DC2626';
+}
+
+function progressBg(rate: number): string {
+  if (rate >= 80) return 'rgba(22,163,74,0.15)';
+  if (rate >= 50) return 'rgba(202,138,4,0.15)';
+  return 'rgba(220,38,38,0.15)';
+}
+
+// ------- Chart colors -------
+
+const CHART_COLORS = {
+  lineRegistrations: '#6366F1',
+  benefitReceivers: '#8B5CF6',
+  seminarApplications: '#F59E0B',
+  seminarAttendees: '#10B981',
+  frontendPurchases: '#3B82F6',
+  backendPurchases: '#EF4444',
+} as const;
+
+// ------- Funnel step row type -------
+
+interface FunnelRow {
+  label: string;
+  target: number;
+  actual: number;
+  prevTarget: number;
+  prevActual: number;
+  revenue?: number;
+  sub?: string; // sub-label like 既存/新規
+}
+
+// ------- Helper: generate date range -------
+
+function generateDateRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const d = new Date(start);
+  const endD = new Date(end);
+  while (d <= endD) {
+    dates.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
+function shortDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-');
+  return `${Number(m)}/${Number(d)}`;
+}
+
+// ------- Component -------
+
+export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDashboardProps) {
+  const { data, error, isLoading } = useSWR(
+    `/api/launch/kpi/${funnelId}`,
+    fetcher,
+  );
+
+  const kpi = data?.kpi ?? defaultKpi();
+  const isDefault = data?.isDefault ?? false;
+
+  const computed = useMemo(() => {
+    const totalNewLineTarget =
+      kpi.inflow.threads.target + kpi.inflow.instagram.target + kpi.inflow.ads.target;
+    const totalNewLine =
+      kpi.inflow.threads.actual + kpi.inflow.instagram.actual + kpi.inflow.ads.actual;
+    const totalLineRegTarget = totalNewLineTarget + kpi.lineRegistration.existing;
+    const totalLineReg = totalNewLine + kpi.lineRegistration.existing;
+
+    const seminarAttendTarget = kpi.seminarDays.reduce((sum, d) => sum + d.attendTarget, 0);
+    const seminarAttendActual = kpi.seminarDays.reduce((sum, d) => sum + d.attendActual, 0);
+
+    const frontendRevenue = kpi.frontend.unitPrice * kpi.frontend.actual;
+    const backendRevenue = kpi.backend.revenue || kpi.backend.unitPrice * kpi.backend.actual;
+    const totalRevenue = frontendRevenue + backendRevenue;
+    const achievementRate = safeDivide(totalRevenue, kpi.kgi.target) * 100;
+
+    // Build funnel rows
+    const rows: FunnelRow[] = [
+      {
+        label: 'LINE登録',
+        target: totalLineRegTarget,
+        actual: totalLineReg,
+        prevTarget: 0,
+        prevActual: 0,
+        sub: `既存 ${numFmt.format(kpi.lineRegistration.existing)} / 新規目標 ${numFmt.format(totalNewLineTarget)}`,
+      },
+      {
+        label: '特典受取',
+        target: kpi.benefitReceivers.target,
+        actual: kpi.benefitReceivers.actual,
+        prevTarget: totalLineRegTarget,
+        prevActual: totalLineReg,
+      },
+      {
+        label: 'セミナー申込',
+        target: kpi.seminarApplications.target,
+        actual: kpi.seminarApplications.actual,
+        prevTarget: kpi.benefitReceivers.target,
+        prevActual: kpi.benefitReceivers.actual,
+        sub: `既存 ${numFmt.format(kpi.seminarApplications.existingActual ?? 0)}/${numFmt.format(kpi.seminarApplications.existingTarget ?? 0)} / 新規 ${numFmt.format(kpi.seminarApplications.newActual ?? 0)}/${numFmt.format(kpi.seminarApplications.newTarget ?? 0)}`,
+      },
+      {
+        label: 'セミナー参加',
+        target: seminarAttendTarget,
+        actual: seminarAttendActual,
+        prevTarget: kpi.seminarApplications.target,
+        prevActual: kpi.seminarApplications.actual,
+      },
+      {
+        label: 'フロント購入',
+        target: kpi.frontend.target,
+        actual: kpi.frontend.actual,
+        prevTarget: seminarAttendTarget,
+        prevActual: seminarAttendActual,
+        revenue: frontendRevenue,
+      },
+      {
+        label: 'バックエンド購入',
+        target: kpi.backend.target,
+        actual: kpi.backend.actual,
+        prevTarget: kpi.frontend.target,
+        prevActual: kpi.frontend.actual,
+        revenue: backendRevenue,
+      },
+    ];
+
+    // Compute target revenues
+    const frontendTargetRevenue = kpi.frontend.unitPrice * kpi.frontend.target;
+    const backendTargetRevenue = kpi.backend.isVariable ? 0 : kpi.backend.unitPrice * kpi.backend.target;
+    const totalTargetRevenue = frontendTargetRevenue + backendTargetRevenue;
+
+    // Build chart data from dailyMetrics
+    const dailyMetrics = kpi.dailyMetrics ?? [];
+    const metricsMap = new Map(dailyMetrics.map(m => [m.date, m]));
+
+    // Chart date range: use baseDate as start if available, last seminar day as end
+    const lastSeminarDate = kpi.seminarDays.length > 0
+      ? kpi.seminarDays.reduce((latest, d) => d.date > latest ? d.date : latest, kpi.seminarDays[0].date)
+      : null;
+    const chartStart = baseDate || startDate;
+    const chartEnd = lastSeminarDate || endDate;
+
+    let chartData: Array<{
+      date: string;
+      label: string;
+      lineRegistrations: number;
+      benefitReceivers: number;
+      seminarApplications: number;
+      seminarAttendees: number;
+      frontendPurchases: number;
+      backendPurchases: number;
+    }> = [];
+
+    if (chartStart && chartEnd) {
+      const dates = generateDateRange(chartStart, chartEnd);
+      let cumLine = 0, cumBenefit = 0, cumSemApp = 0, cumSemAtt = 0, cumFe = 0, cumBe = 0;
+
+      chartData = dates.map(date => {
+        const m = metricsMap.get(date);
+        if (m) {
+          cumLine += m.lineRegistrations ?? 0;
+          cumBenefit += m.benefitReceivers ?? 0;
+          cumSemApp += m.seminarApplications ?? 0;
+          cumSemAtt += m.seminarAttendees ?? 0;
+          cumFe += m.frontendPurchases ?? 0;
+          cumBe += m.backendPurchases ?? 0;
+        }
+        return {
+          date,
+          label: shortDate(date),
+          lineRegistrations: cumLine,
+          benefitReceivers: cumBenefit,
+          seminarApplications: cumSemApp,
+          seminarAttendees: cumSemAtt,
+          frontendPurchases: cumFe,
+          backendPurchases: cumBe,
+        };
+      });
+    }
+
+    const hasChartData = dailyMetrics.length > 0;
+
+    return {
+      totalRevenue,
+      frontendRevenue,
+      backendRevenue,
+      frontendTargetRevenue,
+      backendTargetRevenue,
+      totalTargetRevenue,
+      achievementRate,
+      rows,
+      chartData,
+      hasChartData,
+      totalLineRegTarget,
+      seminarAttendTarget,
+    };
+  }, [kpi, startDate, endDate, baseDate]);
+
+  // ------- Loading / Error -------
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-[color:var(--color-text-muted)]">
+        KPIデータを読み込み中...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-20 text-sm text-red-500">
+        データ取得に失敗しました
+      </div>
+    );
+  }
+
+  // ------- Render -------
+
+  return (
+    <div className="flex flex-col gap-6">
+      {isDefault && (
+        <div className="rounded-lg border border-[color:var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[color:var(--color-text-secondary)]">
+          KPIが未設定です。KPI設定タブから入力してください。
+        </div>
+      )}
+
+      {/* KGI Summary */}
+      <div className={dashboardCardClass}>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <div>
+            <p className="text-xs font-medium text-[color:var(--color-text-muted)]">売上目標 (KGI)</p>
+            <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+              {yen(kpi.kgi.target)}
+            </p>
+            {computed.totalTargetRevenue > 0 && computed.totalTargetRevenue !== kpi.kgi.target && (
+              <p className="text-[10px] text-[color:var(--color-text-muted)]">
+                FE+BE目標: {yen(computed.totalTargetRevenue)}
+              </p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-[color:var(--color-text-muted)]">実績売上</p>
+            <p className="mt-1 text-2xl font-bold text-[color:var(--color-accent)]">
+              {yen(computed.totalRevenue)}
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-[var(--color-surface-muted)]">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(computed.achievementRate, 100)}%`,
+                    backgroundColor: progressColor(computed.achievementRate),
+                  }}
+                />
+              </div>
+              <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">
+                {pct(computed.achievementRate)}
+              </span>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-[color:var(--color-text-muted)]">FE目標売上</p>
+            <p className="mt-1 text-lg font-bold text-[color:var(--color-text-secondary)]">
+              {yen(computed.frontendTargetRevenue)}
+            </p>
+            <p className="text-[10px] text-[color:var(--color-text-muted)]">
+              {kpi.frontend.unitPrice > 0 ? `${yen(kpi.frontend.unitPrice)} x ${kpi.frontend.target}人` : ''}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[color:var(--color-text-muted)]">FE実績売上</p>
+            <p className="mt-1 text-lg font-bold text-[color:var(--color-text-primary)]">
+              {yen(computed.frontendRevenue)}
+            </p>
+            <p className="text-[10px] text-[color:var(--color-text-muted)]">
+              {kpi.frontend.unitPrice > 0 ? `${yen(kpi.frontend.unitPrice)} x ${kpi.frontend.actual}人` : ''}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[color:var(--color-text-muted)]">BE目標売上</p>
+            <p className="mt-1 text-lg font-bold text-[color:var(--color-text-secondary)]">
+              {yen(computed.backendTargetRevenue)}
+            </p>
+            <p className="text-[10px] text-[color:var(--color-text-muted)]">
+              {kpi.backend.unitPrice > 0 ? `${yen(kpi.backend.unitPrice)} x ${kpi.backend.target}人` : ''}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[color:var(--color-text-muted)]">BE実績売上</p>
+            <p className="mt-1 text-lg font-bold text-[color:var(--color-text-primary)]">
+              {yen(computed.backendRevenue)}
+            </p>
+            <p className="text-[10px] text-[color:var(--color-text-muted)]">
+              {kpi.backend.unitPrice > 0 ? `${yen(kpi.backend.unitPrice)} x ${kpi.backend.actual}人` : ''}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Funnel step cards */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+        {computed.rows.map((row) => {
+          const achieveRate = safeDivide(row.actual, row.target) * 100;
+          const remaining = Math.max(row.target - row.actual, 0);
+          const achieved = row.target > 0 && row.actual >= row.target;
+
+          return (
+            <div key={row.label} className={dashboardCardClass}>
+              <p className="text-xs font-semibold text-[color:var(--color-text-primary)]">{row.label}</p>
+              {row.target > 0 && (
+                <p className="mt-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                  目標 {numFmt.format(row.target)}人
+                </p>
+              )}
+              <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                {numFmt.format(row.actual)}<span className="text-sm font-normal">人</span>
+              </p>
+              {row.target > 0 && (
+                <>
+                  <p className="mt-0.5 text-[10px] text-[color:var(--color-text-secondary)]">
+                    {achieved
+                      ? <span className="font-semibold text-[#16A34A]">達成</span>
+                      : `残り ${numFmt.format(remaining)}人`}
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ backgroundColor: progressBg(achieveRate) }}>
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(achieveRate, 100)}%`,
+                          backgroundColor: progressColor(achieveRate),
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="shrink-0 text-[10px] font-bold"
+                      style={{ color: progressColor(achieveRate) }}
+                    >
+                      {pct(achieveRate)}
+                    </span>
+                  </div>
+                </>
+              )}
+              {row.sub && (
+                <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">{row.sub}</p>
+              )}
+              {row.revenue !== undefined && row.revenue > 0 && (
+                <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                  売上 {yen(row.revenue)}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Funnel Progress Table */}
+      <div className={dashboardCardClass}>
+        <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">ファネル進捗</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[color:var(--color-border)] text-xs text-[color:var(--color-text-muted)]">
+                <th className="pb-3 pr-4 text-left font-medium">#</th>
+                <th className="pb-3 pr-4 text-left font-medium">ステップ</th>
+                <th className="pb-3 pr-4 text-right font-medium">目標</th>
+                <th className="pb-3 pr-4 text-right font-medium">実績</th>
+                <th className="pb-3 pr-4 text-right font-medium">残り</th>
+                <th className="pb-3 pr-4 text-right font-medium">目標移行率</th>
+                <th className="pb-3 pr-4 text-right font-medium">実績移行率</th>
+                <th className="pb-3 pr-4 text-right font-medium">達成率</th>
+                <th className="pb-3 text-left font-medium" style={{ minWidth: 100 }}>進捗</th>
+              </tr>
+            </thead>
+            <tbody>
+              {computed.rows.map((row, i) => {
+                const achieveRate = safeDivide(row.actual, row.target) * 100;
+                const targetConvRate = i === 0 ? null : safeDivide(row.target, row.prevTarget) * 100;
+                const actualConvRate = i === 0 ? null : safeDivide(row.actual, row.prevActual) * 100;
+                const remaining = Math.max(row.target - row.actual, 0);
+                const achieved = row.target > 0 && row.actual >= row.target;
+
+                return (
+                  <tr
+                    key={row.label}
+                    className="border-b border-[color:var(--color-border)] last:border-0"
+                  >
+                    <td className="py-3 pr-4 text-xs text-[color:var(--color-text-muted)]">{i}</td>
+                    <td className="py-3 pr-4 text-[color:var(--color-text-primary)]">
+                      <span className="font-medium">{row.label}</span>
+                      {row.sub && (
+                        <span className="ml-2 text-[10px] text-[color:var(--color-text-muted)]">
+                          ({row.sub})
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                      {row.target > 0 ? numFmt.format(row.target) : '-'}
+                    </td>
+                    <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
+                      {numFmt.format(row.actual)}
+                    </td>
+                    <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                      {row.target > 0
+                        ? achieved
+                          ? <span className="font-medium text-[#16A34A]">達成</span>
+                          : numFmt.format(remaining)
+                        : '-'}
+                    </td>
+                    <td className="py-3 pr-4 text-right">
+                      {targetConvRate === null ? (
+                        <span className="text-[color:var(--color-text-muted)]">-</span>
+                      ) : row.prevTarget === 0 ? (
+                        <span className="text-[color:var(--color-text-muted)]">-</span>
+                      ) : (
+                        <span className="text-[color:var(--color-text-secondary)]">
+                          {pct(targetConvRate)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-4 text-right">
+                      {actualConvRate === null ? (
+                        <span className="text-[color:var(--color-text-muted)]">-</span>
+                      ) : row.prevActual === 0 ? (
+                        <span className="text-[color:var(--color-text-muted)]">0.0%</span>
+                      ) : (
+                        <span
+                          className="font-semibold"
+                          style={{ color: progressColor(actualConvRate) }}
+                        >
+                          {pct(actualConvRate)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-4 text-right">
+                      {row.target === 0 ? (
+                        <span className="text-[color:var(--color-text-muted)]">-</span>
+                      ) : (
+                        <span
+                          className="font-semibold"
+                          style={{ color: progressColor(achieveRate) }}
+                        >
+                          {pct(achieveRate)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3">
+                      {row.target > 0 && (
+                        <div className="h-2.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: progressBg(achieveRate) }}>
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(achieveRate, 100)}%`,
+                              backgroundColor: progressColor(achieveRate),
+                            }}
+                          />
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Time-series Chart */}
+      {startDate && endDate && (
+        <div className={dashboardCardClass}>
+          <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">
+            ローンチ推移（累積）
+          </p>
+          {computed.hasChartData ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart data={computed.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 11 }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+                {/* Target reference lines */}
+                {computed.totalLineRegTarget > 0 && (
+                  <ReferenceLine
+                    y={computed.totalLineRegTarget}
+                    stroke={CHART_COLORS.lineRegistrations}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.4}
+                  />
+                )}
+                {kpi.seminarApplications.target > 0 && (
+                  <ReferenceLine
+                    y={kpi.seminarApplications.target}
+                    stroke={CHART_COLORS.seminarApplications}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.4}
+                  />
+                )}
+                {kpi.frontend.target > 0 && (
+                  <ReferenceLine
+                    y={kpi.frontend.target}
+                    stroke={CHART_COLORS.frontendPurchases}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.4}
+                  />
+                )}
+                <Line
+                  type="monotone"
+                  dataKey="lineRegistrations"
+                  name="LINE登録"
+                  stroke={CHART_COLORS.lineRegistrations}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="benefitReceivers"
+                  name="特典受取"
+                  stroke={CHART_COLORS.benefitReceivers}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="seminarApplications"
+                  name="セミナー申込"
+                  stroke={CHART_COLORS.seminarApplications}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="seminarAttendees"
+                  name="セミナー参加"
+                  stroke={CHART_COLORS.seminarAttendees}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="frontendPurchases"
+                  name="FE購入"
+                  stroke={CHART_COLORS.frontendPurchases}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="backendPurchases"
+                  name="BE購入"
+                  stroke={CHART_COLORS.backendPurchases}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="mb-3 rounded-full bg-[var(--color-surface-muted)] p-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-[color:var(--color-text-muted)]">
+                  <path d="M3 3v18h18M7 16l4-4 4 4 4-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p className="text-sm text-[color:var(--color-text-muted)]">日別データが未入力です</p>
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                KPI設定タブの日別メトリクスを入力するとグラフが表示されます
+              </p>
+              {/* Show chart skeleton with just target reference lines */}
+              <div className="mt-4 w-full">
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={computed.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
+                      tickLine={false}
+                      interval={1}
+                    />
+                    <YAxis hide />
+                    {computed.totalLineRegTarget > 0 && (
+                      <ReferenceLine
+                        y={computed.totalLineRegTarget}
+                        stroke={CHART_COLORS.lineRegistrations}
+                        strokeDasharray="4 4"
+                        strokeOpacity={0.3}
+                        label={{ value: `LINE ${numFmt.format(computed.totalLineRegTarget)}`, fontSize: 10, fill: CHART_COLORS.lineRegistrations }}
+                      />
+                    )}
+                    {kpi.seminarApplications.target > 0 && (
+                      <ReferenceLine
+                        y={kpi.seminarApplications.target}
+                        stroke={CHART_COLORS.seminarApplications}
+                        strokeDasharray="4 4"
+                        strokeOpacity={0.3}
+                        label={{ value: `申込 ${numFmt.format(kpi.seminarApplications.target)}`, fontSize: 10, fill: CHART_COLORS.seminarApplications }}
+                      />
+                    )}
+                    {kpi.frontend.target > 0 && (
+                      <ReferenceLine
+                        y={kpi.frontend.target}
+                        stroke={CHART_COLORS.frontendPurchases}
+                        strokeDasharray="4 4"
+                        strokeOpacity={0.3}
+                        label={{ value: `FE ${numFmt.format(kpi.frontend.target)}`, fontSize: 10, fill: CHART_COLORS.frontendPurchases }}
+                      />
+                    )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Seminar Daily Breakdown */}
+      {kpi.seminarDays.length > 0 && (
+        <div className={dashboardCardClass}>
+          <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">セミナー日別</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[color:var(--color-border)] text-xs text-[color:var(--color-text-muted)]">
+                  <th className="pb-3 pr-4 text-left font-medium">日付</th>
+                  <th className="pb-3 pr-4 text-right font-medium">集客目標</th>
+                  <th className="pb-3 pr-4 text-right font-medium">集客実績</th>
+                  <th className="pb-3 pr-4 text-right font-medium">集客率</th>
+                  <th className="pb-3 pr-4 text-right font-medium">参加目標</th>
+                  <th className="pb-3 pr-4 text-right font-medium">参加実績</th>
+                  <th className="pb-3 pr-4 text-right font-medium">参加率</th>
+                  <th className="pb-3 pr-4 text-right font-medium">購入目標</th>
+                  <th className="pb-3 pr-4 text-right font-medium">購入数</th>
+                  <th className="pb-3 text-right font-medium">購入率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kpi.seminarDays.map((day) => {
+                  const recruitRate = safeDivide(day.recruitActual ?? 0, day.recruitTarget) * 100;
+                  const attendRate = safeDivide(day.attendActual, day.attendTarget) * 100;
+                  const purchaseRate = safeDivide(day.purchaseCount, day.purchaseTarget ?? 0) * 100;
+                  return (
+                    <tr
+                      key={day.date}
+                      className="border-b border-[color:var(--color-border)] last:border-0"
+                    >
+                      <td className="py-3 pr-4 font-medium text-[color:var(--color-text-primary)]">
+                        {day.date}
+                      </td>
+                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(day.recruitTarget)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
+                        {numFmt.format(day.recruitActual ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: day.recruitTarget === 0 ? undefined : progressColor(recruitRate) }}
+                        >
+                          {day.recruitTarget === 0 ? '-' : pct(recruitRate)}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(day.attendTarget)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
+                        {numFmt.format(day.attendActual)}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: day.attendTarget === 0 ? undefined : progressColor(attendRate) }}
+                        >
+                          {day.attendTarget === 0 ? '-' : pct(attendRate)}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(day.purchaseTarget ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
+                        {numFmt.format(day.purchaseCount)}
+                      </td>
+                      <td className="py-3 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: (day.purchaseTarget ?? 0) === 0 ? undefined : progressColor(purchaseRate) }}
+                        >
+                          {(day.purchaseTarget ?? 0) === 0 ? '-' : pct(purchaseRate)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[color:var(--color-border)] font-semibold">
+                  <td className="pt-3 pr-4 text-[color:var(--color-text-primary)]">合計</td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right">
+                    {(() => {
+                      const t = kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0);
+                      const a = kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0);
+                      const r = safeDivide(a, t) * 100;
+                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
+                    })()}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right">
+                    {(() => {
+                      const t = kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0);
+                      const a = kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0);
+                      const r = safeDivide(a, t) * 100;
+                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
+                    })()}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0))}
+                  </td>
+                  <td className="pt-3 text-right">
+                    {(() => {
+                      const t = kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0);
+                      const p = kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0);
+                      const r = safeDivide(p, t) * 100;
+                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
+                    })()}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
