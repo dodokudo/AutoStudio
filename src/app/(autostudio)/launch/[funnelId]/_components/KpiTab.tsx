@@ -45,6 +45,13 @@ function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
 }
 
+/** 目標率 / 実績率をまとめて表示 */
+function rateLabel(targetRate: number, actualRate: number): string {
+  const t = targetRate > 0 ? pct(targetRate) : '-';
+  const a = actualRate > 0 ? pct(actualRate) : '-';
+  return `目標 ${t} / 実績 ${a}`;
+}
+
 // ------- Defaults -------
 
 function defaultKpi(): LaunchKpi {
@@ -173,21 +180,34 @@ export function KpiTab({ funnelId }: KpiTabProps) {
   // ------- Computed values -------
 
   const computed = useMemo(() => {
+    // --- 流入 ---
     const totalNewLine =
       kpi.inflow.threads.actual + kpi.inflow.instagram.actual + kpi.inflow.ads.actual;
     const totalNewLineTarget =
       kpi.inflow.threads.target + kpi.inflow.instagram.target + kpi.inflow.ads.target;
     const adsCpa = safeDivide(kpi.inflow.ads.budget, kpi.inflow.ads.actual);
     const totalLineBase = totalNewLine + kpi.lineRegistration.existing;
+    const totalLineRegTarget = totalNewLineTarget + kpi.lineRegistration.existing;
+
+    // --- 動画閲覧率 ---
     const benefitRate = safeDivide(kpi.videoViewers.actual, totalLineBase) * 100;
+    const benefitTargetRate = safeDivide(kpi.videoViewers.target, totalLineRegTarget) * 100;
     const benefitRateExisting = safeDivide(kpi.videoViewers.existingActual ?? 0, kpi.lineRegistration.existing) * 100;
+    const benefitTargetRateExisting = safeDivide(kpi.videoViewers.existingTarget ?? 0, kpi.lineRegistration.existing) * 100;
     const benefitRateNew = safeDivide(kpi.videoViewers.newActual ?? 0, totalNewLine) * 100;
+    const benefitTargetRateNew = safeDivide(kpi.videoViewers.newTarget ?? 0, totalNewLineTarget) * 100;
+
+    // --- セミナー申込率 ---
     const seminarAppRate =
       safeDivide(kpi.seminarApplications.actual, kpi.videoViewers.actual) * 100;
+    const seminarAppTargetRate =
+      safeDivide(kpi.seminarApplications.target, kpi.videoViewers.target) * 100;
     const seminarAppRateExisting = safeDivide(kpi.seminarApplications.existingActual ?? 0, kpi.videoViewers.existingActual ?? 0) * 100;
+    const seminarAppTargetRateExisting = safeDivide(kpi.seminarApplications.existingTarget ?? 0, kpi.videoViewers.existingTarget ?? 0) * 100;
     const seminarAppRateNew = safeDivide(kpi.seminarApplications.newActual ?? 0, kpi.videoViewers.newActual ?? 0) * 100;
+    const seminarAppTargetRateNew = safeDivide(kpi.seminarApplications.newTarget ?? 0, kpi.videoViewers.newTarget ?? 0) * 100;
 
-    // Seminar totals
+    // --- セミナー日別 ---
     const seminarTotals = kpi.seminarDays.reduce(
       (acc, d) => ({
         recruitTarget: acc.recruitTarget + d.recruitTarget,
@@ -204,15 +224,19 @@ export function KpiTab({ funnelId }: KpiTabProps) {
     const seminarPurchaseRate =
       safeDivide(seminarTotals.purchaseCount, seminarTotals.purchaseTarget) * 100;
 
-    // Sales
+    // --- 売上 ---
     const frontendRevenue = kpi.frontend.unitPrice * kpi.frontend.actual;
     const frontendTargetRevenue = kpi.frontend.unitPrice * kpi.frontend.target;
     const frontendPurchaseRate =
       safeDivide(kpi.frontend.actual, seminarTotals.attendActual) * 100;
+    const frontendPurchaseTargetRate =
+      safeDivide(kpi.frontend.target, seminarTotals.attendTarget) * 100;
     const backendRevenue = kpi.backend.revenue || kpi.backend.unitPrice * kpi.backend.actual;
     const backendTargetRevenue = kpi.backend.isVariable ? 0 : kpi.backend.unitPrice * kpi.backend.target;
     const backendPurchaseRate =
       safeDivide(kpi.backend.actual, kpi.frontend.actual) * 100;
+    const backendPurchaseTargetRate =
+      safeDivide(kpi.backend.target, kpi.frontend.target) * 100;
     const totalRevenue = frontendRevenue + backendRevenue;
     const totalTargetRevenue = frontendTargetRevenue + backendTargetRevenue;
     const roas = safeDivide(totalRevenue, kpi.inflow.ads.budget);
@@ -220,23 +244,32 @@ export function KpiTab({ funnelId }: KpiTabProps) {
     return {
       totalNewLine,
       totalNewLineTarget,
+      totalLineRegTarget,
       adsCpa,
       totalLineBase,
       benefitRate,
+      benefitTargetRate,
       benefitRateExisting,
+      benefitTargetRateExisting,
       benefitRateNew,
+      benefitTargetRateNew,
       seminarAppRate,
+      seminarAppTargetRate,
       seminarAppRateExisting,
+      seminarAppTargetRateExisting,
       seminarAppRateNew,
+      seminarAppTargetRateNew,
       seminarTotals,
       seminarAttendRate,
       seminarPurchaseRate,
       frontendRevenue,
       frontendTargetRevenue,
       frontendPurchaseRate,
+      frontendPurchaseTargetRate,
       backendRevenue,
       backendTargetRevenue,
       backendPurchaseRate,
+      backendPurchaseTargetRate,
       totalRevenue,
       totalTargetRevenue,
       roas,
@@ -486,7 +519,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
             />
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
-                既存LINE登録者数
+                既存LINE友だち目標
               </span>
               <NumberInput
                 value={kpi.lineRegistration.existing}
@@ -524,7 +557,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                 </FieldGroup>
               </div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
-                閲覧率: {computed.benefitRateExisting > 0 ? pct(computed.benefitRateExisting) : '-'}
+                閲覧率: {rateLabel(computed.benefitTargetRateExisting, computed.benefitRateExisting)}
               </div>
             </div>
             <div>
@@ -548,7 +581,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                 </FieldGroup>
               </div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
-                閲覧率: {computed.benefitRateNew > 0 ? pct(computed.benefitRateNew) : '-'}
+                閲覧率: {rateLabel(computed.benefitTargetRateNew, computed.benefitRateNew)}
               </div>
             </div>
           </div>
@@ -565,7 +598,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
             />
             <MetricPill
               label="全体閲覧率"
-              value={computed.benefitRate > 0 ? pct(computed.benefitRate) : '-'}
+              value={rateLabel(computed.benefitTargetRate, computed.benefitRate)}
               computed
             />
           </div>
@@ -597,7 +630,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                 </FieldGroup>
               </div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
-                申込率: {computed.seminarAppRateExisting > 0 ? pct(computed.seminarAppRateExisting) : '-'}
+                申込率: {rateLabel(computed.seminarAppTargetRateExisting, computed.seminarAppRateExisting)}
               </div>
             </div>
             <div>
@@ -621,7 +654,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                 </FieldGroup>
               </div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
-                申込率: {computed.seminarAppRateNew > 0 ? pct(computed.seminarAppRateNew) : '-'}
+                申込率: {rateLabel(computed.seminarAppTargetRateNew, computed.seminarAppRateNew)}
               </div>
             </div>
           </div>
@@ -638,7 +671,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
             />
             <MetricPill
               label="全体申込率"
-              value={computed.seminarAppRate > 0 ? pct(computed.seminarAppRate) : '-'}
+              value={rateLabel(computed.seminarAppTargetRate, computed.seminarAppRate)}
               computed
             />
           </div>
@@ -846,13 +879,18 @@ export function KpiTab({ funnelId }: KpiTabProps) {
               />
             </FieldGroup>
             <FieldGroup label="売上">
-              <span className="text-sm font-semibold text-[color:var(--color-text-primary)]">
-                {yen(computed.frontendRevenue)}
-              </span>
+              <div>
+                <span className="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                  {yen(computed.frontendRevenue)}
+                </span>
+                <p className="text-[10px] text-[color:var(--color-text-muted)]">
+                  目標: {yen(computed.frontendTargetRevenue)}
+                </p>
+              </div>
             </FieldGroup>
           </div>
           <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-            購入率: {computed.frontendPurchaseRate > 0 ? pct(computed.frontendPurchaseRate) : '-'}
+            購入率: {rateLabel(computed.frontendPurchaseTargetRate, computed.frontendPurchaseRate)}
           </div>
         </StepCard>
 
@@ -895,20 +933,30 @@ export function KpiTab({ funnelId }: KpiTabProps) {
             </FieldGroup>
             <FieldGroup label="売上">
               {kpi.backend.isVariable ? (
-                <NumberInput
-                  value={kpi.backend.revenue}
-                  onChange={(v) => setField(['backend', 'revenue'], v)}
-                  prefix="¥"
-                />
+                <div>
+                  <NumberInput
+                    value={kpi.backend.revenue}
+                    onChange={(v) => setField(['backend', 'revenue'], v)}
+                    prefix="¥"
+                  />
+                  <p className="mt-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                    目標: {yen(computed.backendTargetRevenue)}
+                  </p>
+                </div>
               ) : (
-                <span className="text-sm font-semibold text-[color:var(--color-text-primary)]">
-                  {yen(kpi.backend.unitPrice * kpi.backend.actual)}
-                </span>
+                <div>
+                  <span className="text-sm font-semibold text-[color:var(--color-text-primary)]">
+                    {yen(kpi.backend.unitPrice * kpi.backend.actual)}
+                  </span>
+                  <p className="text-[10px] text-[color:var(--color-text-muted)]">
+                    目標: {yen(computed.backendTargetRevenue)}
+                  </p>
+                </div>
               )}
             </FieldGroup>
           </div>
           <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-            購入率: {computed.backendPurchaseRate > 0 ? pct(computed.backendPurchaseRate) : '-'}
+            購入率: {rateLabel(computed.backendPurchaseTargetRate, computed.backendPurchaseRate)}
           </div>
         </StepCard>
       </div>
