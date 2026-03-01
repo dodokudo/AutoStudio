@@ -114,7 +114,12 @@ export function KpiTab({ funnelId }: KpiTabProps) {
           obj = obj[path[i]];
         }
         obj[path[path.length - 1]] = value;
-        // Auto-sync seminarApplications totals from existing + new
+        // Auto-sync totals from existing + new
+        if (path[0] === 'videoViewers') {
+          const vv = next.videoViewers;
+          vv.target = (vv.existingTarget ?? 0) + (vv.newTarget ?? 0);
+          vv.actual = (vv.existingActual ?? 0) + (vv.newActual ?? 0);
+        }
         if (path[0] === 'seminarApplications') {
           const sa = next.seminarApplications;
           sa.target = (sa.existingTarget ?? 0) + (sa.newTarget ?? 0);
@@ -175,8 +180,12 @@ export function KpiTab({ funnelId }: KpiTabProps) {
     const adsCpa = safeDivide(kpi.inflow.ads.budget, kpi.inflow.ads.actual);
     const totalLineBase = totalNewLine + kpi.lineRegistration.existing;
     const benefitRate = safeDivide(kpi.videoViewers.actual, totalLineBase) * 100;
+    const benefitRateExisting = safeDivide(kpi.videoViewers.existingActual ?? 0, kpi.lineRegistration.existing) * 100;
+    const benefitRateNew = safeDivide(kpi.videoViewers.newActual ?? 0, totalNewLine) * 100;
     const seminarAppRate =
       safeDivide(kpi.seminarApplications.actual, kpi.videoViewers.actual) * 100;
+    const seminarAppRateExisting = safeDivide(kpi.seminarApplications.existingActual ?? 0, kpi.videoViewers.existingActual ?? 0) * 100;
+    const seminarAppRateNew = safeDivide(kpi.seminarApplications.newActual ?? 0, kpi.videoViewers.newActual ?? 0) * 100;
 
     // Seminar totals
     const seminarTotals = kpi.seminarDays.reduce(
@@ -214,7 +223,11 @@ export function KpiTab({ funnelId }: KpiTabProps) {
       adsCpa,
       totalLineBase,
       benefitRate,
+      benefitRateExisting,
+      benefitRateNew,
       seminarAppRate,
+      seminarAppRateExisting,
+      seminarAppRateNew,
       seminarTotals,
       seminarAttendRate,
       seminarPurchaseRate,
@@ -456,9 +469,19 @@ export function KpiTab({ funnelId }: KpiTabProps) {
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-[color:var(--color-border)] pt-4">
             <MetricPill
-              label="合計新規LINE登録"
+              label="新規目標合計"
+              value={`${numFmt.format(computed.totalNewLineTarget)}人`}
+              computed
+            />
+            <MetricPill
+              label="新規実績合計"
               value={`${numFmt.format(computed.totalNewLine)}人`}
-              sub={`目標: ${numFmt.format(computed.totalNewLineTarget)}人`}
+              computed
+            />
+            <MetricPill
+              label="LINE登録合計"
+              value={`${numFmt.format(computed.totalLineBase)}人`}
+              sub={`目標: ${numFmt.format(computed.totalNewLineTarget + kpi.lineRegistration.existing)}人`}
               computed
             />
             <div className="flex items-center gap-2">
@@ -477,43 +500,74 @@ export function KpiTab({ funnelId }: KpiTabProps) {
 
         <StepArrow />
 
-        {/* Step 2: Benefit */}
+        {/* Step 2: Video Viewers */}
         <StepCard step={2} title="動画閲覧">
-          <div className="flex flex-wrap items-center gap-4">
-            <TargetActualRow
-              target={kpi.videoViewers.target}
-              actual={kpi.videoViewers.actual}
-              onTargetChange={(v) => setField(['videoViewers', 'target'], v)}
-              onActualChange={(v) => setField(['videoViewers', 'actual'], v)}
-              suffix="人"
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-[color:var(--color-text-secondary)]">既存LINE友だち</p>
+              <div className="flex items-center gap-3">
+                <FieldGroup label="目標" inline>
+                  <NumberInput
+                    value={kpi.videoViewers.existingTarget ?? 0}
+                    onChange={(v) => setField(['videoViewers', 'existingTarget'], v)}
+                    suffix="人"
+                    compact
+                  />
+                </FieldGroup>
+                <FieldGroup label="実績" inline>
+                  <NumberInput
+                    value={kpi.videoViewers.existingActual ?? 0}
+                    onChange={(v) => setField(['videoViewers', 'existingActual'], v)}
+                    suffix="人"
+                    compact
+                  />
+                </FieldGroup>
+              </div>
+              <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                閲覧率: {computed.benefitRateExisting > 0 ? pct(computed.benefitRateExisting) : '-'}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-[color:var(--color-text-secondary)]">新規LINE登録者</p>
+              <div className="flex items-center gap-3">
+                <FieldGroup label="目標" inline>
+                  <NumberInput
+                    value={kpi.videoViewers.newTarget ?? 0}
+                    onChange={(v) => setField(['videoViewers', 'newTarget'], v)}
+                    suffix="人"
+                    compact
+                  />
+                </FieldGroup>
+                <FieldGroup label="実績" inline>
+                  <NumberInput
+                    value={kpi.videoViewers.newActual ?? 0}
+                    onChange={(v) => setField(['videoViewers', 'newActual'], v)}
+                    suffix="人"
+                    compact
+                  />
+                </FieldGroup>
+              </div>
+              <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                閲覧率: {computed.benefitRateNew > 0 ? pct(computed.benefitRateNew) : '-'}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-[color:var(--color-border)] pt-4">
+            <MetricPill
+              label="合計目標"
+              value={`${numFmt.format(kpi.videoViewers.target)}人`}
+              computed
             />
             <MetricPill
-              label="閲覧率"
+              label="合計実績"
+              value={`${numFmt.format(kpi.videoViewers.actual)}人`}
+              computed
+            />
+            <MetricPill
+              label="全体閲覧率"
               value={computed.benefitRate > 0 ? pct(computed.benefitRate) : '-'}
               computed
             />
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-lg border border-[color:var(--color-border)]/50 bg-[color:var(--color-surface-muted)]/30 p-3">
-            <div>
-              <div className="mb-1 text-[10px] font-medium text-[color:var(--color-text-muted)]">既存LINE</div>
-              <TargetActualRow
-                target={kpi.videoViewers.existingTarget ?? 0}
-                actual={kpi.videoViewers.existingActual ?? 0}
-                onTargetChange={(v) => setField(['videoViewers', 'existingTarget'], v)}
-                onActualChange={(v) => setField(['videoViewers', 'existingActual'], v)}
-                suffix="人"
-              />
-            </div>
-            <div>
-              <div className="mb-1 text-[10px] font-medium text-[color:var(--color-text-muted)]">新規登録者</div>
-              <TargetActualRow
-                target={kpi.videoViewers.newTarget ?? 0}
-                actual={kpi.videoViewers.newActual ?? 0}
-                onTargetChange={(v) => setField(['videoViewers', 'newTarget'], v)}
-                onActualChange={(v) => setField(['videoViewers', 'newActual'], v)}
-                suffix="人"
-              />
-            </div>
           </div>
         </StepCard>
 
@@ -542,6 +596,9 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                   />
                 </FieldGroup>
               </div>
+              <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                申込率: {computed.seminarAppRateExisting > 0 ? pct(computed.seminarAppRateExisting) : '-'}
+              </div>
             </div>
             <div>
               <p className="mb-1.5 text-xs font-medium text-[color:var(--color-text-secondary)]">新規LINE登録者</p>
@@ -563,6 +620,9 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                   />
                 </FieldGroup>
               </div>
+              <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                申込率: {computed.seminarAppRateNew > 0 ? pct(computed.seminarAppRateNew) : '-'}
+              </div>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-[color:var(--color-border)] pt-4">
@@ -577,7 +637,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
               computed
             />
             <MetricPill
-              label="申込率"
+              label="全体申込率"
               value={computed.seminarAppRate > 0 ? pct(computed.seminarAppRate) : '-'}
               computed
             />
