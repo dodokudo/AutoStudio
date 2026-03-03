@@ -84,10 +84,9 @@ function tokenSimilarity(a: string, b: string): number {
 
 /**
  * Match deliveries with broadcast metrics.
- * Strategy: date-based matching with token similarity disambiguation.
- * 1. Group metrics by broadcast_id (time-series)
- * 2. Index broadcasts by sent date
- * 3. For each delivery: match by date, disambiguate with token similarity
+ * Strategy:
+ * 1. Direct match via delivery.lstepBroadcastId (highest priority)
+ * 2. Date-based matching with token similarity disambiguation (fallback)
  */
 function matchDeliveriesWithMetrics(
   deliveries: DeliveryItem[],
@@ -102,7 +101,7 @@ function matchDeliveriesWithMetrics(
     metricsByBroadcast.set(m.broadcast_id, existing);
   }
 
-  // Index broadcasts by date
+  // Index broadcasts by date (for fallback matching)
   const broadcastsByDate = new Map<
     string,
     { broadcastId: string; name: string; series: BroadcastMetric[] }[]
@@ -117,8 +116,39 @@ function matchDeliveriesWithMetrics(
 
   const matched = new Set<string>();
 
-  return deliveries.map((delivery) => {
-    // Find candidate broadcasts by date
+  // Pass 1: Direct match via lstepBroadcastId
+  const directMatches = new Map<number, { series: BroadcastMetric[]; broadcastId: string }>();
+  deliveries.forEach((delivery, idx) => {
+    if (delivery.lstepBroadcastId) {
+      const series = metricsByBroadcast.get(delivery.lstepBroadcastId);
+      if (series) {
+        directMatches.set(idx, { series, broadcastId: delivery.lstepBroadcastId });
+        matched.add(delivery.lstepBroadcastId);
+      }
+    }
+  });
+
+  // Pass 2: Date-based fallback for remaining deliveries
+  return deliveries.map((delivery, idx) => {
+    const clickCount = delivery.clickTag
+      ? tagMetrics[delivery.clickTag] ?? undefined
+      : undefined;
+
+    // Use direct match if available
+    const direct = directMatches.get(idx);
+    if (direct) {
+      const sorted = [...direct.series].sort(
+        (a, b) => a.elapsed_minutes - b.elapsed_minutes
+      );
+      return {
+        ...delivery,
+        latestMetric: sorted[sorted.length - 1],
+        timeSeries: sorted,
+        clickCount,
+      };
+    }
+
+    // Fallback: date-based matching
     const candidates =
       broadcastsByDate
         .get(delivery.date)
@@ -128,11 +158,9 @@ function matchDeliveriesWithMetrics(
     let bestId: string | null = null;
 
     if (candidates.length === 1) {
-      // Only one broadcast on this date — auto match
       bestSeries = candidates[0].series;
       bestId = candidates[0].broadcastId;
     } else if (candidates.length > 1) {
-      // Multiple broadcasts on same date — use token similarity
       let bestScore = -1;
       for (const c of candidates) {
         const score = tokenSimilarity(delivery.title, c.name);
@@ -142,17 +170,11 @@ function matchDeliveriesWithMetrics(
           bestId = c.broadcastId;
         }
       }
-      // Require at least 1 common token to match
       if (bestScore < 1) {
         bestSeries = null;
         bestId = null;
       }
     }
-
-    // Look up click count from tag metrics
-    const clickCount = delivery.clickTag
-      ? tagMetrics[delivery.clickTag] ?? undefined
-      : undefined;
 
     if (bestSeries && bestId) {
       matched.add(bestId);
