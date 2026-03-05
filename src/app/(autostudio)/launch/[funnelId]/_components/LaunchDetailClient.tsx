@@ -148,11 +148,16 @@ function matchDeliveriesWithMetrics(
       };
     }
 
-    // Fallback: date-based matching
-    const candidates =
-      broadcastsByDate
-        .get(delivery.date)
-        ?.filter((c) => !matched.has(c.broadcastId)) || [];
+    // Skip date-based fallback for non-LINE deliveries (ig-*, th-*)
+    const isLineBroadcast =
+      !delivery.id.startsWith('ig-') && !delivery.id.startsWith('th-');
+
+    // Fallback: date-based matching (LINE deliveries only)
+    const candidates = isLineBroadcast
+      ? broadcastsByDate
+          .get(delivery.date)
+          ?.filter((c) => !matched.has(c.broadcastId)) || []
+      : [];
 
     let bestSeries: BroadcastMetric[] | null = null;
     let bestId: string | null = null;
