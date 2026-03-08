@@ -31,7 +31,9 @@
     "links:init": "tsx src/scripts/initLinkManagement.ts",
     "sales:sync": "tsx src/scripts/syncUnivaPayCharges.ts",
     "sales:sync:bank": "tsx src/scripts/syncMfBankSales.ts",
-    "lstep:metrics": "npx tsx src/scripts/runMessageMetrics.ts"
+    "lstep:metrics": "npx tsx src/scripts/runMessageMetrics.ts",
+    "kpi:sync-tags": "tsx src/scripts/syncTagsToKpi.ts",
+    "kpi:daily-metrics": "npx tsx src/scripts/updateDailyMetrics.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

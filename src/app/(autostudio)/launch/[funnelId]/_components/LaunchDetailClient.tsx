@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
@@ -9,9 +9,6 @@ import { DeliveryTimeline } from '../../_components/DeliveryTimeline';
 import { BroadcastDetail } from '../../_components/BroadcastDetail';
 import { KpiDashboard } from './KpiDashboard';
 import { KpiTab } from './KpiTab';
-import { FunnelAnalysis } from '@/app/(autostudio)/line/_components/FunnelAnalysis';
-import { FunnelComparison, type SegmentFilterType } from '@/components/FunnelComparison';
-import { PRESET_FUNNEL_3M, PRESET_FUNNELS, type FunnelDefinition, type FunnelAnalysisResult } from '@/lib/lstep/funnel-types';
 import type {
   FunnelData,
   BroadcastMetric,
@@ -33,7 +30,6 @@ interface LaunchDetailClientProps {
 const TABS = [
   { id: 'kpi', label: 'KPI' },
   { id: 'kpi-settings', label: 'KPI設定' },
-  { id: 'funnel-progress', label: 'ファネル進捗' },
   { id: 'line-delivery', label: 'LINE配信' },
   { id: 'analysis', label: '配信分析' },
 ] as const;
@@ -248,48 +244,6 @@ export function LaunchDetailClient({
   const [activeTab, setActiveTab] = useState<TabKey>('kpi');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // ファネル進捗タブ用の状態
-  const [funnelSegmentFilter, setFunnelSegmentFilter] = useState<SegmentFilterType>('all');
-  const [funnelCutoffDate, setFunnelCutoffDate] = useState(funnel.startDate);
-  const [funnelResult, setFunnelResult] = useState<FunnelAnalysisResult | null>(null);
-  const [funnelLoading, setFunnelLoading] = useState(false);
-  const [funnelError, setFunnelError] = useState<string | null>(null);
-  const [selectedFunnelDef, setSelectedFunnelDef] = useState<FunnelDefinition>(PRESET_FUNNEL_3M);
-
-  // ファネル進捗の取得
-  const fetchFunnelProgress = useCallback(async () => {
-    setFunnelLoading(true);
-    setFunnelError(null);
-    try {
-      const body: Record<string, unknown> = {
-        funnelDefinition: selectedFunnelDef,
-      };
-      if (funnelSegmentFilter !== 'all' && funnelCutoffDate) {
-        body.segmentFilter = funnelSegmentFilter;
-        body.segmentCutoffDate = funnelCutoffDate;
-      }
-      const res = await fetch('/api/line/funnel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error('ファネルデータの取得に失敗しました');
-      const data = await res.json() as FunnelAnalysisResult;
-      setFunnelResult(data);
-    } catch (err) {
-      setFunnelError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setFunnelLoading(false);
-    }
-  }, [selectedFunnelDef, funnelSegmentFilter, funnelCutoffDate]);
-
-  // ファネル進捗タブが選択されたら自動取得
-  useEffect(() => {
-    if (activeTab === 'funnel-progress' && !funnelResult && !funnelLoading) {
-      fetchFunnelProgress();
-    }
-  }, [activeTab, funnelResult, funnelLoading, fetchFunnelProgress]);
-
   // Match deliveries with metrics
   const deliveriesWithMetrics = useMemo(
     () => matchDeliveriesWithMetrics(funnel.deliveries, broadcastMetrics, tagMetrics),
@@ -476,108 +430,6 @@ export function LaunchDetailClient({
       {/* Tab content */}
       {activeTab === 'kpi' && <KpiDashboard funnelId={funnel.id} startDate={funnel.startDate} endDate={funnel.endDate} baseDate={funnel.baseDate} />}
       {activeTab === 'kpi-settings' && <KpiTab funnelId={funnel.id} />}
-      {activeTab === 'funnel-progress' && (
-        <div className="flex flex-col gap-6">
-          {/* ファネル定義選択 + セグメントフィルタ */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">ファネル:</span>
-              <select
-                value={selectedFunnelDef.id}
-                onChange={(e) => {
-                  const def = PRESET_FUNNELS.find((f) => f.id === e.target.value);
-                  if (def) {
-                    setSelectedFunnelDef(def);
-                    setFunnelResult(null);
-                  }
-                }}
-                className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-1.5 text-xs"
-              >
-                {PRESET_FUNNELS.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">対象:</span>
-              <div className="flex gap-1.5">
-                {(['all', 'new', 'existing'] as const).map((filter) => {
-                  const labels: Record<SegmentFilterType, string> = { all: '全体', new: '新規', existing: '既存' };
-                  const isActive = funnelSegmentFilter === filter;
-                  return (
-                    <button
-                      key={filter}
-                      type="button"
-                      onClick={() => {
-                        setFunnelSegmentFilter(filter);
-                        setFunnelResult(null);
-                      }}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                        isActive
-                          ? 'bg-gray-900 text-white'
-                          : 'border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-surface-muted)]'
-                      }`}
-                    >
-                      {labels[filter]}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {funnelSegmentFilter !== 'all' && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-[color:var(--color-text-muted)]">基準日:</span>
-                <input
-                  type="date"
-                  value={funnelCutoffDate}
-                  onChange={(e) => {
-                    setFunnelCutoffDate(e.target.value);
-                    setFunnelResult(null);
-                  }}
-                  className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-2 py-1 text-xs"
-                />
-                <span className="text-[10px] text-[color:var(--color-text-muted)]">
-                  {funnelSegmentFilter === 'new' ? 'この日以降に登録' : 'この日より前に登録'}
-                </span>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => { setFunnelResult(null); fetchFunnelProgress(); }}
-              disabled={funnelLoading}
-              className="ml-auto px-3 py-1.5 bg-gray-900 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-gray-800 transition disabled:opacity-50"
-            >
-              {funnelLoading ? '読込中...' : '更新'}
-            </button>
-          </div>
-
-          {/* ファネル分析結果 */}
-          {funnelError && (
-            <p className="text-sm text-[color:var(--color-danger)]">エラー: {funnelError}</p>
-          )}
-          {funnelLoading && !funnelResult && (
-            <div className="flex items-center justify-center py-12 text-sm text-[color:var(--color-text-muted)]">
-              読み込み中...
-            </div>
-          )}
-          {funnelResult && <FunnelAnalysis data={funnelResult} />}
-
-          {/* 期間比較 */}
-          <FunnelComparison
-            funnelDefinition={selectedFunnelDef}
-            defaultPeriodA={{ start: funnel.startDate, end: funnel.endDate }}
-            segmentFilter={funnelSegmentFilter}
-            segmentCutoffDate={funnelSegmentFilter !== 'all' ? funnelCutoffDate : undefined}
-            onSegmentFilterChange={(f) => {
-              setFunnelSegmentFilter(f);
-              setFunnelResult(null);
-            }}
-          />
-        </div>
-      )}
       {activeTab === 'line-delivery' && (
         <>
           {/* Summary stats - 5 columns on desktop */}
