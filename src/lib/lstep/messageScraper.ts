@@ -301,37 +301,78 @@ export async function scrapeUrlMetrics(page: Page, urlIds: string[]): Promise<Sc
 }
 
 // ---------------------------------------------------------------------------
-// Collect URL IDs from magazine page
+// Collect URL metrics directly from /line/site list page
 // ---------------------------------------------------------------------------
 
-async function collectUrlIdsFromMagazinePage(page: Page): Promise<string[]> {
-  // Navigate to magazine page if not already there
-  if (!page.url().includes('/line/magazine')) {
-    await page.goto(`${BASE_URL}/line/magazine`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 60000,
-    });
-    await page.waitForTimeout(2000);
+async function collectUrlMetricsFromSitePage(page: Page): Promise<ScrapedUrlMetric[]> {
+  const results: ScrapedUrlMetric[] = [];
+
+  await page.goto(`${BASE_URL}/line/site`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
+  await page.waitForTimeout(3000);
+
+  if (isLoginPage(page)) {
+    throw new CookieExpiredError('URL計測ページでログインリダイレクトを検出');
   }
 
-  const urlIds = new Set<string>();
+  const rows = page.locator('tbody tr');
+  const rowCount = await rows.count();
+  console.log(`URL計測一覧: ${rowCount} 行を処理中...`);
 
-  // Collect all links matching /line/site/show/{id}
-  const siteLinks = page.locator('a[href*="/line/site/show/"]');
-  const count = await siteLinks.count();
+  for (let i = 0; i < rowCount; i++) {
+    try {
+      const row = rows.nth(i);
 
-  for (let i = 0; i < count; i++) {
-    const href = await siteLinks.nth(i).getAttribute('href');
-    if (href) {
-      const m = href.match(/\/line\/site\/show\/(\d+)/);
-      if (m) {
-        urlIds.add(m[1]);
+      // Extract URL ID from /line/site/show/{id} link
+      const siteLink = row.locator('a[href*="/line/site/show/"]');
+      const linkCount = await siteLink.count();
+      if (linkCount === 0) continue;
+
+      const href = await siteLink.first().getAttribute('href');
+      if (!href) continue;
+
+      const idMatch = href.match(/\/line\/site\/show\/(\d+)/);
+      if (!idMatch) continue;
+
+      const urlId = idMatch[1];
+      const urlName = (await siteLink.first().innerText()).trim();
+
+      // Row text contains "N/M" format (unique visitors / total audience)
+      // e.g. "16/830" means 16 unique visitors out of 830 recipients
+      const rowText = (await row.innerText()).trim();
+      const ratioMatch = rowText.match(/(\d[\d,]*)\/(\d[\d,]*)/);
+
+      let uniqueVisitors = 0;
+      let totalAudience = 0;
+      let clickRate = 0;
+
+      if (ratioMatch) {
+        uniqueVisitors = parseNumber(ratioMatch[1]);
+        totalAudience = parseNumber(ratioMatch[2]);
+        if (totalAudience > 0) {
+          clickRate = Math.round((uniqueVisitors / totalAudience) * 1000) / 10;
+        }
       }
+
+      // Skip entries with 0 visitors (no data worth saving)
+      if (uniqueVisitors === 0) continue;
+
+      results.push({
+        urlId,
+        urlName,
+        totalClicks: uniqueVisitors, // list page shows unique visitors, not total clicks
+        uniqueVisitors,
+        clickRate,
+      });
+    } catch (err) {
+      console.warn(`  URL計測行 ${i} の処理に失敗:`, err);
     }
   }
 
-  console.log(`magazine ページから URL ID ${urlIds.size} 件を収集`);
-  return Array.from(urlIds);
+  console.log(`URL計測一覧スクレイピング完了: ${results.length} 件取得`);
+  return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -483,13 +524,8 @@ export async function runBroadcastScrape(
     // 4. Scrape broadcast list
     const broadcasts = await scrapeBroadcasts(page);
 
-    // 5. Collect URL IDs from the magazine page
-    const urlIds = await collectUrlIdsFromMagazinePage(page);
-
-    // 6. Scrape URL metrics
-    const urlMetrics = urlIds.length > 0
-      ? await scrapeUrlMetrics(page, urlIds)
-      : [];
+    // 5-6. Scrape URL metrics directly from /line/site list page
+    const urlMetrics = await collectUrlMetricsFromSitePage(page);
 
     // 6.5. Scrape tag metrics
     let tagMetrics: ScrapedTagMetric[] = [];
