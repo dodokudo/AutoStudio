@@ -131,7 +131,25 @@ export async function scrapeBroadcasts(page: Page): Promise<ScrapedBroadcast[]> 
 
         // Cell 0-1: 配信名 + 日時
         const nameCell = cells.nth(0);
-        const broadcastName = (await nameCell.innerText()).trim();
+        let broadcastName = (await nameCell.innerText()).trim();
+
+        // タイトルなしの場合、cell[4]のメッセージ冒頭を使ってフォールバック名を生成
+        if (broadcastName === 'タイトルなし' && cellCount > 4) {
+          try {
+            const contentCell = cells.nth(4);
+            const contentText = (await contentCell.innerText()).trim();
+            if (contentText) {
+              // 改行で分割して最初の意味のあるテキストを取得（「パック」等のラベルはスキップ）
+              const lines = contentText.split(/\n/).map(l => l.trim()).filter(l => l && l !== 'パック');
+              const preview = lines[0] || '';
+              if (preview) {
+                broadcastName = `[無題] ${preview.slice(0, 40)}${preview.length > 40 ? '…' : ''}`;
+              }
+            }
+          } catch {
+            // Non-fatal: keep original name
+          }
+        }
 
         const dateCell = cells.nth(1);
         const sentAt = (await dateCell.innerText()).trim();

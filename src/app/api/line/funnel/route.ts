@@ -27,10 +27,25 @@ const getCachedFunnelList = unstable_cache(
 );
 
 const getCachedAnalysis = unstable_cache(
-  async (projectId: string, definitionJson: string, startDate?: string, endDate?: string) => {
+  async (
+    projectId: string,
+    definitionJson: string,
+    startDate?: string,
+    endDate?: string,
+    segmentFilter?: 'all' | 'new' | 'existing',
+    segmentCutoffDate?: string,
+  ) => {
     const definition = JSON.parse(definitionJson) as FunnelDefinition;
-    const options = startDate && endDate ? { startDate, endDate } : undefined;
-    return analyzeFunnel(projectId, definition, options);
+    const options: Parameters<typeof analyzeFunnel>[2] = {};
+    if (startDate && endDate) {
+      options.startDate = startDate;
+      options.endDate = endDate;
+    }
+    if (segmentFilter && segmentFilter !== 'all' && segmentCutoffDate) {
+      options.segmentFilter = segmentFilter;
+      options.segmentCutoffDate = segmentCutoffDate;
+    }
+    return analyzeFunnel(projectId, definition, Object.keys(options).length > 0 ? options : undefined);
   },
   ['line-funnel-analysis'],
   { revalidate: 1800 }
@@ -102,7 +117,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { funnelDefinition, startDate, endDate } = body;
+    const { funnelDefinition, startDate, endDate, segmentFilter, segmentCutoffDate } = body;
 
     const definition: FunnelDefinition | null = funnelDefinition ?? null;
 
@@ -119,11 +134,18 @@ export async function POST(request: Request) {
       dateOptions = { startDate, endDate };
     }
 
+    // セグメントフィルタの検証
+    const validSegmentFilters = ['all', 'new', 'existing'] as const;
+    const parsedSegmentFilter = validSegmentFilters.includes(segmentFilter) ? segmentFilter as 'all' | 'new' | 'existing' : undefined;
+    const parsedCutoffDate = isValidDate(segmentCutoffDate) ? segmentCutoffDate : undefined;
+
     const result = await getCachedAnalysis(
       PROJECT_ID,
       JSON.stringify(definition),
       dateOptions?.startDate,
       dateOptions?.endDate,
+      parsedSegmentFilter,
+      parsedCutoffDate,
     );
 
     return NextResponse.json(result, { status: 200 });

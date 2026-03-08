@@ -1,72 +1,16 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { randomUUID } from 'crypto';
 
+// 型定義とプリセット定数はClient-safeなファイルから再エクスポート
+export type { FunnelStep, FunnelDefinition, FunnelStepResult, FunnelAnalysisResult } from './funnel-types';
+export { PRESET_FUNNEL_IGLN, PRESET_FUNNEL_SURVEY, PRESET_FUNNEL_3M, PRESET_FUNNELS } from './funnel-types';
+
+import type { FunnelStep, FunnelDefinition, FunnelAnalysisResult, FunnelStepResult } from './funnel-types';
+import { PRESET_FUNNEL_IGLN, PRESET_FUNNEL_SURVEY, PRESET_FUNNEL_3M } from './funnel-types';
+
 const DEFAULT_DATASET = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 const TABLE_NAME = 'lstep_friends_raw';
 const FUNNEL_DEFINITIONS_TABLE = 'line_funnel_definitions';
-
-/**
- * ファネルステップの定義
- */
-export interface FunnelStep {
-  /** ステップの識別子 */
-  id: string;
-  /** ステップの表示名 */
-  label: string;
-  /** タグカラム名 */
-  tagColumn: string;
-}
-
-/**
- * ファネル定義
- */
-export interface FunnelDefinition {
-  /** ファネルID */
-  id: string;
-  /** ファネル名 */
-  name: string;
-  /** ファネルの説明 */
-  description?: string;
-  /** ファネルステップのリスト（順序通り） */
-  steps: FunnelStep[];
-  /** 作成日時 */
-  createdAt?: string;
-}
-
-/**
- * ファネルステップの結果
- */
-export interface FunnelStepResult {
-  /** ステップID */
-  stepId: string;
-  /** ステップ名 */
-  label: string;
-  /** 到達人数 */
-  reached: number;
-  /** 未到達人数（前のステップからのドロップオフ） */
-  notReached: number;
-  /** 移行率（前のステップからの到達率） */
-  conversionRate: number;
-  /** 全体比（計測対象全体に対する割合） */
-  overallRate: number;
-}
-
-/**
- * ファネル分析結果
- */
-export interface FunnelAnalysisResult {
-  /** ファネル定義 */
-  definition: FunnelDefinition;
-  /** 計測対象の総数 */
-  totalBase: number;
-  /** 各ステップの結果 */
-  steps: FunnelStepResult[];
-  /** 分析対象の日付範囲 */
-  dateRange?: {
-    start: string;
-    end: string;
-  };
-}
 
 /**
  * カスタムファネル分析を実行
@@ -78,6 +22,10 @@ export async function analyzeFunnel(
     startDate?: string;
     endDate?: string;
     snapshotDate?: string;
+    /** 新規/既存フィルタ */
+    segmentFilter?: 'all' | 'new' | 'existing';
+    /** この日付より前の登録=既存、以降=新規 (YYYY-MM-DD) */
+    segmentCutoffDate?: string;
   }
 ): Promise<FunnelAnalysisResult> {
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
@@ -101,11 +49,24 @@ export async function analyzeFunnel(
     ? 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate'
     : '';
 
+  // 新規/既存フィルタ条件を構築
+  const segmentFilterClause = (() => {
+    const filter = options?.segmentFilter;
+    const cutoff = options?.segmentCutoffDate;
+    if (!filter || filter === 'all' || !cutoff) return '';
+    if (filter === 'new') return 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @segmentCutoffDate';
+    if (filter === 'existing') return 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @segmentCutoffDate';
+    return '';
+  })();
+
   // BigQueryパラメータを構築（undefinedを除外）
   const buildParams = () => {
     const params: Record<string, string> = { snapshotDate };
     if (options?.startDate) params.startDate = options.startDate;
     if (options?.endDate) params.endDate = options.endDate;
+    if (options?.segmentFilter && options.segmentFilter !== 'all' && options?.segmentCutoffDate) {
+      params.segmentCutoffDate = options.segmentCutoffDate;
+    }
     return params;
   };
 
@@ -116,7 +77,9 @@ export async function analyzeFunnel(
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
       WHERE snapshot_date = @snapshotDate
         AND friend_added_at IS NOT NULL
+        AND blocked = 0
         ${dateFilter}
+        ${segmentFilterClause}
     `,
     params: buildParams(),
   });
@@ -142,7 +105,9 @@ export async function analyzeFunnel(
           FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
           WHERE snapshot_date = @snapshotDate
             AND friend_added_at IS NOT NULL
+            AND blocked = 0
             ${dateFilter}
+            ${segmentFilterClause}
         `,
         params: buildParams(),
       });
@@ -175,37 +140,6 @@ export async function analyzeFunnel(
       : undefined,
   };
 }
-
-/**
- * プリセットファネル定義: Threads ファネル
- */
-export const PRESET_FUNNEL_IGLN: FunnelDefinition = {
-  id: 'igln',
-  name: 'Threads ファネル分析',
-  description: 'LINE登録からアンケート回答、動画視聴、個別相談、成約までのファネル',
-  steps: [
-    { id: 'measure_target', label: '計測対象', tagColumn: 'friend_added_at' },
-    { id: 'survey_completed', label: 'アンケート回答完了', tagColumn: 'survey_completed' },
-    { id: 'video_lp', label: '動画LP遷移', tagColumn: 'th_video_lp' },
-    { id: 'video_watched', label: '動画閲覧', tagColumn: 'th_video_watched' },
-    { id: 'consultation_form', label: '個別相談フォーム遷移', tagColumn: 'th_consultation_form' },
-    { id: 'consultation_applied', label: '個別相談申込済み', tagColumn: 'th_consultation_applied' },
-    { id: 'contracted', label: '成約', tagColumn: 'th_contracted' },
-  ],
-};
-
-/**
- * プリセットファネル定義: アンケート回答
- */
-export const PRESET_FUNNEL_SURVEY: FunnelDefinition = {
-  id: 'survey',
-  name: 'アンケート回答',
-  description: 'LINE登録からアンケート完了までのファネル',
-  steps: [
-    { id: 'measure_target', label: '計測対象', tagColumn: 'friend_added_at' },
-    { id: 'survey_entered', label: 'アンケート回答', tagColumn: 'survey_form_inflow' },
-  ],
-};
 
 // =============================================================================
 // ファネル定義の永続化（CRUD）
@@ -283,6 +217,7 @@ export async function getFunnelDefinition(
   // プリセットをチェック
   if (funnelId === 'igln') return PRESET_FUNNEL_IGLN;
   if (funnelId === 'survey') return PRESET_FUNNEL_SURVEY;
+  if (funnelId === '3m') return PRESET_FUNNEL_3M;
 
   await ensureFunnelDefinitionsTable(projectId, datasetId);
 
@@ -382,7 +317,7 @@ export async function deleteFunnelDefinition(
   datasetId: string = DEFAULT_DATASET,
 ): Promise<boolean> {
   // プリセットは削除不可
-  if (funnelId === 'igln' || funnelId === 'survey') {
+  if (funnelId === 'igln' || funnelId === 'survey' || funnelId === '3m') {
     throw new Error('プリセットファネルは削除できません');
   }
 
@@ -451,6 +386,15 @@ function formatColumnLabel(column: string): string {
     tai_personal_done: 'TAI：個別相談会実施',
     tai_consultation_done: 'TAI：個別相談会実施',
     tai_contracted: 'TAI：成約',
+    // 3月ローンチ (3M:) — BQではautodetectで先頭_が除去されるため3m_始まり
+    '3m_video_lp': '3M：動画LP遷移',
+    '3m_survey_completed': '3M：アンケート回答済み',
+    '3m_seminar_form': '3M：セミナーフォーム遷移',
+    '3m_seminar_applied': '3M：セミナー申込済み',
+    '3m_seminar_joined': '3M：セミナー参加',
+    '3m_bonus_received': '3M：参加特典受け取り',
+    '3m_fe_purchased': '3M：FE購入',
+    '3m_be_purchased': '3M：BE購入',
     // アンケート
     survey_form_inflow: 'アンケートフォーム流入',
     survey_completed: 'アンケート回答完了',
