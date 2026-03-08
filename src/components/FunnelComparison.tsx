@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
+import { useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import type { FunnelDefinition, FunnelAnalysisResult } from '@/lib/lstep/funnel-types';
 
@@ -10,12 +11,10 @@ export type SegmentFilterType = 'all' | 'new' | 'existing';
 
 export interface FunnelComparisonProps {
   funnelDefinition: FunnelDefinition;
-  defaultPeriodA?: { start: string; end: string };
-  defaultPeriodB?: { start: string; end: string };
-  segmentFilter?: SegmentFilterType;
-  segmentCutoffDate?: string;
-  /** コールバック: セグメントフィルタ変更時 */
-  onSegmentFilterChange?: (filter: SegmentFilterType) => void;
+  /** ローンチ開始日 — この日付を基準に既存/新規を分割 */
+  cutoffDate: string;
+  /** 自動取得を実行するか（trueで初回マウント時に取得） */
+  autoFetch?: boolean;
 }
 
 // --- Helpers ---
@@ -34,29 +33,15 @@ function formatPercent(value: number): string {
   return `${percentFormatter.format(value)}%`;
 }
 
-function getDateNDaysAgo(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
-}
-
 // --- Component ---
 
 export function FunnelComparison({
   funnelDefinition,
-  defaultPeriodA,
-  defaultPeriodB,
-  segmentFilter = 'all',
-  segmentCutoffDate,
-  onSegmentFilterChange,
+  cutoffDate,
+  autoFetch = true,
 }: FunnelComparisonProps) {
-  const [periodAStart, setPeriodAStart] = useState(defaultPeriodA?.start ?? getDateNDaysAgo(60));
-  const [periodAEnd, setPeriodAEnd] = useState(defaultPeriodA?.end ?? getDateNDaysAgo(31));
-  const [periodBStart, setPeriodBStart] = useState(defaultPeriodB?.start ?? getDateNDaysAgo(30));
-  const [periodBEnd, setPeriodBEnd] = useState(defaultPeriodB?.end ?? getDateNDaysAgo(1));
-
-  const [resultA, setResultA] = useState<FunnelAnalysisResult | null>(null);
-  const [resultB, setResultB] = useState<FunnelAnalysisResult | null>(null);
+  const [resultExisting, setResultExisting] = useState<FunnelAnalysisResult | null>(null);
+  const [resultNew, setResultNew] = useState<FunnelAnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,153 +50,68 @@ export function FunnelComparison({
     setError(null);
 
     try {
-      const commonBody = {
-        funnelDefinition,
-        ...(segmentFilter !== 'all' && segmentCutoffDate
-          ? { segmentFilter, segmentCutoffDate }
-          : {}),
-      };
-
-      const [resA, resB] = await Promise.all([
+      const [resExisting, resNew] = await Promise.all([
         fetch('/api/line/funnel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ...commonBody,
-            startDate: periodAStart,
-            endDate: periodAEnd,
+            funnelDefinition,
+            segmentFilter: 'existing',
+            segmentCutoffDate: cutoffDate,
           }),
         }),
         fetch('/api/line/funnel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ...commonBody,
-            startDate: periodBStart,
-            endDate: periodBEnd,
+            funnelDefinition,
+            segmentFilter: 'new',
+            segmentCutoffDate: cutoffDate,
           }),
         }),
       ]);
 
-      if (!resA.ok || !resB.ok) throw new Error('比較データの取得に失敗しました');
+      if (!resExisting.ok || !resNew.ok) throw new Error('比較データの取得に失敗しました');
 
-      const [dataA, dataB] = await Promise.all([
-        resA.json() as Promise<FunnelAnalysisResult>,
-        resB.json() as Promise<FunnelAnalysisResult>,
+      const [dataExisting, dataNew] = await Promise.all([
+        resExisting.json() as Promise<FunnelAnalysisResult>,
+        resNew.json() as Promise<FunnelAnalysisResult>,
       ]);
 
-      setResultA(dataA);
-      setResultB(dataB);
+      setResultExisting(dataExisting);
+      setResultNew(dataNew);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [funnelDefinition, periodAStart, periodAEnd, periodBStart, periodBEnd, segmentFilter, segmentCutoffDate]);
+  }, [funnelDefinition, cutoffDate]);
+
+  // Auto-fetch on mount
+  useEffect(() => {
+    if (autoFetch && !resultExisting && !resultNew && !loading) {
+      runComparison();
+    }
+  }, [autoFetch, resultExisting, resultNew, loading, runComparison]);
 
   return (
     <Card className="p-6 space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-          期間比較ファネル分析
-        </h2>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-          {funnelDefinition.name} - 2つの期間を比較して、ファネルの変化を分析します。
-        </p>
-      </div>
-
-      {/* セグメントフィルタ */}
-      {onSegmentFilterChange && (
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-[color:var(--color-text-muted)]">対象:</span>
-          <div className="flex gap-1.5">
-            {(['all', 'new', 'existing'] as const).map((filter) => {
-              const labels: Record<SegmentFilterType, string> = {
-                all: '全体',
-                new: '新規',
-                existing: '既存',
-              };
-              const isActive = segmentFilter === filter;
-              return (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => onSegmentFilterChange(filter)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                    isActive
-                      ? 'bg-gray-900 text-white'
-                      : 'border border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-surface-muted)]'
-                  }`}
-                >
-                  {labels[filter]}
-                </button>
-              );
-            })}
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
+            既存LINE vs 新規LINE ファネル比較
+          </h2>
+          <p className="mt-0.5 text-xs text-[color:var(--color-text-muted)]">
+            基準日: {cutoffDate}（この日以降の登録 = 新規）
+          </p>
         </div>
-      )}
-
-      {/* 期間設定 */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* A期間 */}
-        <div className="space-y-3 p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
-          <h4 className="text-sm font-semibold text-blue-700">A期間（過去）</h4>
-          <div className="grid gap-2 grid-cols-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-blue-600">開始日</span>
-              <input
-                type="date"
-                value={periodAStart}
-                onChange={(e) => setPeriodAStart(e.target.value)}
-                className="rounded-[var(--radius-sm)] border border-blue-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-blue-600">終了日</span>
-              <input
-                type="date"
-                value={periodAEnd}
-                onChange={(e) => setPeriodAEnd(e.target.value)}
-                className="rounded-[var(--radius-sm)] border border-blue-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-          </div>
-        </div>
-
-        {/* B期間 */}
-        <div className="space-y-3 p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
-          <h4 className="text-sm font-semibold text-green-700">B期間（最近）</h4>
-          <div className="grid gap-2 grid-cols-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-green-600">開始日</span>
-              <input
-                type="date"
-                value={periodBStart}
-                onChange={(e) => setPeriodBStart(e.target.value)}
-                className="rounded-[var(--radius-sm)] border border-green-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-green-600">終了日</span>
-              <input
-                type="date"
-                value={periodBEnd}
-                onChange={(e) => setPeriodBEnd(e.target.value)}
-                className="rounded-[var(--radius-sm)] border border-green-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-center">
         <button
           type="button"
-          onClick={runComparison}
+          onClick={() => { setResultExisting(null); setResultNew(null); runComparison(); }}
           disabled={loading}
-          className="px-4 py-2 bg-gray-900 text-white rounded-[var(--radius-sm)] text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+          className="px-3 py-1.5 bg-gray-900 text-white rounded-[var(--radius-sm)] text-xs font-medium hover:bg-gray-800 transition disabled:opacity-50"
         >
-          {loading ? '分析中...' : '比較分析を実行'}
+          {loading ? '読込中...' : '更新'}
         </button>
       </div>
 
@@ -219,44 +119,34 @@ export function FunnelComparison({
         <p className="text-sm text-[color:var(--color-danger)]">エラー: {error}</p>
       )}
 
+      {loading && !resultExisting && (
+        <div className="flex items-center justify-center py-12 text-sm text-[color:var(--color-text-muted)]">
+          読み込み中...
+        </div>
+      )}
+
       {/* 比較結果 */}
-      {resultA && resultB && (
-        <div className="space-y-4">
-          {/* サマリー */}
+      {resultExisting && resultNew && (
+        <div className="space-y-5">
+          {/* サマリーカード */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
-              <p className="text-xs font-medium text-blue-600 mb-2">
-                A期間: {periodAStart} ~ {periodAEnd}
-              </p>
+              <p className="text-xs font-medium text-blue-600 mb-1">既存LINE</p>
               <p className="text-2xl font-bold text-blue-700">
-                {formatNumber(resultA.totalBase)}人
+                {formatNumber(resultExisting.totalBase)}人
               </p>
-              <p className="text-xs text-blue-600">計測対象</p>
+              <p className="text-[10px] text-blue-500">
+                {cutoffDate} より前に登録
+              </p>
             </div>
-            <div className="p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
-              <p className="text-xs font-medium text-green-600 mb-2">
-                B期間: {periodBStart} ~ {periodBEnd}
+            <div className="p-4 rounded-[var(--radius-md)] bg-emerald-50 border border-emerald-200">
+              <p className="text-xs font-medium text-emerald-600 mb-1">新規LINE</p>
+              <p className="text-2xl font-bold text-emerald-700">
+                {formatNumber(resultNew.totalBase)}人
               </p>
-              <p className="text-2xl font-bold text-green-700">
-                {formatNumber(resultB.totalBase)}人
+              <p className="text-[10px] text-emerald-500">
+                {cutoffDate} 以降に登録
               </p>
-              <p className="text-xs text-green-600">計測対象</p>
-              {(() => {
-                const diff = resultB.totalBase - resultA.totalBase;
-                const pct =
-                  resultA.totalBase > 0
-                    ? (diff / resultA.totalBase) * 100
-                    : 0;
-                return (
-                  <p
-                    className={`text-xs mt-1 ${diff >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                  >
-                    {diff >= 0 ? '+' : ''}
-                    {formatNumber(diff)} ({diff >= 0 ? '+' : ''}
-                    {formatPercent(pct)})
-                  </p>
-                );
-              })()}
             </div>
           </div>
 
@@ -289,20 +179,20 @@ export function FunnelComparison({
                       className="px-3 py-3 text-center text-xs font-medium text-blue-600 bg-blue-50"
                       colSpan={3}
                     >
-                      A期間
+                      既存LINE
                     </th>
                     <th className="w-4"></th>
                     <th
-                      className="px-3 py-3 text-center text-xs font-medium text-green-600 bg-green-50"
+                      className="px-3 py-3 text-center text-xs font-medium text-emerald-600 bg-emerald-50"
                       colSpan={3}
                     >
-                      B期間
+                      新規LINE
                     </th>
                     <th
                       className="px-3 py-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]"
                       colSpan={2}
                     >
-                      差分
+                      差分（新規-既存）
                     </th>
                   </tr>
                   <tr className="border-b border-[color:var(--color-border)] bg-gray-50 text-xs">
@@ -318,13 +208,13 @@ export function FunnelComparison({
                       全体比
                     </th>
                     <th className="w-4"></th>
-                    <th className="px-3 py-2 text-right text-green-600 bg-green-50">
+                    <th className="px-3 py-2 text-right text-emerald-600 bg-emerald-50">
                       到達数
                     </th>
-                    <th className="px-3 py-2 text-right text-green-600 bg-green-50">
+                    <th className="px-3 py-2 text-right text-emerald-600 bg-emerald-50">
                       移行率
                     </th>
-                    <th className="px-3 py-2 text-right text-green-600 bg-green-50">
+                    <th className="px-3 py-2 text-right text-emerald-600 bg-emerald-50">
                       全体比
                     </th>
                     <th className="px-3 py-2 text-right">移行率差</th>
@@ -332,62 +222,52 @@ export function FunnelComparison({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[color:var(--color-border)] text-sm">
-                  {resultA.steps.map((stepA, index) => {
-                    const stepB = resultB.steps[index];
-                    if (!stepB) return null;
+                  {resultExisting.steps.map((stepE, index) => {
+                    const stepN = resultNew.steps[index];
+                    if (!stepN) return null;
                     const isFirst = index === 0;
-                    const rateDiff =
-                      stepB.conversionRate - stepA.conversionRate;
-                    const overallDiff =
-                      stepB.overallRate - stepA.overallRate;
+                    const rateDiff = stepN.conversionRate - stepE.conversionRate;
+                    const overallDiff = stepN.overallRate - stepE.overallRate;
 
                     return (
                       <tr
-                        key={stepA.stepId}
+                        key={stepE.stepId}
                         className="hover:bg-[color:var(--color-surface-muted)]"
                       >
                         <td className="px-3 py-3 text-[color:var(--color-text-secondary)]">
                           {index}
                         </td>
                         <td className="px-3 py-3 font-medium text-[color:var(--color-text-primary)]">
-                          {stepA.label}
+                          {stepE.label}
+                        </td>
+                        {/* 既存 */}
+                        <td className="px-3 py-3 text-right bg-blue-50/50">
+                          {formatNumber(stepE.reached)}
                         </td>
                         <td className="px-3 py-3 text-right bg-blue-50/50">
-                          {formatNumber(stepA.reached)}
+                          {isFirst ? '-' : formatPercent(stepE.conversionRate)}
                         </td>
                         <td className="px-3 py-3 text-right bg-blue-50/50">
-                          {isFirst
-                            ? '-'
-                            : formatPercent(stepA.conversionRate)}
-                        </td>
-                        <td className="px-3 py-3 text-right bg-blue-50/50">
-                          {formatPercent(stepA.overallRate)}
+                          {formatPercent(stepE.overallRate)}
                         </td>
                         <td className="w-4"></td>
-                        <td className="px-3 py-3 text-right bg-green-50/50">
-                          {formatNumber(stepB.reached)}
+                        {/* 新規 */}
+                        <td className="px-3 py-3 text-right bg-emerald-50/50">
+                          {formatNumber(stepN.reached)}
                         </td>
-                        <td className="px-3 py-3 text-right bg-green-50/50">
-                          {isFirst
-                            ? '-'
-                            : formatPercent(stepB.conversionRate)}
+                        <td className="px-3 py-3 text-right bg-emerald-50/50">
+                          {isFirst ? '-' : formatPercent(stepN.conversionRate)}
                         </td>
-                        <td className="px-3 py-3 text-right bg-green-50/50">
-                          {formatPercent(stepB.overallRate)}
+                        <td className="px-3 py-3 text-right bg-emerald-50/50">
+                          {formatPercent(stepN.overallRate)}
                         </td>
+                        {/* 差分 */}
                         <td className="px-3 py-3 text-right">
                           {isFirst ? (
                             '-'
                           ) : (
-                            <span
-                              className={
-                                rateDiff >= 0
-                                  ? 'text-green-600'
-                                  : 'text-red-600'
-                              }
-                            >
-                              {rateDiff >= 0 ? '+' : ''}
-                              {formatPercent(rateDiff)}
+                            <span className={rateDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                              {rateDiff >= 0 ? '+' : ''}{formatPercent(rateDiff)}
                             </span>
                           )}
                         </td>
@@ -395,15 +275,8 @@ export function FunnelComparison({
                           {isFirst ? (
                             '-'
                           ) : (
-                            <span
-                              className={
-                                overallDiff >= 0
-                                  ? 'text-green-600'
-                                  : 'text-red-600'
-                              }
-                            >
-                              {overallDiff >= 0 ? '+' : ''}
-                              {formatPercent(overallDiff)}
+                            <span className={overallDiff >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                              {overallDiff >= 0 ? '+' : ''}{formatPercent(overallDiff)}
                             </span>
                           )}
                         </td>
@@ -415,19 +288,19 @@ export function FunnelComparison({
             </div>
           </div>
 
-          {/* 全体比の視覚的な比較 */}
+          {/* 全体比の視覚的な比較（左右分割バー） */}
           <div>
             <h4 className="text-sm font-semibold text-[color:var(--color-text-primary)] mb-4">
               全体比の比較
             </h4>
             <div className="grid gap-6 md:grid-cols-2">
-              {/* A期間 */}
+              {/* 既存LINE */}
               <div className="p-4 rounded-[var(--radius-md)] bg-blue-50 border border-blue-200">
                 <h5 className="text-sm font-semibold text-blue-700 mb-3">
-                  A期間
+                  既存LINE
                 </h5>
                 <div className="space-y-3">
-                  {resultA.steps.map((step, index) => (
+                  {resultExisting.steps.map((step, index) => (
                     <div key={step.stepId} className="space-y-1">
                       <div className="flex justify-between text-xs">
                         <span className="text-blue-700">
@@ -448,38 +321,35 @@ export function FunnelComparison({
                 </div>
               </div>
 
-              {/* B期間 */}
-              <div className="p-4 rounded-[var(--radius-md)] bg-green-50 border border-green-200">
-                <h5 className="text-sm font-semibold text-green-700 mb-3">
-                  B期間
+              {/* 新規LINE */}
+              <div className="p-4 rounded-[var(--radius-md)] bg-emerald-50 border border-emerald-200">
+                <h5 className="text-sm font-semibold text-emerald-700 mb-3">
+                  新規LINE
                 </h5>
                 <div className="space-y-3">
-                  {resultB.steps.map((step, index) => {
-                    const stepA = resultA.steps[index];
-                    const diff = stepA
-                      ? step.overallRate - stepA.overallRate
-                      : 0;
+                  {resultNew.steps.map((step, index) => {
+                    const stepE = resultExisting.steps[index];
+                    const diff = stepE ? step.overallRate - stepE.overallRate : 0;
                     return (
                       <div key={step.stepId} className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="text-green-700">
+                          <span className="text-emerald-700">
                             {index}. {step.label}
                           </span>
-                          <span className="font-semibold text-green-800">
+                          <span className="font-semibold text-emerald-800">
                             {formatPercent(step.overallRate)}
                             {index > 0 && (
                               <span
-                                className={`ml-2 ${diff >= 0 ? 'text-green-600' : 'text-red-500'}`}
+                                className={`ml-2 ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}
                               >
-                                ({diff >= 0 ? '+' : ''}
-                                {formatPercent(diff)})
+                                ({diff >= 0 ? '+' : ''}{formatPercent(diff)})
                               </span>
                             )}
                           </span>
                         </div>
-                        <div className="h-4 bg-green-100 rounded overflow-hidden">
+                        <div className="h-4 bg-emerald-100 rounded overflow-hidden">
                           <div
-                            className="h-full bg-green-500 transition-all"
+                            className="h-full bg-emerald-500 transition-all"
                             style={{ width: `${step.overallRate}%` }}
                           />
                         </div>
