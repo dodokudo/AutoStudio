@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState, useCallback, useEffect } from 'react';
-import useSWR, { useSWRConfig } from 'swr';
+import { useMemo, useState, useEffect } from 'react';
+import useSWR from 'swr';
 import {
   ResponsiveContainer,
   LineChart,
@@ -14,7 +14,6 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { dashboardCardClass } from '@/components/dashboard/styles';
-import { FunnelAnalysis } from '@/app/(autostudio)/line/_components/FunnelAnalysis';
 import { FunnelComparison } from '@/components/FunnelComparison';
 import { PRESET_FUNNEL_3M } from '@/lib/lstep/funnel-types';
 import type { FunnelAnalysisResult } from '@/lib/lstep/funnel-types';
@@ -104,7 +103,6 @@ const CHART_COLORS = {
   seminarApplications: '#F59E0B',
   seminarAttendees: '#10B981',
   frontendPurchases: '#3B82F6',
-  backendPurchases: '#EF4444',
 } as const;
 
 // ------- Funnel step row type -------
@@ -173,10 +171,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     fetcher,
   );
 
-  const { mutate } = useSWRConfig();
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
-
   // BQからLINE友だち数（既存/新規）を取得
   const [friendsCount, setFriendsCount] = useState<FriendsCount | null>(null);
   // ファネルの既存/新規セグメント別データ
@@ -243,29 +237,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     fetchSegments();
   }, []);
 
-  const handleSyncTags = useCallback(async () => {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await fetch(`/api/launch/kpi/${funnelId}/sync-tags`, { method: 'POST' });
-      const json = await res.json();
-      if (!res.ok) {
-        setSyncResult({ success: false, message: json.error || '同期に失敗しました' });
-        return;
-      }
-      setSyncResult({
-        success: true,
-        message: `${json.tagCount}件のタグから実績値を更新しました`,
-      });
-      // KPIデータを再取得
-      mutate(`/api/launch/kpi/${funnelId}`);
-    } catch {
-      setSyncResult({ success: false, message: '通信エラーが発生しました' });
-    } finally {
-      setSyncing(false);
-    }
-  }, [funnelId, mutate]);
-
   const rawKpi = data?.kpi ?? defaultKpi();
   // 後方互換: 旧データに videoViewers がない場合のフォールバック
   const kpi: LaunchKpi = {
@@ -322,13 +293,11 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       return segmentStepMap[stepId];
     };
 
-    // Build funnel rows
-    const lineSegment = getSegmentActuals('LINE登録');
+    // Build funnel rows (without バックエンド購入)
     const videoSegment = getSegmentActuals('動画閲覧');
     const seminarAppSegment = getSegmentActuals('セミナー申込');
     const seminarJoinSegment = getSegmentActuals('セミナー参加');
     const feSegment = getSegmentActuals('フロント購入');
-    const beSegment = getSegmentActuals('バックエンド購入');
 
     const rows: FunnelRow[] = [
       {
@@ -386,16 +355,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         existingActual: bqSteps?.fePurchased.existing ?? feSegment.existing,
         newActual: bqSteps?.fePurchased.new ?? feSegment.new,
       },
-      {
-        label: 'バックエンド購入',
-        target: kpi.backend.target,
-        actual: beActual,
-        prevTarget: kpi.frontend.target,
-        prevActual: feActual,
-        revenue: kpi.backend.unitPrice * beActual,
-        existingActual: bqSteps?.bePurchased.existing ?? beSegment.existing,
-        newActual: bqSteps?.bePurchased.new ?? beSegment.new,
-      },
     ];
 
     // Compute target revenues
@@ -407,47 +366,67 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     const dailyMetrics = kpi.dailyMetrics ?? [];
     const metricsMap = new Map(dailyMetrics.map(m => [m.date, m]));
 
-    // Chart date range: use baseDate as start if available, last seminar day as end
-    const lastSeminarDate = kpi.seminarDays.length > 0
-      ? kpi.seminarDays.reduce((latest, d) => d.date > latest ? d.date : latest, kpi.seminarDays[0].date)
-      : null;
-    const chartStart = baseDate || startDate;
-    const chartEnd = lastSeminarDate || endDate;
+    // Seminar day range
+    const seminarDayDates = kpi.seminarDays.map(d => d.date).sort();
+    const firstSeminarDate = seminarDayDates.length > 0 ? seminarDayDates[0] : null;
+    const lastSeminarDate = seminarDayDates.length > 0 ? seminarDayDates[seminarDayDates.length - 1] : null;
 
-    let chartData: Array<{
+    // Chart 1: 教育推移 — from SEGMENT_CUTOFF_DATE to last seminar day (or endDate)
+    const chart1Start = SEGMENT_CUTOFF_DATE;
+    const chart1End = lastSeminarDate || endDate;
+
+    let educationChartData: Array<{
       date: string;
       label: string;
       lineRegistrations: number;
       videoViewers: number;
       seminarApplications: number;
-      seminarAttendees: number;
-      frontendPurchases: number;
-      backendPurchases: number;
     }> = [];
 
-    if (chartStart && chartEnd) {
-      const dates = generateDateRange(chartStart, chartEnd);
-      let cumLine = 0, cumBenefit = 0, cumSemApp = 0, cumSemAtt = 0, cumFe = 0, cumBe = 0;
+    if (chart1End) {
+      const dates = generateDateRange(chart1Start, chart1End);
+      let cumLine = 0, cumVideo = 0, cumSemApp = 0;
 
-      chartData = dates.map(date => {
+      educationChartData = dates.map(date => {
         const m = metricsMap.get(date);
         if (m) {
           cumLine += m.lineRegistrations ?? 0;
-          cumBenefit += m.videoViewers ?? 0;
+          cumVideo += m.videoViewers ?? 0;
           cumSemApp += m.seminarApplications ?? 0;
-          cumSemAtt += m.seminarAttendees ?? 0;
-          cumFe += m.frontendPurchases ?? 0;
-          cumBe += m.backendPurchases ?? 0;
         }
         return {
           date,
           label: shortDate(date),
           lineRegistrations: cumLine,
-          videoViewers: cumBenefit,
+          videoViewers: cumVideo,
           seminarApplications: cumSemApp,
+        };
+      });
+    }
+
+    // Chart 2: セミナー推移 — from first seminar day to last seminar day
+    let seminarChartData: Array<{
+      date: string;
+      label: string;
+      seminarAttendees: number;
+      frontendPurchases: number;
+    }> = [];
+
+    if (firstSeminarDate && lastSeminarDate) {
+      const dates = generateDateRange(firstSeminarDate, lastSeminarDate);
+      let cumSemAtt = 0, cumFe = 0;
+
+      seminarChartData = dates.map(date => {
+        const m = metricsMap.get(date);
+        if (m) {
+          cumSemAtt += m.seminarAttendees ?? 0;
+          cumFe += m.frontendPurchases ?? 0;
+        }
+        return {
+          date,
+          label: shortDate(date),
           seminarAttendees: cumSemAtt,
           frontendPurchases: cumFe,
-          backendPurchases: cumBe,
         };
       });
     }
@@ -463,11 +442,14 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       totalTargetRevenue,
       achievementRate,
       rows,
-      chartData,
+      educationChartData,
+      seminarChartData,
       hasChartData,
       totalLineRegTarget,
       totalLineReg,
       seminarAttendTarget,
+      firstSeminarDate,
+      lastSeminarDate,
     };
   }, [kpi, startDate, endDate, baseDate, existingLineActual, newLineActual, segmentStepMap]);
 
@@ -493,54 +475,10 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header: status + sync button */}
-      <div className="flex items-center justify-between gap-4">
-        {isDefault ? (
-          <div className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[color:var(--color-text-secondary)]">
-            KPIが未設定です。KPI設定タブから入力してください。
-          </div>
-        ) : (
-          <div className="flex-1" />
-        )}
-        <button
-          onClick={handleSyncTags}
-          disabled={syncing || isDefault}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[color:var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            className={syncing ? 'animate-spin' : ''}
-          >
-            <path
-              d="M21 12a9 9 0 1 1-2.636-6.364"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <path
-              d="M21 3v6h-6"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {syncing ? '同期中...' : 'Lstep同期'}
-        </button>
-      </div>
-
-      {syncResult && (
-        <div
-          className={`rounded-lg border px-4 py-2 text-xs ${
-            syncResult.success
-              ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
-              : 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
-          }`}
-        >
-          {syncResult.message}
+      {/* Header: status */}
+      {isDefault && (
+        <div className="rounded-lg border border-[color:var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-3 text-sm text-[color:var(--color-text-secondary)]">
+          KPIが未設定です。KPI設定タブから入力してください。
         </div>
       )}
 
@@ -618,7 +556,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       </div>
 
       {/* Funnel step cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {computed.rows.map((row) => {
           const achieveRate = safeDivide(row.actual, row.target) * 100;
           const remaining = Math.max(row.target - row.actual, 0);
@@ -674,7 +612,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         })}
       </div>
 
-      {/* Seminar Daily Breakdown (moved above chart) */}
+      {/* Seminar Daily Breakdown */}
       {kpi.seminarDays.length > 0 && (
         <div className={dashboardCardClass}>
           <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">セミナー日別</p>
@@ -819,14 +757,17 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                 <th className="pb-3 pr-4 text-right font-medium text-blue-600">既存</th>
                 <th className="pb-3 pr-4 text-right font-medium text-emerald-600">新規</th>
                 <th className="pb-3 pr-4 text-right font-medium">達成率</th>
+                <th className="pb-3 pr-4 text-right font-medium">移行率</th>
                 <th className="pb-3 text-left font-medium" style={{ minWidth: 100 }}>進捗</th>
               </tr>
             </thead>
             <tbody>
               {computed.rows.map((row, i) => {
                 const achieveRate = safeDivide(row.actual, row.target) * 100;
-                const remaining = Math.max(row.target - row.actual, 0);
                 const achieved = row.target > 0 && row.actual >= row.target;
+                // 移行率: actual / prevActual * 100 (LINE登録(既存)と新規LINEは表示しない)
+                const showConversion = row.prevActual > 0;
+                const conversionRate = showConversion ? safeDivide(row.actual, row.prevActual) * 100 : 0;
 
                 return (
                   <tr
@@ -863,6 +804,16 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                         </span>
                       )}
                     </td>
+                    <td className="py-3 pr-4 text-right">
+                      {showConversion ? (
+                        <span className="text-sm text-[color:var(--color-text-secondary)]">
+                          <span className="text-[color:var(--color-text-muted)]">{'\u2193'}</span>{' '}
+                          {pct(conversionRate)}
+                        </span>
+                      ) : (
+                        <span className="text-[color:var(--color-text-muted)]">-</span>
+                      )}
+                    </td>
                     <td className="py-3">
                       {row.target > 0 && (
                         <div className="h-2.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: progressBg(achieveRate) }}>
@@ -884,9 +835,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         </div>
       </div>
 
-      {/* 3M Funnel Analysis (from BigQuery tags) */}
-      {startDate && <FunnelAnalysisSection startDate={startDate} />}
-
       {/* Existing vs New LINE Comparison */}
       {startDate && (
         <FunnelComparison
@@ -896,15 +844,15 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         />
       )}
 
-      {/* Time-series Chart */}
+      {/* Chart 1: 教育推移 */}
       {startDate && endDate && (
         <div className={dashboardCardClass}>
           <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">
-            ローンチ推移（累積）
+            教育推移（累積）
           </p>
           {computed.hasChartData ? (
             <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={computed.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <LineChart data={computed.educationChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis
                   dataKey="label"
@@ -946,14 +894,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                     strokeOpacity={0.4}
                   />
                 )}
-                {kpi.frontend.target > 0 && (
-                  <ReferenceLine
-                    y={kpi.frontend.target}
-                    stroke={CHART_COLORS.frontendPurchases}
-                    strokeDasharray="4 4"
-                    strokeOpacity={0.4}
-                  />
-                )}
                 <Line
                   type="monotone"
                   dataKey="lineRegistrations"
@@ -981,33 +921,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                   dot={{ r: 3 }}
                   activeDot={{ r: 5 }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="seminarAttendees"
-                  name="セミナー参加"
-                  stroke={CHART_COLORS.seminarAttendees}
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="frontendPurchases"
-                  name="FE購入"
-                  stroke={CHART_COLORS.frontendPurchases}
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="backendPurchases"
-                  name="BE購入"
-                  stroke={CHART_COLORS.backendPurchases}
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
-                />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -1024,7 +937,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
               {/* Show chart skeleton with just target reference lines */}
               <div className="mt-4 w-full">
                 <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={computed.chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                  <LineChart data={computed.educationChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
                     <XAxis
                       dataKey="label"
@@ -1051,15 +964,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                         label={{ value: `申込 ${numFmt.format(kpi.seminarApplications.target)}`, fontSize: 10, fill: CHART_COLORS.seminarApplications }}
                       />
                     )}
-                    {kpi.frontend.target > 0 && (
-                      <ReferenceLine
-                        y={kpi.frontend.target}
-                        stroke={CHART_COLORS.frontendPurchases}
-                        strokeDasharray="4 4"
-                        strokeOpacity={0.3}
-                        label={{ value: `FE ${numFmt.format(kpi.frontend.target)}`, fontSize: 10, fill: CHART_COLORS.frontendPurchases }}
-                      />
-                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -1068,55 +972,83 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         </div>
       )}
 
+      {/* Chart 2: セミナー推移 */}
+      {startDate && endDate && computed.firstSeminarDate && computed.lastSeminarDate && (
+        <div className={dashboardCardClass}>
+          <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">
+            セミナー推移（累積）
+          </p>
+          {computed.hasChartData ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart data={computed.seminarChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 11 }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+                {computed.seminarAttendTarget > 0 && (
+                  <ReferenceLine
+                    y={computed.seminarAttendTarget}
+                    stroke={CHART_COLORS.seminarAttendees}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.4}
+                  />
+                )}
+                {kpi.frontend.target > 0 && (
+                  <ReferenceLine
+                    y={kpi.frontend.target}
+                    stroke={CHART_COLORS.frontendPurchases}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.4}
+                  />
+                )}
+                <Line
+                  type="monotone"
+                  dataKey="seminarAttendees"
+                  name="セミナー参加"
+                  stroke={CHART_COLORS.seminarAttendees}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="frontendPurchases"
+                  name="FE購入"
+                  stroke={CHART_COLORS.frontendPurchases}
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center py-12 text-sm text-[color:var(--color-text-muted)]">
+              日別データが未入力です
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
-}
-
-// --- Sub-component: 3M Funnel Analysis ---
-
-function FunnelAnalysisSection({ startDate }: { startDate: string }) {
-  const [result, setResult] = useState<FunnelAnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/line/funnel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ funnelDefinition: PRESET_FUNNEL_3M }),
-      });
-      if (!res.ok) throw new Error('ファネルデータの取得に失敗しました');
-      const data = await res.json() as FunnelAnalysisResult;
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!result && !loading) {
-      fetchData();
-    }
-  }, [result, loading, fetchData]);
-
-  if (error) {
-    return (
-      <p className="text-sm text-[color:var(--color-danger)]">ファネル分析エラー: {error}</p>
-    );
-  }
-
-  if (loading || !result) {
-    return (
-      <div className="flex items-center justify-center py-8 text-sm text-[color:var(--color-text-muted)]">
-        ファネル分析を読み込み中...
-      </div>
-    );
-  }
-
-  return <FunnelAnalysis data={result} />;
 }

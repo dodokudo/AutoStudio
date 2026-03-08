@@ -32,7 +32,7 @@ interface DailyTagMapping {
 }
 
 const DAILY_TAG_MAPPINGS: DailyTagMapping[] = [
-  { prefix: '3M:特典受取', field: 'videoViewers' },
+  { prefix: '3M:動画LP遷移', field: 'videoViewers' },
   { prefix: '3M:セミナー申込済み', field: 'seminarApplications' },
   { prefix: '3M:セミナー参加', field: 'seminarAttendees' },
   { prefix: '3M:FE購入', field: 'frontendPurchases' },
