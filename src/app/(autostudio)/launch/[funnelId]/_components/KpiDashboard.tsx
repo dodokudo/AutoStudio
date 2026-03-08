@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
   ResponsiveContainer,
@@ -14,7 +14,16 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { dashboardCardClass } from '@/components/dashboard/styles';
+import { FunnelAnalysis } from '@/app/(autostudio)/line/_components/FunnelAnalysis';
+import { FunnelComparison } from '@/components/FunnelComparison';
+import { PRESET_FUNNEL_3M } from '@/lib/lstep/funnel-types';
+import type { FunnelAnalysisResult } from '@/lib/lstep/funnel-types';
 import type { LaunchKpi } from '@/types/launch';
+
+// ------- Constants -------
+
+/** 3月8日以降が新規、3月7日以前が既存 */
+const SEGMENT_CUTOFF_DATE = '2026-03-08';
 
 // ------- Props -------
 
@@ -108,6 +117,8 @@ interface FunnelRow {
   prevActual: number;
   revenue?: number;
   sub?: string; // sub-label like 既存/新規
+  existingActual?: number;
+  newActual?: number;
 }
 
 // ------- Helper: generate date range -------
@@ -128,6 +139,32 @@ function shortDate(dateStr: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
+// ------- Segment data types -------
+
+interface StepCount {
+  total: number;
+  existing: number;
+  new: number;
+}
+
+interface FriendsCount {
+  existing: number;
+  new: number;
+  total: number;
+  steps?: {
+    video: StepCount;
+    seminarApplied: StepCount;
+    seminarJoined: StepCount;
+    fePurchased: StepCount;
+    bePurchased: StepCount;
+  };
+}
+
+/** ファネルステップごとの既存/新規到達数マップ (stepId -> { existing, new }) */
+interface SegmentStepMap {
+  [stepId: string]: { existing: number; new: number };
+}
+
 // ------- Component -------
 
 export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDashboardProps) {
@@ -139,6 +176,72 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
   const { mutate } = useSWRConfig();
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // BQからLINE友だち数（既存/新規）を取得
+  const [friendsCount, setFriendsCount] = useState<FriendsCount | null>(null);
+  // ファネルの既存/新規セグメント別データ
+  const [segmentStepMap, setSegmentStepMap] = useState<SegmentStepMap | null>(null);
+
+  useEffect(() => {
+    // BQから既存/新規のLINE友だち数を取得
+    fetch(`/api/line/friends-count?cutoff=${SEGMENT_CUTOFF_DATE}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) setFriendsCount({ existing: data.existing, new: data.new, total: data.total, steps: data.steps });
+      })
+      .catch(() => { /* サイレント失敗 */ });
+  }, []);
+
+  useEffect(() => {
+    // 3Mファネルの既存/新規セグメント別データを取得
+    const fetchSegments = async () => {
+      try {
+        const [resExisting, resNew] = await Promise.all([
+          fetch('/api/line/funnel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              funnelDefinition: PRESET_FUNNEL_3M,
+              segmentFilter: 'existing',
+              segmentCutoffDate: SEGMENT_CUTOFF_DATE,
+            }),
+          }),
+          fetch('/api/line/funnel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              funnelDefinition: PRESET_FUNNEL_3M,
+              segmentFilter: 'new',
+              segmentCutoffDate: SEGMENT_CUTOFF_DATE,
+            }),
+          }),
+        ]);
+
+        if (!resExisting.ok || !resNew.ok) return;
+
+        const [dataExisting, dataNew] = await Promise.all([
+          resExisting.json() as Promise<FunnelAnalysisResult>,
+          resNew.json() as Promise<FunnelAnalysisResult>,
+        ]);
+
+        const map: SegmentStepMap = {};
+        for (const step of dataExisting.steps) {
+          map[step.stepId] = { existing: step.reached, new: 0 };
+        }
+        for (const step of dataNew.steps) {
+          if (map[step.stepId]) {
+            map[step.stepId].new = step.reached;
+          } else {
+            map[step.stepId] = { existing: 0, new: step.reached };
+          }
+        }
+        setSegmentStepMap(map);
+      } catch {
+        /* サイレント失敗 */
+      }
+    };
+    fetchSegments();
+  }, []);
 
   const handleSyncTags = useCallback(async () => {
     setSyncing(true);
@@ -172,69 +275,126 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
   };
   const isDefault = data?.isDefault ?? false;
 
+  // BQから取得した実績で上書き（3Mタグデータが信頼できるソース）
+  const existingLineActual = friendsCount?.existing ?? kpi.lineRegistration.existing;
+  const newLineActual = friendsCount?.new ?? 0;
+  const bqSteps = friendsCount?.steps;
+  const videoActual = bqSteps?.video.total ?? kpi.videoViewers.actual;
+  const seminarAppliedActual = bqSteps?.seminarApplied.total ?? kpi.seminarApplications.actual;
+  const seminarJoinedActual = bqSteps?.seminarJoined.total ?? kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0);
+  const feActual = bqSteps?.fePurchased.total ?? kpi.frontend.actual;
+  const beActual = bqSteps?.bePurchased.total ?? kpi.backend.actual;
+
   const computed = useMemo(() => {
     const totalNewLineTarget =
       kpi.inflow.threads.target + kpi.inflow.instagram.target + kpi.inflow.ads.target;
-    const totalNewLine =
-      kpi.inflow.threads.actual + kpi.inflow.instagram.actual + kpi.inflow.ads.actual;
-    const totalLineRegTarget = totalNewLineTarget + kpi.lineRegistration.existing;
-    const totalLineReg = totalNewLine + kpi.lineRegistration.existing;
+    // LINE登録の実績はBQのfriends_countから取得
+    const existingLineCount = existingLineActual;
+    const newLineCount = newLineActual;
+    const totalLineRegTarget = kpi.lineRegistration.existing + totalNewLineTarget;
+    const totalLineReg = existingLineCount + newLineCount;
 
     const seminarAttendTarget = kpi.seminarDays.reduce((sum, d) => sum + d.attendTarget, 0);
     const seminarAttendActual = kpi.seminarDays.reduce((sum, d) => sum + d.attendActual, 0);
 
-    const frontendRevenue = kpi.frontend.unitPrice * kpi.frontend.actual;
-    const backendRevenue = kpi.backend.revenue || kpi.backend.unitPrice * kpi.backend.actual;
+    const frontendRevenue = kpi.frontend.unitPrice * feActual;
+    const backendRevenue = kpi.backend.unitPrice * beActual;
     const totalRevenue = frontendRevenue + backendRevenue;
     const achievementRate = safeDivide(totalRevenue, kpi.kgi.target) * 100;
 
+    // ファネルステップとsegmentStepMapのマッピング
+    // KPIのファネル行 → 3Mファネルのステップ対応
+    const stepMapping: Record<string, string> = {
+      'LINE登録(既存)': 'base',
+      '新規LINE': 'base',
+      'LINE登録': 'base',
+      '動画閲覧': 'video_lp',
+      'セミナー申込': 'seminar_applied',
+      'セミナー参加': 'seminar_joined',
+      'フロント購入': 'fe_purchased',
+      'バックエンド購入': 'be_purchased',
+    };
+
+    const getSegmentActuals = (label: string): { existing: number | undefined; new: number | undefined } => {
+      if (!segmentStepMap) return { existing: undefined, new: undefined };
+      const stepId = stepMapping[label];
+      if (!stepId || !segmentStepMap[stepId]) return { existing: undefined, new: undefined };
+      return segmentStepMap[stepId];
+    };
+
     // Build funnel rows
+    const lineSegment = getSegmentActuals('LINE登録');
+    const videoSegment = getSegmentActuals('動画閲覧');
+    const seminarAppSegment = getSegmentActuals('セミナー申込');
+    const seminarJoinSegment = getSegmentActuals('セミナー参加');
+    const feSegment = getSegmentActuals('フロント購入');
+    const beSegment = getSegmentActuals('バックエンド購入');
+
     const rows: FunnelRow[] = [
       {
-        label: 'LINE登録',
-        target: totalLineRegTarget,
-        actual: totalLineReg,
+        label: 'LINE登録(既存)',
+        target: kpi.lineRegistration.existing,
+        actual: existingLineCount,
         prevTarget: 0,
         prevActual: 0,
-        sub: `既存 ${numFmt.format(kpi.lineRegistration.existing)} / 新規目標 ${numFmt.format(totalNewLineTarget)}`,
+        existingActual: existingLineCount,
+        newActual: undefined,
+      },
+      {
+        label: '新規LINE',
+        target: totalNewLineTarget,
+        actual: newLineCount,
+        prevTarget: 0,
+        prevActual: 0,
+        existingActual: undefined,
+        newActual: newLineCount,
       },
       {
         label: '動画閲覧',
         target: kpi.videoViewers.target,
-        actual: kpi.videoViewers.actual,
+        actual: videoActual,
         prevTarget: totalLineRegTarget,
         prevActual: totalLineReg,
+        existingActual: bqSteps?.video.existing ?? videoSegment.existing,
+        newActual: bqSteps?.video.new ?? videoSegment.new,
       },
       {
         label: 'セミナー申込',
         target: kpi.seminarApplications.target,
-        actual: kpi.seminarApplications.actual,
+        actual: seminarAppliedActual,
         prevTarget: kpi.videoViewers.target,
-        prevActual: kpi.videoViewers.actual,
-        sub: `既存 ${numFmt.format(kpi.seminarApplications.existingActual ?? 0)}/${numFmt.format(kpi.seminarApplications.existingTarget ?? 0)} / 新規 ${numFmt.format(kpi.seminarApplications.newActual ?? 0)}/${numFmt.format(kpi.seminarApplications.newTarget ?? 0)}`,
+        prevActual: videoActual,
+        existingActual: bqSteps?.seminarApplied.existing ?? seminarAppSegment.existing,
+        newActual: bqSteps?.seminarApplied.new ?? seminarAppSegment.new,
       },
       {
         label: 'セミナー参加',
         target: seminarAttendTarget,
-        actual: seminarAttendActual,
+        actual: seminarJoinedActual,
         prevTarget: kpi.seminarApplications.target,
-        prevActual: kpi.seminarApplications.actual,
+        prevActual: seminarAppliedActual,
+        existingActual: bqSteps?.seminarJoined.existing ?? seminarJoinSegment.existing,
+        newActual: bqSteps?.seminarJoined.new ?? seminarJoinSegment.new,
       },
       {
         label: 'フロント購入',
         target: kpi.frontend.target,
-        actual: kpi.frontend.actual,
+        actual: feActual,
         prevTarget: seminarAttendTarget,
-        prevActual: seminarAttendActual,
-        revenue: frontendRevenue,
+        prevActual: seminarJoinedActual,
+        revenue: kpi.frontend.unitPrice * feActual,
+        existingActual: bqSteps?.fePurchased.existing ?? feSegment.existing,
+        newActual: bqSteps?.fePurchased.new ?? feSegment.new,
       },
       {
         label: 'バックエンド購入',
         target: kpi.backend.target,
-        actual: kpi.backend.actual,
+        actual: beActual,
         prevTarget: kpi.frontend.target,
-        prevActual: kpi.frontend.actual,
-        revenue: backendRevenue,
+        prevActual: feActual,
+        revenue: kpi.backend.unitPrice * beActual,
+        existingActual: bqSteps?.bePurchased.existing ?? beSegment.existing,
+        newActual: bqSteps?.bePurchased.new ?? beSegment.new,
       },
     ];
 
@@ -306,9 +466,10 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       chartData,
       hasChartData,
       totalLineRegTarget,
+      totalLineReg,
       seminarAttendTarget,
     };
-  }, [kpi, startDate, endDate, baseDate]);
+  }, [kpi, startDate, endDate, baseDate, existingLineActual, newLineActual, segmentStepMap]);
 
   // ------- Loading / Error -------
 
@@ -457,7 +618,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       </div>
 
       {/* Funnel step cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-7">
         {computed.rows.map((row) => {
           const achieveRate = safeDivide(row.actual, row.target) * 100;
           const remaining = Math.max(row.target - row.actual, 0);
@@ -513,6 +674,137 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         })}
       </div>
 
+      {/* Seminar Daily Breakdown (moved above chart) */}
+      {kpi.seminarDays.length > 0 && (
+        <div className={dashboardCardClass}>
+          <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">セミナー日別</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[color:var(--color-border)] text-xs text-[color:var(--color-text-muted)]">
+                  <th className="pb-3 pr-4 text-left font-medium">日付</th>
+                  <th className="pb-3 pr-4 text-right font-medium">集客目標</th>
+                  <th className="pb-3 pr-4 text-right font-medium">集客実績</th>
+                  <th className="pb-3 pr-4 text-right font-medium">集客率</th>
+                  <th className="pb-3 pr-4 text-right font-medium">参加目標</th>
+                  <th className="pb-3 pr-4 text-right font-medium">参加実績</th>
+                  <th className="pb-3 pr-4 text-right font-medium">参加率</th>
+                  <th className="pb-3 pr-4 text-right font-medium">購入目標</th>
+                  <th className="pb-3 pr-4 text-right font-medium">購入数</th>
+                  <th className="pb-3 text-right font-medium">購入率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kpi.seminarDays.map((day) => {
+                  const recruitRate = safeDivide(day.recruitActual ?? 0, day.recruitTarget) * 100;
+                  const attendRate = safeDivide(day.attendActual, day.attendTarget) * 100;
+                  const purchaseRate = safeDivide(day.purchaseCount, day.purchaseTarget ?? 0) * 100;
+                  return (
+                    <tr
+                      key={day.date}
+                      className="border-b border-[color:var(--color-border)] last:border-0"
+                    >
+                      <td className="py-3 pr-4 font-medium text-[color:var(--color-text-primary)]">
+                        {day.date}
+                      </td>
+                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(day.recruitTarget)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
+                        {numFmt.format(day.recruitActual ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: day.recruitTarget === 0 ? undefined : progressColor(recruitRate) }}
+                        >
+                          {day.recruitTarget === 0 ? '-' : pct(recruitRate)}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(day.attendTarget)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
+                        {numFmt.format(day.attendActual)}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: day.attendTarget === 0 ? undefined : progressColor(attendRate) }}
+                        >
+                          {day.attendTarget === 0 ? '-' : pct(attendRate)}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(day.purchaseTarget ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
+                        {numFmt.format(day.purchaseCount)}
+                      </td>
+                      <td className="py-3 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: (day.purchaseTarget ?? 0) === 0 ? undefined : progressColor(purchaseRate) }}
+                        >
+                          {(day.purchaseTarget ?? 0) === 0 ? '-' : pct(purchaseRate)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[color:var(--color-border)] font-semibold">
+                  <td className="pt-3 pr-4 text-[color:var(--color-text-primary)]">合計</td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right">
+                    {(() => {
+                      const t = kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0);
+                      const a = kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0);
+                      const r = safeDivide(a, t) * 100;
+                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
+                    })()}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right">
+                    {(() => {
+                      const t = kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0);
+                      const a = kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0);
+                      const r = safeDivide(a, t) * 100;
+                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
+                    })()}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0))}
+                  </td>
+                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0))}
+                  </td>
+                  <td className="pt-3 text-right">
+                    {(() => {
+                      const t = kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0);
+                      const p = kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0);
+                      const r = safeDivide(p, t) * 100;
+                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
+                    })()}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Funnel Progress Table */}
       <div className={dashboardCardClass}>
         <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">ファネル進捗</p>
@@ -523,10 +815,9 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                 <th className="pb-3 pr-4 text-left font-medium">#</th>
                 <th className="pb-3 pr-4 text-left font-medium">ステップ</th>
                 <th className="pb-3 pr-4 text-right font-medium">目標</th>
-                <th className="pb-3 pr-4 text-right font-medium">実績</th>
-                <th className="pb-3 pr-4 text-right font-medium">残り</th>
-                <th className="pb-3 pr-4 text-right font-medium">目標移行率</th>
-                <th className="pb-3 pr-4 text-right font-medium">実績移行率</th>
+                <th className="pb-3 pr-4 text-right font-medium">実績(全体)</th>
+                <th className="pb-3 pr-4 text-right font-medium text-blue-600">既存</th>
+                <th className="pb-3 pr-4 text-right font-medium text-emerald-600">新規</th>
                 <th className="pb-3 pr-4 text-right font-medium">達成率</th>
                 <th className="pb-3 text-left font-medium" style={{ minWidth: 100 }}>進捗</th>
               </tr>
@@ -534,8 +825,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
             <tbody>
               {computed.rows.map((row, i) => {
                 const achieveRate = safeDivide(row.actual, row.target) * 100;
-                const targetConvRate = i === 0 ? null : safeDivide(row.target, row.prevTarget) * 100;
-                const actualConvRate = i === 0 ? null : safeDivide(row.actual, row.prevActual) * 100;
                 const remaining = Math.max(row.target - row.actual, 0);
                 const achieved = row.target > 0 && row.actual >= row.target;
 
@@ -547,11 +836,6 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                     <td className="py-3 pr-4 text-xs text-[color:var(--color-text-muted)]">{i}</td>
                     <td className="py-3 pr-4 text-[color:var(--color-text-primary)]">
                       <span className="font-medium">{row.label}</span>
-                      {row.sub && (
-                        <span className="ml-2 text-[10px] text-[color:var(--color-text-muted)]">
-                          ({row.sub})
-                        </span>
-                      )}
                     </td>
                     <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
                       {row.target > 0 ? numFmt.format(row.target) : '-'}
@@ -559,41 +843,17 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                     <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
                       {numFmt.format(row.actual)}
                     </td>
-                    <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                      {row.target > 0
-                        ? achieved
-                          ? <span className="font-medium text-[#16A34A]">達成</span>
-                          : numFmt.format(remaining)
-                        : '-'}
+                    <td className="py-3 pr-4 text-right text-blue-600">
+                      {row.existingActual !== undefined ? numFmt.format(row.existingActual) : '-'}
                     </td>
-                    <td className="py-3 pr-4 text-right">
-                      {targetConvRate === null ? (
-                        <span className="text-[color:var(--color-text-muted)]">-</span>
-                      ) : row.prevTarget === 0 ? (
-                        <span className="text-[color:var(--color-text-muted)]">-</span>
-                      ) : (
-                        <span className="text-[color:var(--color-text-secondary)]">
-                          {pct(targetConvRate)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 pr-4 text-right">
-                      {actualConvRate === null ? (
-                        <span className="text-[color:var(--color-text-muted)]">-</span>
-                      ) : row.prevActual === 0 ? (
-                        <span className="text-[color:var(--color-text-muted)]">0.0%</span>
-                      ) : (
-                        <span
-                          className="font-semibold"
-                          style={{ color: progressColor(actualConvRate) }}
-                        >
-                          {pct(actualConvRate)}
-                        </span>
-                      )}
+                    <td className="py-3 pr-4 text-right text-emerald-600">
+                      {row.newActual !== undefined ? numFmt.format(row.newActual) : '-'}
                     </td>
                     <td className="py-3 pr-4 text-right">
                       {row.target === 0 ? (
                         <span className="text-[color:var(--color-text-muted)]">-</span>
+                      ) : achieved ? (
+                        <span className="font-semibold text-[#16A34A]">達成</span>
                       ) : (
                         <span
                           className="font-semibold"
@@ -623,6 +883,18 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
           </table>
         </div>
       </div>
+
+      {/* 3M Funnel Analysis (from BigQuery tags) */}
+      {startDate && <FunnelAnalysisSection startDate={startDate} />}
+
+      {/* Existing vs New LINE Comparison */}
+      {startDate && (
+        <FunnelComparison
+          funnelDefinition={PRESET_FUNNEL_3M}
+          cutoffDate={SEGMENT_CUTOFF_DATE}
+          autoFetch
+        />
+      )}
 
       {/* Time-series Chart */}
       {startDate && endDate && (
@@ -796,136 +1068,55 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         </div>
       )}
 
-      {/* Seminar Daily Breakdown */}
-      {kpi.seminarDays.length > 0 && (
-        <div className={dashboardCardClass}>
-          <p className="mb-4 text-sm font-semibold text-[color:var(--color-text-primary)]">セミナー日別</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[color:var(--color-border)] text-xs text-[color:var(--color-text-muted)]">
-                  <th className="pb-3 pr-4 text-left font-medium">日付</th>
-                  <th className="pb-3 pr-4 text-right font-medium">集客目標</th>
-                  <th className="pb-3 pr-4 text-right font-medium">集客実績</th>
-                  <th className="pb-3 pr-4 text-right font-medium">集客率</th>
-                  <th className="pb-3 pr-4 text-right font-medium">参加目標</th>
-                  <th className="pb-3 pr-4 text-right font-medium">参加実績</th>
-                  <th className="pb-3 pr-4 text-right font-medium">参加率</th>
-                  <th className="pb-3 pr-4 text-right font-medium">購入目標</th>
-                  <th className="pb-3 pr-4 text-right font-medium">購入数</th>
-                  <th className="pb-3 text-right font-medium">購入率</th>
-                </tr>
-              </thead>
-              <tbody>
-                {kpi.seminarDays.map((day) => {
-                  const recruitRate = safeDivide(day.recruitActual ?? 0, day.recruitTarget) * 100;
-                  const attendRate = safeDivide(day.attendActual, day.attendTarget) * 100;
-                  const purchaseRate = safeDivide(day.purchaseCount, day.purchaseTarget ?? 0) * 100;
-                  return (
-                    <tr
-                      key={day.date}
-                      className="border-b border-[color:var(--color-border)] last:border-0"
-                    >
-                      <td className="py-3 pr-4 font-medium text-[color:var(--color-text-primary)]">
-                        {day.date}
-                      </td>
-                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                        {numFmt.format(day.recruitTarget)}
-                      </td>
-                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
-                        {numFmt.format(day.recruitActual ?? 0)}
-                      </td>
-                      <td className="py-3 pr-4 text-right">
-                        <span
-                          className="font-semibold"
-                          style={{ color: day.recruitTarget === 0 ? undefined : progressColor(recruitRate) }}
-                        >
-                          {day.recruitTarget === 0 ? '-' : pct(recruitRate)}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                        {numFmt.format(day.attendTarget)}
-                      </td>
-                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
-                        {numFmt.format(day.attendActual)}
-                      </td>
-                      <td className="py-3 pr-4 text-right">
-                        <span
-                          className="font-semibold"
-                          style={{ color: day.attendTarget === 0 ? undefined : progressColor(attendRate) }}
-                        >
-                          {day.attendTarget === 0 ? '-' : pct(attendRate)}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                        {numFmt.format(day.purchaseTarget ?? 0)}
-                      </td>
-                      <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
-                        {numFmt.format(day.purchaseCount)}
-                      </td>
-                      <td className="py-3 text-right">
-                        <span
-                          className="font-semibold"
-                          style={{ color: (day.purchaseTarget ?? 0) === 0 ? undefined : progressColor(purchaseRate) }}
-                        >
-                          {(day.purchaseTarget ?? 0) === 0 ? '-' : pct(purchaseRate)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-[color:var(--color-border)] font-semibold">
-                  <td className="pt-3 pr-4 text-[color:var(--color-text-primary)]">合計</td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right">
-                    {(() => {
-                      const t = kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0);
-                      const a = kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0);
-                      const r = safeDivide(a, t) * 100;
-                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
-                    })()}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right">
-                    {(() => {
-                      const t = kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0);
-                      const a = kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0);
-                      const r = safeDivide(a, t) * 100;
-                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
-                    })()}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0))}
-                  </td>
-                  <td className="pt-3 text-right">
-                    {(() => {
-                      const t = kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0);
-                      const p = kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0);
-                      const r = safeDivide(p, t) * 100;
-                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
-                    })()}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
+}
+
+// --- Sub-component: 3M Funnel Analysis ---
+
+function FunnelAnalysisSection({ startDate }: { startDate: string }) {
+  const [result, setResult] = useState<FunnelAnalysisResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/line/funnel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ funnelDefinition: PRESET_FUNNEL_3M }),
+      });
+      if (!res.ok) throw new Error('ファネルデータの取得に失敗しました');
+      const data = await res.json() as FunnelAnalysisResult;
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!result && !loading) {
+      fetchData();
+    }
+  }, [result, loading, fetchData]);
+
+  if (error) {
+    return (
+      <p className="text-sm text-[color:var(--color-danger)]">ファネル分析エラー: {error}</p>
+    );
+  }
+
+  if (loading || !result) {
+    return (
+      <div className="flex items-center justify-center py-8 text-sm text-[color:var(--color-text-muted)]">
+        ファネル分析を読み込み中...
+      </div>
+    );
+  }
+
+  return <FunnelAnalysis data={result} />;
 }
