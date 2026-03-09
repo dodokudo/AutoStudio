@@ -77,6 +77,7 @@ export interface DeliveryItem {
   // Lステップ連携（配信IDベースのメトリクスマッチングに使用）
   lstepBroadcastId?: string; // 一斉配信ID（予約後に書き戻し）
   lstepUrlId?: string; // URL計測ID（クリックメトリクスの紐付けに使用）
+  urlClicks?: Array<{ url?: string; clicks?: number; visitors?: number }>; // URLクリック実績
   // 配信先情報（セグメント別分析用）
   deliveryTarget?: string; // Lステップ配信先条件（例: "全員", "タグ:3M:登録日"）
 }
@@ -134,8 +135,8 @@ export interface SeminarDay {
   recruitActual: number;
   attendTarget: number;
   attendActual: number;
-  purchaseTarget: number;
-  purchaseCount: number;
+  purchaseTarget?: number;
+  purchaseCount?: number;
 }
 
 export interface DailyMetric {
@@ -167,6 +168,11 @@ export interface LaunchKpi {
     existingActual?: number;
     newTarget?: number;
     newActual?: number;
+    watchActual?: number;
+    ebookActual?: number;
+    ebookViewActual?: number;
+    surveyActual?: number;
+    preEngageActual?: number;
   };
   seminarApplications: {
     target: number;
@@ -175,6 +181,8 @@ export interface LaunchKpi {
     existingActual?: number;
     newTarget?: number;
     newActual?: number;
+    formVisits?: number;
+    attendActual?: number;
   };
   seminarDays: SeminarDay[];
   frontend: { unitPrice: number; target: number; actual: number };

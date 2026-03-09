@@ -6,7 +6,7 @@ const PROJECT_ID = (() => {
   return preferred ? resolveProjectId(preferred) : null;
 })();
 
-const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'lstep';
+const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 const TABLE_NAME = 'lstep_friends_raw';
 
 /**
@@ -29,6 +29,9 @@ export async function GET(request: Request) {
   try {
     const client = createBigQueryClient(PROJECT_ID, process.env.LSTEP_BQ_LOCATION);
 
+    // BQテーブルの実際のカラム名:
+    // 3m_lp = 3M:動画LP遷移, 3m_done = 3M:セミナー申込済み,
+    // 3m_fe = 3M:FE購入, 3m_be = 3M:BE購入
     const [rows] = await client.query({
       query: `
         WITH latest AS (
@@ -40,26 +43,23 @@ export async function GET(request: Request) {
           COUNTIF(DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS new_count,
           COUNT(*) AS total_count,
           -- 3Mタグ: 全体
-          COUNTIF(\`3m_video_lp\` = 1) AS video_total,
-          COUNTIF(\`3m_survey_completed\` = 1) AS survey_total,
-          COUNTIF(\`3m_seminar_form\` = 1) AS seminar_form_total,
-          COUNTIF(\`3m_seminar_applied\` = 1) AS seminar_applied_total,
-          COUNTIF(\`3m_seminar_joined\` = 1) AS seminar_joined_total,
-          COUNTIF(\`3m_bonus_received\` = 1) AS bonus_received_total,
-          COUNTIF(\`3m_fe_purchased\` = 1) AS fe_purchased_total,
-          COUNTIF(\`3m_be_purchased\` = 1) AS be_purchased_total,
+          COUNTIF(\`3m_lp\` = 1) AS video_total,
+          COUNTIF(\`3m_done\` = 1) AS seminar_applied_total,
+          0 AS seminar_joined_total, -- セミナー参加カラムは友だちCSVに未存在
+          COUNTIF(\`3m_fe\` = 1) AS fe_purchased_total,
+          COUNTIF(\`3m_be\` = 1) AS be_purchased_total,
           -- 3Mタグ: 既存
-          COUNTIF(\`3m_video_lp\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS video_existing,
-          COUNTIF(\`3m_seminar_applied\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS seminar_applied_existing,
-          COUNTIF(\`3m_seminar_joined\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS seminar_joined_existing,
-          COUNTIF(\`3m_fe_purchased\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS fe_purchased_existing,
-          COUNTIF(\`3m_be_purchased\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS be_purchased_existing,
+          COUNTIF(\`3m_lp\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS video_existing,
+          COUNTIF(\`3m_done\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS seminar_applied_existing,
+          0 AS seminar_joined_existing,
+          COUNTIF(\`3m_fe\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS fe_purchased_existing,
+          COUNTIF(\`3m_be\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS be_purchased_existing,
           -- 3Mタグ: 新規
-          COUNTIF(\`3m_video_lp\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS video_new,
-          COUNTIF(\`3m_seminar_applied\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS seminar_applied_new,
-          COUNTIF(\`3m_seminar_joined\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS seminar_joined_new,
-          COUNTIF(\`3m_fe_purchased\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS fe_purchased_new,
-          COUNTIF(\`3m_be_purchased\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS be_purchased_new
+          COUNTIF(\`3m_lp\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS video_new,
+          COUNTIF(\`3m_done\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS seminar_applied_new,
+          0 AS seminar_joined_new,
+          COUNTIF(\`3m_fe\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS fe_purchased_new,
+          COUNTIF(\`3m_be\` = 1 AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS be_purchased_new
         FROM \`${PROJECT_ID}.${DATASET_ID}.${TABLE_NAME}\` t
         JOIN latest l ON t.snapshot_date = l.sd
         WHERE t.friend_added_at IS NOT NULL

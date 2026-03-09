@@ -18,11 +18,7 @@ import { FunnelComparison } from '@/components/FunnelComparison';
 import { PRESET_FUNNEL_3M } from '@/lib/lstep/funnel-types';
 import type { FunnelAnalysisResult } from '@/lib/lstep/funnel-types';
 import type { LaunchKpi } from '@/types/launch';
-
-// ------- Constants -------
-
-/** 3月8日以降が新規、3月7日以前が既存 */
-const SEGMENT_CUTOFF_DATE = '2026-03-08';
+import { SEGMENT_CUTOFF_DATE } from '@/lib/launch-constants';
 
 // ------- Props -------
 
@@ -183,7 +179,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       .then(data => {
         if (data) setFriendsCount({ existing: data.existing, new: data.new, total: data.total, steps: data.steps });
       })
-      .catch(() => { /* サイレント失敗 */ });
+      .catch((err) => { console.error('[KpiDashboard] friends-count API failed:', err); });
   }, []);
 
   useEffect(() => {
@@ -246,9 +242,10 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
   };
   const isDefault = data?.isDefault ?? false;
 
-  // BQから取得した実績で上書き（3Mタグデータが信頼できるソース）
+  // 既存LINE実績はfriends-count API（リアルタイム）、フォールバックはKPI設定値
+  // 新規LINE実績もfriends-count API、フォールバックはKPIのnewActual
   const existingLineActual = friendsCount?.existing ?? kpi.lineRegistration.existing;
-  const newLineActual = friendsCount?.new ?? 0;
+  const newLineActual = friendsCount?.new ?? kpi.lineRegistration.newActual;
   const bqSteps = friendsCount?.steps;
   const videoActual = bqSteps?.video.total ?? kpi.videoViewers.actual;
   const seminarAppliedActual = bqSteps?.seminarApplied.total ?? kpi.seminarApplications.actual;
@@ -531,7 +528,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
               {yen(computed.frontendRevenue)}
             </p>
             <p className="text-[10px] text-[color:var(--color-text-muted)]">
-              {kpi.frontend.unitPrice > 0 ? `${yen(kpi.frontend.unitPrice)} x ${kpi.frontend.actual}人` : ''}
+              {kpi.frontend.unitPrice > 0 ? `${yen(kpi.frontend.unitPrice)} x ${feActual}人` : ''}
             </p>
           </div>
           <div>
@@ -549,7 +546,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
               {yen(computed.backendRevenue)}
             </p>
             <p className="text-[10px] text-[color:var(--color-text-muted)]">
-              {kpi.backend.unitPrice > 0 ? `${yen(kpi.backend.unitPrice)} x ${kpi.backend.actual}人` : ''}
+              {kpi.backend.unitPrice > 0 ? `${yen(kpi.backend.unitPrice)} x ${beActual}人` : ''}
             </p>
           </div>
         </div>
@@ -636,7 +633,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                 {kpi.seminarDays.map((day) => {
                   const recruitRate = safeDivide(day.recruitActual ?? 0, day.recruitTarget) * 100;
                   const attendRate = safeDivide(day.attendActual, day.attendTarget) * 100;
-                  const purchaseRate = safeDivide(day.purchaseCount, day.purchaseTarget ?? 0) * 100;
+                  const purchaseRate = safeDivide(day.purchaseCount ?? 0, day.purchaseTarget ?? 0) * 100;
                   return (
                     <tr
                       key={day.date}
@@ -677,7 +674,7 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                         {numFmt.format(day.purchaseTarget ?? 0)}
                       </td>
                       <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
-                        {numFmt.format(day.purchaseCount)}
+                        {numFmt.format(day.purchaseCount ?? 0)}
                       </td>
                       <td className="py-3 text-right">
                         <span
@@ -726,12 +723,12 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                     {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0))}
                   </td>
                   <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0))}
+                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.purchaseCount ?? 0), 0))}
                   </td>
                   <td className="pt-3 text-right">
                     {(() => {
                       const t = kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0);
-                      const p = kpi.seminarDays.reduce((s, d) => s + d.purchaseCount, 0);
+                      const p = kpi.seminarDays.reduce((s, d) => s + (d.purchaseCount ?? 0), 0);
                       const r = safeDivide(p, t) * 100;
                       return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
                     })()}

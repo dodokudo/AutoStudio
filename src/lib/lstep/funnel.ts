@@ -31,22 +31,9 @@ export async function analyzeFunnel(
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
   const datasetId = DEFAULT_DATASET;
 
-  // 最新のスナップショット日付を取得（指定がない場合）
-  let snapshotDate = options?.snapshotDate;
-  if (!snapshotDate) {
-    const [latestSnapshot] = await client.query({
-      query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM \`${projectId}.${datasetId}.${TABLE_NAME}\``,
-    });
-    snapshotDate = (latestSnapshot[0] as { snapshot_date: string })?.snapshot_date;
-  }
-
-  if (!snapshotDate) {
-    throw new Error('No snapshot data available');
-  }
-
-  // 日付フィルタ条件を構築
+  // 日付フィルタ条件を構築（JOINのため t. エイリアス必須）
   const dateFilter = options?.startDate && options?.endDate
-    ? 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate'
+    ? 'AND DATE(TIMESTAMP(t.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate'
     : '';
 
   // 新規/既存フィルタ条件を構築
@@ -54,14 +41,14 @@ export async function analyzeFunnel(
     const filter = options?.segmentFilter;
     const cutoff = options?.segmentCutoffDate;
     if (!filter || filter === 'all' || !cutoff) return '';
-    if (filter === 'new') return 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @segmentCutoffDate';
-    if (filter === 'existing') return 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @segmentCutoffDate';
+    if (filter === 'new') return 'AND DATE(TIMESTAMP(t.friend_added_at), "Asia/Tokyo") >= @segmentCutoffDate';
+    if (filter === 'existing') return 'AND DATE(TIMESTAMP(t.friend_added_at), "Asia/Tokyo") < @segmentCutoffDate';
     return '';
   })();
 
   // BigQueryパラメータを構築（undefinedを除外）
   const buildParams = () => {
-    const params: Record<string, string> = { snapshotDate };
+    const params: Record<string, string> = {};
     if (options?.startDate) params.startDate = options.startDate;
     if (options?.endDate) params.endDate = options.endDate;
     if (options?.segmentFilter && options.segmentFilter !== 'all' && options?.segmentCutoffDate) {
@@ -70,14 +57,22 @@ export async function analyzeFunnel(
     return params;
   };
 
+  // 最新スナップショットをJOINで常に取得（staleデータ防止）
+  const latestJoinCTE = `
+    WITH latest AS (
+      SELECT MAX(snapshot_date) AS sd
+      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+    )`;
+
   // 計測対象の総数を取得
   const [totalRows] = await client.query({
     query: `
-      SELECT COUNT(DISTINCT id) AS total
-      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-      WHERE snapshot_date = @snapshotDate
-        AND friend_added_at IS NOT NULL
-        AND blocked = 0
+      ${latestJoinCTE}
+      SELECT COUNT(DISTINCT t.id) AS total
+      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\` t
+      JOIN latest l ON t.snapshot_date = l.sd
+      WHERE t.friend_added_at IS NOT NULL
+        AND t.blocked = 0
         ${dateFilter}
         ${segmentFilterClause}
     `,
@@ -85,6 +80,10 @@ export async function analyzeFunnel(
   });
 
   const totalBase = Number((totalRows[0] as { total: number }).total);
+
+  if (totalBase === 0 && !options?.segmentFilter) {
+    throw new Error('No snapshot data available');
+  }
 
   // 各ステップの到達人数を取得
   const stepResults: FunnelStepResult[] = [];
@@ -101,11 +100,12 @@ export async function analyzeFunnel(
     } else {
       const [rows] = await client.query({
         query: `
-          SELECT COUNT(DISTINCT CASE WHEN \`${step.tagColumn}\` = 1 THEN id END) AS reached
-          FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-          WHERE snapshot_date = @snapshotDate
-            AND friend_added_at IS NOT NULL
-            AND blocked = 0
+          ${latestJoinCTE}
+          SELECT COUNT(DISTINCT CASE WHEN t.\`${step.tagColumn}\` = 1 THEN t.id END) AS reached
+          FROM \`${projectId}.${datasetId}.${TABLE_NAME}\` t
+          JOIN latest l ON t.snapshot_date = l.sd
+          WHERE t.friend_added_at IS NOT NULL
+            AND t.blocked = 0
             ${dateFilter}
             ${segmentFilterClause}
         `,

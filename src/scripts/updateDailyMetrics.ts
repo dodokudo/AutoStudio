@@ -198,8 +198,8 @@ async function main(): Promise<void> {
       const prevCount = prevTags?.get(mapping.field) ?? 0;
 
       if (dateIdx === 0 && currentTags?.has(mapping.field)) {
-        // 最初の日は差分が取れないので0にする
-        metric[mapping.field] = 0;
+        // 最初の日は累積値をそのまま使う（ローンチ開始時点の実績）
+        metric[mapping.field] = currentCount;
       } else if (currentTags?.has(mapping.field)) {
         const diff = currentCount - prevCount;
         metric[mapping.field] = Math.max(0, diff); // マイナスは0にクランプ

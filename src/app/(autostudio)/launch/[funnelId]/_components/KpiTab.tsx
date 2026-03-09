@@ -215,7 +215,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
         attendTarget: acc.attendTarget + d.attendTarget,
         attendActual: acc.attendActual + d.attendActual,
         purchaseTarget: acc.purchaseTarget + (d.purchaseTarget ?? 0),
-        purchaseCount: acc.purchaseCount + d.purchaseCount,
+        purchaseCount: acc.purchaseCount + (d.purchaseCount ?? 0),
       }),
       { recruitTarget: 0, recruitActual: 0, attendTarget: 0, attendActual: 0, purchaseTarget: 0, purchaseCount: 0 },
     );
@@ -705,7 +705,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                   const attendRate =
                     safeDivide(day.attendActual, day.attendTarget) * 100;
                   const purchaseRate =
-                    safeDivide(day.purchaseCount, day.purchaseTarget ?? 0) * 100;
+                    safeDivide(day.purchaseCount ?? 0, day.purchaseTarget ?? 0) * 100;
                   return (
                     <tr
                       key={i}
@@ -771,7 +771,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                       </td>
                       <td className="px-2 py-1.5 text-right">
                         <NumberInput
-                          value={day.purchaseCount}
+                          value={day.purchaseCount ?? 0}
                           onChange={(v) => setSeminarDay(i, 'purchaseCount', v)}
                           suffix="人"
                           compact
