@@ -117,6 +117,10 @@ interface FunnelRow {
   pacedTarget?: number;
   /** ペース達成率 */
   pacedRate?: number;
+  /** 1日あたりの必要人数 */
+  dailyTarget?: number;
+  /** 経過日数 / 全日数（例: "3/14日目"） */
+  paceLabel?: string;
 }
 
 // ------- Helper: generate date range -------
@@ -373,22 +377,46 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     const lastSeminarDate = seminarDayDates.length > 0 ? seminarDayDates[seminarDayDates.length - 1] : null;
 
     // Compute paced targets (今日までの日割り目標)
-    // 期間: SEGMENT_CUTOFF_DATE(3/8) 〜 セミナー最終日(3/21)
+    // JST基準で今日の日付を計算
+    const nowJst = new Date(Date.now() + 9 * 3600000);
+    const todayStr = nowJst.toISOString().slice(0, 10);
+
     if (lastSeminarDate) {
-      const startMs = new Date(SEGMENT_CUTOFF_DATE).getTime();
-      const endMs = new Date(lastSeminarDate).getTime();
-      const totalDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
-      // JST基準で今日の日付を計算
-      const nowJst = new Date(Date.now() + 9 * 3600000);
-      const todayStr = nowJst.toISOString().slice(0, 10);
-      const elapsedMs = new Date(todayStr).getTime() - startMs;
-      const elapsedDays = Math.max(0, Math.min(Math.round(elapsedMs / 86400000) + 1, totalDays));
+      // ① 新規LINE・動画閲覧・セミナー申込: 3/8〜セミナー最終日の日割り
+      const eduStart = new Date(SEGMENT_CUTOFF_DATE).getTime();
+      const eduEnd = new Date(lastSeminarDate).getTime();
+      const eduTotalDays = Math.max(1, Math.round((eduEnd - eduStart) / 86400000) + 1);
+      const eduElapsedMs = new Date(todayStr).getTime() - eduStart;
+      const eduElapsedDays = Math.max(0, Math.min(Math.round(eduElapsedMs / 86400000) + 1, eduTotalDays));
+
+      // ② セミナー参加・フロント購入: セミナー開催日ベース（開催日数で割る）
+      const seminarTotalDays = seminarDayDates.length; // 開催日数（例: 6日）
+      const seminarElapsedDays = seminarDayDates.filter(d => d <= todayStr).length; // 今日までに開催済みの日数
 
       for (const row of rows) {
-        if (row.target > 0 && elapsedDays > 0) {
-          const paced = Math.round(row.target * (elapsedDays / totalDays));
-          row.pacedTarget = paced;
-          row.pacedRate = paced > 0 ? safeDivide(row.actual, paced) * 100 : 0;
+        if (row.target <= 0) continue;
+
+        // LINE登録(既存) はペース表示不要（募集終了）
+        if (row.label === 'LINE登録(既存)') continue;
+
+        if (row.label === 'セミナー参加' || row.label === 'フロント購入') {
+          // セミナー開催日ベース
+          if (seminarTotalDays > 0 && seminarElapsedDays > 0) {
+            const paced = Math.round(row.target * (seminarElapsedDays / seminarTotalDays));
+            row.pacedTarget = paced;
+            row.pacedRate = paced > 0 ? safeDivide(row.actual, paced) * 100 : 0;
+            row.dailyTarget = Math.ceil(row.target / seminarTotalDays);
+            row.paceLabel = `${seminarElapsedDays}/${seminarTotalDays}回目`;
+          }
+        } else {
+          // 教育期間ベース（3/8〜3/21日割り）
+          if (eduElapsedDays > 0) {
+            const paced = Math.round(row.target * (eduElapsedDays / eduTotalDays));
+            row.pacedTarget = paced;
+            row.pacedRate = paced > 0 ? safeDivide(row.actual, paced) * 100 : 0;
+            row.dailyTarget = Math.ceil(row.target / eduTotalDays);
+            row.paceLabel = `${eduElapsedDays}/${eduTotalDays}日目`;
+          }
         }
       }
     }
@@ -624,13 +652,21 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                     <div className="mt-1.5 border-t border-dashed border-[color:var(--color-border)] pt-1.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] text-[color:var(--color-text-muted)]">
-                          本日目標 {numFmt.format(row.pacedTarget)}人
+                          {row.paceLabel}
                         </span>
                         <span
                           className="text-[10px] font-bold"
                           style={{ color: progressColor(row.pacedRate) }}
                         >
                           {pct(row.pacedRate)}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between text-[9px]">
+                        <span className="text-[color:var(--color-text-muted)]">
+                          {row.dailyTarget !== undefined && `${row.dailyTarget}人/日`}
+                        </span>
+                        <span className="text-[color:var(--color-text-secondary)]">
+                          今日まで {numFmt.format(row.pacedTarget)}人
                         </span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-1">
