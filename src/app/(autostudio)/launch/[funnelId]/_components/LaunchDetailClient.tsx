@@ -130,9 +130,13 @@ function matchDeliveriesWithMetrics(
 
   // Pass 2: Date-based fallback for remaining deliveries
   return deliveries.map((delivery, idx) => {
-    const clickCount = delivery.clickTag
+    // clickTag → tag_metrics lookup, fallback to urlClicks sum
+    let clickCount: number | undefined = delivery.clickTag
       ? tagMetrics[delivery.clickTag] ?? undefined
       : undefined;
+    if (clickCount === undefined && delivery.urlClicks && delivery.urlClicks.length > 0) {
+      clickCount = delivery.urlClicks.reduce((sum: number, u: { clicks?: number }) => sum + (u.clicks ?? 0), 0);
+    }
 
     // Use direct match if available
     const direct = directMatches.get(idx);
@@ -751,7 +755,7 @@ function AnalysisTab({
                         -
                       </span>
                     )}
-                    {delivery.clickCount !== undefined && delivery.latestMetric && delivery.latestMetric.delivery_count > 0 && (
+                    {delivery.clickCount !== undefined && delivery.clickCount > 0 && (
                       <span
                         className="rounded px-2 py-0.5 text-[11px] font-semibold"
                         style={{
@@ -760,7 +764,9 @@ function AnalysisTab({
                         }}
                         title={`クリック ${delivery.clickCount}人`}
                       >
-                        {((delivery.clickCount / delivery.latestMetric.delivery_count) * 100).toFixed(1)}%
+                        {delivery.latestMetric && delivery.latestMetric.delivery_count > 0
+                          ? `${((delivery.clickCount / delivery.latestMetric.delivery_count) * 100).toFixed(1)}%`
+                          : `${delivery.clickCount}人`}
                       </span>
                     )}
                   </div>
