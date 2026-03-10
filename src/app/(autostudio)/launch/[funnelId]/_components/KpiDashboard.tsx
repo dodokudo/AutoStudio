@@ -390,12 +390,11 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
       const eduElapsedMs = new Date(dataAsOfStr).getTime() - eduStartMs;
       const eduElapsedDays = Math.max(0, Math.min(Math.round(eduElapsedMs / 86400000) + 1, eduTotalDays));
 
-      // ② セミナー参加・フロント購入: 3/14(初日)〜3/21(最終日)の日数ベース
-      const semStartMs = new Date(firstSeminarDate).getTime();
-      const semEndMs = new Date(lastSeminarDate).getTime();
-      const semTotalDays = Math.max(1, Math.round((semEndMs - semStartMs) / 86400000) + 1);
-      const semElapsedMs = new Date(dataAsOfStr).getTime() - semStartMs;
-      const semElapsedDays = Math.max(0, Math.min(Math.round(semElapsedMs / 86400000) + 1, semTotalDays));
+      // ② セミナー参加・フロント購入: セミナー日別の目標累積ベース
+      const semDaysElapsed = kpi.seminarDays.filter(d => d.date <= dataAsOfStr);
+      const semAttendPaced = semDaysElapsed.reduce((s, d) => s + d.attendTarget, 0);
+      const semPurchasePaced = semDaysElapsed.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0);
+      const semTotalDays = kpi.seminarDays.length;
 
       for (const row of rows) {
         if (row.target <= 0) continue;
@@ -403,17 +402,26 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         // LINE登録(既存) はペース表示不要（募集終了）
         if (row.label === 'LINE登録(既存)') continue;
 
-        if (row.label === 'セミナー参加' || row.label === 'フロント購入') {
-          // セミナー期間ベース（3/14〜3/21）
-          const daily = Math.ceil(row.target / semTotalDays);
-          row.dailyTarget = daily;
-          if (semElapsedDays > 0) {
-            const paced = Math.round(row.target * (semElapsedDays / semTotalDays));
-            row.pacedTarget = paced;
-            row.pacedRate = paced > 0 ? safeDivide(row.actual, paced) * 100 : 0;
-            row.paceLabel = `${semElapsedDays}/${semTotalDays}日目`;
+        if (row.label === 'セミナー参加') {
+          // セミナー日別の参加目標累積
+          row.dailyTarget = semTotalDays > 0 ? Math.ceil(row.target / semTotalDays) : 0;
+          if (semDaysElapsed.length > 0) {
+            row.pacedTarget = semAttendPaced;
+            row.pacedRate = semAttendPaced > 0 ? safeDivide(row.actual, semAttendPaced) * 100 : 0;
+            row.paceLabel = `${semDaysElapsed.length}/${semTotalDays}回終了`;
           } else {
-            // セミナー開始前
+            row.pacedTarget = 0;
+            row.pacedRate = 0;
+            row.paceLabel = `開始前（${shortDate(firstSeminarDate)}〜）`;
+          }
+        } else if (row.label === 'フロント購入') {
+          // セミナー日別の購入目標累積
+          row.dailyTarget = semTotalDays > 0 ? Math.ceil(row.target / semTotalDays) : 0;
+          if (semDaysElapsed.length > 0) {
+            row.pacedTarget = semPurchasePaced;
+            row.pacedRate = semPurchasePaced > 0 ? safeDivide(row.actual, semPurchasePaced) * 100 : 0;
+            row.paceLabel = `${semDaysElapsed.length}/${semTotalDays}回終了`;
+          } else {
             row.pacedTarget = 0;
             row.pacedRate = 0;
             row.paceLabel = `開始前（${shortDate(firstSeminarDate)}〜）`;
