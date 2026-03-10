@@ -113,6 +113,10 @@ interface FunnelRow {
   sub?: string; // sub-label like 既存/新規
   existingActual?: number;
   newActual?: number;
+  /** 今日までのペース目標（日割り） */
+  pacedTarget?: number;
+  /** ペース達成率 */
+  pacedRate?: number;
 }
 
 // ------- Helper: generate date range -------
@@ -368,6 +372,27 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     const firstSeminarDate = seminarDayDates.length > 0 ? seminarDayDates[0] : null;
     const lastSeminarDate = seminarDayDates.length > 0 ? seminarDayDates[seminarDayDates.length - 1] : null;
 
+    // Compute paced targets (今日までの日割り目標)
+    // 期間: SEGMENT_CUTOFF_DATE(3/8) 〜 セミナー最終日(3/21)
+    if (lastSeminarDate) {
+      const startMs = new Date(SEGMENT_CUTOFF_DATE).getTime();
+      const endMs = new Date(lastSeminarDate).getTime();
+      const totalDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+      // JST基準で今日の日付を計算
+      const nowJst = new Date(Date.now() + 9 * 3600000);
+      const todayStr = nowJst.toISOString().slice(0, 10);
+      const elapsedMs = new Date(todayStr).getTime() - startMs;
+      const elapsedDays = Math.max(0, Math.min(Math.round(elapsedMs / 86400000) + 1, totalDays));
+
+      for (const row of rows) {
+        if (row.target > 0 && elapsedDays > 0) {
+          const paced = Math.round(row.target * (elapsedDays / totalDays));
+          row.pacedTarget = paced;
+          row.pacedRate = paced > 0 ? safeDivide(row.actual, paced) * 100 : 0;
+        }
+      }
+    }
+
     // Chart 1: 教育推移 — from SEGMENT_CUTOFF_DATE to last seminar day (or endDate)
     const chart1Start = SEGMENT_CUTOFF_DATE;
     const chart1End = lastSeminarDate || endDate;
@@ -594,6 +619,33 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                       {pct(achieveRate)}
                     </span>
                   </div>
+                  {/* ペース進捗（日割り目標に対する達成率） */}
+                  {row.pacedTarget !== undefined && row.pacedRate !== undefined && !achieved && (
+                    <div className="mt-1.5 border-t border-dashed border-[color:var(--color-border)] pt-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-[color:var(--color-text-muted)]">
+                          本日目標 {numFmt.format(row.pacedTarget)}人
+                        </span>
+                        <span
+                          className="text-[10px] font-bold"
+                          style={{ color: progressColor(row.pacedRate) }}
+                        >
+                          {pct(row.pacedRate)}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1">
+                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-muted)]">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(row.pacedRate, 100)}%`,
+                              backgroundColor: progressColor(row.pacedRate),
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               {row.sub && (
