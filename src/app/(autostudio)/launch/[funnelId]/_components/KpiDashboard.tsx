@@ -376,22 +376,26 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
     const firstSeminarDate = seminarDayDates.length > 0 ? seminarDayDates[0] : null;
     const lastSeminarDate = seminarDayDates.length > 0 ? seminarDayDates[seminarDayDates.length - 1] : null;
 
-    // Compute paced targets (今日までの日割り目標)
-    // JST基準で今日の日付を計算
+    // Compute paced targets (データ反映済み日までの日割り目標)
+    // データは翌日0時頃に更新されるため、実績は昨日分まで → 昨日を基準日にする
     const nowJst = new Date(Date.now() + 9 * 3600000);
-    const todayStr = nowJst.toISOString().slice(0, 10);
+    const yesterdayJst = new Date(nowJst.getTime() - 86400000);
+    const dataAsOfStr = yesterdayJst.toISOString().slice(0, 10);
 
-    if (lastSeminarDate) {
+    if (lastSeminarDate && firstSeminarDate) {
       // ① 新規LINE・動画閲覧・セミナー申込: 3/8〜セミナー最終日の日割り
-      const eduStart = new Date(SEGMENT_CUTOFF_DATE).getTime();
-      const eduEnd = new Date(lastSeminarDate).getTime();
-      const eduTotalDays = Math.max(1, Math.round((eduEnd - eduStart) / 86400000) + 1);
-      const eduElapsedMs = new Date(todayStr).getTime() - eduStart;
+      const eduStartMs = new Date(SEGMENT_CUTOFF_DATE).getTime();
+      const eduEndMs = new Date(lastSeminarDate).getTime();
+      const eduTotalDays = Math.max(1, Math.round((eduEndMs - eduStartMs) / 86400000) + 1);
+      const eduElapsedMs = new Date(dataAsOfStr).getTime() - eduStartMs;
       const eduElapsedDays = Math.max(0, Math.min(Math.round(eduElapsedMs / 86400000) + 1, eduTotalDays));
 
-      // ② セミナー参加・フロント購入: セミナー開催日ベース（開催日数で割る）
-      const seminarTotalDays = seminarDayDates.length; // 開催日数（例: 6日）
-      const seminarElapsedDays = seminarDayDates.filter(d => d <= todayStr).length; // 今日までに開催済みの日数
+      // ② セミナー参加・フロント購入: 3/14(初日)〜3/21(最終日)の日数ベース
+      const semStartMs = new Date(firstSeminarDate).getTime();
+      const semEndMs = new Date(lastSeminarDate).getTime();
+      const semTotalDays = Math.max(1, Math.round((semEndMs - semStartMs) / 86400000) + 1);
+      const semElapsedMs = new Date(dataAsOfStr).getTime() - semStartMs;
+      const semElapsedDays = Math.max(0, Math.min(Math.round(semElapsedMs / 86400000) + 1, semTotalDays));
 
       for (const row of rows) {
         if (row.target <= 0) continue;
@@ -400,13 +404,19 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
         if (row.label === 'LINE登録(既存)') continue;
 
         if (row.label === 'セミナー参加' || row.label === 'フロント購入') {
-          // セミナー開催日ベース
-          if (seminarTotalDays > 0 && seminarElapsedDays > 0) {
-            const paced = Math.round(row.target * (seminarElapsedDays / seminarTotalDays));
+          // セミナー期間ベース（3/14〜3/21）
+          const daily = Math.ceil(row.target / semTotalDays);
+          row.dailyTarget = daily;
+          if (semElapsedDays > 0) {
+            const paced = Math.round(row.target * (semElapsedDays / semTotalDays));
             row.pacedTarget = paced;
             row.pacedRate = paced > 0 ? safeDivide(row.actual, paced) * 100 : 0;
-            row.dailyTarget = Math.ceil(row.target / seminarTotalDays);
-            row.paceLabel = `${seminarElapsedDays}/${seminarTotalDays}回目`;
+            row.paceLabel = `${semElapsedDays}/${semTotalDays}日目`;
+          } else {
+            // セミナー開始前
+            row.pacedTarget = 0;
+            row.pacedRate = 0;
+            row.paceLabel = `開始前（${shortDate(firstSeminarDate)}〜）`;
           }
         } else {
           // 教育期間ベース（3/8〜3/21日割り）
@@ -648,38 +658,44 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                     </span>
                   </div>
                   {/* ペース進捗（日割り目標に対する達成率） */}
-                  {row.pacedTarget !== undefined && row.pacedRate !== undefined && !achieved && (
+                  {row.paceLabel !== undefined && !achieved && (
                     <div className="mt-1.5 border-t border-dashed border-[color:var(--color-border)] pt-1.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] text-[color:var(--color-text-muted)]">
                           {row.paceLabel}
                         </span>
-                        <span
-                          className="text-[10px] font-bold"
-                          style={{ color: progressColor(row.pacedRate) }}
-                        >
-                          {pct(row.pacedRate)}
-                        </span>
+                        {row.pacedTarget !== undefined && row.pacedTarget > 0 && row.pacedRate !== undefined && (
+                          <span
+                            className="text-[10px] font-bold"
+                            style={{ color: progressColor(row.pacedRate) }}
+                          >
+                            {pct(row.pacedRate)}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-0.5 flex items-center justify-between text-[9px]">
                         <span className="text-[color:var(--color-text-muted)]">
                           {row.dailyTarget !== undefined && `${row.dailyTarget}人/日`}
                         </span>
-                        <span className="text-[color:var(--color-text-secondary)]">
-                          今日まで {numFmt.format(row.pacedTarget)}人
-                        </span>
+                        {row.pacedTarget !== undefined && row.pacedTarget > 0 && (
+                          <span className="text-[color:var(--color-text-secondary)]">
+                            昨日まで {numFmt.format(row.pacedTarget)}人
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-1">
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-muted)]">
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${Math.min(row.pacedRate, 100)}%`,
-                              backgroundColor: progressColor(row.pacedRate),
-                            }}
-                          />
+                      {row.pacedTarget !== undefined && row.pacedTarget > 0 && row.pacedRate !== undefined && (
+                        <div className="mt-0.5 flex items-center gap-1">
+                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-muted)]">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(row.pacedRate, 100)}%`,
+                                backgroundColor: progressColor(row.pacedRate),
+                              }}
+                            />
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
                 </>
