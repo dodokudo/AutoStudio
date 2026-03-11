@@ -60,6 +60,13 @@ function parseDateFromSentAt(sentAt: string): string | null {
   return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
 }
 
+/** Parse time (HH:MM) from Lステップ sent_at like "配信済み\n2026/02/26\n21:03" */
+function parseTimeFromSentAt(sentAt: string): string | null {
+  const m = sentAt.match(/(\d{1,2}):(\d{2})\s*$/m);
+  if (!m) return null;
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
+
 /** Tokenize text into meaningful words for similarity matching */
 function tokenize(text: string): Set<string> {
   return new Set(
@@ -104,13 +111,14 @@ function matchDeliveriesWithMetrics(
   // Index broadcasts by date (for fallback matching)
   const broadcastsByDate = new Map<
     string,
-    { broadcastId: string; name: string; series: BroadcastMetric[] }[]
+    { broadcastId: string; name: string; time: string | null; series: BroadcastMetric[] }[]
   >();
   for (const [broadcastId, series] of metricsByBroadcast) {
     const dateStr = parseDateFromSentAt(series[0].sent_at);
     if (!dateStr) continue;
+    const timeStr = parseTimeFromSentAt(series[0].sent_at);
     const existing = broadcastsByDate.get(dateStr) || [];
-    existing.push({ broadcastId, name: series[0].broadcast_name, series });
+    existing.push({ broadcastId, name: series[0].broadcast_name, time: timeStr, series });
     broadcastsByDate.set(dateStr, existing);
   }
 
@@ -170,6 +178,7 @@ function matchDeliveriesWithMetrics(
       bestSeries = candidates[0].series;
       bestId = candidates[0].broadcastId;
     } else if (candidates.length > 1) {
+      // Try token similarity first
       let bestScore = -1;
       for (const c of candidates) {
         const score = tokenSimilarity(delivery.title, c.name);
@@ -179,7 +188,17 @@ function matchDeliveriesWithMetrics(
           bestId = c.broadcastId;
         }
       }
-      if (bestScore < 1) {
+      // If token match is weak, try time-based matching
+      if (bestScore < 1 && delivery.time) {
+        const timeMatch = candidates.find((c) => c.time === delivery.time);
+        if (timeMatch) {
+          bestSeries = timeMatch.series;
+          bestId = timeMatch.broadcastId;
+        } else {
+          bestSeries = null;
+          bestId = null;
+        }
+      } else if (bestScore < 1) {
         bestSeries = null;
         bestId = null;
       }
