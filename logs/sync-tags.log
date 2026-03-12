@@ -1,0 +1,1598 @@
+=== 2026-03-08 21:38:14 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 35
+[sync-tags] 完了
+  更新フィールド: inflow.instagram.actual, videoViewers.actual, backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 35
+  計測日時: 2026-03-08T09:17:50.700Z
+  inflow.instagram.actual: 0
+  videoViewers.actual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 1
+=== 2026-03-08 21:38:18 sync-tags end (exit: 0) ===
+
+=== 2026-03-08 22:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 35
+[sync-tags] 完了
+  更新フィールド: inflow.instagram.actual, videoViewers.actual, backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 35
+  計測日時: 2026-03-08T09:17:50.700Z
+  inflow.instagram.actual: 0
+  videoViewers.actual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 1
+=== 2026-03-08 22:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-08 23:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 35
+[sync-tags] 完了
+  更新フィールド: inflow.instagram.actual, videoViewers.actual, backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 35
+  計測日時: 2026-03-08T09:17:50.700Z
+  inflow.instagram.actual: 0
+  videoViewers.actual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 1
+=== 2026-03-08 23:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 00:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 35
+[sync-tags] 完了
+  更新フィールド: inflow.instagram.actual, videoViewers.actual, backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 35
+  計測日時: 2026-03-08T09:17:50.700Z
+  inflow.instagram.actual: 0
+  videoViewers.actual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 1
+=== 2026-03-09 00:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 01:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 35
+[sync-tags] 完了
+  更新フィールド: inflow.instagram.actual, videoViewers.actual, backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 35
+  計測日時: 2026-03-08T09:17:50.700Z
+  inflow.instagram.actual: 0
+  videoViewers.actual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 1
+=== 2026-03-09 01:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 02:15:00 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 35
+[sync-tags] 完了
+  更新フィールド: inflow.instagram.actual, videoViewers.actual, backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 35
+  計測日時: 2026-03-08T09:17:50.700Z
+  inflow.instagram.actual: 0
+  videoViewers.actual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 1
+=== 2026-03-09 02:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 03:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 35
+[sync-tags] 完了
+  更新フィールド: inflow.instagram.actual, videoViewers.actual, backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 35
+  計測日時: 2026-03-08T09:17:50.700Z
+  inflow.instagram.actual: 0
+  videoViewers.actual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 1
+=== 2026-03-09 03:15:22 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 04:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.actual, seminarApplications.attendActual, backend.actual
+  タグ数: 25
+  計測日時: 2026-03-08T19:02:53.084Z
+  frontend.actual: 0
+  seminarApplications.actual: 4
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+=== 2026-03-09 04:15:08 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 05:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.attendActual, backend.actual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-08T20:02:53.387Z
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  seminarApplications.actual: 4
+=== 2026-03-09 05:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 06:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, frontend.actual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-08T21:02:55.863Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 4
+=== 2026-03-09 06:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 07:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 25
+  計測日時: 2026-03-08T22:02:28.400Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 4
+  seminarApplications.attendActual: 0
+=== 2026-03-09 07:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 08:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, backend.actual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-08T23:02:54.435Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 7
+=== 2026-03-09 08:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 09:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, backend.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 25
+  計測日時: 2026-03-09T00:02:56.860Z
+  seminarApplications.actual: 8
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-09 09:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 10:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, backend.actual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-09T01:02:54.913Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 8
+=== 2026-03-09 10:15:13 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 11:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-09T02:02:53.914Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 8
+=== 2026-03-09 11:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 12:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, seminarApplications.actual, frontend.actual
+  タグ数: 25
+  計測日時: 2026-03-09T03:02:54.699Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  seminarApplications.actual: 8
+  frontend.actual: 0
+=== 2026-03-09 12:15:13 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 13:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, seminarApplications.actual, frontend.actual
+  タグ数: 25
+  計測日時: 2026-03-09T04:02:53.431Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  seminarApplications.actual: 9
+  frontend.actual: 0
+=== 2026-03-09 13:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 14:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, backend.actual, frontend.actual
+  タグ数: 25
+  計測日時: 2026-03-09T05:02:53.891Z
+  seminarApplications.actual: 9
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-09 14:15:08 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 15:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-09T06:02:56.936Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 9
+=== 2026-03-09 15:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 16:15:00 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, frontend.actual, backend.actual
+  タグ数: 25
+  計測日時: 2026-03-09T07:02:54.964Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 9
+  frontend.actual: 0
+  backend.actual: 0
+=== 2026-03-09 16:15:06 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 17:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.attendActual, backend.actual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-09T08:02:54.445Z
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  seminarApplications.actual: 9
+=== 2026-03-09 17:15:13 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 18:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, backend.actual, frontend.actual
+  タグ数: 25
+  計測日時: 2026-03-09T09:02:54.837Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 10
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-09 18:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 19:15:00 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, seminarApplications.actual, backend.actual
+  タグ数: 25
+  計測日時: 2026-03-09T10:02:53.959Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 10
+  backend.actual: 0
+=== 2026-03-09 19:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 20:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 25
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, backend.actual, seminarApplications.actual
+  タグ数: 25
+  計測日時: 2026-03-09T11:02:55.959Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 10
+=== 2026-03-09 20:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 21:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-09T12:02:51.424Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 10
+=== 2026-03-09 21:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 22:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, backend.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-09T13:02:54.731Z
+  seminarApplications.actual: 11
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-09 22:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-09 23:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.actual, seminarApplications.attendActual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-09T14:02:56.682Z
+  backend.actual: 0
+  seminarApplications.actual: 12
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+=== 2026-03-09 23:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 00:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, backend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-09T15:02:58.961Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 12
+=== 2026-03-10 00:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 01:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.attendActual, seminarApplications.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-09T16:02:55.188Z
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 12
+  backend.actual: 0
+=== 2026-03-10 01:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 02:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.actual, seminarApplications.attendActual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-09T17:02:57.590Z
+  frontend.actual: 0
+  seminarApplications.actual: 12
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+=== 2026-03-10 02:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 03:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.attendActual, seminarApplications.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-09T18:02:54.746Z
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 12
+  frontend.actual: 0
+=== 2026-03-10 03:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 04:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-09T19:02:54.782Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 12
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-10 04:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 05:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, frontend.actual, backend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-09T20:02:54.003Z
+  seminarApplications.actual: 12
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-10 05:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 06:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.attendActual, backend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-09T21:02:54.012Z
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  seminarApplications.actual: 12
+=== 2026-03-10 06:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 07:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-09T22:02:53.554Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 12
+=== 2026-03-10 07:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 08:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, frontend.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-09T23:02:57.070Z
+  seminarApplications.actual: 12
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  backend.actual: 0
+=== 2026-03-10 08:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 09:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T00:02:54.528Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 14
+=== 2026-03-10 09:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 10:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.attendActual, backend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T01:02:54.063Z
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  seminarApplications.actual: 14
+=== 2026-03-10 10:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 11:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-10T02:02:53.038Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 14
+  seminarApplications.attendActual: 0
+=== 2026-03-10 11:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 12:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, frontend.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T03:02:53.572Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 14
+  frontend.actual: 0
+  backend.actual: 0
+=== 2026-03-10 12:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 13:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T04:02:53.538Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 14
+=== 2026-03-10 13:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 14:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-10T05:02:52.712Z
+  backend.actual: 0
+  seminarApplications.actual: 14
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-10 14:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 15:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T06:02:52.870Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 14
+=== 2026-03-10 15:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 16:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T07:02:53.573Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 14
+=== 2026-03-10 16:15:08 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 17:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, frontend.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T08:02:54.132Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 14
+  frontend.actual: 0
+  backend.actual: 0
+=== 2026-03-10 17:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 18:15:00 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, backend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T09:02:52.599Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 15
+=== 2026-03-10 18:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 19:15:00 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-10T10:02:53.548Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 15
+  seminarApplications.attendActual: 0
+=== 2026-03-10 19:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 20:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, backend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T11:02:55.064Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 15
+=== 2026-03-10 20:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 21:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, frontend.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T12:02:55.061Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 15
+  frontend.actual: 0
+  backend.actual: 0
+=== 2026-03-10 21:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 22:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.attendActual, seminarApplications.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T13:02:57.086Z
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 16
+  backend.actual: 0
+=== 2026-03-10 22:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-10 23:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, seminarApplications.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T14:02:55.896Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 16
+  backend.actual: 0
+=== 2026-03-10 23:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 00:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-10T15:02:57.295Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 16
+=== 2026-03-11 00:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 01:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T16:02:58.085Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 16
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-11 01:15:08 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 02:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, frontend.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T17:02:56.420Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 16
+  frontend.actual: 0
+  backend.actual: 0
+=== 2026-03-11 02:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 03:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, seminarApplications.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T18:02:56.106Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 17
+  backend.actual: 0
+=== 2026-03-11 03:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 04:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T19:02:56.234Z
+  seminarApplications.actual: 17
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-11 04:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 05:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, seminarApplications.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-10T20:02:56.147Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 17
+  backend.actual: 0
+=== 2026-03-11 05:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 06:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-10T21:02:56.720Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 17
+  seminarApplications.attendActual: 0
+=== 2026-03-11 06:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 07:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, backend.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-10T22:02:56.146Z
+  seminarApplications.actual: 17
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-11 07:15:08 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 08:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-10T23:02:56.382Z
+  backend.actual: 0
+  seminarApplications.actual: 18
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-11 08:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 09:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T00:02:58.425Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 18
+  seminarApplications.attendActual: 0
+=== 2026-03-11 09:15:16 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 10:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T00:02:58.425Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 18
+  seminarApplications.attendActual: 0
+=== 2026-03-11 10:15:15 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 11:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T00:02:58.425Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 18
+  seminarApplications.attendActual: 0
+=== 2026-03-11 11:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 12:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T00:02:58.425Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 18
+  seminarApplications.attendActual: 0
+=== 2026-03-11 12:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 13:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T00:02:58.425Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 18
+  seminarApplications.attendActual: 0
+=== 2026-03-11 13:15:13 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 14:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T00:02:58.425Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.actual: 18
+  seminarApplications.attendActual: 0
+=== 2026-03-11 14:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 15:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-11T06:02:56.066Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 19
+=== 2026-03-11 15:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 16:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.attendActual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-11T07:02:57.660Z
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 19
+=== 2026-03-11 16:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 17:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.attendActual, backend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-11T08:02:56.677Z
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  seminarApplications.actual: 20
+=== 2026-03-11 17:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 18:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, frontend.actual, backend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T09:02:58.703Z
+  seminarApplications.actual: 20
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-11 18:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 19:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-11T10:02:56.798Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 22
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-11 19:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 20:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, frontend.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-11T11:02:58.189Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 22
+  frontend.actual: 0
+  backend.actual: 0
+=== 2026-03-11 20:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 21:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, frontend.actual, seminarApplications.actual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-11T12:02:57.305Z
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 22
+  backend.actual: 0
+=== 2026-03-11 21:15:41 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 22:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, frontend.actual, backend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T13:03:03.660Z
+  seminarApplications.actual: 28
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-11 22:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-11 23:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, backend.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T14:03:03.976Z
+  seminarApplications.actual: 29
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-11 23:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 00:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-11T15:03:09.704Z
+  seminarApplications.actual: 30
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-12 00:15:19 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 01:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, frontend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-11T16:03:02.218Z
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 30
+=== 2026-03-12 01:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 02:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, frontend.actual, backend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T17:03:03.191Z
+  seminarApplications.actual: 31
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-12 02:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 03:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, backend.actual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-11T18:03:03.232Z
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 31
+=== 2026-03-12 03:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 04:15:01 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, frontend.actual, backend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T19:03:02.771Z
+  seminarApplications.actual: 31
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-12 04:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 05:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.actual, seminarApplications.attendActual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-11T20:03:05.228Z
+  frontend.actual: 0
+  seminarApplications.actual: 31
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+=== 2026-03-12 05:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 06:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-11T21:03:03.247Z
+  backend.actual: 0
+  seminarApplications.actual: 31
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-12 06:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 07:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.attendActual, seminarApplications.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-11T22:03:02.737Z
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 31
+  frontend.actual: 0
+=== 2026-03-12 07:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 08:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-11T23:03:05.486Z
+  seminarApplications.actual: 32
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-12 08:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 09:15:00 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.actual, seminarApplications.attendActual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T00:03:03.766Z
+  backend.actual: 0
+  seminarApplications.actual: 33
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+=== 2026-03-12 09:15:07 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 10:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.attendActual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-12T01:03:04.273Z
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 35
+=== 2026-03-12 10:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 11:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T02:03:06.944Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 36
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-12 11:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 12:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.actual, seminarApplications.attendActual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T03:03:03.826Z
+  backend.actual: 0
+  seminarApplications.actual: 37
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+=== 2026-03-12 12:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 13:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, frontend.actual, backend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-12T04:03:04.774Z
+  seminarApplications.actual: 38
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-12 13:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 14:15:02 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.attendActual, seminarApplications.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T05:03:03.272Z
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 38
+  frontend.actual: 0
+=== 2026-03-12 14:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 15:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, backend.actual, seminarApplications.attendActual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-12T06:03:04.286Z
+  frontend.actual: 0
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 38
+=== 2026-03-12 15:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 16:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T07:03:03.028Z
+  seminarApplications.actual: 39
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-12 16:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 17:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T08:03:03.042Z
+  seminarApplications.actual: 39
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-12 17:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 18:15:04 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.attendActual, frontend.actual, seminarApplications.actual
+  タグ数: 26
+  計測日時: 2026-03-12T09:03:03.771Z
+  backend.actual: 0
+  seminarApplications.attendActual: 0
+  frontend.actual: 0
+  seminarApplications.actual: 40
+=== 2026-03-12 18:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 19:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: frontend.actual, seminarApplications.actual, seminarApplications.attendActual, backend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T10:03:03.361Z
+  frontend.actual: 0
+  seminarApplications.actual: 40
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+=== 2026-03-12 19:15:09 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 20:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.attendActual, seminarApplications.actual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T11:03:02.884Z
+  seminarApplications.attendActual: 0
+  seminarApplications.actual: 40
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-12 20:15:10 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 21:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, seminarApplications.attendActual, backend.actual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T12:03:03.295Z
+  seminarApplications.actual: 41
+  seminarApplications.attendActual: 0
+  backend.actual: 0
+  frontend.actual: 0
+=== 2026-03-12 21:15:11 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 22:15:05 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: seminarApplications.actual, backend.actual, frontend.actual, seminarApplications.attendActual
+  タグ数: 26
+  計測日時: 2026-03-12T13:03:05.882Z
+  seminarApplications.actual: 46
+  backend.actual: 0
+  frontend.actual: 0
+  seminarApplications.attendActual: 0
+=== 2026-03-12 22:15:12 sync-tags end (exit: 0) ===
+
+=== 2026-03-12 23:15:03 sync-tags start ===
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[sync-tags] funnelId: funnel-1770198372071
+[sync-tags] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[sync-tags] タグ行数: 26
+[sync-tags] 完了
+  更新フィールド: backend.actual, seminarApplications.actual, seminarApplications.attendActual, frontend.actual
+  タグ数: 26
+  計測日時: 2026-03-12T14:03:07.347Z
+  backend.actual: 0
+  seminarApplications.actual: 49
+  seminarApplications.attendActual: 1
+  frontend.actual: 0
+=== 2026-03-12 23:15:08 sync-tags end (exit: 0) ===
+

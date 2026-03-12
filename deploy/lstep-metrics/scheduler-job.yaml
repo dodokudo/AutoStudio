@@ -1,9 +1,8 @@
 schedule: '*/15 * * * *'
 timeZone: 'Asia/Tokyo'
 httpTarget:
-  uri: https://REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/PROJECT_ID/services/autostudio-lstep-metrics:run
+  uri: https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/mark-454114/jobs/autostudio-lstep-metrics:run
   httpMethod: POST
-  headers:
-    Content-Type: application/json
   oauthToken:
-    serviceAccountEmail: scheduler-invoker@PROJECT_ID.iam.gserviceaccount.com
+    scope: https://www.googleapis.com/auth/cloud-platform
+    serviceAccountEmail: autostudio-lstep@mark-454114.iam.gserviceaccount.com
