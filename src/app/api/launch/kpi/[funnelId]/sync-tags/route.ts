@@ -213,6 +213,38 @@ export async function POST(
       }
     }
 
+    // 5.5 過去セミナー日のattendActual/purchaseCountを募集比率で配分
+    const totalAttend = updates['seminarApplications.attendActual'] ?? 0;
+    const totalPurchase = updates['frontend.actual'] ?? 0;
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (currentKpi.seminarDays && (totalAttend > 0 || totalPurchase > 0)) {
+      const pastDays = currentKpi.seminarDays.filter((s) => s.date <= today);
+      const totalPastRecruit = pastDays.reduce((sum, s) => sum + (s.recruitActual ?? 0), 0);
+
+      if (totalPastRecruit > 0) {
+        let attendRemaining = totalAttend;
+        let purchaseRemaining = totalPurchase;
+
+        for (let i = 0; i < pastDays.length; i++) {
+          const day = pastDays[i];
+          const recruit = day.recruitActual ?? 0;
+          const isLast = i === pastDays.length - 1;
+
+          if (isLast) {
+            day.attendActual = attendRemaining;
+            day.purchaseCount = purchaseRemaining;
+          } else {
+            const ratio = recruit / totalPastRecruit;
+            day.attendActual = Math.round(totalAttend * ratio);
+            day.purchaseCount = Math.round(totalPurchase * ratio);
+            attendRemaining -= day.attendActual;
+            purchaseRemaining -= day.purchaseCount;
+          }
+        }
+      }
+    }
+
     // 6. KPIオブジェクトに反映
     const kpiObj = currentKpi as unknown as Record<string, unknown>;
     for (const [path, value] of Object.entries(updates)) {

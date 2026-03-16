@@ -11,12 +11,14 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { SEGMENT_CUTOFF_DATE } from '@/lib/launch-constants';
 import type { LaunchKpi } from '@/types/launch';
 
 const PROJECT_ID = resolveProjectId(process.env.LSTEP_BQ_PROJECT_ID || process.env.BQ_PROJECT_ID);
 const DATASET = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
 const KPI_TABLE = `${PROJECT_ID}.${DATASET}.launch_kpi`;
 const TAG_TABLE = `${PROJECT_ID}.${DATASET}.tag_metrics`;
+const FRIENDS_TABLE = `${PROJECT_ID}.${DATASET}.lstep_friends_raw`;
 
 const DEFAULT_FUNNEL_ID = 'funnel-1770198372071';
 
@@ -124,6 +126,75 @@ async function main(): Promise<void> {
 
   if (threadsTotal > 0) {
     updates['inflow.threads.actual'] = threadsTotal;
+  }
+
+  // 3.5 LINE登録数をlstep_friends_rawから取得
+  try {
+    const cutoff = SEGMENT_CUTOFF_DATE;
+    if (cutoff && currentKpi.lineRegistration) {
+      const [friendsRows] = await bq.query({
+        query: `
+          WITH latest AS (
+            SELECT MAX(snapshot_date) AS sd
+            FROM \`${FRIENDS_TABLE}\`
+          )
+          SELECT
+            COUNTIF(DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") < @cutoff) AS existing_count,
+            COUNTIF(DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") >= @cutoff) AS new_count
+          FROM \`${FRIENDS_TABLE}\` f
+          JOIN latest l ON f.snapshot_date = l.sd
+          WHERE f.friend_added_at IS NOT NULL
+            AND f.blocked = 0
+        `,
+        useLegacySql: false,
+        params: { cutoff },
+      });
+
+      if (friendsRows && friendsRows.length > 0) {
+        const r = friendsRows[0] as { existing_count: number; new_count: number };
+        updates['lineRegistration.newActual'] = Number(r.new_count);
+        console.log(`[sync-tags] LINE登録数: 既存=${r.existing_count}, 新規=${r.new_count}`);
+      }
+    }
+  } catch (e) {
+    console.error('[sync-tags] LINE登録数取得エラー:', e);
+  }
+
+  // 3.6 過去セミナー日のattendActual/purchaseCountを募集比率で配分
+  const totalAttend = updates['seminarApplications.attendActual'] ?? 0;
+  const totalPurchase = updates['frontend.actual'] ?? 0;
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  if (currentKpi.seminarDays && (totalAttend > 0 || totalPurchase > 0)) {
+    // 過去日のrecruitActualの合計を計算
+    const pastDays = currentKpi.seminarDays.filter((s) => s.date <= today);
+    const totalPastRecruit = pastDays.reduce((sum, s) => sum + (s.recruitActual ?? 0), 0);
+
+    if (totalPastRecruit > 0) {
+      let attendRemaining = totalAttend;
+      let purchaseRemaining = totalPurchase;
+
+      for (let i = 0; i < pastDays.length; i++) {
+        const day = pastDays[i];
+        const recruit = day.recruitActual ?? 0;
+        const isLast = i === pastDays.length - 1;
+
+        if (isLast) {
+          // 最後の日に残り全部を割り当て（端数吸収）
+          day.attendActual = attendRemaining;
+          day.purchaseCount = purchaseRemaining;
+        } else {
+          const ratio = recruit / totalPastRecruit;
+          const attendShare = Math.round(totalAttend * ratio);
+          const purchaseShare = Math.round(totalPurchase * ratio);
+          day.attendActual = attendShare;
+          day.purchaseCount = purchaseShare;
+          attendRemaining -= attendShare;
+          purchaseRemaining -= purchaseShare;
+        }
+        console.log(`[sync-tags] ${day.date}: attend=${day.attendActual}, purchase=${day.purchaseCount} (recruit=${recruit})`);
+      }
+    }
   }
 
   // 4. KPIオブジェクトに反映

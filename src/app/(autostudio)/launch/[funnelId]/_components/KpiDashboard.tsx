@@ -254,12 +254,17 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
   // 新規LINE実績もfriends-count API、フォールバックはKPIのnewActual
   const existingLineActual = friendsCount?.existing ?? kpi.lineRegistration.existing;
   const newLineActual = friendsCount?.new ?? kpi.lineRegistration.newActual;
+  // tag_metrics（KPI JSON）と lstep_friends_raw（bqSteps）の大きい方を採用
+  // tag_metricsはタグ管理ページから直接取得するため、CSVベースのbqStepsより正確
   const bqSteps = friendsCount?.steps;
-  const videoActual = bqSteps?.video.total ?? kpi.videoViewers.actual;
-  const seminarAppliedActual = bqSteps?.seminarApplied.total ?? kpi.seminarApplications.actual;
-  const seminarJoinedActual = bqSteps?.seminarJoined.total ?? kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0);
-  const feActual = bqSteps?.fePurchased.total ?? kpi.frontend.actual;
-  const beActual = bqSteps?.bePurchased.total ?? kpi.backend.actual;
+  const videoActual = Math.max(kpi.videoViewers.actual, bqSteps?.video.total ?? 0);
+  const seminarAppliedActual = Math.max(kpi.seminarApplications.actual, bqSteps?.seminarApplied.total ?? 0);
+  const seminarJoinedActual = Math.max(
+    kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0),
+    bqSteps?.seminarJoined.total ?? 0,
+  );
+  const feActual = Math.max(kpi.frontend.actual, bqSteps?.fePurchased.total ?? 0);
+  const beActual = Math.max(kpi.backend.actual, bqSteps?.bePurchased.total ?? 0);
 
   const computed = useMemo(() => {
     const totalNewLineTarget =
