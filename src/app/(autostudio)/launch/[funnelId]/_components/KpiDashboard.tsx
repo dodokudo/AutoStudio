@@ -737,20 +737,24 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                   <th className="pb-3 pr-4 text-left font-medium">日付</th>
                   <th className="pb-3 pr-4 text-right font-medium">集客目標</th>
                   <th className="pb-3 pr-4 text-right font-medium">集客実績</th>
-                  <th className="pb-3 pr-4 text-right font-medium">集客率</th>
+                  <th className="pb-3 pr-4 text-right font-medium">集客達成率</th>
                   <th className="pb-3 pr-4 text-right font-medium">参加目標</th>
                   <th className="pb-3 pr-4 text-right font-medium">参加実績</th>
                   <th className="pb-3 pr-4 text-right font-medium">参加率</th>
+                  <th className="pb-3 pr-4 text-right font-medium">参加達成率</th>
                   <th className="pb-3 pr-4 text-right font-medium">購入目標</th>
                   <th className="pb-3 pr-4 text-right font-medium">購入数</th>
-                  <th className="pb-3 text-right font-medium">購入率</th>
+                  <th className="pb-3 pr-4 text-right font-medium">購入率</th>
+                  <th className="pb-3 text-right font-medium">購入達成率</th>
                 </tr>
               </thead>
               <tbody>
                 {kpi.seminarDays.map((day) => {
-                  const recruitRate = safeDivide(day.recruitActual ?? 0, day.recruitTarget) * 100;
-                  const attendRate = safeDivide(day.attendActual, day.attendTarget) * 100;
-                  const purchaseRate = safeDivide(day.purchaseCount ?? 0, day.purchaseTarget ?? 0) * 100;
+                  const recruitAchieve = safeDivide(day.recruitActual ?? 0, day.recruitTarget) * 100;
+                  const attendConv = safeDivide(day.attendActual, day.recruitActual ?? 0) * 100;
+                  const attendAchieve = safeDivide(day.attendActual, day.attendTarget) * 100;
+                  const purchaseConv = safeDivide(day.purchaseCount ?? 0, day.attendActual) * 100;
+                  const purchaseAchieve = safeDivide(day.purchaseCount ?? 0, day.purchaseTarget ?? 0) * 100;
                   return (
                     <tr
                       key={day.date}
@@ -768,9 +772,9 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                       <td className="py-3 pr-4 text-right">
                         <span
                           className="font-semibold"
-                          style={{ color: day.recruitTarget === 0 ? undefined : progressColor(recruitRate) }}
+                          style={{ color: day.recruitTarget === 0 ? undefined : progressColor(recruitAchieve) }}
                         >
-                          {day.recruitTarget === 0 ? '-' : pct(recruitRate)}
+                          {day.recruitTarget === 0 ? '-' : pct(recruitAchieve)}
                         </span>
                       </td>
                       <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
@@ -782,9 +786,17 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                       <td className="py-3 pr-4 text-right">
                         <span
                           className="font-semibold"
-                          style={{ color: day.attendTarget === 0 ? undefined : progressColor(attendRate) }}
+                          style={{ color: (day.recruitActual ?? 0) === 0 ? undefined : progressColor(attendConv) }}
                         >
-                          {day.attendTarget === 0 ? '-' : pct(attendRate)}
+                          {(day.recruitActual ?? 0) === 0 ? '-' : pct(attendConv)}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: day.attendTarget === 0 ? undefined : progressColor(attendAchieve) }}
+                        >
+                          {day.attendTarget === 0 ? '-' : pct(attendAchieve)}
                         </span>
                       </td>
                       <td className="py-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
@@ -793,12 +805,20 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                       <td className="py-3 pr-4 text-right font-bold text-[color:var(--color-text-primary)]">
                         {numFmt.format(day.purchaseCount ?? 0)}
                       </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span
+                          className="font-semibold"
+                          style={{ color: day.attendActual === 0 ? undefined : progressColor(purchaseConv) }}
+                        >
+                          {day.attendActual === 0 ? '-' : pct(purchaseConv)}
+                        </span>
+                      </td>
                       <td className="py-3 text-right">
                         <span
                           className="font-semibold"
-                          style={{ color: (day.purchaseTarget ?? 0) === 0 ? undefined : progressColor(purchaseRate) }}
+                          style={{ color: (day.purchaseTarget ?? 0) === 0 ? undefined : progressColor(purchaseAchieve) }}
                         >
-                          {(day.purchaseTarget ?? 0) === 0 ? '-' : pct(purchaseRate)}
+                          {(day.purchaseTarget ?? 0) === 0 ? '-' : pct(purchaseAchieve)}
                         </span>
                       </td>
                     </tr>
@@ -806,51 +826,67 @@ export function KpiDashboard({ funnelId, startDate, endDate, baseDate }: KpiDash
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-[color:var(--color-border)] font-semibold">
-                  <td className="pt-3 pr-4 text-[color:var(--color-text-primary)]">合計</td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right">
-                    {(() => {
-                      const t = kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0);
-                      const a = kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0);
-                      const r = safeDivide(a, t) * 100;
-                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
-                    })()}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right">
-                    {(() => {
-                      const t = kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0);
-                      const a = kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0);
-                      const r = safeDivide(a, t) * 100;
-                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
-                    })()}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0))}
-                  </td>
-                  <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
-                    {numFmt.format(kpi.seminarDays.reduce((s, d) => s + (d.purchaseCount ?? 0), 0))}
-                  </td>
-                  <td className="pt-3 text-right">
-                    {(() => {
-                      const t = kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0);
-                      const p = kpi.seminarDays.reduce((s, d) => s + (d.purchaseCount ?? 0), 0);
-                      const r = safeDivide(p, t) * 100;
-                      return <span style={{ color: t === 0 ? undefined : progressColor(r) }}>{t === 0 ? '-' : pct(r)}</span>;
-                    })()}
-                  </td>
-                </tr>
+                {(() => {
+                  const totRecTarget = kpi.seminarDays.reduce((s, d) => s + d.recruitTarget, 0);
+                  const totRecActual = kpi.seminarDays.reduce((s, d) => s + (d.recruitActual ?? 0), 0);
+                  const totAttTarget = kpi.seminarDays.reduce((s, d) => s + d.attendTarget, 0);
+                  const totAttActual = kpi.seminarDays.reduce((s, d) => s + d.attendActual, 0);
+                  const totPurTarget = kpi.seminarDays.reduce((s, d) => s + (d.purchaseTarget ?? 0), 0);
+                  const totPurCount = kpi.seminarDays.reduce((s, d) => s + (d.purchaseCount ?? 0), 0);
+                  const recAchieve = safeDivide(totRecActual, totRecTarget) * 100;
+                  const attConv = safeDivide(totAttActual, totRecActual) * 100;
+                  const attAchieve = safeDivide(totAttActual, totAttTarget) * 100;
+                  const purConv = safeDivide(totPurCount, totAttActual) * 100;
+                  const purAchieve = safeDivide(totPurCount, totPurTarget) * 100;
+                  return (
+                    <tr className="border-t-2 border-[color:var(--color-border)] font-semibold">
+                      <td className="pt-3 pr-4 text-[color:var(--color-text-primary)]">合計</td>
+                      <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(totRecTarget)}
+                      </td>
+                      <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                        {numFmt.format(totRecActual)}
+                      </td>
+                      <td className="pt-3 pr-4 text-right">
+                        <span style={{ color: totRecTarget === 0 ? undefined : progressColor(recAchieve) }}>
+                          {totRecTarget === 0 ? '-' : pct(recAchieve)}
+                        </span>
+                      </td>
+                      <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(totAttTarget)}
+                      </td>
+                      <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                        {numFmt.format(totAttActual)}
+                      </td>
+                      <td className="pt-3 pr-4 text-right">
+                        <span style={{ color: totRecActual === 0 ? undefined : progressColor(attConv) }}>
+                          {totRecActual === 0 ? '-' : pct(attConv)}
+                        </span>
+                      </td>
+                      <td className="pt-3 pr-4 text-right">
+                        <span style={{ color: totAttTarget === 0 ? undefined : progressColor(attAchieve) }}>
+                          {totAttTarget === 0 ? '-' : pct(attAchieve)}
+                        </span>
+                      </td>
+                      <td className="pt-3 pr-4 text-right text-[color:var(--color-text-secondary)]">
+                        {numFmt.format(totPurTarget)}
+                      </td>
+                      <td className="pt-3 pr-4 text-right text-[color:var(--color-text-primary)]">
+                        {numFmt.format(totPurCount)}
+                      </td>
+                      <td className="pt-3 pr-4 text-right">
+                        <span style={{ color: totAttActual === 0 ? undefined : progressColor(purConv) }}>
+                          {totAttActual === 0 ? '-' : pct(purConv)}
+                        </span>
+                      </td>
+                      <td className="pt-3 text-right">
+                        <span style={{ color: totPurTarget === 0 ? undefined : progressColor(purAchieve) }}>
+                          {totPurTarget === 0 ? '-' : pct(purAchieve)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })()}
               </tfoot>
             </table>
           </div>

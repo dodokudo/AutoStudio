@@ -219,9 +219,13 @@ export function KpiTab({ funnelId }: KpiTabProps) {
       }),
       { recruitTarget: 0, recruitActual: 0, attendTarget: 0, attendActual: 0, purchaseTarget: 0, purchaseCount: 0 },
     );
-    const seminarAttendRate =
+    const seminarAttendConvRate =
+      safeDivide(seminarTotals.attendActual, seminarTotals.recruitActual) * 100;
+    const seminarAttendAchieveRate =
       safeDivide(seminarTotals.attendActual, seminarTotals.attendTarget) * 100;
-    const seminarPurchaseRate =
+    const seminarPurchaseConvRate =
+      safeDivide(seminarTotals.purchaseCount, seminarTotals.attendActual) * 100;
+    const seminarPurchaseAchieveRate =
       safeDivide(seminarTotals.purchaseCount, seminarTotals.purchaseTarget) * 100;
 
     // --- 売上 ---
@@ -260,8 +264,10 @@ export function KpiTab({ funnelId }: KpiTabProps) {
       seminarAppRateNew,
       seminarAppTargetRateNew,
       seminarTotals,
-      seminarAttendRate,
-      seminarPurchaseRate,
+      seminarAttendConvRate,
+      seminarAttendAchieveRate,
+      seminarPurchaseConvRate,
+      seminarPurchaseAchieveRate,
       frontendRevenue,
       frontendTargetRevenue,
       frontendPurchaseRate,
@@ -823,7 +829,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                       {numFmt.format(computed.seminarTotals.attendActual)}人
                     </td>
                     <td className="px-2 py-2 text-right text-xs">
-                      {computed.seminarAttendRate > 0 ? pct(computed.seminarAttendRate) : '-'}
+                      {computed.seminarAttendConvRate > 0 ? pct(computed.seminarAttendConvRate) : '-'}
                     </td>
                     <td className="px-2 py-2 text-right text-xs">
                       {numFmt.format(computed.seminarTotals.purchaseTarget)}人
@@ -832,7 +838,7 @@ export function KpiTab({ funnelId }: KpiTabProps) {
                       {numFmt.format(computed.seminarTotals.purchaseCount)}人
                     </td>
                     <td className="px-2 py-2 text-right text-xs">
-                      {computed.seminarPurchaseRate > 0 ? pct(computed.seminarPurchaseRate) : '-'}
+                      {computed.seminarPurchaseConvRate > 0 ? pct(computed.seminarPurchaseConvRate) : '-'}
                     </td>
                     <td />
                   </tr>

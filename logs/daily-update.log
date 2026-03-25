@@ -50,3 +50,708 @@
   セミナー参加: 0
   FE購入: 0
   BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 15
+  セミナー 2026-03-15: recruitActual = 13
+  セミナー 2026-03-17: recruitActual = 4
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 4
+  セミナー 2026-03-21: recruitActual = 9
+[daily-update] 同期完了: 11フィールド + 6セミナー日
+  videoViewers.surveyActual = 81
+  seminarApplications.formVisits = 48
+  seminarApplications.attendActual = 1
+  seminarApplications.actual = 49
+  videoViewers.preEngageActual = 98
+  videoViewers.actual = 163
+  videoViewers.watchActual = 23
+  videoViewers.ebookActual = 87
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 73
+  lineRegistration.newActual = 73
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 519
+[daily-update] 対象日数: 179
+[daily-update] 期間: 2025-05-01 〜 2026-03-13
+[daily-update] 生成したdailyMetrics: 179日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=13 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 174 日)
+  2026-03-11: LINE=24 特典=35 セミ申込=13 セミ参加=- FE=- BE=-
+  2026-03-12: LINE=1 特典=14 セミ申込=20 セミ参加=1 FE=- BE=-
+  2026-03-13: LINE=- 特典=1 セミ申込=0 セミ参加=0 FE=- BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 179日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=15/13 参加=0/10 購入=0/3
+  2026-03-15: 集客=13/25 参加=0/18 購入=0/5
+  2026-03-17: 集客=4/25 参加=0/18 購入=0/5
+  2026-03-18: 集客=4/25 参加=0/18 購入=0/6
+  2026-03-19: 集客=4/25 参加=0/18 購入=0/6
+  2026-03-21: 集客=9/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 913
+  特典受取: 163
+  セミナー申込: 49
+  セミナー参加: 1
+  FE購入: 0
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 15
+  セミナー 2026-03-15: recruitActual = 18
+  セミナー 2026-03-17: recruitActual = 5
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 7
+  セミナー 2026-03-21: recruitActual = 12
+[daily-update] 同期完了: 11フィールド + 6セミナー日
+  videoViewers.surveyActual = 93
+  seminarApplications.formVisits = 52
+  seminarApplications.attendActual = 1
+  seminarApplications.actual = 61
+  videoViewers.preEngageActual = 98
+  videoViewers.actual = 172
+  videoViewers.watchActual = 26
+  videoViewers.ebookActual = 95
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 79
+  lineRegistration.newActual = 84
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 545
+[daily-update] 対象日数: 180
+[daily-update] 期間: 2025-05-01 〜 2026-03-14
+[daily-update] 生成したdailyMetrics: 180日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=13 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 175 日)
+  2026-03-12: LINE=13 特典=14 セミ申込=20 セミ参加=1 FE=- BE=-
+  2026-03-13: LINE=1 特典=9 セミ申込=8 セミ参加=0 FE=- BE=-
+  2026-03-14: LINE=- 特典=1 セミ申込=4 セミ参加=0 FE=- BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 180日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=15/13 参加=0/10 購入=0/3
+  2026-03-15: 集客=18/25 参加=0/18 購入=0/5
+  2026-03-17: 集客=5/25 参加=0/18 購入=0/5
+  2026-03-18: 集客=4/25 参加=0/18 購入=0/6
+  2026-03-19: 集客=7/25 参加=0/18 購入=0/6
+  2026-03-21: 集客=12/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 922
+  特典受取: 172
+  セミナー申込: 61
+  セミナー参加: 1
+  FE購入: 0
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 7
+  セミナー 2026-03-18: recruitActual = 5
+  セミナー 2026-03-19: recruitActual = 8
+  セミナー 2026-03-21: recruitActual = 14
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 1
+  videoViewers.surveyActual = 101
+  seminarApplications.formVisits = 55
+  seminarApplications.attendActual = 9
+  seminarApplications.actual = 69
+  videoViewers.preEngageActual = 98
+  videoViewers.actual = 178
+  videoViewers.watchActual = 28
+  videoViewers.ebookActual = 105
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 85
+  lineRegistration.newActual = 92
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 571
+[daily-update] 対象日数: 181
+[daily-update] 期間: 2025-05-01 〜 2026-03-15
+[daily-update] 生成したdailyMetrics: 181日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 176 日)
+  2026-03-13: LINE=10 特典=9 セミ申込=8 セミ参加=0 FE=- BE=-
+  2026-03-14: LINE=- 特典=6 セミ申込=12 セミ参加=9 FE=- BE=-
+  2026-03-15: LINE=- 特典=1 セミ申込=0 セミ参加=0 FE=1 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 181日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=0/10 購入=0/3
+  2026-03-15: 集客=23/25 参加=0/18 購入=0/5
+  2026-03-17: 集客=7/25 参加=0/18 購入=0/5
+  2026-03-18: 集客=5/25 参加=0/18 購入=0/6
+  2026-03-19: 集客=8/25 参加=0/18 購入=0/6
+  2026-03-21: 集客=14/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 923
+  特典受取: 178
+  セミナー申込: 69
+  セミナー参加: 10
+  FE購入: 1
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 11
+  セミナー 2026-03-18: recruitActual = 7
+  セミナー 2026-03-19: recruitActual = 10
+  セミナー 2026-03-21: recruitActual = 14
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 2
+  videoViewers.surveyActual = 125
+  seminarApplications.formVisits = 58
+  seminarApplications.attendActual = 26
+  seminarApplications.actual = 77
+  videoViewers.preEngageActual = 98
+  videoViewers.actual = 193
+  videoViewers.watchActual = 32
+  videoViewers.ebookActual = 117
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 111
+  lineRegistration.newActual = 98
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 597
+[daily-update] 対象日数: 182
+[daily-update] 期間: 2025-05-01 〜 2026-03-16
+[daily-update] 生成したdailyMetrics: 182日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 177 日)
+  2026-03-14: LINE=5 特典=6 セミ申込=12 セミ参加=9 FE=- BE=-
+  2026-03-15: LINE=1 特典=15 セミ申込=8 セミ参加=16 FE=2 BE=-
+  2026-03-16: LINE=- 特典=1 セミ申込=0 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 178日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=15/13 参加=0/10 購入=0/3
+  2026-03-15: 集客=13/25 参加=0/18 購入=0/5
+  2026-03-17: 集客=4/25 参加=0/18 購入=0/5
+  2026-03-18: 集客=4/25 参加=0/18 購入=0/6
+  2026-03-19: 集客=4/25 参加=0/18 購入=0/6
+  2026-03-21: 集客=9/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 929
+  特典受取: 193
+  セミナー申込: 77
+  セミナー参加: 26
+  FE購入: 2
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 12
+  セミナー 2026-03-18: recruitActual = 8
+  セミナー 2026-03-19: recruitActual = 12
+  セミナー 2026-03-21: recruitActual = 15
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 5
+  videoViewers.surveyActual = 136
+  seminarApplications.formVisits = 62
+  seminarApplications.attendActual = 26
+  seminarApplications.actual = 82
+  videoViewers.preEngageActual = 98
+  videoViewers.actual = 194
+  videoViewers.watchActual = 34
+  videoViewers.ebookActual = 123
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 124
+  lineRegistration.newActual = 120
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 623
+[daily-update] 対象日数: 184
+[daily-update] 期間: 2025-05-01 〜 2026-03-17
+[daily-update] 生成したdailyMetrics: 184日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 179 日)
+  2026-03-15: LINE=25 特典=15 セミ申込=8 セミ参加=16 FE=2 BE=-
+  2026-03-16: LINE=1 特典=2 セミ申込=5 セミ参加=0 FE=3 BE=-
+  2026-03-17: LINE=- 特典=0 セミ申込=0 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 184日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=9/10 購入=2/3
+  2026-03-15: 集客=23/25 参加=17/18 購入=3/5
+  2026-03-17: 集客=12/25 参加=0/18 購入=0/5
+  2026-03-18: 集客=8/25 参加=0/18 購入=0/6
+  2026-03-19: 集客=12/25 参加=0/18 購入=0/6
+  2026-03-21: 集客=15/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 951
+  特典受取: 194
+  セミナー申込: 82
+  セミナー参加: 26
+  FE購入: 5
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 15
+  セミナー 2026-03-18: recruitActual = 8
+  セミナー 2026-03-19: recruitActual = 14
+  セミナー 2026-03-21: recruitActual = 15
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 5
+  videoViewers.surveyActual = 149
+  seminarApplications.formVisits = 68
+  seminarApplications.attendActual = 36
+  seminarApplications.actual = 87
+  videoViewers.preEngageActual = 97
+  videoViewers.actual = 199
+  videoViewers.watchActual = 35
+  videoViewers.ebookActual = 134
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 133
+  lineRegistration.newActual = 130
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 649
+[daily-update] 対象日数: 185
+[daily-update] 期間: 2025-05-01 〜 2026-03-18
+[daily-update] 生成したdailyMetrics: 185日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 180 日)
+  2026-03-16: LINE=13 特典=2 セミ申込=5 セミ参加=0 FE=3 BE=-
+  2026-03-17: LINE=- 特典=4 セミ申込=5 セミ参加=10 FE=0 BE=-
+  2026-03-18: LINE=- 特典=1 セミ申込=0 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 185日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=10/10 購入=1/3
+  2026-03-15: 集客=23/25 参加=17/18 購入=2/5
+  2026-03-17: 集客=15/25 参加=9/18 購入=2/5
+  2026-03-18: 集客=8/25 参加=0/18 購入=0/6
+  2026-03-19: 集客=14/25 参加=0/18 購入=0/6
+  2026-03-21: 集客=15/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 958
+  特典受取: 199
+  セミナー申込: 87
+  セミナー参加: 36
+  FE購入: 5
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 14
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 19
+  セミナー 2026-03-21: recruitActual = 18
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 6
+  videoViewers.surveyActual = 166
+  seminarApplications.formVisits = 67
+  seminarApplications.attendActual = 39
+  seminarApplications.actual = 93
+  videoViewers.preEngageActual = 97
+  videoViewers.actual = 209
+  videoViewers.watchActual = 36
+  videoViewers.ebookActual = 144
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 142
+  lineRegistration.newActual = 144
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 675
+[daily-update] 対象日数: 186
+[daily-update] 期間: 2025-05-01 〜 2026-03-19
+[daily-update] 生成したdailyMetrics: 186日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 181 日)
+  2026-03-17: LINE=13 特典=4 セミ申込=5 セミ参加=10 FE=0 BE=-
+  2026-03-18: LINE=1 特典=11 セミ申込=5 セミ参加=3 FE=1 BE=-
+  2026-03-19: LINE=- 特典=0 セミ申込=1 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 186日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=9/10 購入=1/3
+  2026-03-15: 集客=23/25 参加=16/18 購入=2/5
+  2026-03-17: 集客=14/25 参加=8/18 購入=1/5
+  2026-03-18: 集客=4/25 参加=6/18 購入=2/6
+  2026-03-19: 集客=19/25 参加=0/18 購入=0/6
+  2026-03-21: 集客=18/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 969
+  特典受取: 209
+  セミナー申込: 93
+  セミナー参加: 39
+  FE購入: 6
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 14
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 24
+  セミナー 2026-03-21: recruitActual = 22
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 6
+  videoViewers.surveyActual = 175
+  seminarApplications.formVisits = 69
+  seminarApplications.attendActual = 46
+  seminarApplications.actual = 103
+  videoViewers.preEngageActual = 97
+  videoViewers.actual = 211
+  videoViewers.watchActual = 37
+  videoViewers.ebookActual = 149
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 145
+  lineRegistration.newActual = 159
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 701
+[daily-update] 対象日数: 187
+[daily-update] 期間: 2025-05-01 〜 2026-03-20
+[daily-update] 生成したdailyMetrics: 187日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 182 日)
+  2026-03-18: LINE=18 特典=11 セミ申込=5 セミ参加=3 FE=1 BE=-
+  2026-03-19: LINE=- 特典=0 セミ申込=10 セミ参加=7 FE=0 BE=-
+  2026-03-20: LINE=- 特典=2 セミ申込=1 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 187日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=8/10 購入=1/3
+  2026-03-15: 集客=23/25 参加=14/18 購入=2/5
+  2026-03-17: 集客=14/25 参加=9/18 購入=1/5
+  2026-03-18: 集客=4/25 参加=3/18 購入=0/6
+  2026-03-19: 集客=24/25 参加=12/18 購入=2/6
+  2026-03-21: 集客=22/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 980
+  特典受取: 211
+  セミナー申込: 103
+  セミナー参加: 46
+  FE購入: 6
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 14
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 23
+  セミナー 2026-03-21: recruitActual = 25
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 6
+  videoViewers.surveyActual = 176
+  seminarApplications.formVisits = 72
+  seminarApplications.attendActual = 46
+  seminarApplications.actual = 107
+  videoViewers.preEngageActual = 97
+  videoViewers.actual = 213
+  videoViewers.watchActual = 38
+  videoViewers.ebookActual = 149
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 145
+  lineRegistration.newActual = 169
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 727
+[daily-update] 対象日数: 188
+[daily-update] 期間: 2025-05-01 〜 2026-03-21
+[daily-update] 生成したdailyMetrics: 188日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 183 日)
+  2026-03-19: LINE=10 特典=0 セミ申込=10 セミ参加=7 FE=0 BE=-
+  2026-03-20: LINE=- 特典=4 セミ申込=4 セミ参加=0 FE=0 BE=-
+  2026-03-21: LINE=- 特典=0 セミ申込=1 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 188日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=8/10 購入=1/3
+  2026-03-15: 集客=23/25 参加=14/18 購入=2/5
+  2026-03-17: 集客=14/25 参加=8/18 購入=1/5
+  2026-03-18: 集客=4/25 参加=2/18 購入=0/6
+  2026-03-19: 集客=23/25 参加=14/18 購入=2/6
+  2026-03-21: 集客=25/25 参加=0/18 購入=0/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 989
+  特典受取: 213
+  セミナー申込: 107
+  セミナー参加: 46
+  FE購入: 6
+  BE購入: 0
+npm notice
+npm notice New minor version of npm available! 11.6.0 -> 11.12.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.0
+npm notice To update run: npm install -g npm@11.12.0
+npm notice
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  suppress all logs with { quiet: true }
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 14
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 23
+  セミナー 2026-03-21: recruitActual = 31
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 10
+  videoViewers.surveyActual = 176
+  seminarApplications.formVisits = 74
+  seminarApplications.attendActual = 63
+  seminarApplications.actual = 113
+  videoViewers.preEngageActual = 97
+  videoViewers.actual = 213
+  videoViewers.watchActual = 37
+  videoViewers.ebookActual = 150
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 146
+  lineRegistration.newActual = 168
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 753
+[daily-update] 対象日数: 189
+[daily-update] 期間: 2025-05-01 〜 2026-03-22
+[daily-update] 生成したdailyMetrics: 189日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 184 日)
+  2026-03-20: LINE=2 特典=4 セミ申込=4 セミ参加=0 FE=0 BE=-
+  2026-03-21: LINE=- 特典=0 セミ申込=6 セミ参加=17 FE=4 BE=-
+  2026-03-22: LINE=- 特典=0 セミ申込=1 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 189日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=8/10 購入=1/3
+  2026-03-15: 集客=23/25 参加=14/18 購入=2/5
+  2026-03-17: 集客=14/25 参加=9/18 購入=1/5
+  2026-03-18: 集客=4/25 参加=3/18 購入=0/6
+  2026-03-19: 集客=23/25 参加=15/18 購入=2/6
+  2026-03-21: 集客=31/25 参加=14/18 購入=4/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 985
+  特典受取: 213
+  セミナー申込: 113
+  セミナー参加: 63
+  FE購入: 10
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 13
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 14
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 23
+  セミナー 2026-03-21: recruitActual = 32
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 10
+  videoViewers.surveyActual = 179
+  seminarApplications.formVisits = 76
+  seminarApplications.attendActual = 63
+  seminarApplications.actual = 114
+  videoViewers.preEngageActual = 97
+  videoViewers.actual = 218
+  videoViewers.watchActual = 38
+  videoViewers.ebookActual = 148
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 151
+  lineRegistration.newActual = 168
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 779
+[daily-update] 対象日数: 190
+[daily-update] 期間: 2025-05-01 〜 2026-03-23
+[daily-update] 生成したdailyMetrics: 190日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 185 日)
+  2026-03-21: LINE=1 特典=0 セミ申込=6 セミ参加=17 FE=4 BE=-
+  2026-03-22: LINE=- 特典=4 セミ申込=2 セミ参加=0 FE=0 BE=-
+  2026-03-23: LINE=- 特典=1 セミ申込=0 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 189日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=13/13 参加=8/10 購入=1/3
+  2026-03-15: 集客=23/25 参加=13/18 購入=2/5
+  2026-03-17: 集客=14/25 参加=8/18 購入=1/5
+  2026-03-18: 集客=4/25 参加=2/18 購入=0/6
+  2026-03-19: 集客=23/25 参加=13/18 購入=2/6
+  2026-03-21: 集客=31/25 参加=19/18 購入=4/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 984
+  特典受取: 218
+  セミナー申込: 114
+  セミナー参加: 63
+  FE購入: 10
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 12
+  セミナー 2026-03-15: recruitActual = 23
+  セミナー 2026-03-17: recruitActual = 13
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 23
+  セミナー 2026-03-21: recruitActual = 34
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 11
+  videoViewers.surveyActual = 187
+  seminarApplications.formVisits = 80
+  seminarApplications.attendActual = 62
+  seminarApplications.actual = 114
+  videoViewers.preEngageActual = 96
+  videoViewers.actual = 223
+  videoViewers.watchActual = 40
+  videoViewers.ebookActual = 154
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 158
+  lineRegistration.newActual = 171
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 805
+[daily-update] 対象日数: 191
+[daily-update] 期間: 2025-05-01 〜 2026-03-24
+[daily-update] 生成したdailyMetrics: 191日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 186 日)
+  2026-03-22: LINE=4 特典=4 セミ申込=2 セミ参加=0 FE=0 BE=-
+  2026-03-23: LINE=- 特典=5 セミ申込=0 セミ参加=0 FE=1 BE=-
+  2026-03-24: LINE=- 特典=1 セミ申込=0 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 191日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=12/13 参加=7/10 購入=1/3
+  2026-03-15: 集客=23/25 参加=13/18 購入=2/5
+  2026-03-17: 集客=13/25 参加=8/18 購入=1/5
+  2026-03-18: 集客=4/25 参加=2/18 購入=0/6
+  2026-03-19: 集客=23/25 参加=13/18 購入=2/6
+  2026-03-21: 集客=34/25 参加=19/18 購入=5/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 983
+  特典受取: 223
+  セミナー申込: 114
+  セミナー参加: 63
+  FE購入: 11
+  BE購入: 0
+[dotenv@17.2.2] injecting env (70) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[daily-update] funnelId: funnel-1770198372071
+[daily-update] PROJECT_ID: mark-454114, DATASET: autostudio_lstep
+[bigquery] Using GOOGLE_APPLICATION_CREDENTIALS path for credentials
+[daily-update] ── STEP2: タグ→KPI実績同期 ──
+  セミナー 2026-03-14: recruitActual = 12
+  セミナー 2026-03-15: recruitActual = 24
+  セミナー 2026-03-17: recruitActual = 13
+  セミナー 2026-03-18: recruitActual = 4
+  セミナー 2026-03-19: recruitActual = 23
+  セミナー 2026-03-21: recruitActual = 34
+[daily-update] 同期完了: 12フィールド + 6セミナー日
+  frontend.actual = 11
+  videoViewers.surveyActual = 200
+  seminarApplications.formVisits = 81
+  seminarApplications.attendActual = 62
+  seminarApplications.actual = 115
+  videoViewers.preEngageActual = 96
+  videoViewers.actual = 227
+  videoViewers.watchActual = 41
+  videoViewers.ebookActual = 160
+  videoViewers.ebookViewActual = 4
+  inflow.threads.actual = 171
+  lineRegistration.newActual = 179
+[daily-update] ── STEP3: dailyMetrics計算 ──
+[daily-update] タグスナップショット行数: 831
+[daily-update] 対象日数: 192
+[daily-update] 期間: 2025-05-01 〜 2026-03-25
+[daily-update] 生成したdailyMetrics: 192日分
+  2025-05-01: LINE=5 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-04: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-05: LINE=12 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-06: LINE=15 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  2025-05-07: LINE=1 特典=- セミ申込=- セミ参加=- FE=- BE=-
+  ... (残り 187 日)
+  2026-03-23: LINE=10 特典=5 セミ申込=0 セミ参加=0 FE=1 BE=-
+  2026-03-24: LINE=- 特典=5 セミ申込=1 セミ参加=0 FE=0 BE=-
+  2026-03-25: LINE=- 特典=0 セミ申込=0 セミ参加=0 FE=0 BE=-
+[daily-update] ── STEP4: KPIデータ保存 ──
+[daily-update] 完了: 192日分のdailyMetrics保存
+[daily-update] セミナー日別:
+  2026-03-14: 集客=12/13 参加=7/10 購入=1/3
+  2026-03-15: 集客=24/25 参加=13/18 購入=2/5
+  2026-03-17: 集客=13/25 参加=7/18 購入=1/5
+  2026-03-18: 集客=4/25 参加=2/18 購入=0/6
+  2026-03-19: 集客=23/25 参加=13/18 購入=2/6
+  2026-03-21: 集客=34/25 参加=20/18 購入=5/5
+[daily-update] dailyMetrics累計:
+  LINE登録: 985
+  特典受取: 227
+  セミナー申込: 115
+  セミナー参加: 63
+  FE購入: 11
+  BE購入: 0
