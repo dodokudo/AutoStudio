@@ -234,6 +234,26 @@ async function getLatestGaDate(): Promise<string | null> {
   }
 }
 
+async function hasChargesSubscriptionIdColumn(): Promise<boolean> {
+  const client = createBigQueryClient(PROJECT_ID);
+
+  try {
+    const [rows] = await client.query({
+      query: `
+        SELECT 1 AS exists_flag
+        FROM \`${PROJECT_ID}.${SALES_DATASET_ID}.INFORMATION_SCHEMA.COLUMNS\`
+        WHERE table_name = 'charges'
+          AND column_name = 'subscription_id'
+        LIMIT 1
+      `,
+    });
+    return rows.length > 0;
+  } catch (error) {
+    console.error('[analyca/dashboard] failed to inspect charges schema:', error);
+    return false;
+  }
+}
+
 async function getPlanSummaries(): Promise<Map<string, AnalycaPlanBreakdown>> {
   const client = createBigQueryClient(PROJECT_ID);
   const [rows] = await client.query({
@@ -420,6 +440,10 @@ async function getDailyGaFunnel(
 
 async function getContracts(startDateISO: string, endDateISO: string): Promise<AnalycaContractRow[]> {
   const client = createBigQueryClient(PROJECT_ID);
+  const subscriptionIdSelect = await hasChargesSubscriptionIdColumn()
+    ? 'c.subscription_id AS subscription_id'
+    : 'CAST(NULL AS STRING) AS subscription_id';
+
   const [chargeRows, userRows] = await Promise.all([
     client.query({
       query: `
@@ -427,7 +451,7 @@ async function getContracts(startDateISO: string, endDateISO: string): Promise<A
         c.id AS charge_id,
         FORMAT_TIMESTAMP('%Y-%m-%d %H:%M', c.created_on, 'Asia/Tokyo') AS purchased_at,
         c.created_on AS created_on,
-        c.subscription_id AS subscription_id,
+        ${subscriptionIdSelect},
         c.charged_amount AS amount,
         c.status AS status,
         JSON_VALUE(c.metadata, '$."univapay-name"') AS customer_name,
