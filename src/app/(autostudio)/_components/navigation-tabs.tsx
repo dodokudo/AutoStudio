@@ -9,6 +9,7 @@ const navItems = [
   { id: 'threads', href: '/threads', label: 'Threads' },
   { id: 'instagram', href: '/instagram', label: 'Instagram' },
   { id: 'line', href: '/line', label: 'LINE' },
+  { id: 'analyca', href: '/analyca', label: 'ANALYCA' },
   { id: 'launch', href: '/launch', label: 'Launch' },
   { id: 'sales', href: '/sales', label: 'Sales' },
   { id: 'ads', href: '/ads', label: 'Ads' },

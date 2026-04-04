@@ -11,6 +11,7 @@ const UNIVAPAY_STORE_ID = process.env.UNIVAPAY_STORE_ID ?? '';
 export interface UnivaPayCharge {
   id: string;
   store_id: string;
+  subscription_id?: string | null;
   transaction_token_id: string;
   requested_amount: number;
   requested_currency: string;

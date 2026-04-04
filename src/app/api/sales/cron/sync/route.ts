@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { listAllCharges } from '@/lib/univapay/client';
-import { upsertCharges, getLastSyncedAt } from '@/lib/sales/charges';
+import { initChargesTable, upsertCharges, getLastSyncedAt } from '@/lib/sales/charges';
 import { autoCategorizeCharges } from '@/lib/sales/categories';
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +11,8 @@ async function handleSync() {
 
   try {
     console.log('[sales/cron/sync] Started at', new Date().toISOString());
+
+    await initChargesTable();
 
     // 最終同期日時を確認
     const lastSyncedAt = await getLastSyncedAt();

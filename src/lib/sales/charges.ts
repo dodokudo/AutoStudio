@@ -30,6 +30,7 @@ export async function initChargesTable(): Promise<void> {
         fields: [
           { name: 'id', type: 'STRING', mode: 'REQUIRED' },
           { name: 'store_id', type: 'STRING' },
+          { name: 'subscription_id', type: 'STRING' },
           { name: 'transaction_token_id', type: 'STRING' },
           { name: 'requested_amount', type: 'INTEGER' },
           { name: 'requested_currency', type: 'STRING' },
@@ -47,6 +48,10 @@ export async function initChargesTable(): Promise<void> {
       },
     });
     console.log(`[charges] Created table: ${TABLE}`);
+  } else {
+    await client.query({
+      query: `ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\` ADD COLUMN IF NOT EXISTS subscription_id STRING`,
+    });
   }
 }
 
@@ -70,6 +75,7 @@ export async function upsertCharges(charges: UnivaPayCharge[]): Promise<number> 
         fields: [
           { name: 'id', type: 'STRING', mode: 'REQUIRED' },
           { name: 'store_id', type: 'STRING' },
+          { name: 'subscription_id', type: 'STRING' },
           { name: 'transaction_token_id', type: 'STRING' },
           { name: 'requested_amount', type: 'INTEGER' },
           { name: 'requested_currency', type: 'STRING' },
@@ -91,6 +97,7 @@ export async function upsertCharges(charges: UnivaPayCharge[]): Promise<number> 
     const rows = charges.map(c => ({
       id: c.id,
       store_id: c.store_id,
+      subscription_id: c.subscription_id ?? null,
       transaction_token_id: c.transaction_token_id,
       requested_amount: c.requested_amount,
       requested_currency: c.requested_currency,
@@ -118,6 +125,7 @@ export async function upsertCharges(charges: UnivaPayCharge[]): Promise<number> 
         WHEN MATCHED THEN
           UPDATE SET
             store_id = S.store_id,
+            subscription_id = S.subscription_id,
             transaction_token_id = S.transaction_token_id,
             requested_amount = S.requested_amount,
             requested_currency = S.requested_currency,
@@ -132,10 +140,10 @@ export async function upsertCharges(charges: UnivaPayCharge[]): Promise<number> 
             error_message = S.error_message,
             synced_at = S.synced_at
         WHEN NOT MATCHED THEN
-          INSERT (id, store_id, transaction_token_id, requested_amount, requested_currency,
+          INSERT (id, store_id, subscription_id, transaction_token_id, requested_amount, requested_currency,
                   charged_amount, charged_currency, status, metadata, mode, created_on,
                   descriptor, error_code, error_message, synced_at)
-          VALUES (S.id, S.store_id, S.transaction_token_id, S.requested_amount, S.requested_currency,
+          VALUES (S.id, S.store_id, S.subscription_id, S.transaction_token_id, S.requested_amount, S.requested_currency,
                   S.charged_amount, S.charged_currency, S.status, S.metadata, S.mode, S.created_on,
                   S.descriptor, S.error_code, S.error_message, S.synced_at)
       `,
@@ -166,6 +174,7 @@ export async function getChargesFromBigQuery(
       SELECT
         id,
         store_id,
+        subscription_id,
         transaction_token_id,
         requested_amount,
         requested_currency,
@@ -190,6 +199,7 @@ export async function getChargesFromBigQuery(
   return (rows as Array<Record<string, unknown>>).map(row => ({
     id: String(row.id),
     store_id: String(row.store_id),
+    subscription_id: row.subscription_id ? String(row.subscription_id) : undefined,
     transaction_token_id: String(row.transaction_token_id),
     requested_amount: Number(row.requested_amount),
     requested_currency: String(row.requested_currency),
