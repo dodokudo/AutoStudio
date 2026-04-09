@@ -82,33 +82,30 @@ export async function createShortLink(req: CreateShortLinkRequest): Promise<Shor
   return shortLink;
 }
 
+// 短縮リンクのメモリキャッシュ（59本程度なので全部載せる）
+let shortLinkCache: Map<string, ShortLink> | null = null;
+let shortLinkCacheFetchedAt = 0;
+const SHORT_LINK_CACHE_TTL_MS = 1000 * 60 * 5; // 5分
+
+async function getShortLinkCache(): Promise<Map<string, ShortLink>> {
+  const now = Date.now();
+  if (shortLinkCache && now - shortLinkCacheFetchedAt < SHORT_LINK_CACHE_TTL_MS) {
+    return shortLinkCache;
+  }
+
+  const allLinks = await getAllShortLinks();
+  const cache = new Map<string, ShortLink>();
+  for (const link of allLinks) {
+    cache.set(link.shortCode, link);
+  }
+  shortLinkCache = cache;
+  shortLinkCacheFetchedAt = now;
+  return cache;
+}
+
 export async function getShortLinkByCode(shortCode: string): Promise<ShortLink | null> {
-  const query = `
-    SELECT
-      id,
-      short_code as shortCode,
-      destination_url as destinationUrl,
-      title,
-      description,
-      ogp_image_url as ogpImageUrl,
-      management_name as managementName,
-      category,
-      CAST(created_at AS STRING) as createdAt,
-      created_by as createdBy,
-      is_active as isActive
-    FROM \`${projectId}.${dataset}.short_links\`
-    WHERE short_code = @shortCode
-    AND is_active = true
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
-
-  const [rows] = await bigquery.query({
-    query,
-    params: { shortCode },
-  });
-
-  return rows.length > 0 ? (rows[0] as ShortLink) : null;
+  const cache = await getShortLinkCache();
+  return cache.get(shortCode) ?? null;
 }
 
 export async function getAllShortLinks(): Promise<ShortLink[]> {

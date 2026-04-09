@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getShortLinkByCode, logClick } from '@/lib/links/bigquery';
 import { headers } from 'next/headers';
-import RedirectClient from './redirect-client';
 
 interface PageProps {
   params: Promise<{ code: string[] }>;
@@ -46,8 +45,8 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
     console.error('Failed to log click:', error);
   });
 
-  // 通常のブラウザの場合はクライアントサイドリダイレクト
-  return <RedirectClient destinationUrl={shortLink.destinationUrl} />;
+  // サーバーサイドで即座にリダイレクト（クライアントJSの読み込みを待たない）
+  redirect(shortLink.destinationUrl);
 }
 
 // OGPメタデータ生成
