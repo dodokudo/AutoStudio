@@ -79,6 +79,7 @@ export async function createShortLink(req: CreateShortLinkRequest): Promise<Shor
 
   await bigquery.dataset(dataset).table('short_links').insert([row]);
 
+  invalidateShortLinkCache();
   return shortLink;
 }
 
@@ -106,6 +107,11 @@ async function getShortLinkCache(): Promise<Map<string, ShortLink>> {
 export async function getShortLinkByCode(shortCode: string): Promise<ShortLink | null> {
   const cache = await getShortLinkCache();
   return cache.get(shortCode) ?? null;
+}
+
+export function invalidateShortLinkCache(): void {
+  shortLinkCache = null;
+  shortLinkCacheFetchedAt = 0;
 }
 
 export async function getAllShortLinks(): Promise<ShortLink[]> {
@@ -821,6 +827,8 @@ export async function updateShortLink(id: string, req: UpdateShortLinkRequest): 
       is_active: true,
     },
   ]);
+
+  invalidateShortLinkCache();
 }
 
 export async function getLinkDailyClicks(

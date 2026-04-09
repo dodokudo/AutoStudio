@@ -35,8 +35,8 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
   const forwardedFor = headersList.get('x-forwarded-for');
   const ipAddress = forwardedFor ? forwardedFor.split(',')[0] : undefined;
 
-  // クリックログを記録（await しない）
-  logClick(shortLink.id, {
+  // クリックログを記録してからリダイレクト（計測漏れ防止）
+  await logClick(shortLink.id, {
     referrer,
     userAgent,
     ipAddress,
@@ -45,7 +45,7 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
     console.error('Failed to log click:', error);
   });
 
-  // サーバーサイドで即座にリダイレクト（クライアントJSの読み込みを待たない）
+  // サーバーサイドで即座にリダイレクト
   redirect(shortLink.destinationUrl);
 }
 
