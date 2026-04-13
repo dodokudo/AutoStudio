@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
+import { Table } from '@/components/ui/table';
 import {
   Bar,
   BarChart,
@@ -172,6 +173,9 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   // 顧客名編集機能
   const [editingCustomerName, setEditingCustomerName] = useState<string | null>(null);
   const [editCustomerNameValue, setEditCustomerNameValue] = useState('');
+
+  // 月別売上推移の期間フィルタ
+  const [monthlyRangeMonths, setMonthlyRangeMonths] = useState<3 | 6 | 12>(12);
 
   // 期間変更時に初期データを同期
   useEffect(() => {
@@ -779,6 +783,98 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     }));
   }, [fullData, initialData]);
 
+  const monthlySales = useMemo(() => {
+    const monthlyData = fullData?.monthlyData ?? initialData.monthlyData;
+    if (!monthlyData) return [];
+    const { charges, categories: monthlyCategories, manualSales, rangeStart, rangeEnd } = monthlyData;
+    const start = new Date(rangeStart + 'T00:00:00');
+    const end = new Date(rangeEnd + 'T00:00:00');
+
+    const toMonthKey = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const last = new Date(end.getFullYear(), end.getMonth(), 1);
+
+    type MonthEntry = {
+      month: string;
+      frontend: number;
+      backend: number;
+      backend_renewal: number;
+      analyca: number;
+      corporate: number;
+      other: number;
+      total: number;
+    };
+    const map = new Map<string, MonthEntry>();
+
+    while (cursor <= last) {
+      const key = toMonthKey(cursor);
+      map.set(key, {
+        month: key,
+        frontend: 0,
+        backend: 0,
+        backend_renewal: 0,
+        analyca: 0,
+        corporate: 0,
+        other: 0,
+        total: 0,
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    const mergedCategories = {
+      ...(fullData?.categories ?? initialData.categories),
+      ...monthlyCategories,
+    } as Record<string, SalesCategoryId>;
+
+    for (const charge of charges) {
+      if (charge.status !== 'successful') continue;
+      const key = toMonthKey(new Date(charge.created_on));
+      const entry = map.get(key);
+      if (!entry) continue;
+      const cat = (mergedCategories[charge.id] ?? 'other') as SalesCategoryId;
+      entry[cat] += charge.charged_amount;
+      entry.total += charge.charged_amount;
+    }
+
+    for (const sale of manualSales) {
+      const key = toMonthKey(new Date(sale.transactionDate + 'T00:00:00'));
+      const entry = map.get(key);
+      if (!entry) continue;
+      const cat = (sale.category ?? 'other') as SalesCategoryId;
+      entry[cat] += sale.amount;
+      entry.total += sale.amount;
+    }
+
+    return Array.from(map.values());
+  }, [fullData, initialData]);
+
+  const monthlySalesFiltered = useMemo(() => {
+    return monthlySales.slice(-monthlyRangeMonths);
+  }, [monthlySales, monthlyRangeMonths]);
+
+  const monthlySalesTotals = useMemo(() => {
+    const totals = {
+      frontend: 0,
+      backend: 0,
+      backend_renewal: 0,
+      analyca: 0,
+      corporate: 0,
+      other: 0,
+      total: 0,
+    };
+    for (const row of monthlySalesFiltered) {
+      totals.frontend += row.frontend;
+      totals.backend += row.backend;
+      totals.backend_renewal += row.backend_renewal;
+      totals.analyca += row.analyca;
+      totals.corporate += row.corporate;
+      totals.other += row.other;
+      totals.total += row.total;
+    }
+    return totals;
+  }, [monthlySalesFiltered]);
+
   const frontendCountForRate = mainCategoryStats.frontend.count;
   const backendCountForRate = mainCategoryStats.backend.count;
   const oneTimeSalesAmount = mainCategoryStats.frontend.amount + mainCategoryStats.backend.amount;
@@ -1318,6 +1414,187 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
             </div>
           )}
         </div>
+      </Card>
+
+      {/* 月別 売上推移 */}
+      <Card className="p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+              月別 売上推移
+            </h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+              カテゴリ内訳の積み上げ棒と合計（折れ線）／下段にカテゴリ別明細
+            </p>
+          </div>
+          <div className="flex gap-1 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-1 text-xs">
+            {[3, 6, 12].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setMonthlyRangeMonths(n as 3 | 6 | 12)}
+                className={
+                  monthlyRangeMonths === n
+                    ? 'rounded-[var(--radius-sm)] bg-white px-3 py-1.5 font-semibold text-[color:var(--color-text-primary)] shadow-sm'
+                    : 'rounded-[var(--radius-sm)] px-3 py-1.5 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+                }
+              >
+                直近{n}ヶ月
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4 h-80">
+          {monthlySalesFiltered.length > 0 ? (
+            <ResponsiveContainer>
+              <ComposedChart data={monthlySalesFiltered} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#475569' }}
+                  tickFormatter={(value) => `¥${(value / 10000).toFixed(0)}万`}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || payload.length === 0) return null;
+                    const totalEntry = payload.find((p) => p.dataKey === 'total');
+                    const total = typeof totalEntry?.value === 'number' ? totalEntry.value : 0;
+                    const categoryEntries = payload
+                      .filter((p) => p.dataKey !== 'total' && typeof p.value === 'number' && (p.value as number) > 0)
+                      .map((p) => ({
+                        name: p.name as string,
+                        value: p.value as number,
+                        color: (p.color ?? p.fill ?? '#64748b') as string,
+                      }))
+                      .sort((a, b) => b.value - a.value);
+                    return (
+                      <div className="rounded-md border border-[color:var(--color-border)] bg-white px-3 py-2 shadow-md">
+                        <p className="mb-2 text-sm font-semibold text-[color:var(--color-text-primary)]">{label}</p>
+                        <div className="space-y-1 text-sm">
+                          {categoryEntries.map((entry) => {
+                            const pct = total > 0 ? (entry.value / total) * 100 : 0;
+                            return (
+                              <div key={entry.name} className="flex items-center justify-between gap-4">
+                                <span className="flex items-center gap-2" style={{ color: entry.color }}>
+                                  <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: entry.color }} />
+                                  {entry.name}
+                                </span>
+                                <span style={{ color: entry.color }}>
+                                  ¥{numberFormatter.format(entry.value)}（{pct.toFixed(1)}%）
+                                </span>
+                              </div>
+                            );
+                          })}
+                          <div className="mt-2 flex items-center justify-between gap-4 border-t border-[color:var(--color-border)] pt-2 font-semibold text-[color:var(--color-text-primary)]">
+                            <span>合計</span>
+                            <span>¥{numberFormatter.format(total)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {SALES_CATEGORIES.map((cat) => (
+                  <Bar
+                    key={cat.id}
+                    dataKey={cat.id}
+                    name={cat.label}
+                    stackId="sales"
+                    fill={cat.color}
+                    radius={[0, 0, 0, 0]}
+                    opacity={0.9}
+                  />
+                ))}
+                <Line
+                  type="monotone"
+                  dataKey="total"
+                  name="合計"
+                  stroke="#0f172a"
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                月別売上データがありません
+              </p>
+            </div>
+          )}
+        </div>
+
+        {monthlySalesFiltered.length > 0 && (
+          <div className="mt-6 overflow-x-auto">
+            <Table>
+              <thead className="bg-[color:var(--color-surface-muted)] text-xs uppercase text-[color:var(--color-text-muted)]">
+                <tr>
+                  <th className="px-3 py-2 text-left">月</th>
+                  {SALES_CATEGORIES.map((cat) => (
+                    <th key={cat.id} className="px-3 py-2 text-right whitespace-nowrap">
+                      <span
+                        className="inline-block h-2 w-2 rounded-sm align-middle mr-1"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      {cat.label}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 text-right whitespace-nowrap">合計</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] font-semibold text-[color:var(--color-text-primary)]">
+                  <td className="px-3 py-2">期間合計</td>
+                  {SALES_CATEGORIES.map((cat) => {
+                    const val = monthlySalesTotals[cat.id];
+                    const pct = monthlySalesTotals.total > 0 ? (val / monthlySalesTotals.total) * 100 : 0;
+                    return (
+                      <td key={cat.id} className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                        <div>¥{numberFormatter.format(val)}</div>
+                        <div className="text-xs font-normal text-[color:var(--color-text-muted)]">
+                          {pct.toFixed(1)}%
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                    ¥{numberFormatter.format(monthlySalesTotals.total)}
+                  </td>
+                </tr>
+                {[...monthlySalesFiltered].reverse().map((row) => (
+                  <tr key={row.month} className="border-t border-[color:var(--color-border)]">
+                    <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)] whitespace-nowrap">
+                      {row.month}
+                    </td>
+                    {SALES_CATEGORIES.map((cat) => {
+                      const val = row[cat.id];
+                      const pct = row.total > 0 ? (val / row.total) * 100 : 0;
+                      return (
+                        <td key={cat.id} className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                          <div>¥{numberFormatter.format(val)}</div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">
+                            {pct.toFixed(1)}%
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td className="px-3 py-2 text-right whitespace-nowrap font-semibold text-[color:var(--color-text-primary)] tabular-nums">
+                      ¥{numberFormatter.format(row.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        )}
       </Card>
 
       {/* 月別 成約数/転換率 推移 */}

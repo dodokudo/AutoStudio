@@ -116,7 +116,7 @@ interface ContractUserRow {
   threads_username: string | null;
 }
 
-const ANALYTICS_DATASET_ID = 'analytics_489007096';
+const ANALYTICS_DATASET_ID = 'analytics_531152456';
 const ANALYCA_DATASET_ID = 'analyca';
 const SALES_DATASET_ID = 'autostudio_sales';
 const PROJECT_ID = resolveProjectId();
@@ -212,7 +212,7 @@ function enumerateDates(startDate: Date, endDate: Date): string[] {
 }
 
 async function getLatestGaDate(): Promise<string | null> {
-  const client = createBigQueryClient(PROJECT_ID, 'US');
+  const client = createBigQueryClient(PROJECT_ID, 'asia-northeast1');
 
   try {
     const [rows] = await client.query({
@@ -221,7 +221,7 @@ async function getLatestGaDate(): Promise<string | null> {
         FROM \`${PROJECT_ID}.${ANALYTICS_DATASET_ID}.INFORMATION_SCHEMA.TABLES\`
         WHERE STARTS_WITH(table_name, 'events_')
       `,
-      location: 'US',
+      location: 'asia-northeast1',
     });
     const latestTable = rows?.[0]?.latest_table ? String(rows[0].latest_table) : '';
     if (!latestTable.startsWith('events_')) return null;
@@ -379,7 +379,7 @@ async function getDailyGaFunnel(
   startDateKey: string,
   endDateKey: string,
 ): Promise<Map<string, { lpViews: number; checkoutStarts: number; checkoutPageViews: number; paymentSubmits: number }>> {
-  const client = createBigQueryClient(PROJECT_ID, 'US');
+  const client = createBigQueryClient(PROJECT_ID, 'asia-northeast1');
   try {
     const [rows] = await client.query({
       query: `
@@ -419,7 +419,7 @@ async function getDailyGaFunnel(
         startSuffix: toGaSuffix(startDateKey),
         endSuffix: toGaSuffix(endDateKey),
       },
-      location: 'US',
+      location: 'asia-northeast1',
     });
 
     const map = new Map<string, { lpViews: number; checkoutStarts: number; checkoutPageViews: number; paymentSubmits: number }>();
