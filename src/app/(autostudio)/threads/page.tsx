@@ -12,7 +12,7 @@ import { ReportTab } from "./_components/report-tab";
 import { ScheduleTab } from "./_components/schedule-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
-import { getLinkClicksSummary, getThreadsLinkClicksByRange } from "@/lib/links/analytics";
+import { getLinkClicksSummary, getThreadsLinkClicksByRange, getThreadsLpLineClicksByRange } from "@/lib/links/analytics";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
@@ -108,6 +108,14 @@ const getCachedThreadsLinkClicksByRange = unstable_cache(
   { revalidate: 1800 }
 );
 
+const getCachedThreadsLpLineClicksByRange = unstable_cache(
+  async (startISO: string, endISO: string) => {
+    return getThreadsLpLineClicksByRange(new Date(startISO), new Date(endISO));
+  },
+  ['threads-lp-line-clicks-by-range'],
+  { revalidate: 1800 }
+);
+
 const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -167,6 +175,8 @@ export default async function ThreadsHome({
       previousClicks,
       dailyPostStats,
       previousDailyPostStats,
+      currentLpLineSeries,
+      previousLpLineSeries,
     ] = await Promise.all([
       needsFullInsights ? getCachedThreadsInsights(PROJECT_ID, insightsOptions.startDate, insightsOptions.endDate, insightsOptions.rangeDays) : Promise.resolve(null),
       !needsFullInsights ? getCachedLightweightInsights(PROJECT_ID, insightsOptions.startDate, insightsOptions.endDate) : Promise.resolve(null),
@@ -190,7 +200,12 @@ export default async function ThreadsHome({
         formatDateInput(previousRangeStart),
         formatDateInput(previousRangeEnd),
       ),
+      getCachedThreadsLpLineClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString()),
+      getCachedThreadsLpLineClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString()),
     ]);
+
+    const lpLineClicksForRange = currentLpLineSeries.reduce((sum, entry) => sum + entry.clicks, 0);
+    const previousLpLineClicks = previousLpLineSeries.reduce((sum, entry) => sum + entry.clicks, 0);
 
     // 投稿タブ用のデータを統合
     const effectiveAccountSummary = insights?.accountSummary ?? lightweightInsights?.accountSummary ?? {
@@ -334,8 +349,10 @@ export default async function ThreadsHome({
 
     const postsDeltaValue = postsCountForRange - previousPostsCount;
 
-    const linkClickConversionRate = safeDivide(totalLinkClicks, profileViewsNumeric);
-    const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, totalLinkClicks);
+    const ctrValue = safeDivide(totalLinkClicks, profileViewsNumeric);
+    const lpClickConversionRate = safeDivide(lpLineClicksForRange, totalLinkClicks);
+    const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, lpLineClicksForRange);
+    const lpLineClicksDeltaValue = lpLineClicksForRange - previousLpLineClicks;
 
     const rangeDurationDays = Math.max(1, Math.round((selectedRangeWindow.end.getTime() - selectedRangeWindow.start.getTime()) / DAY_MS) + 1);
 
@@ -352,14 +369,21 @@ export default async function ThreadsHome({
         : null;
 
     const linkClicksDeltaParts = [
-      linkClickConversionRate !== null ? `遷移率: ${formatPercent(linkClickConversionRate, 2)}` : null,
+      ctrValue !== null ? `CTR: ${formatPercent(ctrValue, 2)}` : null,
       linkClicksDeltaValue !== null && linkClicksDeltaValue !== 0
         ? `${linkClicksDeltaValue > 0 ? '+' : ''}${formatNumber(linkClicksDeltaValue)}`
         : null,
     ].filter((part): part is string => Boolean(part));
 
+    const lpClicksDeltaParts = [
+      lpClickConversionRate !== null ? `LP遷移率: ${formatPercent(lpClickConversionRate, 2)}` : null,
+      lpLineClicksDeltaValue !== 0
+        ? `${lpLineClicksDeltaValue > 0 ? '+' : ''}${formatNumber(lpLineClicksDeltaValue)}`
+        : null,
+    ].filter((part): part is string => Boolean(part));
+
     const lineRegistrationDeltaParts = [
-      lineRegistrationConversionRate !== null ? `遷移率: ${formatPercent(lineRegistrationConversionRate, 2)}` : null,
+      lineRegistrationConversionRate !== null ? `登録率: ${formatPercent(lineRegistrationConversionRate, 2)}` : null,
       lineRegistrationDeltaValue !== null && lineRegistrationDeltaValue !== 0
         ? `${lineRegistrationDeltaValue > 0 ? '+' : ''}${formatNumber(lineRegistrationDeltaValue)}`
         : null,
@@ -392,6 +416,12 @@ export default async function ThreadsHome({
         value: formatNumber(totalLinkClicks),
         delta: linkClicksDeltaParts.length ? linkClicksDeltaParts.join(' / ') : undefined,
         deltaTone: resolveDeltaTone(linkClicksDeltaValue ?? undefined),
+      },
+      {
+        label: 'LPクリック',
+        value: formatNumber(lpLineClicksForRange),
+        delta: lpClicksDeltaParts.length ? lpClicksDeltaParts.join(' / ') : undefined,
+        deltaTone: resolveDeltaTone(lpLineClicksDeltaValue),
       },
       {
         label: 'LINE登録数',
@@ -454,6 +484,12 @@ export default async function ThreadsHome({
       console.error('[threads/page] Failed to load link clicks series:', linkError);
     }
 
+    // Threads導線LPに配置されたLINE登録リンクのクリックを日別で取得
+    const lpClicksByDate: Record<string, number> = currentLpLineSeries.reduce<Record<string, number>>((acc, point) => {
+      acc[point.date] = point.clicks;
+      return acc;
+    }, {});
+
     let performanceSeries = dailyMetricsForChart.map((metric, index) => {
       const previousFollowers = index > 0 ? dailyMetricsForChart[index - 1].followers : metric.followers;
       const rawFollowerDelta = index === 0 ? 0 : metric.followers - previousFollowers;
@@ -464,6 +500,7 @@ export default async function ThreadsHome({
         impressions: impressionsByDate[metric.date] ?? 0,
         followerDelta,
         linkClicks: linkClicksByDate[metric.date] ?? 0,
+        lpClicks: lpClicksByDate[metric.date] ?? 0,
         lineRegistrations: lineRegistrationsByDate[metric.date] ?? 0,
         postCount: postCountByDate[metric.date] ?? 0,
       };
@@ -483,6 +520,7 @@ export default async function ThreadsHome({
         impressions: impressionsByDate[date] ?? 0,
         followerDelta: 0,
         linkClicks: linkClicksByDate[date] ?? 0,
+        lpClicks: lpClicksByDate[date] ?? 0,
         lineRegistrations: lineRegistrationsByDate[date] ?? 0,
         postCount: postCountByDate[date] ?? 0,
       }));

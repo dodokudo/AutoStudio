@@ -39,6 +39,7 @@ interface InsightsTabProps {
     impressions: number;
     followerDelta: number;
     linkClicks?: number;
+    lpClicks?: number;
     lineRegistrations?: number;
     postCount?: number;
   }>;
@@ -110,6 +111,7 @@ export function InsightsTab({
       displayDate,
       followers: item.followers ?? 0,
       linkClicks: item.linkClicks ?? 0,
+      lpClicks: item.lpClicks ?? 0,
     };
   });
 
@@ -228,6 +230,7 @@ export function InsightsTab({
                   <th className="px-3 py-2 text-right">インプ</th>
                   <th className="px-3 py-2 text-right">クリック</th>
                   <th className="px-3 py-2 text-right">CTR</th>
+                  <th className="px-3 py-2 text-right">LPクリック</th>
                   <th className="px-3 py-2 text-right">LINE</th>
                   <th className="px-3 py-2 text-right">登録率</th>
                 </tr>
@@ -239,8 +242,9 @@ export function InsightsTab({
                     ? fullDateFormatter.format(parsed)
                     : item.date;
                   const linkClicks = item.linkClicks ?? 0;
+                  const lpClicks = item.lpClicks ?? 0;
                   const lineRegs = item.lineRegistrations ?? 0;
-                  const registrationRate = linkClicks > 0 ? (lineRegs / linkClicks) * 100 : 0;
+                  const registrationRate = lpClicks > 0 ? (lineRegs / lpClicks) * 100 : 0;
                   return (
                     <tr key={item.date} className="hover:bg-[color:var(--color-surface-muted)]">
                       <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">
@@ -266,13 +270,16 @@ export function InsightsTab({
                       <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
                         {item.impressions > 0 ? `${((linkClicks / item.impressions) * 100).toFixed(2)}%` : '-'}
                       </td>
+                      <td className="px-3 py-2 text-right text-[color:var(--color-text-primary)]">
+                        {numberFormatter.format(lpClicks)}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         <span className={lineRegs > 0 ? 'text-amber-600' : 'text-[color:var(--color-text-secondary)]'}>
                           {lineRegs > 0 ? `+${numberFormatter.format(lineRegs)}` : '0'}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
-                        {linkClicks > 0 ? `${registrationRate.toFixed(1)}%` : '-'}
+                        {lpClicks > 0 ? `${registrationRate.toFixed(1)}%` : '-'}
                       </td>
                     </tr>
                   );

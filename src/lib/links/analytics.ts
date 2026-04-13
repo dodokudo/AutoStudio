@@ -17,6 +17,70 @@ export interface LinkClicksSummary {
   }>;
 }
 
+// Threads導線LPに配置されているLINE登録ボタンのshort_code一覧。
+// LaunchKit /content/opt-3, opt-4, threads-opt* に埋め込まれているリンクを手動で列挙。
+// LP側でCTAを増やした際はここに追記する。
+export const THREADS_LP_LINE_SHORT_CODES = [
+  'L-opt4',
+  'L-opt4-tp',
+  'L-opt4-th',
+  'L-opt4-ig',
+  'TAI2',
+  'TAI2kp',
+  'TAI2p',
+  'IG-TAI2',
+  'thLINE1',
+  'prf_LN',
+  'kpost_LN',
+  'IG_LN2',
+] as const;
+
+export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Promise<LinkClicksByDate[]> {
+  const bigquery = createBigQueryClient(projectId);
+  const startKey = formatDateInput(start);
+  const endKey = formatDateInput(end);
+
+  const query = `
+    WITH latest_links AS (
+      SELECT
+        id,
+        short_code,
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) AS rn
+      FROM \`${projectId}.${dataset}.short_links\`
+      WHERE is_active = TRUE
+        AND short_code IN UNNEST(@codes)
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo")) AS date,
+      COUNT(*) AS clicks
+    FROM \`${projectId}.${dataset}.click_logs\` cl
+    JOIN latest_links ll ON cl.short_link_id = ll.id
+    WHERE ll.rn = 1
+      AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    GROUP BY date
+    ORDER BY date DESC
+  `;
+
+  const [rows] = await bigquery.query({
+    query,
+    params: {
+      codes: [...THREADS_LP_LINE_SHORT_CODES],
+      startDate: startKey,
+      endDate: endKey,
+    },
+  });
+
+  return rows.map((row: Record<string, unknown>) => ({
+    date: String(row.date),
+    clicks: Number(row.clicks ?? 0),
+  }));
+}
+
+export async function getThreadsLpLineClicksTotal(start: Date, end: Date): Promise<number> {
+  const series = await getThreadsLpLineClicksByRange(start, end);
+  return series.reduce((sum, entry) => sum + entry.clicks, 0);
+}
+
 export async function getThreadsLinkClicks(): Promise<LinkClicksByDate[]> {
   const end = new Date();
   const start = new Date(end.getTime());
