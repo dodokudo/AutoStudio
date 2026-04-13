@@ -16,11 +16,21 @@ const SCHEDULE_TABLE_SCHEMA = [
   { name: 'main_text', type: 'STRING' },
   { name: 'comment1', type: 'STRING' },
   { name: 'comment2', type: 'STRING' },
+  { name: 'comment3', type: 'STRING' },
+  { name: 'comment4', type: 'STRING' },
+  { name: 'comment5', type: 'STRING' },
+  { name: 'comment6', type: 'STRING' },
+  { name: 'comment7', type: 'STRING' },
   { name: 'created_at', type: 'TIMESTAMP' },
   { name: 'updated_at', type: 'TIMESTAMP' },
   { name: 'main_thread_id', type: 'STRING' },
   { name: 'comment1_thread_id', type: 'STRING' },
   { name: 'comment2_thread_id', type: 'STRING' },
+  { name: 'comment3_thread_id', type: 'STRING' },
+  { name: 'comment4_thread_id', type: 'STRING' },
+  { name: 'comment5_thread_id', type: 'STRING' },
+  { name: 'comment6_thread_id', type: 'STRING' },
+  { name: 'comment7_thread_id', type: 'STRING' },
   { name: 'error_message', type: 'STRING' },
 ];
 
@@ -44,7 +54,22 @@ export async function ensureScheduledPostsTable() {
     }
   } else {
     // マイグレーション: 新カラムを追加（既存テーブル用）
-    const newColumns = ['main_thread_id', 'comment1_thread_id', 'comment2_thread_id', 'error_message'];
+    const newColumns = [
+      'main_thread_id',
+      'comment1_thread_id',
+      'comment2_thread_id',
+      'error_message',
+      'comment3',
+      'comment4',
+      'comment5',
+      'comment6',
+      'comment7',
+      'comment3_thread_id',
+      'comment4_thread_id',
+      'comment5_thread_id',
+      'comment6_thread_id',
+      'comment7_thread_id',
+    ];
     for (const col of newColumns) {
       try {
         await client.query({
@@ -78,6 +103,11 @@ export type ScheduledPostRow = {
   main_text: string;
   comment1: string;
   comment2: string;
+  comment3: string;
+  comment4: string;
+  comment5: string;
+  comment6: string;
+  comment7: string;
   created_at: string;
   updated_at: string;
   template_id?: string | null;
@@ -86,6 +116,11 @@ export type ScheduledPostRow = {
   main_thread_id?: string | null;
   comment1_thread_id?: string | null;
   comment2_thread_id?: string | null;
+  comment3_thread_id?: string | null;
+  comment4_thread_id?: string | null;
+  comment5_thread_id?: string | null;
+  comment6_thread_id?: string | null;
+  comment7_thread_id?: string | null;
   error_message?: string | null;
 };
 
@@ -115,11 +150,21 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
       sp.main_text,
       sp.comment1,
       sp.comment2,
+      sp.comment3,
+      sp.comment4,
+      sp.comment5,
+      sp.comment6,
+      sp.comment7,
       sp.created_at,
       sp.updated_at,
       sp.main_thread_id,
       sp.comment1_thread_id,
       sp.comment2_thread_id,
+      sp.comment3_thread_id,
+      sp.comment4_thread_id,
+      sp.comment5_thread_id,
+      sp.comment6_thread_id,
+      sp.comment7_thread_id,
       sp.error_message,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S+09:00', sp.scheduled_time, 'Asia/Tokyo') AS scheduled_at_jst,
       FORMAT_DATE('%Y-%m-%d', DATE(sp.scheduled_time, 'Asia/Tokyo')) AS scheduled_date,
@@ -144,6 +189,11 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     main_text: toPlain(row.main_text),
     comment1: toPlain(row.comment1),
     comment2: toPlain(row.comment2),
+    comment3: toPlain(row.comment3),
+    comment4: toPlain(row.comment4),
+    comment5: toPlain(row.comment5),
+    comment6: toPlain(row.comment6),
+    comment7: toPlain(row.comment7),
     created_at: toPlain(row.created_at),
     updated_at: toPlain(row.updated_at),
     template_id: toPlain(row.template_id) || null,
@@ -152,6 +202,11 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     main_thread_id: toPlain(row.main_thread_id) || null,
     comment1_thread_id: toPlain(row.comment1_thread_id) || null,
     comment2_thread_id: toPlain(row.comment2_thread_id) || null,
+    comment3_thread_id: toPlain(row.comment3_thread_id) || null,
+    comment4_thread_id: toPlain(row.comment4_thread_id) || null,
+    comment5_thread_id: toPlain(row.comment5_thread_id) || null,
+    comment6_thread_id: toPlain(row.comment6_thread_id) || null,
+    comment7_thread_id: toPlain(row.comment7_thread_id) || null,
     error_message: toPlain(row.error_message) || null,
   })) as ScheduledPostRow[];
 }
@@ -167,11 +222,21 @@ export async function getScheduledPostById(scheduleId: string) {
       sp.main_text,
       sp.comment1,
       sp.comment2,
+      sp.comment3,
+      sp.comment4,
+      sp.comment5,
+      sp.comment6,
+      sp.comment7,
       sp.created_at,
       sp.updated_at,
       sp.main_thread_id,
       sp.comment1_thread_id,
       sp.comment2_thread_id,
+      sp.comment3_thread_id,
+      sp.comment4_thread_id,
+      sp.comment5_thread_id,
+      sp.comment6_thread_id,
+      sp.comment7_thread_id,
       sp.error_message,
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S+09:00', sp.scheduled_time, 'Asia/Tokyo') AS scheduled_at_jst,
       FORMAT_DATE('%Y-%m-%d', DATE(sp.scheduled_time, 'Asia/Tokyo')) AS scheduled_date,
@@ -197,6 +262,11 @@ export async function getScheduledPostById(scheduleId: string) {
     main_text: toPlain(row.main_text),
     comment1: toPlain(row.comment1),
     comment2: toPlain(row.comment2),
+    comment3: toPlain(row.comment3),
+    comment4: toPlain(row.comment4),
+    comment5: toPlain(row.comment5),
+    comment6: toPlain(row.comment6),
+    comment7: toPlain(row.comment7),
     created_at: toPlain(row.created_at),
     updated_at: toPlain(row.updated_at),
     template_id: toPlain(row.template_id) || null,
@@ -205,6 +275,11 @@ export async function getScheduledPostById(scheduleId: string) {
     main_thread_id: toPlain(row.main_thread_id) || null,
     comment1_thread_id: toPlain(row.comment1_thread_id) || null,
     comment2_thread_id: toPlain(row.comment2_thread_id) || null,
+    comment3_thread_id: toPlain(row.comment3_thread_id) || null,
+    comment4_thread_id: toPlain(row.comment4_thread_id) || null,
+    comment5_thread_id: toPlain(row.comment5_thread_id) || null,
+    comment6_thread_id: toPlain(row.comment6_thread_id) || null,
+    comment7_thread_id: toPlain(row.comment7_thread_id) || null,
     error_message: toPlain(row.error_message) || null,
   } as ScheduledPostRow;
 }
@@ -217,12 +292,17 @@ export async function insertScheduledPost(params: {
   mainText: string;
   comment1: string;
   comment2: string;
+  comment3?: string;
+  comment4?: string;
+  comment5?: string;
+  comment6?: string;
+  comment7?: string;
 }) {
   await ensureScheduledPostsTable();
   const sql = `
     INSERT INTO \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-    (schedule_id, plan_id, scheduled_time, status, main_text, comment1, comment2, created_at, updated_at)
-    VALUES (@scheduleId, @planId, @scheduledTime, @status, @mainText, @comment1, @comment2, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+    (schedule_id, plan_id, scheduled_time, status, main_text, comment1, comment2, comment3, comment4, comment5, comment6, comment7, created_at, updated_at)
+    VALUES (@scheduleId, @planId, @scheduledTime, @status, @mainText, @comment1, @comment2, @comment3, @comment4, @comment5, @comment6, @comment7, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
   `;
   await client.query({
     query: sql,
@@ -234,6 +314,11 @@ export async function insertScheduledPost(params: {
       mainText: params.mainText,
       comment1: params.comment1,
       comment2: params.comment2,
+      comment3: params.comment3 ?? '',
+      comment4: params.comment4 ?? '',
+      comment5: params.comment5 ?? '',
+      comment6: params.comment6 ?? '',
+      comment7: params.comment7 ?? '',
     },
     types: {
       planId: 'STRING',
@@ -251,9 +336,19 @@ export async function updateScheduledPost(
     mainText?: string | null;
     comment1?: string | null;
     comment2?: string | null;
+    comment3?: string | null;
+    comment4?: string | null;
+    comment5?: string | null;
+    comment6?: string | null;
+    comment7?: string | null;
     mainThreadId?: string | null;
     comment1ThreadId?: string | null;
     comment2ThreadId?: string | null;
+    comment3ThreadId?: string | null;
+    comment4ThreadId?: string | null;
+    comment5ThreadId?: string | null;
+    comment6ThreadId?: string | null;
+    comment7ThreadId?: string | null;
     errorMessage?: string | null;
   },
 ) {
@@ -295,6 +390,31 @@ export async function updateScheduledPost(
     queryParams.comment2 = params.comment2;
     types.comment2 = 'STRING';
   }
+  if (params.comment3 !== undefined) {
+    setClauses.push('comment3 = @comment3');
+    queryParams.comment3 = params.comment3;
+    types.comment3 = 'STRING';
+  }
+  if (params.comment4 !== undefined) {
+    setClauses.push('comment4 = @comment4');
+    queryParams.comment4 = params.comment4;
+    types.comment4 = 'STRING';
+  }
+  if (params.comment5 !== undefined) {
+    setClauses.push('comment5 = @comment5');
+    queryParams.comment5 = params.comment5;
+    types.comment5 = 'STRING';
+  }
+  if (params.comment6 !== undefined) {
+    setClauses.push('comment6 = @comment6');
+    queryParams.comment6 = params.comment6;
+    types.comment6 = 'STRING';
+  }
+  if (params.comment7 !== undefined) {
+    setClauses.push('comment7 = @comment7');
+    queryParams.comment7 = params.comment7;
+    types.comment7 = 'STRING';
+  }
   if (params.mainThreadId !== undefined) {
     setClauses.push('main_thread_id = @mainThreadId');
     queryParams.mainThreadId = params.mainThreadId;
@@ -309,6 +429,31 @@ export async function updateScheduledPost(
     setClauses.push('comment2_thread_id = @comment2ThreadId');
     queryParams.comment2ThreadId = params.comment2ThreadId;
     types.comment2ThreadId = 'STRING';
+  }
+  if (params.comment3ThreadId !== undefined) {
+    setClauses.push('comment3_thread_id = @comment3ThreadId');
+    queryParams.comment3ThreadId = params.comment3ThreadId;
+    types.comment3ThreadId = 'STRING';
+  }
+  if (params.comment4ThreadId !== undefined) {
+    setClauses.push('comment4_thread_id = @comment4ThreadId');
+    queryParams.comment4ThreadId = params.comment4ThreadId;
+    types.comment4ThreadId = 'STRING';
+  }
+  if (params.comment5ThreadId !== undefined) {
+    setClauses.push('comment5_thread_id = @comment5ThreadId');
+    queryParams.comment5ThreadId = params.comment5ThreadId;
+    types.comment5ThreadId = 'STRING';
+  }
+  if (params.comment6ThreadId !== undefined) {
+    setClauses.push('comment6_thread_id = @comment6ThreadId');
+    queryParams.comment6ThreadId = params.comment6ThreadId;
+    types.comment6ThreadId = 'STRING';
+  }
+  if (params.comment7ThreadId !== undefined) {
+    setClauses.push('comment7_thread_id = @comment7ThreadId');
+    queryParams.comment7ThreadId = params.comment7ThreadId;
+    types.comment7ThreadId = 'STRING';
   }
   if (params.errorMessage !== undefined) {
     setClauses.push('error_message = @errorMessage');

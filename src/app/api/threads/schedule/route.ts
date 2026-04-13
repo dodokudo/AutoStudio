@@ -11,6 +11,14 @@ function validateTextLength(label: string, value?: string) {
   return null;
 }
 
+function validateOptionalTextLength(label: string, value?: string) {
+  if (!value) return null;
+  if (value.length > 500) {
+    return `${label}は500文字以内である必要があります`;
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -28,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
-    const { scheduledAt, mainText, comment1, comment2, status, planId } = payload ?? {};
+    const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, status, planId } = payload ?? {};
 
     if (!scheduledAt || typeof scheduledAt !== 'string') {
       return NextResponse.json({ error: 'scheduledAt is required' }, { status: 400 });
@@ -49,6 +57,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: comment2Error }, { status: 400 });
     }
 
+    for (const [label, value] of [
+      ['コメント3', comment3],
+      ['コメント4', comment4],
+      ['コメント5', comment5],
+      ['コメント6', comment6],
+      ['コメント7', comment7],
+    ] as const) {
+      const err = validateOptionalTextLength(label, typeof value === 'string' ? value : undefined);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+    }
+
     const scheduledTimeIso = toJstIsoString(String(scheduledAt));
     if (!scheduledTimeIso) {
       return NextResponse.json({ error: 'scheduledAt is invalid' }, { status: 400 });
@@ -63,6 +82,11 @@ export async function POST(request: NextRequest) {
       mainText: String(mainText),
       comment1: String(comment1),
       comment2: String(comment2),
+      comment3: typeof comment3 === 'string' ? comment3 : '',
+      comment4: typeof comment4 === 'string' ? comment4 : '',
+      comment5: typeof comment5 === 'string' ? comment5 : '',
+      comment6: typeof comment6 === 'string' ? comment6 : '',
+      comment7: typeof comment7 === 'string' ? comment7 : '',
     });
 
     if (!created) {

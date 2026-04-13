@@ -30,12 +30,22 @@ type ScheduleEditorProps = {
     mainText: string;
     comment1: string;
     comment2: string;
+    comment3: string;
+    comment4: string;
+    comment5: string;
+    comment6: string;
+    comment7: string;
     status: 'draft' | 'scheduled';
   }) => Promise<void>;
   onPublishNow: (payload: {
     mainText: string;
     comment1: string;
     comment2: string;
+    comment3: string;
+    comment4: string;
+    comment5: string;
+    comment6: string;
+    comment7: string;
   }) => Promise<void>;
   generatedContent: GeneratedContent | null;
   onGeneratedContentConsumed: () => void;
@@ -55,6 +65,11 @@ export function ScheduleEditor({
   const [mainText, setMainText] = useState('');
   const [comment1, setComment1] = useState('');
   const [comment2, setComment2] = useState('');
+  const [comment3, setComment3] = useState('');
+  const [comment4, setComment4] = useState('');
+  const [comment5, setComment5] = useState('');
+  const [comment6, setComment6] = useState('');
+  const [comment7, setComment7] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +78,11 @@ export function ScheduleEditor({
       setMainText(selectedItem.mainText);
       setComment1(selectedItem.comment1);
       setComment2(selectedItem.comment2);
+      setComment3(selectedItem.comment3);
+      setComment4(selectedItem.comment4);
+      setComment5(selectedItem.comment5);
+      setComment6(selectedItem.comment6);
+      setComment7(selectedItem.comment7);
       setError(null);
       return;
     }
@@ -72,10 +92,15 @@ export function ScheduleEditor({
     setMainText('');
     setComment1('');
     setComment2('');
+    setComment3('');
+    setComment4('');
+    setComment5('');
+    setComment6('');
+    setComment7('');
     setError(null);
   }, [selectedDate, selectedItem]);
 
-  // AI生成されたコンテンツを反映
+  // AI生成されたコンテンツを反映（comment1, comment2のみ。3〜7は手動入力）
   useEffect(() => {
     if (generatedContent) {
       setMainText(generatedContent.mainText);
@@ -89,6 +114,18 @@ export function ScheduleEditor({
   const mainLength = mainText.length;
   const comment1Length = comment1.length;
   const comment2Length = comment2.length;
+  const comment3Length = comment3.length;
+  const comment4Length = comment4.length;
+  const comment5Length = comment5.length;
+  const comment6Length = comment6.length;
+  const comment7Length = comment7.length;
+
+  const optionalCommentsValid =
+    comment3Length <= MAX_LENGTH &&
+    comment4Length <= MAX_LENGTH &&
+    comment5Length <= MAX_LENGTH &&
+    comment6Length <= MAX_LENGTH &&
+    comment7Length <= MAX_LENGTH;
 
   const isValidForSchedule = useMemo(() => {
     return (
@@ -98,9 +135,10 @@ export function ScheduleEditor({
       comment2.trim().length > 0 &&
       mainLength <= MAX_LENGTH &&
       comment1Length <= MAX_LENGTH &&
-      comment2Length <= MAX_LENGTH
+      comment2Length <= MAX_LENGTH &&
+      optionalCommentsValid
     );
-  }, [scheduledAt, mainText, comment1, comment2, mainLength, comment1Length, comment2Length]);
+  }, [scheduledAt, mainText, comment1, comment2, mainLength, comment1Length, comment2Length, optionalCommentsValid]);
 
   const isValidForPublish = useMemo(() => {
     return (
@@ -109,13 +147,14 @@ export function ScheduleEditor({
       comment2.trim().length > 0 &&
       mainLength <= MAX_LENGTH &&
       comment1Length <= MAX_LENGTH &&
-      comment2Length <= MAX_LENGTH
+      comment2Length <= MAX_LENGTH &&
+      optionalCommentsValid
     );
-  }, [mainText, comment1, comment2, mainLength, comment1Length, comment2Length]);
+  }, [mainText, comment1, comment2, mainLength, comment1Length, comment2Length, optionalCommentsValid]);
 
   const handleSubmit = async (status: 'draft' | 'scheduled') => {
     if (!isValidForSchedule) {
-      setError('未入力の項目があります。');
+      setError('未入力または文字数超過の項目があります。');
       return;
     }
     setError(null);
@@ -125,6 +164,11 @@ export function ScheduleEditor({
       mainText,
       comment1,
       comment2,
+      comment3,
+      comment4,
+      comment5,
+      comment6,
+      comment7,
       status,
     });
   };
@@ -139,6 +183,11 @@ export function ScheduleEditor({
       mainText,
       comment1,
       comment2,
+      comment3,
+      comment4,
+      comment5,
+      comment6,
+      comment7,
     });
   };
 
@@ -213,6 +262,27 @@ export function ScheduleEditor({
             {comment2Length}/{MAX_LENGTH}
           </div>
         </label>
+
+        {([
+          { index: 3, value: comment3, length: comment3Length, setter: setComment3 },
+          { index: 4, value: comment4, length: comment4Length, setter: setComment4 },
+          { index: 5, value: comment5, length: comment5Length, setter: setComment5 },
+          { index: 6, value: comment6, length: comment6Length, setter: setComment6 },
+          { index: 7, value: comment7, length: comment7Length, setter: setComment7 },
+        ] as const).map((c) => (
+          <label key={c.index} className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+            コメント{c.index}（任意）
+            <textarea
+              value={c.value}
+              onChange={(event) => c.setter(event.target.value)}
+              rows={9}
+              className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
+            />
+            <div className={classNames('mt-1 text-right text-[11px]', c.length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
+              {c.length}/{MAX_LENGTH}
+            </div>
+          </label>
+        ))}
 
         {error ? (
           <div className="rounded-[var(--radius-lg)] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">

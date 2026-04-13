@@ -5,6 +5,11 @@ interface PublishNowRequest {
   mainText: string;
   comment1: string;
   comment2: string;
+  comment3?: string;
+  comment4?: string;
+  comment5?: string;
+  comment6?: string;
+  comment7?: string;
 }
 
 function validateTextLength(text: string, fieldName: string): string | null {
@@ -20,7 +25,7 @@ function validateTextLength(text: string, fieldName: string): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as PublishNowRequest;
-    const { mainText, comment1, comment2 } = body;
+    const { mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7 } = body;
 
     // バリデーション
     const mainError = validateTextLength(mainText, 'メイン投稿');
@@ -35,6 +40,17 @@ export async function POST(request: NextRequest) {
     if (comment2Error) {
       return NextResponse.json({ error: comment2Error }, { status: 400 });
     }
+    for (const [label, value] of [
+      ['コメント3', comment3],
+      ['コメント4', comment4],
+      ['コメント5', comment5],
+      ['コメント6', comment6],
+      ['コメント7', comment7],
+    ] as const) {
+      if (typeof value === 'string' && value.length > 500) {
+        return NextResponse.json({ error: `${label}は500文字以内である必要があります` }, { status: 400 });
+      }
+    }
 
     console.log('[threads/schedule/publish-now] Starting immediate publish...');
 
@@ -43,25 +59,40 @@ export async function POST(request: NextRequest) {
     const mainThreadId = await postThread(mainText);
     console.log('[threads/schedule/publish-now] Main thread posted:', mainThreadId);
 
-    // コメント1（2秒待機）
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    console.log('[threads/schedule/publish-now] Posting comment1...');
-    const comment1Id = await postThread(comment1, mainThreadId);
-    console.log('[threads/schedule/publish-now] Comment1 posted:', comment1Id);
+    const commentIds: Record<number, string | undefined> = {};
+    const commentList: Array<{ index: number; text?: string }> = [
+      { index: 1, text: comment1 },
+      { index: 2, text: comment2 },
+      { index: 3, text: comment3 },
+      { index: 4, text: comment4 },
+      { index: 5, text: comment5 },
+      { index: 6, text: comment6 },
+      { index: 7, text: comment7 },
+    ];
 
-    // コメント2（2秒待機）
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    console.log('[threads/schedule/publish-now] Posting comment2...');
-    const comment2Id = await postThread(comment2, comment1Id);
-    console.log('[threads/schedule/publish-now] Comment2 posted:', comment2Id);
+    let replyToId = mainThreadId;
+    for (const comment of commentList) {
+      if (!comment.text || !comment.text.trim()) continue;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log(`[threads/schedule/publish-now] Posting comment${comment.index}...`);
+      const id = await postThread(comment.text, replyToId);
+      console.log(`[threads/schedule/publish-now] Comment${comment.index} posted:`, id);
+      commentIds[comment.index] = id;
+      replyToId = id;
+    }
 
     console.log('[threads/schedule/publish-now] All posts completed successfully');
 
     return NextResponse.json({
       success: true,
       mainThreadId,
-      comment1Id,
-      comment2Id,
+      comment1Id: commentIds[1],
+      comment2Id: commentIds[2],
+      comment3Id: commentIds[3],
+      comment4Id: commentIds[4],
+      comment5Id: commentIds[5],
+      comment6Id: commentIds[6],
+      comment7Id: commentIds[7],
     });
   } catch (error) {
     console.error('[threads/schedule/publish-now] Error:', error);

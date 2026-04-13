@@ -107,14 +107,14 @@ async function recoverStuckPosts(): Promise<number> {
 async function executeScheduledPost(post: ScheduledPostRow): Promise<{
   success: boolean;
   mainThreadId?: string;
-  comment1ThreadId?: string;
-  comment2ThreadId?: string;
+  commentThreadIds: Record<number, string | undefined>;
   error?: string;
 }> {
   console.log(`[scheduledPostsWorker] Executing: ${post.schedule_id}`);
   console.log(`[scheduledPostsWorker] Scheduled time (JST): ${post.scheduled_at_jst}`);
 
   const errors: string[] = [];
+  const commentThreadIds: Record<number, string | undefined> = {};
 
   // 1. メイン投稿（既に投稿済みならスキップ）
   let mainThreadId = post.main_thread_id || undefined;
@@ -129,7 +129,7 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[scheduledPostsWorker] Main thread failed: ${post.schedule_id}`, errorMessage);
       await updateScheduledPost(post.schedule_id, { status: 'failed', errorMessage: `Main: ${errorMessage}` });
-      return { success: false, error: errorMessage };
+      return { success: false, commentThreadIds, error: errorMessage };
     }
   } else {
     console.log(`[scheduledPostsWorker] Main thread already posted: ${mainThreadId}`);
@@ -137,52 +137,51 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
 
   let replyToId = mainThreadId;
 
-  // 2. コメント1（既に投稿済みならスキップ）
-  let comment1ThreadId = post.comment1_thread_id || undefined;
-  if (!comment1ThreadId && post.comment1?.trim()) {
-    try {
-      const delay1 = Math.floor(Math.random() * 60000) + 30000;
-      console.log(
-        `[scheduledPostsWorker] Waiting ${(delay1 / 1000).toFixed(1)}s before comment1...`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay1));
+  // 2. コメント1〜7を順次投稿
+  const comments: Array<{
+    index: number;
+    text: string;
+    existingThreadId?: string | null;
+    updateKey: 'comment1ThreadId' | 'comment2ThreadId' | 'comment3ThreadId' | 'comment4ThreadId' | 'comment5ThreadId' | 'comment6ThreadId' | 'comment7ThreadId';
+  }> = [
+    { index: 1, text: post.comment1, existingThreadId: post.comment1_thread_id, updateKey: 'comment1ThreadId' },
+    { index: 2, text: post.comment2, existingThreadId: post.comment2_thread_id, updateKey: 'comment2ThreadId' },
+    { index: 3, text: post.comment3, existingThreadId: post.comment3_thread_id, updateKey: 'comment3ThreadId' },
+    { index: 4, text: post.comment4, existingThreadId: post.comment4_thread_id, updateKey: 'comment4ThreadId' },
+    { index: 5, text: post.comment5, existingThreadId: post.comment5_thread_id, updateKey: 'comment5ThreadId' },
+    { index: 6, text: post.comment6, existingThreadId: post.comment6_thread_id, updateKey: 'comment6ThreadId' },
+    { index: 7, text: post.comment7, existingThreadId: post.comment7_thread_id, updateKey: 'comment7ThreadId' },
+  ];
 
-      console.log('[scheduledPostsWorker] Posting comment1...');
-      comment1ThreadId = await postThreadWithRetry(post.comment1, replyToId);
-      console.log(`[scheduledPostsWorker] Comment1 posted: ${comment1ThreadId}`);
-      await updateScheduledPost(post.schedule_id, { comment1ThreadId });
-      replyToId = comment1ThreadId;
+  for (const comment of comments) {
+    const existing = comment.existingThreadId || undefined;
+    if (existing) {
+      console.log(`[scheduledPostsWorker] Comment${comment.index} already posted: ${existing}`);
+      commentThreadIds[comment.index] = existing;
+      replyToId = existing;
+      continue;
+    }
+    if (!comment.text?.trim()) {
+      continue;
+    }
+    try {
+      const delay = Math.floor(Math.random() * 60000) + 30000;
+      console.log(
+        `[scheduledPostsWorker] Waiting ${(delay / 1000).toFixed(1)}s before comment${comment.index}...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
+      console.log(`[scheduledPostsWorker] Posting comment${comment.index}...`);
+      const threadId = await postThreadWithRetry(comment.text, replyToId);
+      console.log(`[scheduledPostsWorker] Comment${comment.index} posted: ${threadId}`);
+      await updateScheduledPost(post.schedule_id, { [comment.updateKey]: threadId });
+      commentThreadIds[comment.index] = threadId;
+      replyToId = threadId;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[scheduledPostsWorker] Comment1 failed: ${post.schedule_id}`, errorMessage);
-      errors.push(`Comment1: ${errorMessage}`);
+      console.error(`[scheduledPostsWorker] Comment${comment.index} failed: ${post.schedule_id}`, errorMessage);
+      errors.push(`Comment${comment.index}: ${errorMessage}`);
     }
-  } else if (comment1ThreadId) {
-    console.log(`[scheduledPostsWorker] Comment1 already posted: ${comment1ThreadId}`);
-    replyToId = comment1ThreadId;
-  }
-
-  // 3. コメント2（既に投稿済みならスキップ）
-  let comment2ThreadId = post.comment2_thread_id || undefined;
-  if (!comment2ThreadId && post.comment2?.trim()) {
-    try {
-      const delay2 = Math.floor(Math.random() * 60000) + 30000;
-      console.log(
-        `[scheduledPostsWorker] Waiting ${(delay2 / 1000).toFixed(1)}s before comment2...`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay2));
-
-      console.log('[scheduledPostsWorker] Posting comment2...');
-      comment2ThreadId = await postThreadWithRetry(post.comment2, replyToId);
-      console.log(`[scheduledPostsWorker] Comment2 posted: ${comment2ThreadId}`);
-      await updateScheduledPost(post.schedule_id, { comment2ThreadId });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[scheduledPostsWorker] Comment2 failed: ${post.schedule_id}`, errorMessage);
-      errors.push(`Comment2: ${errorMessage}`);
-    }
-  } else if (comment2ThreadId) {
-    console.log(`[scheduledPostsWorker] Comment2 already posted: ${comment2ThreadId}`);
   }
 
   // 結果判定
@@ -191,12 +190,12 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     const combinedError = errors.join('; ');
     await updateScheduledPost(post.schedule_id, { status: 'partial', errorMessage: combinedError });
     console.log(`[scheduledPostsWorker] Partial completion: ${post.schedule_id} (${combinedError})`);
-    return { success: true, mainThreadId, comment1ThreadId, comment2ThreadId, error: combinedError };
+    return { success: true, mainThreadId, commentThreadIds, error: combinedError };
   } else {
     // 全完了
     await updateScheduledPost(post.schedule_id, { status: 'posted' });
     console.log(`[scheduledPostsWorker] Successfully completed: ${post.schedule_id}`);
-    return { success: true, mainThreadId, comment1ThreadId, comment2ThreadId };
+    return { success: true, mainThreadId, commentThreadIds };
   }
 }
 

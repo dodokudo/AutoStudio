@@ -42,6 +42,11 @@ function mapItem(raw: Record<string, unknown>): ScheduledPost {
     mainText: String(raw.main_text ?? ''),
     comment1: String(raw.comment1 ?? ''),
     comment2: String(raw.comment2 ?? ''),
+    comment3: String(raw.comment3 ?? ''),
+    comment4: String(raw.comment4 ?? ''),
+    comment5: String(raw.comment5 ?? ''),
+    comment6: String(raw.comment6 ?? ''),
+    comment7: String(raw.comment7 ?? ''),
     createdAt: String(raw.created_at ?? ''),
     updatedAt: String(raw.updated_at ?? ''),
     templateId: raw.template_id ? String(raw.template_id) : null,
@@ -183,6 +188,11 @@ export function ScheduleTab() {
     mainText: string;
     comment1: string;
     comment2: string;
+    comment3: string;
+    comment4: string;
+    comment5: string;
+    comment6: string;
+    comment7: string;
     status: 'draft' | 'scheduled';
   }) => {
     setSaving(true);
@@ -198,6 +208,11 @@ export function ScheduleTab() {
             mainText: payload.mainText,
             comment1: payload.comment1,
             comment2: payload.comment2,
+            comment3: payload.comment3,
+            comment4: payload.comment4,
+            comment5: payload.comment5,
+            comment6: payload.comment6,
+            comment7: payload.comment7,
             status: payload.status,
           }),
         },
@@ -237,6 +252,11 @@ export function ScheduleTab() {
     mainText: string;
     comment1: string;
     comment2: string;
+    comment3: string;
+    comment4: string;
+    comment5: string;
+    comment6: string;
+    comment7: string;
   }) => {
     if (!confirm('今すぐ投稿しますか？')) return;
     setPublishing(true);
@@ -248,6 +268,11 @@ export function ScheduleTab() {
           mainText: payload.mainText,
           comment1: payload.comment1,
           comment2: payload.comment2,
+          comment3: payload.comment3,
+          comment4: payload.comment4,
+          comment5: payload.comment5,
+          comment6: payload.comment6,
+          comment7: payload.comment7,
         }),
       });
       const data = await res.json();
