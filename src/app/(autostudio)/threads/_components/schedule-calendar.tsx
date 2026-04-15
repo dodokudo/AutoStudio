@@ -370,6 +370,7 @@ export function ScheduleCalendar({
                 { index: 5, value: detailItem.comment5 },
                 { index: 6, value: detailItem.comment6 },
                 { index: 7, value: detailItem.comment7 },
+                { index: 8, value: detailItem.comment8 },
               ] as const).map((c) =>
                 c.value ? (
                   <div key={c.index}>

@@ -13,6 +13,7 @@ export type ScheduledPost = {
   comment5: string;
   comment6: string;
   comment7: string;
+  comment8: string;
   createdAt: string;
   updatedAt: string;
   templateId?: string | null;

@@ -9,7 +9,10 @@ import {
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 5000;
-const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10分
+const STUCK_THRESHOLD_MS = 4 * 60 * 1000; // 4分（cron3分間隔+余裕1分）
+const COMMENT_DELAY_MIN_MS = 15000; // コメント間待機の最小値: 15秒
+const COMMENT_DELAY_RANGE_MS = 30000; // 上乗せ範囲: 最大+30秒（合計15-45秒）
+const TIMEOUT_SAFE_MARGIN_MS = 240000; // 関数起動から240秒経過で安全撤退（maxDuration 300秒）
 
 /**
  * 日本時間で現在時刻を取得
@@ -113,6 +116,7 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
   console.log(`[scheduledPostsWorker] Executing: ${post.schedule_id}`);
   console.log(`[scheduledPostsWorker] Scheduled time (JST): ${post.scheduled_at_jst}`);
 
+  const startedAt = Date.now();
   const errors: string[] = [];
   const commentThreadIds: Record<number, string | undefined> = {};
 
@@ -137,12 +141,12 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
 
   let replyToId = mainThreadId;
 
-  // 2. コメント1〜7を順次投稿
+  // 2. コメント1〜8を順次投稿
   const comments: Array<{
     index: number;
     text: string;
     existingThreadId?: string | null;
-    updateKey: 'comment1ThreadId' | 'comment2ThreadId' | 'comment3ThreadId' | 'comment4ThreadId' | 'comment5ThreadId' | 'comment6ThreadId' | 'comment7ThreadId';
+    updateKey: 'comment1ThreadId' | 'comment2ThreadId' | 'comment3ThreadId' | 'comment4ThreadId' | 'comment5ThreadId' | 'comment6ThreadId' | 'comment7ThreadId' | 'comment8ThreadId';
   }> = [
     { index: 1, text: post.comment1, existingThreadId: post.comment1_thread_id, updateKey: 'comment1ThreadId' },
     { index: 2, text: post.comment2, existingThreadId: post.comment2_thread_id, updateKey: 'comment2ThreadId' },
@@ -151,8 +155,10 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     { index: 5, text: post.comment5, existingThreadId: post.comment5_thread_id, updateKey: 'comment5ThreadId' },
     { index: 6, text: post.comment6, existingThreadId: post.comment6_thread_id, updateKey: 'comment6ThreadId' },
     { index: 7, text: post.comment7, existingThreadId: post.comment7_thread_id, updateKey: 'comment7ThreadId' },
+    { index: 8, text: post.comment8, existingThreadId: post.comment8_thread_id, updateKey: 'comment8ThreadId' },
   ];
 
+  let timedOut = false;
   for (const comment of comments) {
     const existing = comment.existingThreadId || undefined;
     if (existing) {
@@ -164,8 +170,19 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     if (!comment.text?.trim()) {
       continue;
     }
+
+    // タイムアウト前の安全撤退: 残時間が足りなければ次cronに委ねる
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= TIMEOUT_SAFE_MARGIN_MS) {
+      console.warn(
+        `[scheduledPostsWorker] Timeout margin reached (${(elapsed / 1000).toFixed(1)}s), yielding to next cron for comment${comment.index}+`,
+      );
+      timedOut = true;
+      break;
+    }
+
     try {
-      const delay = Math.floor(Math.random() * 60000) + 30000;
+      const delay = Math.floor(Math.random() * COMMENT_DELAY_RANGE_MS) + COMMENT_DELAY_MIN_MS;
       console.log(
         `[scheduledPostsWorker] Waiting ${(delay / 1000).toFixed(1)}s before comment${comment.index}...`,
       );
@@ -185,6 +202,15 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
   }
 
   // 結果判定
+  if (timedOut) {
+    // タイムアウト安全撤退 → partial にして次cronで継続
+    const combinedError = errors.length > 0
+      ? `${errors.join('; ')}; timeout-yield`
+      : 'timeout-yield';
+    await updateScheduledPost(post.schedule_id, { status: 'partial', errorMessage: combinedError });
+    console.log(`[scheduledPostsWorker] Timeout yield: ${post.schedule_id} (${combinedError})`);
+    return { success: true, mainThreadId, commentThreadIds, error: combinedError };
+  }
   if (errors.length > 0) {
     // メインは成功したがコメントが失敗 → partial
     const combinedError = errors.join('; ');

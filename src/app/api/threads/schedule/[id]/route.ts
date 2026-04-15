@@ -18,7 +18,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const payload = await request.json();
-    const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, status, planId } = payload ?? {};
+    const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, status, planId } = payload ?? {};
 
     const mainError = validateTextLength('メイン投稿', mainText);
     if (mainError) {
@@ -39,6 +39,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ['コメント5', comment5],
       ['コメント6', comment6],
       ['コメント7', comment7],
+      ['コメント8', comment8],
     ] as const) {
       if (typeof value !== 'string') continue;
       if (value.length > 500) {
@@ -64,6 +65,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       comment5: typeof comment5 === 'string' ? comment5 : undefined,
       comment6: typeof comment6 === 'string' ? comment6 : undefined,
       comment7: typeof comment7 === 'string' ? comment7 : undefined,
+      comment8: typeof comment8 === 'string' ? comment8 : undefined,
     });
 
     if (!updated) {

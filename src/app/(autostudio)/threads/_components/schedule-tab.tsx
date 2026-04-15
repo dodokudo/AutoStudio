@@ -47,6 +47,7 @@ function mapItem(raw: Record<string, unknown>): ScheduledPost {
     comment5: String(raw.comment5 ?? ''),
     comment6: String(raw.comment6 ?? ''),
     comment7: String(raw.comment7 ?? ''),
+    comment8: String(raw.comment8 ?? ''),
     createdAt: String(raw.created_at ?? ''),
     updatedAt: String(raw.updated_at ?? ''),
     templateId: raw.template_id ? String(raw.template_id) : null,
@@ -193,6 +194,7 @@ export function ScheduleTab() {
     comment5: string;
     comment6: string;
     comment7: string;
+    comment8: string;
     status: 'draft' | 'scheduled';
   }) => {
     setSaving(true);
@@ -213,6 +215,7 @@ export function ScheduleTab() {
             comment5: payload.comment5,
             comment6: payload.comment6,
             comment7: payload.comment7,
+            comment8: payload.comment8,
             status: payload.status,
           }),
         },
@@ -257,6 +260,7 @@ export function ScheduleTab() {
     comment5: string;
     comment6: string;
     comment7: string;
+    comment8: string;
   }) => {
     if (!confirm('今すぐ投稿しますか？')) return;
     setPublishing(true);
@@ -273,6 +277,7 @@ export function ScheduleTab() {
           comment5: payload.comment5,
           comment6: payload.comment6,
           comment7: payload.comment7,
+          comment8: payload.comment8,
         }),
       });
       const data = await res.json();

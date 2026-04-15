@@ -35,6 +35,7 @@ type ScheduleEditorProps = {
     comment5: string;
     comment6: string;
     comment7: string;
+    comment8: string;
     status: 'draft' | 'scheduled';
   }) => Promise<void>;
   onPublishNow: (payload: {
@@ -46,6 +47,7 @@ type ScheduleEditorProps = {
     comment5: string;
     comment6: string;
     comment7: string;
+    comment8: string;
   }) => Promise<void>;
   generatedContent: GeneratedContent | null;
   onGeneratedContentConsumed: () => void;
@@ -70,6 +72,7 @@ export function ScheduleEditor({
   const [comment5, setComment5] = useState('');
   const [comment6, setComment6] = useState('');
   const [comment7, setComment7] = useState('');
+  const [comment8, setComment8] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,6 +86,7 @@ export function ScheduleEditor({
       setComment5(selectedItem.comment5);
       setComment6(selectedItem.comment6);
       setComment7(selectedItem.comment7);
+      setComment8(selectedItem.comment8);
       setError(null);
       return;
     }
@@ -97,6 +101,7 @@ export function ScheduleEditor({
     setComment5('');
     setComment6('');
     setComment7('');
+    setComment8('');
     setError(null);
   }, [selectedDate, selectedItem]);
 
@@ -119,13 +124,15 @@ export function ScheduleEditor({
   const comment5Length = comment5.length;
   const comment6Length = comment6.length;
   const comment7Length = comment7.length;
+  const comment8Length = comment8.length;
 
   const optionalCommentsValid =
     comment3Length <= MAX_LENGTH &&
     comment4Length <= MAX_LENGTH &&
     comment5Length <= MAX_LENGTH &&
     comment6Length <= MAX_LENGTH &&
-    comment7Length <= MAX_LENGTH;
+    comment7Length <= MAX_LENGTH &&
+    comment8Length <= MAX_LENGTH;
 
   const isValidForSchedule = useMemo(() => {
     return (
@@ -169,6 +176,7 @@ export function ScheduleEditor({
       comment5,
       comment6,
       comment7,
+      comment8,
       status,
     });
   };
@@ -188,6 +196,7 @@ export function ScheduleEditor({
       comment5,
       comment6,
       comment7,
+      comment8,
     });
   };
 
@@ -269,6 +278,7 @@ export function ScheduleEditor({
           { index: 5, value: comment5, length: comment5Length, setter: setComment5 },
           { index: 6, value: comment6, length: comment6Length, setter: setComment6 },
           { index: 7, value: comment7, length: comment7Length, setter: setComment7 },
+          { index: 8, value: comment8, length: comment8Length, setter: setComment8 },
         ] as const).map((c) => (
           <label key={c.index} className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
             コメント{c.index}（任意）

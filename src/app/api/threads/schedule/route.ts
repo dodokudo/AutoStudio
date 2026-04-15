@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
-    const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, status, planId } = payload ?? {};
+    const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, status, planId } = payload ?? {};
 
     if (!scheduledAt || typeof scheduledAt !== 'string') {
       return NextResponse.json({ error: 'scheduledAt is required' }, { status: 400 });
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
       ['コメント5', comment5],
       ['コメント6', comment6],
       ['コメント7', comment7],
+      ['コメント8', comment8],
     ] as const) {
       const err = validateOptionalTextLength(label, typeof value === 'string' ? value : undefined);
       if (err) return NextResponse.json({ error: err }, { status: 400 });
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
       comment5: typeof comment5 === 'string' ? comment5 : '',
       comment6: typeof comment6 === 'string' ? comment6 : '',
       comment7: typeof comment7 === 'string' ? comment7 : '',
+      comment8: typeof comment8 === 'string' ? comment8 : '',
     });
 
     if (!created) {

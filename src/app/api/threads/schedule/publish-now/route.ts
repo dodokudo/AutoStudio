@@ -10,6 +10,7 @@ interface PublishNowRequest {
   comment5?: string;
   comment6?: string;
   comment7?: string;
+  comment8?: string;
 }
 
 function validateTextLength(text: string, fieldName: string): string | null {
@@ -25,7 +26,7 @@ function validateTextLength(text: string, fieldName: string): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as PublishNowRequest;
-    const { mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7 } = body;
+    const { mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8 } = body;
 
     // バリデーション
     const mainError = validateTextLength(mainText, 'メイン投稿');
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
       ['コメント5', comment5],
       ['コメント6', comment6],
       ['コメント7', comment7],
+      ['コメント8', comment8],
     ] as const) {
       if (typeof value === 'string' && value.length > 500) {
         return NextResponse.json({ error: `${label}は500文字以内である必要があります` }, { status: 400 });
@@ -68,6 +70,7 @@ export async function POST(request: NextRequest) {
       { index: 5, text: comment5 },
       { index: 6, text: comment6 },
       { index: 7, text: comment7 },
+      { index: 8, text: comment8 },
     ];
 
     let replyToId = mainThreadId;
@@ -93,6 +96,7 @@ export async function POST(request: NextRequest) {
       comment5Id: commentIds[5],
       comment6Id: commentIds[6],
       comment7Id: commentIds[7],
+      comment8Id: commentIds[8],
     });
   } catch (error) {
     console.error('[threads/schedule/publish-now] Error:', error);
