@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
 
 type SortOption = 'postedAt' | 'views' | 'likes';
@@ -290,6 +291,11 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [portalMounted, setPortalMounted] = useState(false);
+
+  useEffect(() => {
+    setPortalMounted(true);
+  }, []);
 
   const displayedPosts = showAll ? posts : posts.slice(0, INITIAL_DISPLAY_COUNT);
   const hasMore = posts.length > INITIAL_DISPLAY_COUNT;
@@ -413,7 +419,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
         </>
       )}
 
-      {reserveTarget && (
+      {portalMounted && reserveTarget && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           onClick={closeReserveModal}
@@ -480,7 +486,8 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </Card>
   );
