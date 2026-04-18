@@ -6,7 +6,7 @@ const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
 // 特典誘導テンプレート（文言・URLは必要に応じて変更）
-const TOKUTEN_GUIDE_URL = 'https://asto.jp/l/th/2026';
+const TOKUTEN_GUIDE_URL = 'https://asto.jp/l/3p';
 const TOKUTEN_GUIDE_TEMPLATE = `1000名以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
 ${TOKUTEN_GUIDE_URL}`;
 

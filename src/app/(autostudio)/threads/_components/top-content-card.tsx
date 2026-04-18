@@ -54,10 +54,8 @@ function evaluateEligibility(post: TopContentPost): ReservationEligibility {
   if (comments.length < 2) {
     return { eligible: false, reason: 'コメ<2' };
   }
-  if (comments.length > COMMENT_SLOT_LIMIT) {
-    return { eligible: false, reason: `コメ${COMMENT_SLOT_LIMIT + 1}個以上不可` };
-  }
-  const tooLong = comments.find((c) => cleanContent(c.text ?? '').length > TEXT_LENGTH_LIMIT);
+  const effectiveComments = comments.slice(0, COMMENT_SLOT_LIMIT);
+  const tooLong = effectiveComments.find((c) => cleanContent(c.text ?? '').length > TEXT_LENGTH_LIMIT);
   if (tooLong) {
     return { eligible: false, reason: 'コメ500字超' };
   }
