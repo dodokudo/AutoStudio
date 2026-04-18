@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 
 type SortOption = 'postedAt' | 'views' | 'likes';
@@ -14,18 +14,67 @@ interface PostCommentData {
   views: number;
 }
 
+type TopContentPost = {
+  id: string;
+  content: string;
+  views: number;
+  likes: number;
+  replies: number;
+  postedAt: string;
+  commentData?: PostCommentData[];
+};
+
 interface TopContentCardProps {
-  posts: Array<{
-    id: string;
-    content: string;
-    views: number;
-    likes: number;
-    replies: number;
-    postedAt: string;
-    commentData?: PostCommentData[];
-  }>;
+  posts: TopContentPost[];
   sortOption: SortOption;
   onSortChange: (option: SortOption) => void;
+}
+
+const COMMENT_SLOT_LIMIT = 7;
+const TEXT_LENGTH_LIMIT = 500;
+
+type ReservationEligibility =
+  | { eligible: true }
+  | { eligible: false; reason: string };
+
+function cleanContent(text: string) {
+  return text.replace(/^【メイン投稿】\s*/g, '').replace(/^【コメント\d+】\s*/g, '');
+}
+
+function evaluateEligibility(post: TopContentPost): ReservationEligibility {
+  const cleanedMain = cleanContent(post.content ?? '').trim();
+  if (!cleanedMain) {
+    return { eligible: false, reason: '本文空' };
+  }
+  if (cleanedMain.length > TEXT_LENGTH_LIMIT) {
+    return { eligible: false, reason: '本文500字超' };
+  }
+  const comments = post.commentData ?? [];
+  if (comments.length < 2) {
+    return { eligible: false, reason: 'コメ<2' };
+  }
+  if (comments.length > COMMENT_SLOT_LIMIT) {
+    return { eligible: false, reason: `コメ>${COMMENT_SLOT_LIMIT}` };
+  }
+  const tooLong = comments.find((c) => cleanContent(c.text ?? '').length > TEXT_LENGTH_LIMIT);
+  if (tooLong) {
+    return { eligible: false, reason: 'コメ500字超' };
+  }
+  return { eligible: true };
+}
+
+function getDefaultScheduledAt() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + 60);
+  now.setSeconds(0);
+  now.setMilliseconds(0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const y = now.getFullYear();
+  const m = pad(now.getMonth() + 1);
+  const d = pad(now.getDate());
+  const hh = pad(now.getHours());
+  const mm = pad(now.getMinutes());
+  return `${y}-${m}-${d}T${hh}:${mm}`;
 }
 
 const INITIAL_DISPLAY_COUNT = 20;
@@ -89,27 +138,24 @@ function calculateTransitionRates(postViews: number, comments: PostCommentData[]
   };
 }
 
-function cleanContent(text: string) {
-  // 【メイン投稿】などのプレフィックスを除去
-  return text.replace(/^【メイン投稿】\s*/g, '').replace(/^【コメント\d+】\s*/g, '');
-}
-
 function truncateText(text: string, maxLength = 80) {
   const cleaned = cleanContent(text);
   if (cleaned.length <= maxLength) return cleaned;
   return `${cleaned.slice(0, maxLength)}…`;
 }
 
-function PostCard({ post, isExpanded, onToggle, rank }: {
+function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
   post: TopContentCardProps['posts'][number];
   isExpanded: boolean;
   onToggle: () => void;
   rank?: number;
+  onReserve: (post: TopContentPost) => void;
 }) {
   const isTop10 = rank !== undefined && rank <= 10;
   const commentData = post.commentData ?? [];
   const hasComments = commentData.length > 0;
   const { transitions: transitionRates, overallRate } = calculateTransitionRates(post.views, commentData);
+  const eligibility = useMemo(() => evaluateEligibility(post), [post]);
 
   return (
     <div
@@ -149,7 +195,18 @@ function PostCard({ post, isExpanded, onToggle, rank }: {
         <div className="flex items-center gap-3">
           <span>閲覧 {post.views.toLocaleString()}</span>
           <span>いいね {post.likes.toLocaleString()}</span>
-          <span>返信 {post.replies.toLocaleString()}</span>
+          <button
+            type="button"
+            disabled={!eligibility.eligible}
+            title={eligibility.eligible ? '同じ内容で再投稿を予約' : eligibility.reason}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (eligibility.eligible) onReserve(post);
+            }}
+            className="rounded-full border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-2.5 py-0.5 text-[11px] font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            {eligibility.eligible ? '予約投稿' : `NG:${eligibility.reason}`}
+          </button>
         </div>
       </div>
 
@@ -220,6 +277,7 @@ function PostCard({ post, isExpanded, onToggle, rank }: {
           ))}
         </div>
       )}
+
     </div>
   );
 }
@@ -227,6 +285,11 @@ function PostCard({ post, isExpanded, onToggle, rank }: {
 export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCardProps) {
   const [showAll, setShowAll] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [reserveTarget, setReserveTarget] = useState<TopContentPost | null>(null);
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const displayedPosts = showAll ? posts : posts.slice(0, INITIAL_DISPLAY_COUNT);
   const hasMore = posts.length > INITIAL_DISPLAY_COUNT;
@@ -241,6 +304,57 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
       }
       return next;
     });
+  };
+
+  const openReserveModal = (post: TopContentPost) => {
+    setReserveTarget(post);
+    setScheduledAt(getDefaultScheduledAt());
+    setSubmitError(null);
+  };
+
+  const closeReserveModal = () => {
+    if (submitting) return;
+    setReserveTarget(null);
+    setSubmitError(null);
+  };
+
+  const handleSubmitReservation = async () => {
+    if (!reserveTarget || !scheduledAt) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const comments = (reserveTarget.commentData ?? []).map((c) => cleanContent(c.text ?? ''));
+      const mainText = cleanContent(reserveTarget.content ?? '');
+      const body: Record<string, unknown> = {
+        scheduledAt,
+        mainText,
+        comment1: comments[0] ?? '',
+        comment2: comments[1] ?? '',
+        comment3: comments[2] ?? '',
+        comment4: comments[3] ?? '',
+        comment5: comments[4] ?? '',
+        comment6: comments[5] ?? '',
+        comment7: comments[6] ?? '',
+        comment8: '',
+        status: 'scheduled',
+      };
+      const res = await fetch('/api/threads/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || '予約の登録に失敗しました');
+      }
+      setReserveTarget(null);
+      setSuccessMessage('予約投稿に登録しました。予約投稿タブで編集できます。');
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : '予約の登録に失敗しました');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -263,6 +377,11 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
           <option value="postedAt">投稿日</option>
         </select>
       </header>
+      {successMessage && (
+        <div className="mb-3 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          {successMessage}
+        </div>
+      )}
       {posts.length === 0 ? (
         <p className="rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5 text-center text-sm text-[color:var(--color-text-muted)]">
           データがありません。
@@ -277,6 +396,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
                 isExpanded={expandedIds.has(post.id)}
                 onToggle={() => toggleExpanded(post.id)}
                 rank={index + 1}
+                onReserve={openReserveModal}
               />
             ))}
           </div>
@@ -291,6 +411,76 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
             </div>
           )}
         </>
+      )}
+
+      {reserveTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={closeReserveModal}
+        >
+          <div
+            className="w-full max-w-lg rounded-[var(--radius-md)] bg-white p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">予約投稿に登録</h3>
+              <button
+                type="button"
+                className="text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
+                onClick={closeReserveModal}
+                disabled={submitting}
+              >
+                閉じる
+              </button>
+            </header>
+            <p className="mb-3 text-xs text-[color:var(--color-text-secondary)]">
+              同じ本文とコメント（{(reserveTarget.commentData ?? []).length}件）を指定日時に再投稿します。登録後は予約投稿タブで編集できます。
+            </p>
+            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-secondary)]">
+              投稿日時（JST）
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(event) => setScheduledAt(event.target.value)}
+              className="mb-3 h-10 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+              disabled={submitting}
+            />
+            <div className="mb-3 max-h-48 overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 text-xs text-[color:var(--color-text-primary)]">
+              <p className="mb-1 font-medium text-[color:var(--color-text-secondary)]">メイン</p>
+              <p className="whitespace-pre-wrap">{cleanContent(reserveTarget.content ?? '')}</p>
+              {(reserveTarget.commentData ?? []).map((c, idx) => (
+                <div key={c.commentId ?? idx} className="mt-2">
+                  <p className="mb-1 font-medium text-[color:var(--color-text-secondary)]">コメント{idx + 1}</p>
+                  <p className="whitespace-pre-wrap">{cleanContent(c.text ?? '')}</p>
+                </div>
+              ))}
+            </div>
+            {submitError && (
+              <div className="mb-3 rounded-[var(--radius-sm)] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                {submitError}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeReserveModal}
+                disabled={submitting}
+                className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-4 py-2 text-sm text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReservation}
+                disabled={submitting || !scheduledAt}
+                className="rounded-[var(--radius-sm)] border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? '登録中…' : '予約に登録'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </Card>
   );
