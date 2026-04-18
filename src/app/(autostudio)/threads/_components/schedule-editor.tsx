@@ -233,17 +233,17 @@ export function ScheduleEditor({
           </div>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border-l-4 border-indigo-500 bg-indigo-50/60 p-3">
+        <div className="rounded-[var(--radius-lg)] border-l-4 border-blue-600 bg-blue-50/70 p-3">
           <label className="block">
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700">
-              <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700">
+              <span className="inline-flex h-5 items-center rounded-full bg-blue-600 px-2 text-[10px] font-bold text-white">メイン</span>
               メイン投稿（必須）
             </span>
             <textarea
               value={mainText}
               onChange={(event) => setMainText(event.target.value)}
               rows={4}
-              className="mt-2 w-full rounded-[var(--radius-lg)] border border-indigo-200 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              className="mt-2 w-full rounded-[var(--radius-lg)] border-2 border-blue-300 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             />
             <div className={classNames('mt-1 text-right text-[11px]', mainLength > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
               {mainLength}/{MAX_LENGTH}
@@ -251,17 +251,17 @@ export function ScheduleEditor({
           </label>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border-l-4 border-purple-500 bg-purple-50/60 p-3">
+        <div className="rounded-[var(--radius-lg)] border-l-4 border-emerald-600 bg-emerald-50/70 p-3">
           <label className="block">
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-700">
-              <span className="inline-block h-2 w-2 rounded-full bg-purple-500" />
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+              <span className="inline-flex h-5 items-center rounded-full bg-emerald-600 px-2 text-[10px] font-bold text-white">コメ1</span>
               コメント1（必須）
             </span>
             <textarea
               value={comment1}
               onChange={(event) => setComment1(event.target.value)}
               rows={9}
-              className="mt-2 w-full rounded-[var(--radius-lg)] border border-purple-200 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-200"
+              className="mt-2 w-full rounded-[var(--radius-lg)] border-2 border-emerald-300 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
             />
             <div className={classNames('mt-1 text-right text-[11px]', comment1Length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
               {comment1Length}/{MAX_LENGTH}
@@ -269,17 +269,17 @@ export function ScheduleEditor({
           </label>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border-l-4 border-pink-500 bg-pink-50/60 p-3">
+        <div className="rounded-[var(--radius-lg)] border-l-4 border-orange-500 bg-orange-50/70 p-3">
           <label className="block">
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-pink-700">
-              <span className="inline-block h-2 w-2 rounded-full bg-pink-500" />
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-orange-700">
+              <span className="inline-flex h-5 items-center rounded-full bg-orange-500 px-2 text-[10px] font-bold text-white">コメ2</span>
               コメント2（必須）
             </span>
             <textarea
               value={comment2}
               onChange={(event) => setComment2(event.target.value)}
               rows={9}
-              className="mt-2 w-full rounded-[var(--radius-lg)] border border-pink-200 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-pink-400 focus:outline-none focus:ring-2 focus:ring-pink-200"
+              className="mt-2 w-full rounded-[var(--radius-lg)] border-2 border-orange-300 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
             />
             <div className={classNames('mt-1 text-right text-[11px]', comment2Length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
               {comment2Length}/{MAX_LENGTH}

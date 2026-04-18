@@ -437,9 +437,18 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
                 閉じる
               </button>
             </header>
-            <p className="mb-3 text-xs text-[color:var(--color-text-secondary)]">
-              同じ本文とコメント（{(reserveTarget.commentData ?? []).length}件）を指定日時に再投稿します。登録後は予約投稿タブで編集できます。
-            </p>
+            {(() => {
+              const allComments = reserveTarget.commentData ?? [];
+              const usedCount = Math.min(allComments.length, COMMENT_SLOT_LIMIT);
+              const overflow = Math.max(0, allComments.length - COMMENT_SLOT_LIMIT);
+              return (
+                <p className="mb-3 text-xs text-[color:var(--color-text-secondary)]">
+                  同じ本文とコメント{usedCount}件を指定日時に再投稿します。
+                  {overflow > 0 ? `元の投稿はコメント${allComments.length}件ですが、再投稿は先頭${COMMENT_SLOT_LIMIT}件までです。` : ''}
+                  登録後は予約投稿タブで編集できます。
+                </p>
+              );
+            })()}
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-secondary)]">
               投稿日時（JST）
             </label>
@@ -453,7 +462,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
             <div className="mb-3 max-h-48 overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 text-xs text-[color:var(--color-text-primary)]">
               <p className="mb-1 font-medium text-[color:var(--color-text-secondary)]">メイン</p>
               <p className="whitespace-pre-wrap">{cleanContent(reserveTarget.content ?? '')}</p>
-              {(reserveTarget.commentData ?? []).map((c, idx) => (
+              {(reserveTarget.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c, idx) => (
                 <div key={c.commentId ?? idx} className="mt-2">
                   <p className="mb-1 font-medium text-[color:var(--color-text-secondary)]">コメント{idx + 1}</p>
                   <p className="whitespace-pre-wrap">{cleanContent(c.text ?? '')}</p>
