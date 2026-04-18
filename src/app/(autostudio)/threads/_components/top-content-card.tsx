@@ -55,7 +55,7 @@ function evaluateEligibility(post: TopContentPost): ReservationEligibility {
     return { eligible: false, reason: 'コメ<2' };
   }
   if (comments.length > COMMENT_SLOT_LIMIT) {
-    return { eligible: false, reason: `コメ>${COMMENT_SLOT_LIMIT}` };
+    return { eligible: false, reason: `コメ${COMMENT_SLOT_LIMIT + 1}個以上不可` };
   }
   const tooLong = comments.find((c) => cleanContent(c.text ?? '').length > TEXT_LENGTH_LIMIT);
   if (tooLong) {
@@ -206,7 +206,7 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
             }}
             className="rounded-full border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-2.5 py-0.5 text-[11px] font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
-            {eligibility.eligible ? '予約投稿' : `NG:${eligibility.reason}`}
+            {eligibility.eligible ? '再投稿' : eligibility.reason}
           </button>
         </div>
       </div>
@@ -354,7 +354,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
         throw new Error(data?.error || '予約の登録に失敗しました');
       }
       setReserveTarget(null);
-      setSuccessMessage('予約投稿に登録しました。予約投稿タブで編集できます。');
+      setSuccessMessage('再投稿を予約しました。予約投稿タブで編集できます。');
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : '予約の登録に失敗しました');
@@ -429,7 +429,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
             onClick={(event) => event.stopPropagation()}
           >
             <header className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">予約投稿に登録</h3>
+              <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">再投稿の予約</h3>
               <button
                 type="button"
                 className="text-sm text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]"
@@ -482,7 +482,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
                 disabled={submitting || !scheduledAt}
                 className="rounded-[var(--radius-sm)] border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submitting ? '登録中…' : '予約に登録'}
+                {submitting ? '登録中…' : '再投稿を予約'}
               </button>
             </div>
           </div>
