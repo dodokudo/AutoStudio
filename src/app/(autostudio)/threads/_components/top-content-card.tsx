@@ -459,15 +459,33 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
               className="mb-3 h-10 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
               disabled={submitting}
             />
-            <div className="mb-3 max-h-48 overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3 text-xs text-[color:var(--color-text-primary)]">
-              <p className="mb-1 font-medium text-[color:var(--color-text-secondary)]">メイン</p>
-              <p className="whitespace-pre-wrap">{cleanContent(reserveTarget.content ?? '')}</p>
-              {(reserveTarget.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c, idx) => (
-                <div key={c.commentId ?? idx} className="mt-2">
-                  <p className="mb-1 font-medium text-[color:var(--color-text-secondary)]">コメント{idx + 1}</p>
-                  <p className="whitespace-pre-wrap">{cleanContent(c.text ?? '')}</p>
+            <div className="mb-3 max-h-64 space-y-2 overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-2 text-xs text-[color:var(--color-text-primary)]">
+              <div className="rounded-[var(--radius-sm)] border-l-4 border-blue-600 bg-blue-50 p-2">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <span className="inline-flex h-5 items-center rounded-full bg-blue-600 px-2 text-[10px] font-bold text-white">メイン</span>
                 </div>
-              ))}
+                <p className="whitespace-pre-wrap">{cleanContent(reserveTarget.content ?? '')}</p>
+              </div>
+              {(reserveTarget.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c, idx) => {
+                const palettes = [
+                  { bg: 'bg-emerald-50', border: 'border-emerald-600', pill: 'bg-emerald-600', label: 'コメ1' },
+                  { bg: 'bg-orange-50', border: 'border-orange-500', pill: 'bg-orange-500', label: 'コメ2' },
+                  { bg: 'bg-slate-50', border: 'border-slate-400', pill: 'bg-slate-500', label: `コメ${idx + 1}` },
+                  { bg: 'bg-slate-50', border: 'border-slate-400', pill: 'bg-slate-500', label: `コメ${idx + 1}` },
+                  { bg: 'bg-slate-50', border: 'border-slate-400', pill: 'bg-slate-500', label: `コメ${idx + 1}` },
+                  { bg: 'bg-slate-50', border: 'border-slate-400', pill: 'bg-slate-500', label: `コメ${idx + 1}` },
+                  { bg: 'bg-slate-50', border: 'border-slate-400', pill: 'bg-slate-500', label: `コメ${idx + 1}` },
+                ];
+                const palette = palettes[idx] ?? palettes[palettes.length - 1];
+                return (
+                  <div key={c.commentId ?? idx} className={`rounded-[var(--radius-sm)] border-l-4 ${palette.border} ${palette.bg} p-2`}>
+                    <div className="mb-1 flex items-center gap-1.5">
+                      <span className={`inline-flex h-5 items-center rounded-full ${palette.pill} px-2 text-[10px] font-bold text-white`}>{palette.label}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap">{cleanContent(c.text ?? '')}</p>
+                  </div>
+                );
+              })}
             </div>
             {submitError && (
               <div className="mb-3 rounded-[var(--radius-sm)] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">

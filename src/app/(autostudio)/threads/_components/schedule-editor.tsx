@@ -233,59 +233,44 @@ export function ScheduleEditor({
           </div>
         </div>
 
-        <div className="rounded-[var(--radius-lg)] border-l-4 border-blue-600 bg-blue-50/70 p-3">
-          <label className="block">
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700">
-              <span className="inline-flex h-5 items-center rounded-full bg-blue-600 px-2 text-[10px] font-bold text-white">メイン</span>
-              メイン投稿（必須）
-            </span>
-            <textarea
-              value={mainText}
-              onChange={(event) => setMainText(event.target.value)}
-              rows={4}
-              className="mt-2 w-full rounded-[var(--radius-lg)] border-2 border-blue-300 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
-            <div className={classNames('mt-1 text-right text-[11px]', mainLength > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
-              {mainLength}/{MAX_LENGTH}
-            </div>
-          </label>
-        </div>
+        <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+          メイン投稿（必須）
+          <textarea
+            value={mainText}
+            onChange={(event) => setMainText(event.target.value)}
+            rows={4}
+            className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
+          />
+          <div className={classNames('mt-1 text-right text-[11px]', mainLength > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
+            {mainLength}/{MAX_LENGTH}
+          </div>
+        </label>
 
-        <div className="rounded-[var(--radius-lg)] border-l-4 border-emerald-600 bg-emerald-50/70 p-3">
-          <label className="block">
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-              <span className="inline-flex h-5 items-center rounded-full bg-emerald-600 px-2 text-[10px] font-bold text-white">コメ1</span>
-              コメント1（必須）
-            </span>
-            <textarea
-              value={comment1}
-              onChange={(event) => setComment1(event.target.value)}
-              rows={9}
-              className="mt-2 w-full rounded-[var(--radius-lg)] border-2 border-emerald-300 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-            />
-            <div className={classNames('mt-1 text-right text-[11px]', comment1Length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
-              {comment1Length}/{MAX_LENGTH}
-            </div>
-          </label>
-        </div>
+        <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+          コメント1（必須）
+          <textarea
+            value={comment1}
+            onChange={(event) => setComment1(event.target.value)}
+            rows={9}
+            className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
+          />
+          <div className={classNames('mt-1 text-right text-[11px]', comment1Length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
+            {comment1Length}/{MAX_LENGTH}
+          </div>
+        </label>
 
-        <div className="rounded-[var(--radius-lg)] border-l-4 border-orange-500 bg-orange-50/70 p-3">
-          <label className="block">
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-orange-700">
-              <span className="inline-flex h-5 items-center rounded-full bg-orange-500 px-2 text-[10px] font-bold text-white">コメ2</span>
-              コメント2（必須）
-            </span>
-            <textarea
-              value={comment2}
-              onChange={(event) => setComment2(event.target.value)}
-              rows={9}
-              className="mt-2 w-full rounded-[var(--radius-lg)] border-2 border-orange-300 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
-            />
-            <div className={classNames('mt-1 text-right text-[11px]', comment2Length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
-              {comment2Length}/{MAX_LENGTH}
-            </div>
-          </label>
-        </div>
+        <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+          コメント2（必須）
+          <textarea
+            value={comment2}
+            onChange={(event) => setComment2(event.target.value)}
+            rows={9}
+            className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
+          />
+          <div className={classNames('mt-1 text-right text-[11px]', comment2Length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
+            {comment2Length}/{MAX_LENGTH}
+          </div>
+        </label>
 
         {([
           { index: 3, value: comment3, length: comment3Length, setter: setComment3 },
@@ -295,23 +280,18 @@ export function ScheduleEditor({
           { index: 7, value: comment7, length: comment7Length, setter: setComment7 },
           { index: 8, value: comment8, length: comment8Length, setter: setComment8 },
         ] as const).map((c) => (
-          <div key={c.index} className="rounded-[var(--radius-lg)] border-l-4 border-slate-300 bg-slate-50/60 p-3">
-            <label className="block">
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-                <span className="inline-block h-2 w-2 rounded-full bg-slate-400" />
-                コメント{c.index}（任意）
-              </span>
-              <textarea
-                value={c.value}
-                onChange={(event) => c.setter(event.target.value)}
-                rows={9}
-                className="mt-2 w-full rounded-[var(--radius-lg)] border border-slate-200 bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-              />
-              <div className={classNames('mt-1 text-right text-[11px]', c.length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
-                {c.length}/{MAX_LENGTH}
-              </div>
-            </label>
-          </div>
+          <label key={c.index} className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
+            コメント{c.index}（任意）
+            <textarea
+              value={c.value}
+              onChange={(event) => c.setter(event.target.value)}
+              rows={9}
+              className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
+            />
+            <div className={classNames('mt-1 text-right text-[11px]', c.length > MAX_LENGTH ? 'text-red-500' : 'text-[color:var(--color-text-muted)]')}>
+              {c.length}/{MAX_LENGTH}
+            </div>
+          </label>
         ))}
 
         {error ? (
