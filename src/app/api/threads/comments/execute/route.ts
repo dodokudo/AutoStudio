@@ -79,12 +79,10 @@ export async function POST() {
         // Threads APIの安定性のため、短い待機時間を追加
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // テキストからURLを検出して分離
-        const { textWithoutUrl, url } = extractUrlFromText(comment.comment_text);
+        // URLはテキストに含めたまま投稿（link_attachmentはコメントでは表示されないため使わない）
+        console.log(`[threads/comments/execute] Text: "${comment.comment_text}"`);
 
-        console.log(`[threads/comments/execute] Text: "${textWithoutUrl}", URL: ${url || 'none'}`);
-
-        const commentThreadId = await postThread(textWithoutUrl, replyToId, url);
+        const commentThreadId = await postThread(comment.comment_text, replyToId);
 
         console.log(`[threads/comments/execute] Comment ${comment.comment_order} posted with ID: ${commentThreadId}`);
 
