@@ -126,16 +126,9 @@ export async function POST(request: NextRequest) {
           console.log(`[plans/update] Waiting ${delaySeconds} seconds before posting comment ${i + 1}...`);
           await new Promise(resolve => setTimeout(resolve, randomDelayMs));
 
-          // コメントからURLを検出して分離
-          console.log(`[plans/update] Comment ${i + 1} original text:`, JSON.stringify(comment.text));
-          const { textWithoutUrl: commentTextWithoutUrl, url: commentUrl } = extractUrlFromText(comment.text);
-          console.log(`[plans/update] Comment ${i + 1} extracted:`, {
-            textWithoutUrl: commentTextWithoutUrl,
-            url: commentUrl,
-            textLength: commentTextWithoutUrl.length,
-            urlLength: commentUrl?.length
-          });
-          const commentThreadId = await postThread(commentTextWithoutUrl, replyToId, commentUrl);
+          // URLはテキストに含めたまま投稿（link_attachmentはコメントでは表示されないため使わない）
+          console.log(`[plans/update] Comment ${i + 1} text:`, JSON.stringify(comment.text));
+          const commentThreadId = await postThread(comment.text, replyToId);
           console.log(`[plans/update] Comment ${i + 1} posted:`, commentThreadId);
           replyToId = commentThreadId;
         }
