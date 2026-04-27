@@ -1,4 +1,5 @@
 import { postThread } from '@/lib/threadsApi';
+import { normalizeTokutenGuideComment } from '@/lib/threadsText';
 import {
   listScheduledPosts,
   updateScheduledPost,
@@ -146,16 +147,17 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     index: number;
     text: string;
     existingThreadId?: string | null;
+    valueKey: 'comment1' | 'comment2' | 'comment3' | 'comment4' | 'comment5' | 'comment6' | 'comment7' | 'comment8';
     updateKey: 'comment1ThreadId' | 'comment2ThreadId' | 'comment3ThreadId' | 'comment4ThreadId' | 'comment5ThreadId' | 'comment6ThreadId' | 'comment7ThreadId' | 'comment8ThreadId';
   }> = [
-    { index: 1, text: post.comment1, existingThreadId: post.comment1_thread_id, updateKey: 'comment1ThreadId' },
-    { index: 2, text: post.comment2, existingThreadId: post.comment2_thread_id, updateKey: 'comment2ThreadId' },
-    { index: 3, text: post.comment3, existingThreadId: post.comment3_thread_id, updateKey: 'comment3ThreadId' },
-    { index: 4, text: post.comment4, existingThreadId: post.comment4_thread_id, updateKey: 'comment4ThreadId' },
-    { index: 5, text: post.comment5, existingThreadId: post.comment5_thread_id, updateKey: 'comment5ThreadId' },
-    { index: 6, text: post.comment6, existingThreadId: post.comment6_thread_id, updateKey: 'comment6ThreadId' },
-    { index: 7, text: post.comment7, existingThreadId: post.comment7_thread_id, updateKey: 'comment7ThreadId' },
-    { index: 8, text: post.comment8, existingThreadId: post.comment8_thread_id, updateKey: 'comment8ThreadId' },
+    { index: 1, text: post.comment1, existingThreadId: post.comment1_thread_id, valueKey: 'comment1', updateKey: 'comment1ThreadId' },
+    { index: 2, text: post.comment2, existingThreadId: post.comment2_thread_id, valueKey: 'comment2', updateKey: 'comment2ThreadId' },
+    { index: 3, text: post.comment3, existingThreadId: post.comment3_thread_id, valueKey: 'comment3', updateKey: 'comment3ThreadId' },
+    { index: 4, text: post.comment4, existingThreadId: post.comment4_thread_id, valueKey: 'comment4', updateKey: 'comment4ThreadId' },
+    { index: 5, text: post.comment5, existingThreadId: post.comment5_thread_id, valueKey: 'comment5', updateKey: 'comment5ThreadId' },
+    { index: 6, text: post.comment6, existingThreadId: post.comment6_thread_id, valueKey: 'comment6', updateKey: 'comment6ThreadId' },
+    { index: 7, text: post.comment7, existingThreadId: post.comment7_thread_id, valueKey: 'comment7', updateKey: 'comment7ThreadId' },
+    { index: 8, text: post.comment8, existingThreadId: post.comment8_thread_id, valueKey: 'comment8', updateKey: 'comment8ThreadId' },
   ];
 
   let timedOut = false;
@@ -169,6 +171,18 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     }
     if (!comment.text?.trim()) {
       continue;
+    }
+
+    const normalizedText = comment.index >= 3
+      ? normalizeTokutenGuideComment(comment.text)
+      : comment.text;
+
+    if (normalizedText !== comment.text) {
+      console.warn(
+        `[scheduledPostsWorker] Normalized comment${comment.index} CTA text before posting`,
+      );
+      await updateScheduledPost(post.schedule_id, { [comment.valueKey]: normalizedText });
+      comment.text = normalizedText;
     }
 
     // タイムアウト前の安全撤退: 残時間が足りなければ次cronに委ねる

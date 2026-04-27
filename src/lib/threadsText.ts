@@ -63,3 +63,28 @@ export function sanitizeThreadsMainPost(value: string): string {
 export function sanitizeThreadsComment(value: string): string {
   return stripWithPatterns(value, COMMENT_LABEL_PATTERNS);
 }
+
+export const TOKUTEN_GUIDE_URL = 'https://asto.jp/l/3p';
+
+const TOKUTEN_GUIDE_PATTERNS = [
+  /1000名以上が受け取っている.*Threadsノウハウはこちら/u,
+  /2026年最新版のAI×Threadsノウハウはこちら/u,
+  /2026年最新版のThreadsノウハウはこちら/u,
+];
+
+function hasHttpUrl(value: string): boolean {
+  return /https?:\/\/\S+/u.test(value);
+}
+
+export function isTokutenGuidePlaceholderComment(value?: string | null): boolean {
+  const text = value?.trim() ?? '';
+  if (!text || hasHttpUrl(text)) return false;
+  return TOKUTEN_GUIDE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+export function normalizeTokutenGuideComment(value?: string | null): string {
+  const text = value?.trim() ?? '';
+  if (!text) return '';
+  if (!isTokutenGuidePlaceholderComment(text)) return text;
+  return `${text}\n${TOKUTEN_GUIDE_URL}`;
+}

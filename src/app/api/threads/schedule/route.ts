@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertScheduledPost, listScheduledPosts, toJstIsoString } from '@/lib/bigqueryScheduledPosts';
+import { normalizeTokutenGuideComment } from '@/lib/threadsText';
 
 function validateTextLength(label: string, value?: string) {
   if (!value || value.trim().length === 0) {
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
       mainText: String(mainText),
       comment1: String(comment1),
       comment2: String(comment2),
-      comment3: typeof comment3 === 'string' ? comment3 : '',
+      comment3: normalizeTokutenGuideComment(typeof comment3 === 'string' ? comment3 : ''),
       comment4: typeof comment4 === 'string' ? comment4 : '',
       comment5: typeof comment5 === 'string' ? comment5 : '',
       comment6: typeof comment6 === 'string' ? comment6 : '',

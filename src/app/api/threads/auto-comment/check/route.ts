@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import { sendAlertEmail } from '@/lib/notifications';
+import { isTokutenGuidePlaceholderComment, TOKUTEN_GUIDE_URL } from '@/lib/threadsText';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
 // 特典誘導テンプレート（文言・URLは必要に応じて変更）
-const TOKUTEN_GUIDE_URL = 'https://asto.jp/l/3p';
 const TOKUTEN_GUIDE_TEMPLATE = `1000名以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
 ${TOKUTEN_GUIDE_URL}`;
 
@@ -129,7 +129,16 @@ async function checkTokutenGuide(
     return { has_tokuten_guide: true, reason: `url_at_depth${commentWithUrl.depth}` };
   }
 
-  // チェック3: 固定ポスト誘導の文言があるか（全コメント対象）
+  // チェック3: URLなしのCTA文言が既にあるか（重複投稿防止）
+  const placeholderTokutenGuide = comments.find(
+    (c: any) => c.depth >= 1 && c.text && isTokutenGuidePlaceholderComment(c.text)
+  );
+
+  if (placeholderTokutenGuide) {
+    return { has_tokuten_guide: true, reason: `tokuten_placeholder_without_url_at_depth${placeholderTokutenGuide.depth}` };
+  }
+
+  // チェック4: 固定ポスト誘導の文言があるか（全コメント対象）
   const fixedPostPattern = /固定ポスト.*配.*受け取/;
   const hasFixedPostGuide = comments.some(
     (c: any) => c.text && (
