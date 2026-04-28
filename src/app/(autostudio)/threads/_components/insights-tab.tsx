@@ -233,6 +233,7 @@ export function InsightsTab({
                   <th className="px-3 py-2 text-right">LPクリック</th>
                   <th className="px-3 py-2 text-right">LINE</th>
                   <th className="px-3 py-2 text-right">登録率</th>
+                  <th className="px-3 py-2 text-right">CVR</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--color-border)]">
@@ -245,6 +246,7 @@ export function InsightsTab({
                   const lpClicks = item.lpClicks ?? 0;
                   const lineRegs = item.lineRegistrations ?? 0;
                   const registrationRate = lpClicks > 0 ? (lineRegs / lpClicks) * 100 : 0;
+                  const cvr = linkClicks > 0 ? (lineRegs / linkClicks) * 100 : 0;
                   return (
                     <tr key={item.date} className="hover:bg-[color:var(--color-surface-muted)]">
                       <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">
@@ -280,6 +282,9 @@ export function InsightsTab({
                       </td>
                       <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
                         {lpClicks > 0 ? `${registrationRate.toFixed(1)}%` : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-right text-[color:var(--color-text-secondary)]">
+                        {linkClicks > 0 ? `${cvr.toFixed(1)}%` : '-'}
                       </td>
                     </tr>
                   );
