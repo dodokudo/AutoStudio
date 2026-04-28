@@ -47,8 +47,8 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     // まずログイン後のダッシュボードに移動
     await page.goto('https://manager.linestep.net/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    if (isLoginPage(page)) {
-      throw new CookieExpiredError('Lstepのログインページへリダイレクトされました');
+    if (await isSessionExpired(page)) {
+      throw new CookieExpiredError('Lstepのセッションが切れています（ログインが必要）');
     }
 
     // サイドバーから友だちリストに移動
@@ -63,6 +63,11 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
       await page.click('text=友だちリスト', { timeout: 5000 });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2000);
+    }
+
+    // 友だちリスト画面が出ている＝ログインできている、を再確認
+    if (await isSessionExpired(page)) {
+      throw new CookieExpiredError('友だちリスト遷移後にログイン画面が表示されました');
     }
 
     const download = await performDownloadFlow(page, config);
@@ -98,6 +103,27 @@ function isLoginPage(page: Page): boolean {
   return false;
 }
 
+// Cookie/セッション失効を多面的に検知する。
+// Lstepはセッション切れ時に必ずしも /account/login にリダイレクトしない（空画面を返す）ため、
+// URL以外にも「ログインフォームの存在」「サイドバーの存在」を併せて確認する。
+async function isSessionExpired(page: Page): Promise<boolean> {
+  if (isLoginPage(page)) {
+    return true;
+  }
+  // ログインフォーム要素が見える＝ログイン画面
+  const loginFormCount = await page.locator('input[type="password"], form[action*="login"]').count();
+  if (loginFormCount > 0) {
+    return true;
+  }
+  // 5秒以内にサイドバーの「友だちリスト」テキストが見つからなければセッション切れ扱い
+  try {
+    await page.locator('text=友だちリスト').first().waitFor({ state: 'attached', timeout: 5000 });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Download> {
   // 1. 友だちリストページで待機
   await page.waitForLoadState('domcontentloaded');
@@ -126,30 +152,53 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
     throw new Error('CSV操作タブが見つかりませんでした');
   }
 
-  // 3. CSV操作タブをクリック
-  console.log('CSV操作タブをクリック...');
-  await page.getByRole('tab', { name: 'CSV操作' }).click();
+  // 3. CSV操作ボタンをクリック → モーダルが開く（2026 UI更新）
+  console.log('CSV操作ボタンをクリック...');
+  const csvOpClicked = await tryClickByRoles(page, 'CSV操作', ['button', 'tab', 'link']);
+  if (!csvOpClicked) {
+    await page.locator('text=CSV操作').first().click({ timeout: 10000 });
+  }
   await page.waitForTimeout(2000);
 
-  // 4. CSVエクスポートボタンをクリック（ID: csv_export_mover）
-  console.log('CSVエクスポートボタンをクリック...');
-  await page.locator('#csv_export_mover').click();
+  // 4. モーダル内の「CSVエクスポートリスト」ボタンをクリック
+  // 旧UI: CSV操作タブ → #csv_export_mover → 履歴・お気に入りタブ
+  // 新UI: CSV操作ボタン → モーダル → 「CSVエクスポートリスト」ボタン → エクスポート履歴+お気に入り画面
+  console.log('モーダル内「CSVエクスポートリスト」をクリック...');
+  const exportListClicked = await tryClickByRoles(
+    page,
+    'CSVエクスポートリスト',
+    ['button', 'link'],
+  );
+  if (exportListClicked) {
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2500);
+    console.log('現在のURL:', page.url());
+  } else {
+    // 旧UIフォールバック
+    const moverCount = await page.locator('#csv_export_mover').count();
+    if (moverCount > 0) {
+      console.log('  -> 旧UI: #csv_export_mover をクリック');
+      await page.locator('#csv_export_mover').click({ timeout: 10000 });
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
+      // さらに「履歴・お気に入りから表示条件入力」へ
+      const histLink = await page.getByRole('link', { name: '履歴・お気に入りから表示条件入力' }).count();
+      if (histLink > 0) {
+        await page.getByRole('link', { name: '履歴・お気に入りから表示条件入力' }).click();
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(2000);
+      }
+    } else {
+      throw new Error('CSVエクスポートリストへの遷移ボタンが見つかりません');
+    }
+  }
 
-  // ページ遷移を待つ（/line/exporter/.../register に遷移）
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
-  console.log('CSVエクスポートページに遷移しました:', page.url());
-
-  // 5. 「履歴・お気に入りから表示条件入力」タブをクリック
-  console.log('履歴・お気に入りから表示条件入力をクリック...');
-  await page.getByRole('link', { name: '履歴・お気に入りから表示条件入力' }).click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
-  console.log('エクスポートリストページに遷移しました:', page.url());
-
-  // 6. お気に入りの1番上（「表示項目をコピーして利用」リンク）をクリック
+  // 6. お気に入りの1番上（「表示項目をコピーして利用」リンク or ボタン）をクリック
   console.log('お気に入りの1番上（表示項目をコピーして利用）をクリック...');
-  await page.getByRole('link', { name: '表示項目をコピーして利用' }).first().click();
+  const copyClicked = await tryClickByRoles(page, '表示項目をコピーして利用', ['link', 'button']);
+  if (!copyClicked) {
+    await page.locator('text=表示項目をコピーして利用').first().click({ timeout: 10000 });
+  }
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
   console.log('CSVエクスポート設定ページに戻りました:', page.url());
@@ -250,6 +299,26 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
 
   console.log('ダウンロード開始...');
   return downloadPromise;
+}
+
+async function tryClickByRoles(
+  page: Page,
+  name: string,
+  roles: Array<'button' | 'tab' | 'link'>,
+): Promise<boolean> {
+  for (const role of roles) {
+    const locator = page.getByRole(role, { name });
+    const count = await locator.count();
+    if (count === 0) continue;
+    try {
+      await locator.first().click({ timeout: 8000 });
+      console.log(`  -> role=${role} でクリック成功 (${name})`);
+      return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
 }
 
 async function clickByText(page: Page, text: string, timeout: number): Promise<void> {
