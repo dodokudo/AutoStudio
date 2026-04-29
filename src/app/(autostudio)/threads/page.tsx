@@ -352,6 +352,7 @@ export default async function ThreadsHome({
     const ctrValue = safeDivide(totalLinkClicks, profileViewsNumeric);
     const lpClickConversionRate = safeDivide(lpLineClicksForRange, totalLinkClicks);
     const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, lpLineClicksForRange);
+    const lineRegistrationCvr = safeDivide(lineRegistrationsNumeric, totalLinkClicks);
     const lpLineClicksDeltaValue = lpLineClicksForRange - previousLpLineClicks;
 
     const rangeDurationDays = Math.max(1, Math.round((selectedRangeWindow.end.getTime() - selectedRangeWindow.start.getTime()) / DAY_MS) + 1);
@@ -384,6 +385,7 @@ export default async function ThreadsHome({
 
     const lineRegistrationDeltaParts = [
       lineRegistrationConversionRate !== null ? `登録率: ${formatPercent(lineRegistrationConversionRate, 2)}` : null,
+      lineRegistrationCvr !== null ? `CVR: ${formatPercent(lineRegistrationCvr, 2)}` : null,
       lineRegistrationDeltaValue !== null && lineRegistrationDeltaValue !== 0
         ? `${lineRegistrationDeltaValue > 0 ? '+' : ''}${formatNumber(lineRegistrationDeltaValue)}`
         : null,
