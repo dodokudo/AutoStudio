@@ -286,6 +286,8 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [reserveTarget, setReserveTarget] = useState<TopContentPost | null>(null);
   const [scheduledAt, setScheduledAt] = useState('');
+  const [draftMainText, setDraftMainText] = useState('');
+  const [draftComments, setDraftComments] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -313,6 +315,8 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
   const openReserveModal = (post: TopContentPost) => {
     setReserveTarget(post);
     setScheduledAt(getDefaultScheduledAt());
+    setDraftMainText(cleanContent(post.content ?? ''));
+    setDraftComments((post.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c) => cleanContent(c.text ?? '')));
     setSubmitError(null);
   };
 
@@ -327,8 +331,8 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const comments = (reserveTarget.commentData ?? []).map((c) => cleanContent(c.text ?? ''));
-      const mainText = cleanContent(reserveTarget.content ?? '');
+      const comments = draftComments.map((comment) => comment.trim()).filter(Boolean);
+      const mainText = draftMainText.trim();
       const body: Record<string, unknown> = {
         scheduledAt,
         mainText,
@@ -360,6 +364,21 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
       setSubmitting(false);
     }
   };
+
+  const updateDraftComment = (index: number, value: string) => {
+    setDraftComments((prev) => prev.map((comment, idx) => (idx === index ? value : comment)));
+  };
+
+  const removeDraftComment = (index: number) => {
+    setDraftComments((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const commentCount = draftComments.filter((comment) => comment.trim().length > 0).length;
+  const canSubmitReservation =
+    !submitting &&
+    scheduledAt &&
+    draftMainText.trim().length > 0 &&
+    commentCount >= 2;
 
   return (
     <Card>
@@ -438,14 +457,15 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
               </button>
             </header>
             {(() => {
-              const allComments = reserveTarget.commentData ?? [];
-              const usedCount = Math.min(allComments.length, COMMENT_SLOT_LIMIT);
-              const overflow = Math.max(0, allComments.length - COMMENT_SLOT_LIMIT);
+              const originalComments = reserveTarget.commentData ?? [];
+              const originalCount = originalComments.length;
+              const overflow = Math.max(0, originalCount - COMMENT_SLOT_LIMIT);
               return (
                 <p className="mb-3 text-xs text-[color:var(--color-text-secondary)]">
-                  同じ本文とコメント{usedCount}件を指定日時に再投稿します。
-                  {overflow > 0 ? `元の投稿はコメント${allComments.length}件ですが、再投稿は先頭${COMMENT_SLOT_LIMIT}件までです。` : ''}
-                  登録後は予約投稿タブで編集できます。
+                  メイン投稿とコメント欄を編集して再投稿を予約できます。
+                  コメントは並び順どおりに詰めて予約されます。
+                  {overflow > 0 ? `元の投稿はコメント${originalCount}件ですが、再投稿は先頭${COMMENT_SLOT_LIMIT}件までです。` : ''}
+                  コメントは2件以上必要です。
                 </p>
               );
             })()}
@@ -459,24 +479,67 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
               className="mb-3 h-10 w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
               disabled={submitting}
             />
-            <div className="mb-3 max-h-64 overflow-y-auto text-xs text-[color:var(--color-text-primary)]">
-              <p className="whitespace-pre-wrap">{cleanContent(reserveTarget.content ?? '')}</p>
-              {(reserveTarget.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).length > 0 && (
-                <>
-                  <div className="my-3 border-t border-gray-200" />
-                  <p className="mb-2 text-xs font-medium text-gray-500">コメント欄</p>
-                  <div className="space-y-2">
-                    {(reserveTarget.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c, idx) => (
-                      <div key={c.commentId ?? idx} className="rounded-md bg-gray-50 p-2">
-                        <div className="mb-1 flex items-center gap-2 text-[10px] text-gray-400">
-                          <span className="font-medium text-purple-600">コメント{idx + 1}</span>
-                        </div>
-                        <p className="whitespace-pre-wrap text-gray-700">{cleanContent(c.text ?? '')}</p>
-                      </div>
-                    ))}
+            <div className="mb-3 max-h-96 overflow-y-auto space-y-3 text-xs text-[color:var(--color-text-primary)]">
+              <div className="rounded-md border border-[color:var(--color-border)] bg-white p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-gray-500">メイン投稿</p>
+                  <button
+                    type="button"
+                    onClick={() => setDraftMainText('')}
+                    disabled={submitting}
+                    className="rounded-full border border-rose-200 px-2.5 py-0.5 text-[11px] font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    削除
+                  </button>
+                </div>
+                <textarea
+                  value={draftMainText}
+                  onChange={(event) => setDraftMainText(event.target.value)}
+                  disabled={submitting}
+                  rows={5}
+                  className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                />
+                <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                  {draftMainText.length}/500
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-gray-500">コメント欄</p>
+                  <span className="text-[10px] text-[color:var(--color-text-muted)]">2件以上必要</span>
+                </div>
+                {draftComments.map((comment, idx) => (
+                  <div key={`${idx}-${reserveTarget.id}`} className="rounded-md border border-[color:var(--color-border)] bg-gray-50 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-purple-600">コメント{idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeDraftComment(idx)}
+                        disabled={submitting}
+                        className="rounded-full border border-rose-200 px-2.5 py-0.5 text-[11px] font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        削除
+                      </button>
+                    </div>
+                    <textarea
+                      value={comment}
+                      onChange={(event) => updateDraftComment(idx, event.target.value)}
+                      disabled={submitting}
+                      rows={4}
+                      className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                    />
+                    <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                      {comment.length}/500
+                    </p>
                   </div>
-                </>
-              )}
+                ))}
+                {draftComments.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-4 text-center text-xs text-[color:var(--color-text-muted)]">
+                    コメントがありません。再投稿にはコメントを2件以上残してください。
+                  </div>
+                ) : null}
+              </div>
             </div>
             {submitError && (
               <div className="mb-3 rounded-[var(--radius-sm)] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
@@ -495,7 +558,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
               <button
                 type="button"
                 onClick={handleSubmitReservation}
-                disabled={submitting || !scheduledAt}
+                disabled={!canSubmitReservation}
                 className="rounded-[var(--radius-sm)] border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? '登録中…' : '再投稿を予約'}
