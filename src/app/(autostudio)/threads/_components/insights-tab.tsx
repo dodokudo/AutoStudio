@@ -206,7 +206,7 @@ export function InsightsTab({
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">インプレッション & フォロワー推移</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              日別のインプレッション（折れ線）、フォロワー増加数とLINE登録数（棒グラフ）を直近30日で確認できます。
+              日別のインプレッション（折れ線）、フォロワー増加数とLINE登録数（棒グラフ）を選択期間で確認できます。
             </p>
           </div>
           <button

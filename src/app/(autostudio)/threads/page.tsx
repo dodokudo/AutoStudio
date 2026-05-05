@@ -61,8 +61,8 @@ const getCachedThreadsDashboard = unstable_cache(
 );
 
 const getCachedThreadsInsightsData = unstable_cache(
-  async (startDate?: string, endDate?: string) => {
-    return getThreadsInsightsData({ startDate, endDate });
+  async (startDate?: string, endDate?: string, dailyMetricsLimit?: number | null) => {
+    return getThreadsInsightsData({ startDate, endDate, dailyMetricsLimit });
   },
   ['threads-insights-data'],
   { revalidate: 1800 }
@@ -188,6 +188,7 @@ export default async function ThreadsHome({
       getCachedThreadsInsightsData(
         postsQueryStartKey,
         postsQueryEndKey,
+        null,
       ),
       getCachedLinkClicksSummary(rangeStartDate.toISOString(), rangeEndDate.toISOString()),
       getCachedLinkClicksSummary(previousRangeStart.toISOString(), previousRangeEnd.toISOString()),
@@ -333,10 +334,11 @@ export default async function ThreadsHome({
       const d = new Date(`${m.date}T00:00:00Z`);
       return d >= rangeStartDate && d <= rangeEndDate;
     });
-    const followersStart = firstPoint?.followers ?? sortedDailyMetrics.at(-1)?.followers ?? null;
-    const followersEnd = lastPoint?.followers ?? sortedDailyMetrics[0]?.followers ?? null;
+    const followersStart = firstPoint?.followers ?? sortedDailyMetrics.at(0)?.followers ?? null;
+    const followersEnd = lastPoint?.followers ?? sortedDailyMetrics.at(-1)?.followers ?? null;
     const followerDeltaValue =
       followersStart !== null && followersEnd !== null ? followersEnd - followersStart : effectiveAccountSummary.followersChange;
+    const followersCurrentValue = followersEnd ?? effectiveAccountSummary.averageFollowers;
 
     const lineRegistrationsNumeric =
       typeof lineRegistrationCount === 'number' && Number.isFinite(lineRegistrationCount)
@@ -394,7 +396,7 @@ export default async function ThreadsHome({
     const stats = [
       {
         label: '現在のフォロワー数',
-        value: formatNumber(effectiveAccountSummary.averageFollowers),
+        value: formatNumber(followersCurrentValue),
         delta:
           followerDeltaValue === null || followerDeltaValue === 0
             ? undefined
@@ -528,12 +530,12 @@ export default async function ThreadsHome({
       }));
     }
 
-    const trimmedPerformanceSeries = performanceSeries.slice(-30);
-    const maxImpressionsValue = trimmedPerformanceSeries.reduce(
+    const displayedPerformanceSeries = performanceSeries;
+    const maxImpressionsValue = displayedPerformanceSeries.reduce(
       (max, item) => Math.max(max, item.impressions),
       0,
     );
-    const maxFollowerDeltaValue = trimmedPerformanceSeries.reduce(
+    const maxFollowerDeltaValue = displayedPerformanceSeries.reduce(
       (max, item) => Math.max(max, item.followerDelta),
       0,
     );
@@ -601,7 +603,7 @@ export default async function ThreadsHome({
             customEnd={customEnd}
             noteText={noteText}
             stats={stats}
-            performanceSeries={trimmedPerformanceSeries}
+            performanceSeries={displayedPerformanceSeries}
             maxImpressions={maxImpressionsValue}
             maxFollowerDelta={maxFollowerDeltaValue}
           />

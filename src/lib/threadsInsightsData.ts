@@ -54,6 +54,7 @@ export interface ThreadsInsightsDataOptions {
   startDate?: string;
   endDate?: string;
   limit?: number | null;
+  dailyMetricsLimit?: number | null;
 }
 
 function toPlain(value: unknown): string {
@@ -95,6 +96,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
     startDate: options.startDate ?? null,
     endDate: options.endDate ?? null,
     limit: options.limit ?? POSTS_LIMIT,
+    dailyMetricsLimit: options.dailyMetricsLimit ?? 90,
   });
   if (cachedActivity && now - cachedFetchedAt < CACHE_TTL_MS && cachedOptionKey === optionKey) {
     return cachedActivity;
@@ -230,16 +232,34 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
 
   let dailyMetrics: DailyFollowerMetric[] = [];
   try {
+    const dailyMetricConditions = ['date IS NOT NULL'];
+    const dailyMetricParams: Record<string, unknown> = {};
+    if (options.startDate) {
+      dailyMetricConditions.push('date >= @dailyMetricStartDate');
+      dailyMetricParams.dailyMetricStartDate = options.startDate;
+    }
+    if (options.endDate) {
+      dailyMetricConditions.push('date <= @dailyMetricEndDate');
+      dailyMetricParams.dailyMetricEndDate = options.endDate;
+    }
+    const shouldLimitDailyMetrics = options.dailyMetricsLimit !== null;
+    const resolvedDailyMetricsLimit = typeof options.dailyMetricsLimit === 'number' ? options.dailyMetricsLimit : 90;
+    const dailyMetricsLimitClause = shouldLimitDailyMetrics ? 'LIMIT @dailyMetricsLimit' : '';
+    if (shouldLimitDailyMetrics) {
+      dailyMetricParams.dailyMetricsLimit = resolvedDailyMetricsLimit;
+    }
+
     const [rows] = await client.query({
       query: `
         SELECT
           date,
           followers_snapshot
         FROM \`${PROJECT_ID}.${DATASET}.threads_daily_metrics\`
-        WHERE date IS NOT NULL
+        WHERE ${dailyMetricConditions.join(' AND ')}
         ORDER BY date DESC
-        LIMIT 90
+        ${dailyMetricsLimitClause}
       `,
+      params: dailyMetricParams,
     });
 
     dailyMetrics = rows
