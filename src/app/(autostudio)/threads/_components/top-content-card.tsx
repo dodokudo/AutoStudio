@@ -480,7 +480,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
               disabled={submitting}
             />
             <div className="mb-3 max-h-96 overflow-y-auto space-y-3 text-xs text-[color:var(--color-text-primary)]">
-              <div className="rounded-md border border-[color:var(--color-border)] bg-white p-3">
+              <div>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-xs font-medium text-gray-500">メイン投稿</p>
                   <button
@@ -510,7 +510,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
                   <span className="text-[10px] text-[color:var(--color-text-muted)]">2件以上必要</span>
                 </div>
                 {draftComments.map((comment, idx) => (
-                  <div key={`${idx}-${reserveTarget.id}`} className="rounded-md border border-[color:var(--color-border)] bg-gray-50 p-3">
+                  <div key={`${idx}-${reserveTarget.id}`}>
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <span className="text-[11px] font-medium text-purple-600">コメント{idx + 1}</span>
                       <button
