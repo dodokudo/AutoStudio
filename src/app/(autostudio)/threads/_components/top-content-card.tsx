@@ -526,7 +526,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
                       value={comment}
                       onChange={(event) => updateDraftComment(idx, event.target.value)}
                       disabled={submitting}
-                      rows={4}
+                      rows={5}
                       className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                     />
                     <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
