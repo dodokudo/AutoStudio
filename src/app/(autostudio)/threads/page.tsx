@@ -15,6 +15,7 @@ import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib
 import { getLinkClicksSummary, getThreadsLinkClicksByRange, getThreadsLpLineClicksByRange } from "@/lib/links/analytics";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
+import { Banner } from "@/components/ui/banner";
 
 const PROJECT_ID = resolveProjectId();
 
@@ -121,6 +122,7 @@ const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ThreadsTabKey = 'post' | 'schedule' | 'insights' | 'competitor' | 'report';
+const THREADS_ANNOUNCEMENT = 'お知らせ: Threadsインサイトでカスタム期間が使えるようになりました。トップコンテンツの再投稿では、メイン投稿とコメントをその場で編集・削除できます。';
 
 export default async function ThreadsHome({
   searchParams,
@@ -588,6 +590,7 @@ export default async function ThreadsHome({
           />
         }
       >
+        <Banner variant="success">{THREADS_ANNOUNCEMENT}</Banner>
         {activeTab === 'post' ? (
           <PostTab
             planSummaries={planSummaries}
