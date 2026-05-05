@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate') ?? undefined;
     const endDate = searchParams.get('endDate') ?? undefined;
 
-    const data = await getThreadsInsightsData({ startDate, endDate });
+    const data = await getThreadsInsightsData({ startDate, endDate, limit: null });
 
     return NextResponse.json({
       posts: data.posts,

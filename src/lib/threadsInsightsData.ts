@@ -53,6 +53,7 @@ let cachedOptionKey = '';
 export interface ThreadsInsightsDataOptions {
   startDate?: string;
   endDate?: string;
+  limit?: number | null;
 }
 
 function toPlain(value: unknown): string {
@@ -93,6 +94,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
   const optionKey = JSON.stringify({
     startDate: options.startDate ?? null,
     endDate: options.endDate ?? null,
+    limit: options.limit ?? POSTS_LIMIT,
   });
   if (cachedActivity && now - cachedFetchedAt < CACHE_TTL_MS && cachedOptionKey === optionKey) {
     return cachedActivity;
@@ -114,9 +116,12 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       params.endDate = options.endDate;
     }
 
-    // 常に件数制限をかける（期間指定時も無制限にしない）
-    const limitClause = 'LIMIT @limit';
-    params.limit = POSTS_LIMIT;
+    const shouldLimitPosts = options.limit !== null;
+    const resolvedLimit = typeof options.limit === 'number' ? options.limit : POSTS_LIMIT;
+    const limitClause = shouldLimitPosts ? 'LIMIT @limit' : '';
+    if (shouldLimitPosts) {
+      params.limit = resolvedLimit;
+    }
 
     const query = `
       SELECT

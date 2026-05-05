@@ -81,6 +81,8 @@ export function InsightsRangeSelector({ options, value, customStart, customEnd }
       customStart={customStart}
       customEnd={customEnd}
       onCustomChange={handleCustomChange}
+      customApplyMode
+      customApplyLabel="反映"
       latestLabel={latestLabel}
     />
   );
