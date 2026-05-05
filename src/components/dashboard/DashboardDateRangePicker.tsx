@@ -12,6 +12,7 @@ interface DashboardDateRangePickerProps {
   onCustomChange?: (start: string, end: string) => void;
   customApplyMode?: boolean;
   customApplyLabel?: string;
+  customApplyLoading?: boolean;
   latestLabel?: string;
   className?: string;
   'aria-label'?: string;
@@ -27,6 +28,7 @@ export function DashboardDateRangePicker({
   onCustomChange,
   customApplyMode = false,
   customApplyLabel = '適用',
+  customApplyLoading = false,
   latestLabel,
   className,
   'aria-label': ariaLabel,
@@ -53,6 +55,7 @@ export function DashboardDateRangePicker({
   const effectiveCustomEnd = customApplyMode ? draftCustomEnd : (customEnd ?? '');
   const isCustomDraftValid = effectiveCustomStart !== '' && effectiveCustomEnd !== '';
   const hasDraftChanged = effectiveCustomStart !== (customStart ?? '') || effectiveCustomEnd !== (customEnd ?? '');
+  const customApplyDisabled = !isCustomDraftValid || !hasDraftChanged || customApplyLoading;
 
   return (
     <div className={className}>
@@ -113,10 +116,17 @@ export function DashboardDateRangePicker({
             <button
               type="button"
               onClick={() => onCustomChange?.(draftCustomStart, draftCustomEnd)}
-              disabled={!isCustomDraftValid || !hasDraftChanged}
-              className="rounded-[var(--radius-sm)] border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+              disabled={customApplyDisabled}
+              className="inline-flex min-w-[88px] items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[color:var(--color-accent)] bg-[color:var(--color-accent)] px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
-              {customApplyLabel}
+              {customApplyLoading ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/35 border-t-white" />
+                  <span>反映中</span>
+                </>
+              ) : (
+                customApplyLabel
+              )}
             </button>
           ) : null}
         </div>

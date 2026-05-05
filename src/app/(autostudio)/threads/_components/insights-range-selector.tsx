@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, useTransition } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 
@@ -22,12 +22,15 @@ export function InsightsRangeSelector({ options, value, customStart, customEnd }
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
   const mappedOptions = useMemo(() => options.map((option) => ({ value: option.value, label: option.label })), [options]);
 
   const updateQuery = (params: URLSearchParams) => {
     const query = params.toString();
-    router.push(query ? `${pathname}?${query}` : pathname);
+    startTransition(() => {
+      router.push(query ? `${pathname}?${query}` : pathname);
+    });
   };
 
   const handleChange = (nextValue: string) => {
@@ -83,6 +86,7 @@ export function InsightsRangeSelector({ options, value, customStart, customEnd }
       onCustomChange={handleCustomChange}
       customApplyMode
       customApplyLabel="反映"
+      customApplyLoading={isPending}
       latestLabel={latestLabel}
     />
   );
