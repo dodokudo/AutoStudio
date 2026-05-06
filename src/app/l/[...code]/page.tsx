@@ -1,6 +1,7 @@
-import { redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { getShortLinkByCode, logClick } from '@/lib/links/bigquery';
 import { headers } from 'next/headers';
+import RedirectClient from './redirect-client';
 
 interface PageProps {
   params: Promise<{ code: string[] }>;
@@ -25,28 +26,34 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
   const shortLink = await getShortLinkByCode(code);
 
   if (!shortLink) {
-    redirect('/404');
+    notFound();
   }
 
-  // クリック情報を記録（非同期で実行、リダイレクトをブロックしない）
   const headersList = await headers();
   const userAgent = headersList.get('user-agent') || '';
   const referrer = headersList.get('referer') || undefined;
   const forwardedFor = headersList.get('x-forwarded-for');
   const ipAddress = forwardedFor ? forwardedFor.split(',')[0] : undefined;
 
-  // クリックログを記録してからリダイレクト（計測漏れ防止）
-  await logClick(shortLink.id, {
-    referrer,
-    userAgent,
-    ipAddress,
-    deviceType: getDeviceType(userAgent),
-  }).catch((error) => {
-    console.error('Failed to log click:', error);
-  });
+  const isBot = isCrawlerUserAgent(userAgent);
 
-  // サーバーサイドで即座にリダイレクト
-  redirect(shortLink.destinationUrl);
+  if (!isBot) {
+    await logClick(shortLink.id, {
+      referrer,
+      userAgent,
+      ipAddress,
+      deviceType: getDeviceType(userAgent),
+    }).catch((error) => {
+      console.error('Failed to log click:', error);
+    });
+  }
+
+  return <RedirectClient destinationUrl={shortLink.destinationUrl} />;
+}
+
+function isCrawlerUserAgent(userAgent: string): boolean {
+  if (!userAgent) return false;
+  return /facebookexternalhit|Facebot|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|WhatsApp|Pinterest|redditbot|Applebot|Googlebot|bingbot|DuckDuckBot|YandexBot|Baiduspider|Embedly|Threadsbot|Meta-ExternalAgent|LineBot|line-poker|Bytespider/i.test(userAgent);
 }
 
 // OGPメタデータ生成
