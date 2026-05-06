@@ -8,15 +8,12 @@ interface RedirectClientProps {
 
 export default function RedirectClient({ destinationUrl }: RedirectClientProps) {
   useEffect(() => {
-    // すぐにリダイレクト
     window.location.replace(destinationUrl);
   }, [destinationUrl]);
 
   return (
-    <>
-      <noscript>
-        <meta httpEquiv="refresh" content={`0;url=${destinationUrl}`} />
-      </noscript>
-    </>
+    <p>
+      <a href={destinationUrl}>Continue</a>
+    </p>
   );
 }
