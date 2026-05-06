@@ -37,16 +37,18 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
 
   const isBot = isCrawlerUserAgent(userAgent);
 
-  if (!isBot) {
-    await logClick(shortLink.id, {
-      referrer,
-      userAgent,
-      ipAddress,
-      deviceType: getDeviceType(userAgent),
-    }).catch((error) => {
-      console.error('Failed to log click:', error);
-    });
+  if (isBot) {
+    return null;
   }
+
+  await logClick(shortLink.id, {
+    referrer,
+    userAgent,
+    ipAddress,
+    deviceType: getDeviceType(userAgent),
+  }).catch((error) => {
+    console.error('Failed to log click:', error);
+  });
 
   return <RedirectClient destinationUrl={shortLink.destinationUrl} />;
 }
