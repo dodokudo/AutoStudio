@@ -116,6 +116,12 @@ export function PostQueueContainer({ initialPlans, variant = 'embedded' }: PostQ
       if (!res.ok) {
         throw new Error(responseData?.error || '予約登録に失敗しました');
       }
+      await mutate();
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
       alert('予約投稿に登録しました。予約投稿タブに反映されます。');
     } catch (error) {
       console.error('[PostQueue] schedule failed', error);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertScheduledPost, listScheduledPosts, toJstIsoString } from '@/lib/bigqueryScheduledPosts';
+import { updatePlanStatus } from '@/lib/bigqueryPlans';
 import { normalizeTokutenGuideComment } from '@/lib/threadsText';
 
 function validateTextLength(label: string, value?: string) {
@@ -94,6 +95,14 @@ export async function POST(request: NextRequest) {
 
     if (!created) {
       return NextResponse.json({ error: 'Failed to create schedule' }, { status: 500 });
+    }
+
+    if (typeof planId === 'string' && planId) {
+      try {
+        await updatePlanStatus(planId, 'scheduled');
+      } catch (err) {
+        console.error('[threads/schedule] failed to update plan status', err);
+      }
     }
 
     return NextResponse.json({ item: created });
