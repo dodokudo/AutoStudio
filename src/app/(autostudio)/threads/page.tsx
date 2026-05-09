@@ -41,7 +41,7 @@ const getCachedListPlanSummaries = unstable_cache(
     return listPlanSummaries();
   },
   ['threads-plan-summaries'],
-  { revalidate: 300 }
+  { revalidate: 15 }
 );
 
 const getCachedThreadsDashboard = unstable_cache(

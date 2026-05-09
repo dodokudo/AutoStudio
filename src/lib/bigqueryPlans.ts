@@ -467,11 +467,16 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
     SET status = @status, updated_at = CURRENT_TIMESTAMP()
-    WHERE plan_id = @planId AND generation_date = CURRENT_DATE("Asia/Tokyo")
+    WHERE plan_id = @planId
+      AND generation_date = (
+        SELECT MAX(generation_date)
+        FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+        WHERE plan_id = @planId
+      )
   `;
   await client.query({ query: sql, params: { planId, status } });
   const [plan] = await query(
-    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId AND generation_date = CURRENT_DATE("Asia/Tokyo")`,
+    `SELECT * FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` WHERE plan_id = @planId ORDER BY generation_date DESC LIMIT 1`,
     { planId },
   );
   const normalized = plan ? normalizePlan(plan) : undefined;
@@ -480,6 +485,45 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   // （承認時の即時投稿のみで、スケジュール投稿は不要）
 
   return normalized;
+}
+
+export async function updateLatestPlanContent(
+  planId: string,
+  fields: { mainText?: string; comments?: string; status?: PlanStatus; scheduledTime?: string },
+) {
+  await ensurePlanTable();
+  const sql = `
+    UPDATE \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+    SET
+      main_text = COALESCE(@mainText, main_text),
+      comments = COALESCE(@comments, comments),
+      status = COALESCE(@status, status),
+      scheduled_time = COALESCE(@scheduledTime, scheduled_time),
+      updated_at = CURRENT_TIMESTAMP()
+    WHERE plan_id = @planId
+      AND generation_date = (
+        SELECT MAX(generation_date)
+        FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+        WHERE plan_id = @planId
+      )
+  `;
+  await client.query({
+    query: sql,
+    params: {
+      planId,
+      mainText: fields.mainText ?? null,
+      comments: fields.comments ?? null,
+      status: fields.status ?? null,
+      scheduledTime: fields.scheduledTime ?? null,
+    },
+    types: {
+      planId: 'STRING',
+      mainText: 'STRING',
+      comments: 'STRING',
+      status: 'STRING',
+      scheduledTime: 'STRING',
+    },
+  });
 }
 
 export async function upsertPlan(plan: Partial<ThreadPlan> & { plan_id: string; generation_date?: string }) {

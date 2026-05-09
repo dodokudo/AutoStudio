@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { insertScheduledPost, listScheduledPosts, toJstIsoString } from '@/lib/bigqueryScheduledPosts';
-import { updatePlanStatus } from '@/lib/bigqueryPlans';
+import { updateLatestPlanContent } from '@/lib/bigqueryPlans';
 import { normalizeTokutenGuideComment } from '@/lib/threadsText';
 
 function validateTextLength(label: string, value?: string) {
@@ -99,11 +100,20 @@ export async function POST(request: NextRequest) {
 
     if (typeof planId === 'string' && planId) {
       try {
-        await updatePlanStatus(planId, 'scheduled');
+        const commentArr = [comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8]
+          .map((text, idx) => ({ order: idx + 1, text: typeof text === 'string' ? text : '' }))
+          .filter((c) => c.text);
+        await updateLatestPlanContent(planId, {
+          mainText: String(mainText),
+          comments: JSON.stringify(commentArr),
+          status: 'scheduled',
+        });
       } catch (err) {
-        console.error('[threads/schedule] failed to update plan status', err);
+        console.error('[threads/schedule] failed to update plan content/status', err);
       }
     }
+
+    revalidatePath('/threads');
 
     return NextResponse.json({ item: created });
   } catch (error) {
