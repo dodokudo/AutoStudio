@@ -145,6 +145,21 @@ export function PostQueue({
                   }}
                 />
               </label>
+              {onSchedule ? (
+                <Button
+                  className="h-10"
+                  onClick={() =>
+                    onSchedule(item.id, {
+                      scheduledAt: draft.scheduledAt,
+                      mainText: draft.mainText,
+                      comments: draft.comments ?? item.comments,
+                    })
+                  }
+                  disabled={isPending || hasTextError || hasRequiredCommentError || !draft.scheduledAt}
+                >
+                  {isPending ? '登録中…' : '予約登録'}
+                </Button>
+              ) : null}
               <Button
                 className="h-10 bg-emerald-600 hover:bg-emerald-700"
                 onClick={() => onPublishNow?.(item.id, { mainText: draft.mainText, comments: draft.comments ?? item.comments })}
@@ -156,7 +171,7 @@ export function PostQueue({
 
             <textarea
               className={classNames(
-                'mt-4 w-full max-w-full min-w-0 rounded-[var(--radius-md)] border px-3 py-3 text-sm focus:outline-none focus-visible:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] break-words',
+                'mt-4 w-full max-w-full min-w-0 rounded-[var(--radius-md)] border px-3 py-3 text-sm focus:outline-none focus-visible:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--color-accent)] focus:border-transparent break-words',
                 hasTextError ? 'border-[#ffb4b4]' : 'border-[color:var(--color-border)]',
               )}
               rows={6}
@@ -183,7 +198,7 @@ export function PostQueue({
                     </button>
                   </div>
                   <textarea
-                    className="w-full max-w-full min-w-0 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-3 py-3 text-sm focus:outline-none focus-visible:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] break-words min-h-[18rem] md:min-h-[12rem]"
+                    className="w-full max-w-full min-w-0 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-3 py-3 text-sm focus:outline-none focus-visible:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--color-accent)] focus:border-transparent break-words min-h-[18rem] md:min-h-[12rem]"
                     rows={4}
                     value={comment.text}
                     onChange={(event) => {

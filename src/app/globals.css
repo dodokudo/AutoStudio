@@ -74,7 +74,6 @@ a:hover {
 button:focus-visible,
 [role="button"]:focus-visible,
 select:focus-visible,
-textarea:focus-visible,
 input:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--color-accent);
