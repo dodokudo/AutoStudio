@@ -1,7 +1,7 @@
 import { unstable_cache } from 'next/cache';
 import { getThreadsInsights, type ThreadsInsightsOptions } from "@/lib/threadsInsights";
 import { getLightweightInsights } from "@/lib/threadsAccountSummary";
-import { listPlanSummaries, seedPlansIfNeeded } from "@/lib/bigqueryPlans";
+import { listPlanSummaries } from "@/lib/bigqueryPlans";
 import { getThreadsDashboard } from "@/lib/threadsDashboard";
 import { getThreadsInsightsData, getDailyPostStats } from "@/lib/threadsInsightsData";
 import { resolveProjectId } from "@/lib/bigquery";
@@ -34,14 +34,6 @@ const getCachedLightweightInsights = unstable_cache(
   },
   ['threads-lightweight-insights'],
   { revalidate: 1800 }
-);
-
-const getCachedSeedPlansIfNeeded = unstable_cache(
-  async () => {
-    return seedPlansIfNeeded();
-  },
-  ['threads-seed-plans'],
-  { revalidate: 300 }
 );
 
 const getCachedListPlanSummaries = unstable_cache(
@@ -153,7 +145,61 @@ export default async function ThreadsHome({
   const allowedTabs: ThreadsTabKey[] = ['insights', 'post', 'schedule', 'competitor', 'report'];
   const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'insights';
 
+  const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
+
+  const sharedParams = new URLSearchParams();
+  if (rangeValueForUi) sharedParams.set('range', rangeValueForUi);
+  if (rangeValueForUi === 'custom') {
+    if (customStart) sharedParams.set('start', customStart);
+    if (customEnd) sharedParams.set('end', customEnd);
+  }
+
+  const tabItems = (
+    [
+      { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
+      { id: 'schedule' as ThreadsTabKey, label: '予約投稿' },
+      { id: 'post' as ThreadsTabKey, label: '投稿' },
+      { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
+      { id: 'report' as ThreadsTabKey, label: 'レポート' },
+    ] satisfies Array<{ id: ThreadsTabKey; label: string }>
+  ).map((item) => {
+    const params = new URLSearchParams(sharedParams.toString());
+    params.set('tab', item.id);
+    return {
+      id: item.id,
+      label: item.label,
+      href: `?${params.toString()}`,
+    };
+  });
+
   try {
+    if (activeTab === 'post') {
+      const [planSummaries, dashboard] = await Promise.all([
+        getCachedListPlanSummaries(),
+        getCachedThreadsDashboard(),
+      ]);
+
+      return (
+        <ThreadsTabShell
+          tabItems={tabItems}
+          activeTab={activeTab}
+          rangeSelector={
+            <InsightsRangeSelector
+              options={rangeSelectorOptions}
+              value={rangeValueForUi}
+              customStart={customStart}
+              customEnd={customEnd}
+            />
+          }
+        >
+          <PostTab
+            planSummaries={planSummaries}
+            recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
+          />
+        </ThreadsTabShell>
+      );
+    }
+
     const { start: rangeStartDate, end: rangeEndDate } = selectedRangeWindow;
 
     const durationMs = Math.max(rangeEndDate.getTime() - rangeStartDate.getTime(), DAY_MS);
@@ -168,8 +214,6 @@ export default async function ThreadsHome({
     const [
       insights,
       lightweightInsights,
-      planSummaries,
-      dashboard,
       insightsActivity,
       currentClicks,
       previousClicks,
@@ -180,11 +224,6 @@ export default async function ThreadsHome({
     ] = await Promise.all([
       needsFullInsights ? getCachedThreadsInsights(PROJECT_ID, insightsOptions.startDate, insightsOptions.endDate, insightsOptions.rangeDays) : Promise.resolve(null),
       !needsFullInsights ? getCachedLightweightInsights(PROJECT_ID, insightsOptions.startDate, insightsOptions.endDate) : Promise.resolve(null),
-      (async () => {
-        await getCachedSeedPlansIfNeeded();
-        return getCachedListPlanSummaries();
-      })(),
-      getCachedThreadsDashboard(),
       getCachedThreadsInsightsData(
         postsQueryStartKey,
         postsQueryEndKey,
@@ -217,8 +256,6 @@ export default async function ThreadsHome({
       profileViewsChange: 0,
       recentDates: [],
     };
-    const effectiveTemplateSummaries = insights?.templateSummaries ?? lightweightInsights?.templateSummaries ?? [];
-    const effectivePostCount = insights?.postCount ?? lightweightInsights?.postCount ?? 0;
 
     let lineRegistrationCount: number | null = null;
     let previousLineRegistrationCount: number | null = null;
@@ -540,41 +577,6 @@ export default async function ThreadsHome({
       0,
     );
 
-
-
-    const templateOptions =
-      effectiveTemplateSummaries?.map((template) => ({
-        value: template.templateId,
-        label: `${template.templateId} (v${template.version})`,
-      })) || [];
-
-    const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
-
-    const sharedParams = new URLSearchParams();
-    if (rangeValueForUi) sharedParams.set('range', rangeValueForUi);
-    if (rangeValueForUi === 'custom') {
-      if (customStart) sharedParams.set('start', customStart);
-      if (customEnd) sharedParams.set('end', customEnd);
-    }
-
-    const tabItems = (
-      [
-        { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
-        { id: 'schedule' as ThreadsTabKey, label: '予約投稿' },
-        { id: 'post' as ThreadsTabKey, label: '投稿' },
-        { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
-        { id: 'report' as ThreadsTabKey, label: 'レポート' },
-      ] satisfies Array<{ id: ThreadsTabKey; label: string }>
-    ).map((item) => {
-      const params = new URLSearchParams(sharedParams.toString());
-      params.set('tab', item.id);
-      return {
-        id: item.id,
-        label: item.label,
-        href: `?${params.toString()}`,
-      };
-    });
-
     return (
       <ThreadsTabShell
         tabItems={tabItems}
@@ -588,13 +590,7 @@ export default async function ThreadsHome({
           />
         }
       >
-        {activeTab === 'post' ? (
-          <PostTab
-            planSummaries={planSummaries}
-            templateOptions={templateOptions}
-            recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
-          />
-        ) : activeTab === 'schedule' ? (
+        {activeTab === 'schedule' ? (
           <ScheduleTab />
         ) : activeTab === 'insights' ? (
           <InsightsTab

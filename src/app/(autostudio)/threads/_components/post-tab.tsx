@@ -7,20 +7,13 @@ import { PostedContent } from './posted-content';
 import type { ThreadPlanSummary } from '@/types/threadPlan';
 import { Card } from '@/components/ui/card';
 
-type TemplateOption = {
-  value: string;
-  label: string;
-};
-
 type PostTabProps = {
   planSummaries: ThreadPlanSummary[];
-  templateOptions: TemplateOption[];
   recentLogs?: Array<Record<string, unknown>>;
 };
 
 export function PostTab({
   planSummaries,
-  templateOptions,
   recentLogs,
 }: PostTabProps) {
   return (
@@ -41,7 +34,6 @@ export function PostTab({
         </header>
         <PostQueueContainer
           initialPlans={JSON.parse(JSON.stringify(planSummaries))}
-          templateOptions={templateOptions}
           variant="embedded"
         />
       </Card>

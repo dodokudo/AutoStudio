@@ -99,7 +99,6 @@ export function OverviewTab(props: OverviewTabProps) {
 
           <PostQueueContainer
             initialPlans={JSON.parse(JSON.stringify(props.planSummaries))}
-            templateOptions={props.templateOptions}
             variant="embedded"
           />
         </div>
