@@ -180,8 +180,11 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
       tp.theme,
       tp.status AS plan_status
     FROM \`${PROJECT_ID}.${DATASET}.${TABLE}\` sp
-    LEFT JOIN \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` tp
-      ON sp.plan_id = tp.plan_id
+    LEFT JOIN (
+      SELECT plan_id, template_id, theme, status,
+        ROW_NUMBER() OVER (PARTITION BY plan_id ORDER BY generation_date DESC, updated_at DESC) AS rn
+      FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+    ) tp ON sp.plan_id = tp.plan_id AND tp.rn = 1
     ${whereClause}
     ORDER BY sp.scheduled_time ASC
   `;
@@ -256,8 +259,11 @@ export async function getScheduledPostById(scheduleId: string) {
       tp.theme,
       tp.status AS plan_status
     FROM \`${PROJECT_ID}.${DATASET}.${TABLE}\` sp
-    LEFT JOIN \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` tp
-      ON sp.plan_id = tp.plan_id
+    LEFT JOIN (
+      SELECT plan_id, template_id, theme, status,
+        ROW_NUMBER() OVER (PARTITION BY plan_id ORDER BY generation_date DESC, updated_at DESC) AS rn
+      FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
+    ) tp ON sp.plan_id = tp.plan_id AND tp.rn = 1
     WHERE sp.schedule_id = @scheduleId
     LIMIT 1
   `;
