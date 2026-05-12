@@ -5,11 +5,13 @@ const PUBLIC_PATHS = [
   '/login',
   '/api/auth/',
   '/api/cron/',
+  '/api/ads/cron/',
   '/api/threads/cron/',
   '/api/threads/schedule/run',
   '/api/threads/auto-comment/check',
   '/api/threads/comments/execute',
   '/api/sales/cron/',
+  '/api/launchkit/events',
 ];
 
 export function middleware(request: NextRequest) {

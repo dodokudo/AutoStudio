@@ -40,6 +40,9 @@ export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Pro
   const startKey = formatDateInput(start);
   const endKey = formatDateInput(end);
 
+  // 旧運用: AutoStudio短縮URL(L-opt4-th等)のクリック click_logs
+  // 新運用: LaunchKit直URL+JS計測 launchkit_events(line_cta_click, source='threads')
+  // 両方をUNION ALLして日別合算
   const query = `
     WITH latest_links AS (
       SELECT
@@ -49,14 +52,32 @@ export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Pro
       FROM \`${projectId}.${dataset}.short_links\`
       WHERE is_active = TRUE
         AND short_code IN UNNEST(@codes)
+    ),
+    legacy_clicks AS (
+      SELECT
+        DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.click_logs\` cl
+      JOIN latest_links ll ON cl.short_link_id = ll.id
+      WHERE ll.rn = 1
+        AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    ),
+    launchkit_clicks AS (
+      SELECT
+        DATE(occurred_at, "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.launchkit_events\`
+      WHERE event_type = 'line_cta_click'
+        AND source = 'threads'
+        AND DATE(occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    ),
+    combined AS (
+      SELECT date FROM legacy_clicks
+      UNION ALL
+      SELECT date FROM launchkit_clicks
     )
     SELECT
-      FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo")) AS date,
+      FORMAT_DATE('%Y-%m-%d', date) AS date,
       COUNT(*) AS clicks
-    FROM \`${projectId}.${dataset}.click_logs\` cl
-    JOIN latest_links ll ON cl.short_link_id = ll.id
-    WHERE ll.rn = 1
-      AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    FROM combined
     GROUP BY date
     ORDER BY date DESC
   `;
@@ -91,6 +112,9 @@ export async function getThreadsLinkClicks(): Promise<LinkClicksByDate[]> {
 export async function getThreadsLinkClicksByRange(start: Date, end: Date): Promise<LinkClicksByDate[]> {
   const bigquery = createBigQueryClient(projectId);
 
+  // 旧運用: Threads投稿に貼った短縮URL(category='threads') click_logs
+  // 新運用: lkit.jp直URL からのLPアクセス launchkit_events(page_view, source='threads')
+  // 両方をUNION ALLして日別合算
   const query = `
     WITH latest_links AS (
       SELECT
@@ -99,15 +123,33 @@ export async function getThreadsLinkClicksByRange(start: Date, end: Date): Promi
       FROM \`${projectId}.${dataset}.short_links\`
       WHERE is_active = true
         AND category = 'threads'
+    ),
+    legacy_clicks AS (
+      SELECT
+        DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.click_logs\` cl
+      INNER JOIN latest_links ll ON cl.short_link_id = ll.id
+      WHERE ll.rn = 1
+        AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    ),
+    launchkit_views AS (
+      SELECT
+        DATE(occurred_at, "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.launchkit_events\`
+      WHERE event_type = 'page_view'
+        AND source = 'threads'
+        AND DATE(occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    ),
+    combined AS (
+      SELECT date FROM legacy_clicks
+      UNION ALL
+      SELECT date FROM launchkit_views
     )
     SELECT
-      FORMAT_DATE('%Y-%m-%d', DATE(cl.clicked_at)) as date,
-      COUNT(*) as clicks
-    FROM \`${projectId}.${dataset}.click_logs\` cl
-    INNER JOIN latest_links ll ON cl.short_link_id = ll.id
-    WHERE ll.rn = 1
-      AND DATE(cl.clicked_at) BETWEEN @startDate AND @endDate
-    GROUP BY FORMAT_DATE('%Y-%m-%d', DATE(cl.clicked_at))
+      FORMAT_DATE('%Y-%m-%d', date) AS date,
+      COUNT(*) AS clicks
+    FROM combined
+    GROUP BY date
     ORDER BY date DESC
   `;
 
