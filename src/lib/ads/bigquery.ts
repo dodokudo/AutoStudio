@@ -37,6 +37,7 @@ export interface AdsDashboardSummary {
   reach: number;
   clicks: number;
   inlineLinkClicks: number;
+  launchkitLineClicks: number;
   leads: number;
   completeRegistrations: number;
   purchases: number;
@@ -49,6 +50,7 @@ export interface AdsDashboardSummary {
   lineCpa: number;
   ctr: number;
   inlineLinkCtr: number;
+  lineClickRate: number;
 }
 
 export interface AdsDailyPoint {
@@ -72,6 +74,8 @@ export interface AdsByAdRow {
   impressions: number;
   clicks: number;
   inlineLinkClicks: number;
+  launchkitLineClicks: number | null;
+  lineRegistrations: number | null;
   leads: number;
   purchases: number;
   purchaseValue: number;
@@ -81,6 +85,8 @@ export interface AdsByAdRow {
   metaLeadCpa: number;
   ctr: number;
   inlineLinkCtr: number;
+  lineClickCpa: number | null;
+  finalLineCpa: number | null;
 }
 
 export interface AdsByMediaTypeRow {
@@ -89,10 +95,12 @@ export interface AdsByMediaTypeRow {
   spend: number;
   impressions: number;
   inlineLinkClicks: number;
+  launchkitLineClicks: number;
   leads: number;
   purchases: number;
   metaLeadCpa: number;
   lpc: number;
+  lineClickCpa: number | null;
 }
 
 export interface AdsDashboardData {
@@ -115,6 +123,7 @@ const emptySummary: AdsDashboardSummary = {
   purchases: 0,
   purchaseValue: 0,
   lineRegistrations: 0,
+  launchkitLineClicks: 0,
   cpm: 0,
   cpc: 0,
   lpc: 0,
@@ -122,7 +131,23 @@ const emptySummary: AdsDashboardSummary = {
   lineCpa: 0,
   ctr: 0,
   inlineLinkCtr: 0,
+  lineClickRate: 0,
 };
+
+async function countLaunchkitLineClicks(startDate: string, endDate: string): Promise<number> {
+  const client = createBigQueryClient(PROJECT_ID, LOCATION);
+  const [rows] = await client.query({
+    query: `
+      SELECT COUNT(*) AS total
+      FROM \`${PROJECT_ID}.autostudio_links.launchkit_events\`
+      WHERE event_type = 'line_cta_click'
+        AND DATE(occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    `,
+    params: { startDate, endDate },
+  });
+
+  return toNumber((rows as Array<Record<string, unknown>>)[0]?.total);
+}
 
 async function tableExists(tableName: string): Promise<boolean> {
   const client = createBigQueryClient(PROJECT_ID, LOCATION);
@@ -144,7 +169,10 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
   }
 
   const client = createBigQueryClient(PROJECT_ID, LOCATION);
-  const lineRegistrations = await countLineRegistrationsByDateRange(PROJECT_ID, startDate, endDate).catch(() => 0);
+  const [lineRegistrations, launchkitLineClicks] = await Promise.all([
+    countLineRegistrationsByDateRange(PROJECT_ID, startDate, endDate).catch(() => 0),
+    countLaunchkitLineClicks(startDate, endDate).catch(() => 0),
+  ]);
 
   const [summaryRows, dailyRows, adRows, mediaRows, latestRows] = await Promise.all([
     client.query({
@@ -267,6 +295,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
     reach: toNumber(summaryRaw.reach),
     clicks,
     inlineLinkClicks,
+    launchkitLineClicks,
     leads,
     completeRegistrations: toNumber(summaryRaw.complete_registrations),
     purchases: toNumber(summaryRaw.purchases),
@@ -279,6 +308,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
     lineCpa: safeRate(spend, lineRegistrations),
     ctr: safeRate(clicks, impressions),
     inlineLinkCtr: safeRate(inlineLinkClicks, impressions),
+    lineClickRate: safeRate(launchkitLineClicks, inlineLinkClicks),
   };
 
   const daily = (dailyRows[0] as Array<Record<string, unknown>>).map((row) => ({
@@ -308,6 +338,8 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
       impressions: rowImpressions,
       clicks: rowClicks,
       inlineLinkClicks: rowInlineLinkClicks,
+      launchkitLineClicks: null,
+      lineRegistrations: null,
       leads: rowLeads,
       purchases: toNumber(row.purchases),
       purchaseValue: toNumber(row.purchase_value),
@@ -317,6 +349,8 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
       metaLeadCpa: safeRate(rowSpend, rowLeads),
       ctr: safeRate(rowClicks, rowImpressions),
       inlineLinkCtr: safeRate(rowInlineLinkClicks, rowImpressions),
+      lineClickCpa: null,
+      finalLineCpa: null,
     };
   });
 
@@ -330,10 +364,12 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
       spend: rowSpend,
       impressions: toNumber(row.impressions),
       inlineLinkClicks: rowInlineLinkClicks,
+      launchkitLineClicks: 0,
       leads: rowLeads,
       purchases: toNumber(row.purchases),
       metaLeadCpa: safeRate(rowSpend, rowLeads),
       lpc: safeRate(rowSpend, rowInlineLinkClicks),
+      lineClickCpa: null,
     };
   });
 

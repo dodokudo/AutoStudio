@@ -1,11 +1,12 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { dashboardCardClass } from '@/components/dashboard/styles';
-import type { AdsDashboardData } from '@/lib/ads/bigquery';
+import type { AdsByAdRow, AdsDashboardData } from '@/lib/ads/bigquery';
 
 interface AdsDashboardShellProps {
   rangeOptions: Array<{ value: string; label: string }>;
@@ -14,18 +15,25 @@ interface AdsDashboardShellProps {
   data: AdsDashboardData;
 }
 
-const ADS_TAB_ITEMS = [{ id: 'home', label: 'ホーム' }];
-const NOOP = () => {};
+type AdsTabKey = 'home' | 'creative';
 
-function yen(value: number): string {
+const ADS_TAB_ITEMS: Array<{ id: AdsTabKey; label: string }> = [
+  { id: 'home', label: 'ホーム' },
+  { id: 'creative', label: 'クリエイティブ' },
+];
+
+function yen(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
   return `¥${Math.round(value).toLocaleString('ja-JP')}`;
 }
 
-function num(value: number): string {
+function num(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
   return Math.round(value).toLocaleString('ja-JP');
 }
 
-function pct(value: number): string {
+function pct(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
   return `${(value * 100).toFixed(2)}%`;
 }
 
@@ -40,10 +48,38 @@ function mediaLabel(value: string): string {
   return labels[value] ?? value;
 }
 
+function metricValue(value: string, note?: string) {
+  return (
+    <div>
+      <p className="mt-3 text-xl font-semibold text-[color:var(--color-text-primary)]">{value}</p>
+      {note ? <p className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">{note}</p> : null}
+    </div>
+  );
+}
+
+function CreativeThumb({ row }: { row: AdsByAdRow }) {
+  return (
+    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]">
+      {row.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={row.thumbnailUrl} alt={row.adName} className="h-full w-full object-cover" loading="lazy" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-xs text-[color:var(--color-text-muted)]">No image</div>
+      )}
+      {row.mediaType !== 'image' ? (
+        <div className="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          {mediaLabel(row.mediaType)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }: AdsDashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<AdsTabKey>('home');
 
   const handleRangeChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -56,18 +92,20 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
+  const topCreatives = useMemo(() => data.byAd.slice(0, 5), [data.byAd]);
+
   const primaryKpi = [
     { label: '消化金額', value: yen(data.summary.spend) },
     { label: 'インプレッション', value: num(data.summary.impressions) },
-    { label: 'リンククリック', value: num(data.summary.inlineLinkClicks) },
-    { label: 'Meta CV', value: num(data.summary.leads + data.summary.completeRegistrations + data.summary.purchases) },
+    { label: '広告リンククリック', value: num(data.summary.inlineLinkClicks), note: `CTR ${pct(data.summary.inlineLinkCtr)}` },
+    { label: 'LP内LINEクリック', value: num(data.summary.launchkitLineClicks), note: `クリック率 ${pct(data.summary.lineClickRate)}` },
     { label: 'LINE登録(全流入)', value: num(data.summary.lineRegistrations) },
   ];
 
   const costMetrics = [
     { label: 'CPM', value: yen(data.summary.cpm) },
     { label: 'CPC', value: yen(data.summary.cpc) },
-    { label: 'LPC', value: yen(data.summary.lpc) },
+    { label: '広告LPC', value: yen(data.summary.lpc) },
     { label: 'Meta Lead CPA', value: data.summary.leads > 0 ? yen(data.summary.metaLeadCpa) : '—' },
     { label: 'LINE CPA(全流入)', value: data.summary.lineRegistrations > 0 ? yen(data.summary.lineCpa) : '—' },
   ];
@@ -77,9 +115,9 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
       <div className="flex flex-wrap items-end justify-between gap-4">
         <DashboardTabsInteractive
           items={ADS_TAB_ITEMS}
-          value="home"
-          onChange={NOOP}
-          className="flex-1 min-w-[160px]"
+          value={activeTab}
+          onChange={(value) => setActiveTab(value as AdsTabKey)}
+          className="flex-1 min-w-[220px]"
         />
         <DashboardDateRangePicker
           options={rangeOptions}
@@ -90,120 +128,186 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
         />
       </div>
 
-      <Card className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">広告ダッシュボード</h1>
+      {activeTab === 'home' ? (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">広告ダッシュボード</h1>
+                <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                  {data.latestSyncedAt ? `最終同期: ${data.latestSyncedAt}` : 'Meta広告データ未同期'}
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {primaryKpi.map((item) => (
+                <div key={item.label} className={dashboardCardClass}>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{item.label}</p>
+                  {metricValue(item.value, item.note)}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">費用指標</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              {data.latestSyncedAt ? `最終同期: ${data.latestSyncedAt}` : 'Meta広告データ未同期'}
+              LP内LINEクリックはLaunchKit計測、LINE登録はLステップ全流入から取得しています。広告別のLINE登録突合は広告ID付きURL運用が必要です。
             </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {costMetrics.map((item) => (
+                <div key={item.label} className={dashboardCardClass}>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{item.label}</p>
+                  {metricValue(item.value)}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">素材タイプ別</h2>
+              <div className="mt-4 space-y-3">
+                {data.byMediaType.map((row) => (
+                  <div key={row.mediaType} className="rounded-md border border-[color:var(--color-border)] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-[color:var(--color-text-primary)]">{mediaLabel(row.mediaType)}</p>
+                        <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{num(row.ads)}件</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-[color:var(--color-text-primary)]">{yen(row.spend)}</p>
+                        <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">LPC {row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {data.byMediaType.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">この期間の広告データがありません。</p>
+                ) : null}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">上位クリエイティブ</h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('creative')}
+                  className="text-sm font-medium text-[color:var(--color-text-primary)] underline-offset-4 hover:underline"
+                >
+                  すべて見る
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {topCreatives.map((row) => (
+                  <div key={row.adId} className="flex gap-4 rounded-md border border-[color:var(--color-border)] p-3">
+                    <CreativeThumb row={row} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-[color:var(--color-text-primary)]">{row.adName}</p>
+                      <p className="mt-1 truncate text-xs text-[color:var(--color-text-muted)]">{row.campaignName}</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <p className="text-[color:var(--color-text-muted)]">消化</p>
+                          <p className="font-semibold">{yen(row.spend)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[color:var(--color-text-muted)]">リンク</p>
+                          <p className="font-semibold">{num(row.inlineLinkClicks)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[color:var(--color-text-muted)]">LPC</p>
+                          <p className="font-semibold">{row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {topCreatives.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">この期間のクリエイティブデータがありません。</p>
+                ) : null}
+              </div>
+            </Card>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {primaryKpi.map((item) => (
-            <div key={item.label} className={dashboardCardClass}>
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{item.label}</p>
-              <p className="mt-3 text-xl font-semibold text-[color:var(--color-text-primary)]">{item.value}</p>
+      ) : (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">クリエイティブ別成果</h1>
+              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+                広告素材ごとのサムネイル、消化金額、クリック、CPAを確認できます。
+              </p>
             </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">費用指標</h2>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-          Meta側CVは広告マネージャーのactions、LINE CPAは現時点ではLステップ全流入登録数で割っています。
-        </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {costMetrics.map((item) => (
-            <div key={item.label} className={dashboardCardClass}>
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{item.label}</p>
-              <p className="mt-3 text-xl font-semibold text-[color:var(--color-text-primary)]">{item.value}</p>
+            <div className="rounded-md border border-[color:var(--color-border)] px-3 py-2 text-xs text-[color:var(--color-text-muted)]">
+              LP内LINEクリック/LINE登録の広告別突合は未連携
             </div>
-          ))}
-        </div>
-      </Card>
+          </div>
 
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">素材タイプ別</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-[color:var(--color-text-muted)]">
-              <tr className="border-b border-[color:var(--color-border)]">
-                <th className="py-2 pr-4">タイプ</th>
-                <th className="py-2 pr-4 text-right">広告数</th>
-                <th className="py-2 pr-4 text-right">消化金額</th>
-                <th className="py-2 pr-4 text-right">リンククリック</th>
-                <th className="py-2 pr-4 text-right">LPC</th>
-                <th className="py-2 pr-4 text-right">Meta Lead</th>
-                <th className="py-2 text-right">Lead CPA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.byMediaType.map((row) => (
-                <tr key={row.mediaType} className="border-b border-[color:var(--color-border)]">
-                  <td className="py-3 pr-4 font-medium">{mediaLabel(row.mediaType)}</td>
-                  <td className="py-3 pr-4 text-right">{num(row.ads)}</td>
-                  <td className="py-3 pr-4 text-right">{yen(row.spend)}</td>
-                  <td className="py-3 pr-4 text-right">{num(row.inlineLinkClicks)}</td>
-                  <td className="py-3 pr-4 text-right">{row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</td>
-                  <td className="py-3 pr-4 text-right">{num(row.leads)}</td>
-                  <td className="py-3 text-right">{row.leads > 0 ? yen(row.metaLeadCpa) : '—'}</td>
-                </tr>
-              ))}
-              {data.byMediaType.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-[color:var(--color-text-muted)]">この期間の広告データがありません。</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+          <div className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {data.byAd.map((row) => (
+              <div key={row.adId} className="overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+                <div className="flex gap-4 p-4">
+                  <CreativeThumb row={row} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="line-clamp-2 font-semibold text-[color:var(--color-text-primary)]">{row.adName}</p>
+                        <p className="mt-1 truncate text-xs text-[color:var(--color-text-muted)]">{row.campaignName}</p>
+                      </div>
+                      <span className="shrink-0 rounded bg-[color:var(--color-surface-muted)] px-2 py-1 text-[11px] text-[color:var(--color-text-secondary)]">
+                        {mediaLabel(row.mediaType)}
+                      </span>
+                    </div>
+                    <p className="mt-2 truncate text-xs text-[color:var(--color-text-muted)]">{row.adsetName}</p>
+                  </div>
+                </div>
 
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">広告/クリエイティブ別</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-[color:var(--color-text-muted)]">
-              <tr className="border-b border-[color:var(--color-border)]">
-                <th className="py-2 pr-4">広告</th>
-                <th className="py-2 pr-4">種別</th>
-                <th className="py-2 pr-4 text-right">消化金額</th>
-                <th className="py-2 pr-4 text-right">Imp</th>
-                <th className="py-2 pr-4 text-right">CTR</th>
-                <th className="py-2 pr-4 text-right">リンククリック</th>
-                <th className="py-2 pr-4 text-right">LPC</th>
-                <th className="py-2 pr-4 text-right">Meta Lead</th>
-                <th className="py-2 text-right">Lead CPA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.byAd.map((row) => (
-                <tr key={row.adId} className="border-b border-[color:var(--color-border)] align-top">
-                  <td className="py-3 pr-4">
-                    <div className="max-w-[280px] font-medium text-[color:var(--color-text-primary)]">{row.adName}</div>
-                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{row.campaignName}</div>
-                  </td>
-                  <td className="py-3 pr-4">{mediaLabel(row.mediaType)}</td>
-                  <td className="py-3 pr-4 text-right">{yen(row.spend)}</td>
-                  <td className="py-3 pr-4 text-right">{num(row.impressions)}</td>
-                  <td className="py-3 pr-4 text-right">{pct(row.ctr)}</td>
-                  <td className="py-3 pr-4 text-right">{num(row.inlineLinkClicks)}</td>
-                  <td className="py-3 pr-4 text-right">{row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</td>
-                  <td className="py-3 pr-4 text-right">{num(row.leads)}</td>
-                  <td className="py-3 text-right">{row.leads > 0 ? yen(row.metaLeadCpa) : '—'}</td>
-                </tr>
-              ))}
-              {data.byAd.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-[color:var(--color-text-muted)]">この期間の広告データがありません。</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                <div className="grid grid-cols-3 border-t border-[color:var(--color-border)] text-sm">
+                  <div className="border-r border-[color:var(--color-border)] p-3">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">消化金額</p>
+                    <p className="mt-1 font-semibold">{yen(row.spend)}</p>
+                  </div>
+                  <div className="border-r border-[color:var(--color-border)] p-3">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">Imp</p>
+                    <p className="mt-1 font-semibold">{num(row.impressions)}</p>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">CTR</p>
+                    <p className="mt-1 font-semibold">{pct(row.ctr)}</p>
+                  </div>
+                  <div className="border-r border-t border-[color:var(--color-border)] p-3">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">リンク</p>
+                    <p className="mt-1 font-semibold">{num(row.inlineLinkClicks)}</p>
+                  </div>
+                  <div className="border-r border-t border-[color:var(--color-border)] p-3">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">LPC</p>
+                    <p className="mt-1 font-semibold">{row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</p>
+                  </div>
+                  <div className="border-t border-[color:var(--color-border)] p-3">
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">Meta CPA</p>
+                    <p className="mt-1 font-semibold">{row.leads > 0 ? yen(row.metaLeadCpa) : '—'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 border-t border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-xs">
+                  <div className="border-r border-[color:var(--color-border)] p-3">
+                    <p className="text-[color:var(--color-text-muted)]">LP内LINEクリック</p>
+                    <p className="mt-1 font-medium text-[color:var(--color-text-secondary)]">広告別未連携</p>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-[color:var(--color-text-muted)]">LINE登録</p>
+                    <p className="mt-1 font-medium text-[color:var(--color-text-secondary)]">広告別未連携</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {data.byAd.length === 0 ? (
+              <p className="col-span-full py-12 text-center text-sm text-[color:var(--color-text-muted)]">この期間のクリエイティブデータがありません。</p>
+            ) : null}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
