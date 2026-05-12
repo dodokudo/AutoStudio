@@ -16,6 +16,7 @@ interface AdsDashboardShellProps {
 }
 
 type AdsTabKey = 'home' | 'creative';
+type CreativeSortKey = 'spend' | 'impressions' | 'ctr' | 'inlineLinkClicks' | 'lpc' | 'clicks';
 
 const ADS_TAB_ITEMS: Array<{ id: AdsTabKey; label: string }> = [
   { id: 'home', label: 'ホーム' },
@@ -75,11 +76,30 @@ function CreativeThumb({ row }: { row: AdsByAdRow }) {
   );
 }
 
+function getCreativeSortValue(row: AdsByAdRow, key: CreativeSortKey): number {
+  if (key === 'spend') return row.spend;
+  if (key === 'impressions') return row.impressions;
+  if (key === 'ctr') return row.ctr;
+  if (key === 'inlineLinkClicks') return row.inlineLinkClicks;
+  if (key === 'lpc') return row.inlineLinkClicks > 0 ? row.lpc : Number.POSITIVE_INFINITY;
+  return row.clicks;
+}
+
+const CREATIVE_SORT_OPTIONS: Array<{ key: CreativeSortKey; label: string; directionLabel: string }> = [
+  { key: 'spend', label: '消化金額', directionLabel: '高い順' },
+  { key: 'impressions', label: 'Imp', directionLabel: '多い順' },
+  { key: 'inlineLinkClicks', label: 'リンク', directionLabel: '多い順' },
+  { key: 'ctr', label: 'CTR', directionLabel: '高い順' },
+  { key: 'lpc', label: 'LPC', directionLabel: '低い順' },
+  { key: 'clicks', label: 'クリック', directionLabel: '多い順' },
+];
+
 export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }: AdsDashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<AdsTabKey>('home');
+  const [creativeSort, setCreativeSort] = useState<CreativeSortKey>('spend');
 
   const handleRangeChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -93,6 +113,15 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
   };
 
   const topCreatives = useMemo(() => data.byAd.slice(0, 5), [data.byAd]);
+  const sortedCreatives = useMemo(() => {
+    const sorted = [...data.byAd].sort((a, b) => {
+      const aValue = getCreativeSortValue(a, creativeSort);
+      const bValue = getCreativeSortValue(b, creativeSort);
+      if (creativeSort === 'lpc') return aValue - bValue;
+      return bValue - aValue;
+    });
+    return sorted;
+  }, [creativeSort, data.byAd]);
 
   const primaryKpi = [
     { label: '消化金額', value: yen(data.summary.spend) },
@@ -244,12 +273,31 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {data.byAd.map((row) => (
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {CREATIVE_SORT_OPTIONS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setCreativeSort(option.key)}
+                className={`rounded-md border px-3 py-2 text-sm transition ${
+                  creativeSort === option.key
+                    ? 'border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] text-white'
+                    : 'border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                {option.label}
+                <span className="ml-1 text-xs opacity-75">{option.directionLabel}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {sortedCreatives.map((row, index) => (
               <div key={row.adId} className="overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-                <div className="flex gap-4 p-4">
+                <div className="grid gap-4 p-4 lg:grid-cols-[auto_minmax(260px,1.2fr)_repeat(6,minmax(92px,1fr))] lg:items-center">
+                  <div className="text-sm font-semibold text-[color:var(--color-text-muted)]">#{index + 1}</div>
                   <CreativeThumb row={row} />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="line-clamp-2 font-semibold text-[color:var(--color-text-primary)]">{row.adName}</p>
@@ -261,49 +309,35 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
                     </div>
                     <p className="mt-2 truncate text-xs text-[color:var(--color-text-muted)]">{row.adsetName}</p>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-3 border-t border-[color:var(--color-border)] text-sm">
-                  <div className="border-r border-[color:var(--color-border)] p-3">
+                  <div>
                     <p className="text-[11px] text-[color:var(--color-text-muted)]">消化金額</p>
                     <p className="mt-1 font-semibold">{yen(row.spend)}</p>
                   </div>
-                  <div className="border-r border-[color:var(--color-border)] p-3">
+                  <div>
                     <p className="text-[11px] text-[color:var(--color-text-muted)]">Imp</p>
                     <p className="mt-1 font-semibold">{num(row.impressions)}</p>
                   </div>
-                  <div className="p-3">
+                  <div>
                     <p className="text-[11px] text-[color:var(--color-text-muted)]">CTR</p>
                     <p className="mt-1 font-semibold">{pct(row.ctr)}</p>
                   </div>
-                  <div className="border-r border-t border-[color:var(--color-border)] p-3">
+                  <div>
                     <p className="text-[11px] text-[color:var(--color-text-muted)]">リンク</p>
                     <p className="mt-1 font-semibold">{num(row.inlineLinkClicks)}</p>
                   </div>
-                  <div className="border-r border-t border-[color:var(--color-border)] p-3">
+                  <div>
                     <p className="text-[11px] text-[color:var(--color-text-muted)]">LPC</p>
                     <p className="mt-1 font-semibold">{row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</p>
                   </div>
-                  <div className="border-t border-[color:var(--color-border)] p-3">
-                    <p className="text-[11px] text-[color:var(--color-text-muted)]">Meta CPA</p>
-                    <p className="mt-1 font-semibold">{row.leads > 0 ? yen(row.metaLeadCpa) : '—'}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 border-t border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-xs">
-                  <div className="border-r border-[color:var(--color-border)] p-3">
-                    <p className="text-[color:var(--color-text-muted)]">LP内LINEクリック</p>
-                    <p className="mt-1 font-medium text-[color:var(--color-text-secondary)]">広告別未連携</p>
-                  </div>
-                  <div className="p-3">
-                    <p className="text-[color:var(--color-text-muted)]">LINE登録</p>
-                    <p className="mt-1 font-medium text-[color:var(--color-text-secondary)]">広告別未連携</p>
+                  <div>
+                    <p className="text-[11px] text-[color:var(--color-text-muted)]">LINE</p>
+                    <p className="mt-1 text-xs font-medium text-[color:var(--color-text-secondary)]">広告別未連携</p>
                   </div>
                 </div>
               </div>
             ))}
-            {data.byAd.length === 0 ? (
-              <p className="col-span-full py-12 text-center text-sm text-[color:var(--color-text-muted)]">この期間のクリエイティブデータがありません。</p>
+            {sortedCreatives.length === 0 ? (
+              <p className="py-12 text-center text-sm text-[color:var(--color-text-muted)]">この期間のクリエイティブデータがありません。</p>
             ) : null}
           </div>
         </Card>
