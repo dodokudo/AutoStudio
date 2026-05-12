@@ -59,11 +59,12 @@ function metricValue(value: string, note?: string) {
 }
 
 function CreativeThumb({ row }: { row: AdsByAdRow }) {
+  const imageUrl = row.imageUrl || row.thumbnailUrl;
   return (
-    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]">
-      {row.thumbnailUrl ? (
+    <div className="relative h-32 w-20 shrink-0 overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]">
+      {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={row.thumbnailUrl} alt={row.adName} className="h-full w-full object-cover" loading="lazy" />
+        <img src={imageUrl} alt={row.adName} className="h-full w-full object-cover" loading="lazy" />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-xs text-[color:var(--color-text-muted)]">No image</div>
       )}
@@ -93,6 +94,11 @@ const CREATIVE_SORT_OPTIONS: Array<{ key: CreativeSortKey; label: string; direct
   { key: 'lpc', label: 'LPC', directionLabel: '低い順' },
   { key: 'clicks', label: 'クリック', directionLabel: '多い順' },
 ];
+
+function sortOptionLabel(key: CreativeSortKey): string {
+  const option = CREATIVE_SORT_OPTIONS.find((item) => item.key === key);
+  return option ? `${option.label} ${option.directionLabel}` : '消化金額 高い順';
+}
 
 export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }: AdsDashboardShellProps) {
   const router = useRouter();
@@ -268,33 +274,31 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
                 広告素材ごとのサムネイル、消化金額、クリック、CPAを確認できます。
               </p>
             </div>
-            <div className="rounded-md border border-[color:var(--color-border)] px-3 py-2 text-xs text-[color:var(--color-text-muted)]">
-              LP内LINEクリック/LINE登録の広告別突合は未連携
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">並び替え</span>
+              <select
+                value={creativeSort}
+                onChange={(event) => setCreativeSort(event.target.value as CreativeSortKey)}
+                className="h-10 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-medium text-[color:var(--color-text-primary)] shadow-sm outline-none transition focus:border-[color:var(--color-text-primary)]"
+                aria-label="クリエイティブの並び替え"
+              >
+                {CREATIVE_SORT_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label} {option.directionLabel}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            {CREATIVE_SORT_OPTIONS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setCreativeSort(option.key)}
-                className={`rounded-md border px-3 py-2 text-sm transition ${
-                  creativeSort === option.key
-                    ? 'border-[color:var(--color-text-primary)] bg-[color:var(--color-text-primary)] text-white'
-                    : 'border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
-                }`}
-              >
-                {option.label}
-                <span className="ml-1 text-xs opacity-75">{option.directionLabel}</span>
-              </button>
-            ))}
+          <div className="mt-4 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3 text-sm text-[color:var(--color-text-secondary)]">
+            {sortOptionLabel(creativeSort)}で表示中
           </div>
 
           <div className="mt-5 space-y-3">
             {sortedCreatives.map((row, index) => (
               <div key={row.adId} className="overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-                <div className="grid gap-4 p-4 lg:grid-cols-[auto_minmax(260px,1.2fr)_repeat(6,minmax(92px,1fr))] lg:items-center">
+                <div className="grid gap-4 p-4 lg:grid-cols-[auto_auto_minmax(280px,1.5fr)_repeat(5,minmax(96px,1fr))] lg:items-center">
                   <div className="text-sm font-semibold text-[color:var(--color-text-muted)]">#{index + 1}</div>
                   <CreativeThumb row={row} />
                   <div className="min-w-0">
@@ -328,10 +332,6 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
                   <div>
                     <p className="text-[11px] text-[color:var(--color-text-muted)]">LPC</p>
                     <p className="mt-1 font-semibold">{row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[color:var(--color-text-muted)]">LINE</p>
-                    <p className="mt-1 text-xs font-medium text-[color:var(--color-text-secondary)]">広告別未連携</p>
                   </div>
                 </div>
               </div>

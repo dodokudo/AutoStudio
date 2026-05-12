@@ -69,6 +69,7 @@ export interface AdsByAdRow {
   adsetName: string;
   mediaType: string;
   thumbnailUrl: string | null;
+  imageUrl: string | null;
   instagramPermalinkUrl: string | null;
   spend: number;
   impressions: number;
@@ -217,6 +218,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
           ANY_VALUE(i.adset_name) AS adset_name,
           ANY_VALUE(COALESCE(c.media_type, 'unknown')) AS media_type,
           ANY_VALUE(c.thumbnail_url) AS thumbnail_url,
+          ANY_VALUE(c.image_url) AS image_url,
           ANY_VALUE(c.instagram_permalink_url) AS instagram_permalink_url,
           SUM(i.spend) AS spend,
           SUM(i.impressions) AS impressions,
@@ -333,6 +335,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
       adsetName: String(row.adset_name ?? '不明'),
       mediaType: String(row.media_type ?? 'unknown'),
       thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : null,
+      imageUrl: row.image_url ? String(row.image_url) : null,
       instagramPermalinkUrl: row.instagram_permalink_url ? String(row.instagram_permalink_url) : null,
       spend: rowSpend,
       impressions: rowImpressions,
