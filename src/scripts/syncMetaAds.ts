@@ -3,7 +3,7 @@
 import dotenv from 'dotenv';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import { META_AD_CREATIVES_TABLE, META_AD_INSIGHTS_TABLE, META_ADS_DATASET } from '@/lib/ads/bigquery';
-import { fetchMetaAdCreatives, fetchMetaAdInsights, MetaActionMetric, MetaAdInsight, MetaAdWithCreative } from '@/lib/ads/metaApi';
+import { fetchMetaAdCreatives, fetchMetaAdInsights, fetchMetaVideoThumbnails, MetaActionMetric, MetaAdInsight, MetaAdWithCreative } from '@/lib/ads/metaApi';
 
 dotenv.config({ path: '.env.local' });
 
@@ -105,7 +105,7 @@ function mapInsight(row: MetaAdInsight, syncedAt: string) {
   };
 }
 
-function mapCreative(ad: MetaAdWithCreative, syncedAt: string) {
+function mapCreative(ad: MetaAdWithCreative, syncedAt: string, videoThumbnailUrl?: string) {
   const creative = ad.creative ?? {};
   return {
     ad_account_id: AD_ACCOUNT_ID,
@@ -120,7 +120,7 @@ function mapCreative(ad: MetaAdWithCreative, syncedAt: string) {
     object_type: creative.object_type ?? null,
     media_type: inferMediaType(ad),
     thumbnail_url: creative.thumbnail_url ?? null,
-    image_url: creative.image_url ?? null,
+    image_url: creative.image_url ?? videoThumbnailUrl ?? null,
     video_id: creative.video_id ?? null,
     instagram_permalink_url: creative.instagram_permalink_url ?? null,
     object_story_id: creative.object_story_id ?? null,
@@ -198,8 +198,14 @@ async function main() {
   ]);
 
   console.log(`[meta-ads] fetched insights=${insights.length}, creatives=${creatives.length}`);
+  const videoThumbnailMap = await fetchMetaVideoThumbnails({
+    accessToken: ACCESS_TOKEN,
+    videoIds: creatives.map((row) => row.creative?.video_id).filter((videoId): videoId is string => Boolean(videoId)),
+  });
+  console.log(`[meta-ads] fetched video thumbnails=${videoThumbnailMap.size}`);
+
   await replaceInsights(insights.filter((row) => row.ad_id && row.date_start && row.date_stop).map((row) => mapInsight(row, syncedAt)));
-  await replaceCreatives(creatives.map((row) => mapCreative(row, syncedAt)));
+  await replaceCreatives(creatives.map((row) => mapCreative(row, syncedAt, row.creative?.video_id ? videoThumbnailMap.get(row.creative.video_id) : undefined)));
   console.log('[meta-ads] sync completed');
 }
 

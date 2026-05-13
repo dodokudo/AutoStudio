@@ -76,6 +76,13 @@ interface GraphListResponse<T> {
   };
 }
 
+interface MetaVideoThumbnail {
+  uri?: string;
+  width?: number;
+  height?: number;
+  is_preferred?: boolean;
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   const json: GraphListResponse<unknown> = await response.json();
@@ -97,6 +104,36 @@ async function fetchPaged<T>(url: string): Promise<T[]> {
   }
 
   return rows;
+}
+
+export async function fetchMetaVideoThumbnails(options: {
+  accessToken: string;
+  videoIds: string[];
+}): Promise<Map<string, string>> {
+  const uniqueVideoIds = [...new Set(options.videoIds.filter(Boolean))];
+  const pairs = await Promise.all(
+    uniqueVideoIds.map(async (videoId) => {
+      const url = new URL(`${META_GRAPH_BASE}/${videoId}/thumbnails`);
+      url.searchParams.set('fields', 'uri,is_preferred,width,height');
+      url.searchParams.set('access_token', options.accessToken);
+
+      try {
+        const rows = await fetchPaged<MetaVideoThumbnail>(url.toString());
+        const best = rows
+          .filter((row) => row.uri)
+          .sort((a, b) => {
+            if (a.is_preferred !== b.is_preferred) return a.is_preferred ? -1 : 1;
+            return (Number(b.width ?? 0) * Number(b.height ?? 0)) - (Number(a.width ?? 0) * Number(a.height ?? 0));
+          })[0];
+        return best?.uri ? ([videoId, best.uri] as const) : null;
+      } catch (error) {
+        console.warn(`[meta-ads] failed to fetch video thumbnail for ${videoId}:`, error instanceof Error ? error.message : error);
+        return null;
+      }
+    }),
+  );
+
+  return new Map(pairs.filter((pair): pair is readonly [string, string] => Boolean(pair)));
 }
 
 export async function fetchMetaAdInsights(options: {

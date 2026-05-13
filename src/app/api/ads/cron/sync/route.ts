@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import { META_AD_CREATIVES_TABLE, META_AD_INSIGHTS_TABLE, META_ADS_DATASET } from '@/lib/ads/bigquery';
-import { fetchMetaAdCreatives, fetchMetaAdInsights, MetaActionMetric, MetaAdInsight, MetaAdWithCreative } from '@/lib/ads/metaApi';
+import { fetchMetaAdCreatives, fetchMetaAdInsights, fetchMetaVideoThumbnails, MetaActionMetric, MetaAdInsight, MetaAdWithCreative } from '@/lib/ads/metaApi';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -99,7 +99,7 @@ function mapInsight(row: MetaAdInsight, adAccountId: string, syncedAt: string) {
   };
 }
 
-function mapCreative(ad: MetaAdWithCreative, adAccountId: string, syncedAt: string) {
+function mapCreative(ad: MetaAdWithCreative, adAccountId: string, syncedAt: string, videoThumbnailUrl?: string) {
   const creative = ad.creative ?? {};
   return {
     ad_account_id: adAccountId,
@@ -114,7 +114,7 @@ function mapCreative(ad: MetaAdWithCreative, adAccountId: string, syncedAt: stri
     object_type: creative.object_type ?? null,
     media_type: inferMediaType(ad),
     thumbnail_url: creative.thumbnail_url ?? null,
-    image_url: creative.image_url ?? null,
+    image_url: creative.image_url ?? videoThumbnailUrl ?? null,
     video_id: creative.video_id ?? null,
     instagram_permalink_url: creative.instagram_permalink_url ?? null,
     object_story_id: creative.object_story_id ?? null,
@@ -163,9 +163,17 @@ export async function GET() {
       await insertRows(META_AD_INSIGHTS_TABLE, insightRows);
     }
 
-    await insertRows(META_AD_CREATIVES_TABLE, creatives.map((row) => mapCreative(row, adAccountId, syncedAt)));
+    const videoThumbnailMap = await fetchMetaVideoThumbnails({
+      accessToken,
+      videoIds: creatives.map((row) => row.creative?.video_id).filter((videoId): videoId is string => Boolean(videoId)),
+    });
 
-    return NextResponse.json({ ok: true, insights: insightRows.length, creatives: creatives.length, syncedAt });
+    await insertRows(
+      META_AD_CREATIVES_TABLE,
+      creatives.map((row) => mapCreative(row, adAccountId, syncedAt, row.creative?.video_id ? videoThumbnailMap.get(row.creative.video_id) : undefined)),
+    );
+
+    return NextResponse.json({ ok: true, insights: insightRows.length, creatives: creatives.length, videoThumbnails: videoThumbnailMap.size, syncedAt });
   } catch (error) {
     console.error('[api/ads/cron/sync] failed', error);
     return NextResponse.json(

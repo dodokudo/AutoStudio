@@ -60,11 +60,16 @@ function metricValue(value: string, note?: string) {
 
 function CreativeThumb({ row }: { row: AdsByAdRow }) {
   const imageUrl = row.imageUrl || row.thumbnailUrl;
+  const isImage = row.mediaType === 'image';
   return (
-    <div className="relative h-32 w-20 shrink-0 overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)]">
+    <div
+      className={`relative shrink-0 overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] ${
+        isImage ? 'h-28 w-28' : 'h-32 w-20'
+      }`}
+    >
       {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt={row.adName} className="h-full w-full object-cover" loading="lazy" />
+        <img src={imageUrl} alt={row.adName} className={`h-full w-full ${isImage ? 'object-contain' : 'object-cover'}`} loading="lazy" />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-xs text-[color:var(--color-text-muted)]">No image</div>
       )}
@@ -94,11 +99,6 @@ const CREATIVE_SORT_OPTIONS: Array<{ key: CreativeSortKey; label: string; direct
   { key: 'lpc', label: 'LPC', directionLabel: '低い順' },
   { key: 'clicks', label: 'クリック', directionLabel: '多い順' },
 ];
-
-function sortOptionLabel(key: CreativeSortKey): string {
-  const option = CREATIVE_SORT_OPTIONS.find((item) => item.key === key);
-  return option ? `${option.label} ${option.directionLabel}` : '消化金額 高い順';
-}
 
 export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }: AdsDashboardShellProps) {
   const router = useRouter();
@@ -289,10 +289,6 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
                 ))}
               </select>
             </div>
-          </div>
-
-          <div className="mt-4 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3 text-sm text-[color:var(--color-text-secondary)]">
-            {sortOptionLabel(creativeSort)}で表示中
           </div>
 
           <div className="mt-5 space-y-3">
