@@ -83,6 +83,10 @@ function RetentionCard({ row, base }: { row: { adsetName: string | null; audienc
 }
 
 function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
+  const totalP15s = row.byAdset.reduce((sum, a) => sum + (a.p15s ?? 0), 0);
+  const totalP95 = row.byAdset.reduce((sum, a) => sum + (a.p95 ?? 0), 0);
+  const base = row.totalVideoPlays > 0 ? row.totalVideoPlays : Math.max(row.totalImpressions, 1);
+
   return (
     <Card className="p-4">
       <div className="flex items-start gap-4">
@@ -90,7 +94,7 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={row.thumbnailUrl} alt="" className="aspect-[9/16] w-32 shrink-0 rounded-md object-cover" loading="lazy" />
         )}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-medium text-[color:var(--color-text-primary)] line-clamp-1">
               {row.adName ?? row.permalink ?? '(no name)'}
@@ -106,13 +110,25 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
               </a>
             )}
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-3 text-xs md:grid-cols-6">
+          <div className="grid grid-cols-3 gap-3 text-xs md:grid-cols-6">
             <div><div className="text-[color:var(--color-text-muted)]">消化</div><div className="font-semibold text-[color:var(--color-text-primary)]">{yen(row.totalSpend)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">imp</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalImpressions)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">再生</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalVideoPlays)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">25%維持</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP25 / row.totalVideoPlays) * 100 : 0)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">50%維持</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP50 / row.totalVideoPlays) * 100 : 0)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">完視聴</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP100 / row.totalVideoPlays) * 100 : 0)}</div></div>
+          </div>
+          <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+            <div className="mb-2 text-xs font-medium text-[color:var(--color-text-primary)]">広告全体の視聴維持カーブ</div>
+            <div className="space-y-1">
+              <RetentionBar label="再生" value={row.totalVideoPlays} total={base} />
+              <RetentionBar label="15s" value={totalP15s} total={base} />
+              <RetentionBar label="25%" value={row.totalP25} total={base} />
+              <RetentionBar label="50%" value={row.totalP50} total={base} />
+              <RetentionBar label="75%" value={row.totalP75} total={base} />
+              <RetentionBar label="95%" value={totalP95} total={base} />
+              <RetentionBar label="100%" value={row.totalP100} total={base} />
+            </div>
           </div>
         </div>
       </div>

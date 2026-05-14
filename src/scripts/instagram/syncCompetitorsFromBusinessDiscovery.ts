@@ -134,24 +134,25 @@ async function main() {
     const reels = (result.media?.data ?? []).filter(
       (m) => m.media_product_type === 'REELS' || m.media_type === 'VIDEO',
     );
-    // 動画を GCS に保存（並列）
-    const gcsUrls = await Promise.all(
-      reels.map(async (reel) => {
-        if (!reel.media_url) return null;
-        return uploadVideoToGcs(reel.media_url, username, reel.id);
-      }),
-    );
+    // メタデータのみ即投入。動画 upload は IG_DOWNLOAD_VIDEOS=true 時のみ
+    const downloadEnabled = process.env.IG_DOWNLOAD_VIDEOS === 'true';
+    const gcsUrls = downloadEnabled
+      ? await Promise.all(
+          reels.map((reel) => (reel.media_url ? uploadVideoToGcs(reel.media_url, username, reel.id) : Promise.resolve(null))),
+        )
+      : reels.map(() => null);
     reels.forEach((reel, idx) => {
+      const gcsUrl = gcsUrls[idx];
       reelRows.push({
         snapshot_date: today,
         username,
         instagram_media_id: reel.id,
-        drive_file_id: null,
-        drive_file_url: gcsUrls[idx],
+        drive_file_id: gcsUrl ? `gcs:${reel.id}` : reel.id,
+        drive_file_url: gcsUrl ?? (reel.permalink ?? `https://www.instagram.com/reel/${reel.id}/`),
         caption: reel.caption ?? null,
-        permalink: reel.permalink ?? null,
-        media_type: reel.media_product_type ?? reel.media_type ?? null,
-        posted_at: reel.timestamp ?? null,
+        permalink: reel.permalink ?? `https://www.instagram.com/${username}/`,
+        media_type: reel.media_product_type ?? reel.media_type ?? 'REELS',
+        posted_at: reel.timestamp ?? new Date().toISOString(),
         created_at: nowIso,
         sheet_caption: reel.caption ?? null,
         view_count: reel.view_count ?? null,
