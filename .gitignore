@@ -44,3 +44,12 @@ next-env.d.ts
 
 # secrets folder with credentials
 /secrets/
+
+# logs
+/logs/
+
+# scratch/temp scripts
+measure-save.mjs
+
+# serena local config
+.serena/
