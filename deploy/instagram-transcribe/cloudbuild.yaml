@@ -1,0 +1,24 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build','-t','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-transcribe:latest','-f','deploy/instagram-transcribe/Dockerfile','.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-transcribe:latest']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'autostudio-instagram-transcribe'
+      - '--image=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-transcribe:latest'
+      - '--region=asia-northeast1'
+      - '--memory=2Gi'
+      - '--cpu=2'
+      - '--max-retries=1'
+      - '--task-timeout=1800'
+      - '--env-vars-file=deploy/instagram-transcribe/env.yaml'
+images:
+  - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-transcribe:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 2400s

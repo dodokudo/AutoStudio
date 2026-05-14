@@ -1,0 +1,24 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build','-t','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-user-insights:latest','-f','deploy/instagram-user-insights/Dockerfile','.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-user-insights:latest']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'autostudio-instagram-user-insights'
+      - '--image=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-user-insights:latest'
+      - '--region=asia-northeast1'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--max-retries=2'
+      - '--task-timeout=300'
+      - '--env-vars-file=deploy/instagram-user-insights/env.yaml'
+images:
+  - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-user-insights:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

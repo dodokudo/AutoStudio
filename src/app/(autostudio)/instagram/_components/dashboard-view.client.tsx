@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { InsightsCard } from '@/app/(autostudio)/threads/_components/insights-card';
+import { LiveReelsView } from '../live-reels/_components/live-reels-view';
 
 interface Props {
   data: InstagramDashboardData;
@@ -266,36 +267,19 @@ export function InstagramDashboardView({ data }: Props) {
 
   const reelPostCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const reel of data.reels) {
-      if (!reel.timestamp) continue;
-      const date = parseDate(reel.timestamp);
-      if (!date) continue;
-      const key = formatDateKey(date);
-      if (!key) continue;
-      counts[key] = (counts[key] ?? 0) + 1;
+    for (const item of data.reelDailyCounts ?? []) {
+      counts[item.date] = item.count;
     }
     return counts;
-  }, [data.reels]);
+  }, [data.reelDailyCounts]);
 
   const storyDailyStats = useMemo(() => {
     const stats: Record<string, { count: number; views: number }> = {};
-    for (const story of data.stories) {
-      if (!story.timestamp) continue;
-      const date = parseDate(story.timestamp);
-      if (!date) continue;
-      const key = formatDateKey(date);
-      if (!key) continue;
-      if (!stats[key]) {
-        stats[key] = { count: 0, views: 0 };
-      }
-      stats[key].count += 1;
-      const storyViews = story.reach ?? 0;
-      if (storyViews > stats[key].views) {
-        stats[key].views = storyViews;
-      }
+    for (const item of data.storyDailyCounts ?? []) {
+      stats[item.date] = { count: item.count, views: item.views };
     }
     return stats;
-  }, [data.stories]);
+  }, [data.storyDailyCounts]);
 
   const followerSeriesWithDelta = useMemo(() => {
     const sorted = [...data.followerSeries].sort((a, b) => a.date.localeCompare(b.date));
@@ -471,6 +455,10 @@ export function InstagramDashboardView({ data }: Props) {
     const reachTotal = followerSeriesInRange.reduce((sum, point) => sum + (point.reach ?? 0), 0);
     const postCount = useAllRange ? data.reels.length : filteredReels.length;
 
+    const latestUserInsights = data.latestUserInsights;
+    const latestFollowersFromApi = latestUserInsights?.followersCount ?? null;
+    const reachFromApi = latestUserInsights?.reach ?? null;
+
     let lineRegistrations: number | null = null;
     if (data.lineRegistrationSeries.length > 0) {
       const lineSeriesInRange = useAllRange
@@ -491,15 +479,26 @@ export function InstagramDashboardView({ data }: Props) {
       linkClicks = data.linkClickCount;
     }
 
+    let lpLineCtaClicks: number | null = null;
+    if (data.lpLineCtaClickSeries && data.lpLineCtaClickSeries.length > 0) {
+      const series = useAllRange
+        ? data.lpLineCtaClickSeries
+        : data.lpLineCtaClickSeries.filter((point) => isWithinDateRange(point.date, startKey, endKey));
+      lpLineCtaClicks = series.reduce((sum, point) => sum + (point.clicks ?? 0), 0);
+    } else if (data.lpLineCtaClickCount !== null && data.lpLineCtaClickCount !== undefined) {
+      lpLineCtaClicks = data.lpLineCtaClickCount;
+    }
+
     return {
-      currentFollowers: latestFollowerPoint?.followers ?? 0,
+      currentFollowers: latestFollowersFromApi ?? latestFollowerPoint?.followers ?? 0,
       followerGrowth,
-      latestReach: reachTotal,
+      latestReach: reachFromApi !== null ? reachFromApi : reachTotal,
       postCount,
       totalReels: filteredReels.length,
       totalStories: filteredStories.length,
       lineRegistrations,
       linkClicks,
+      lpLineCtaClicks,
     };
   }, [data, dateRange, filteredReels, filteredStories]);
 
@@ -531,6 +530,11 @@ export function InstagramDashboardView({ data }: Props) {
       {
         label: 'リンククリック数',
         value: summary.linkClicks !== null ? summary.linkClicks.toLocaleString() : '—',
+        delta: '期間内合計',
+      },
+      {
+        label: 'LP LINE登録CTA',
+        value: summary.lpLineCtaClicks !== null ? summary.lpLineCtaClicks.toLocaleString() : '—',
         delta: '期間内合計',
       },
       {
@@ -588,7 +592,7 @@ export function InstagramDashboardView({ data }: Props) {
   }
 
   return (
-    <div className="section-stack mx-auto max-w-6xl pb-12">
+    <div className="section-stack mx-auto max-w-6xl pb-12" style={{ gap: '20px' }}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <DashboardTabsInteractive
           items={tabItems.map((tab) => ({ id: tab.value, label: tab.label }))}
@@ -813,48 +817,90 @@ export function InstagramDashboardView({ data }: Props) {
                 詳細
               </Button>
             </div>
-            {sortedReels.length > 0 ? (
-              <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
-                {sortedReels.slice(0, 5).map((reel) => {
-                  const thumbnailUrl = resolveMediaUrl(reel.thumbnailUrl, reel.driveImageUrl);
-                  const viewRate = computeReelViewRate(reel.timestamp, reel.views ?? null);
-                  return (
-                    <div
-                      key={reel.instagramId}
-                      className="flex min-w-[220px] flex-shrink-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white shadow-sm"
-                    >
-                      <div className="relative aspect-[9/16] w-full bg-[color:var(--color-surface-muted)]">
-                        {thumbnailUrl ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img src={thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
-                        ) : null}
+            {(() => {
+              const apiRows = data.reelMetricsData?.rows ?? [];
+              const filtered = apiRows.filter((row) => {
+                if (chartRange.useAllRange) return true;
+                if (!chartRange.startKey || !chartRange.endKey) return true;
+                const iso = row.snapshot.publishedAt;
+                if (!iso) return false;
+                const d = new Date(iso);
+                if (Number.isNaN(d.getTime())) return false;
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                return key >= chartRange.startKey && key <= chartRange.endKey;
+              });
+              const top5 = [...filtered]
+                .sort((a, b) => {
+                  const at = a.snapshot.publishedAt ? new Date(a.snapshot.publishedAt).getTime() : 0;
+                  const bt = b.snapshot.publishedAt ? new Date(b.snapshot.publishedAt).getTime() : 0;
+                  return bt - at;
+                })
+                .slice(0, 5);
+              if (top5.length === 0) {
+                return (
+                  <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
+                    リールデータがありません
+                  </div>
+                );
+              }
+              return (
+                <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
+                  {top5.map((row) => {
+                    const { snapshot } = row;
+                    const completion = snapshot.completionRate !== null ? snapshot.completionRate * 100 : null;
+                    const avgWatch = snapshot.avgWatchTimeSeconds;
+                    return (
+                      <div
+                        key={snapshot.instagramId}
+                        className="flex min-w-[220px] flex-shrink-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white shadow-sm"
+                      >
+                        <div className="relative aspect-[9/16] w-full bg-[color:var(--color-surface-muted)]">
+                          {snapshot.thumbnailUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={snapshot.thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+                          ) : null}
+                        </div>
+                        <div className="flex flex-col gap-3 p-3">
+                          <p className="text-xs text-[color:var(--color-text-muted)]">{formatDisplayDate(snapshot.publishedAt)}</p>
+                          <dl className="space-y-2 text-sm text-[color:var(--color-text-secondary)]">
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-[color:var(--color-text-muted)]">再生数</dt>
+                              <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                                {snapshot.views?.toLocaleString() ?? '—'}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-[color:var(--color-text-muted)]">平均視聴</dt>
+                              <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                                {avgWatch !== null && avgWatch !== undefined ? `${avgWatch.toFixed(1)}秒` : '—'}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-[color:var(--color-text-muted)]">視聴維持率</dt>
+                              <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                                {completion !== null ? `${completion.toFixed(1)}%` : '—'}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-[color:var(--color-text-muted)]">スキップ率</dt>
+                              <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                                {snapshot.skipRate !== null && snapshot.skipRate !== undefined ? `${snapshot.skipRate.toFixed(1)}%` : '—'}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-[color:var(--color-text-muted)]">保存数</dt>
+                              <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                                {snapshot.saved?.toLocaleString() ?? '—'}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-3 p-3">
-                        <p className="text-xs text-[color:var(--color-text-muted)]">{formatDisplayDate(reel.timestamp)}</p>
-                        <dl className="space-y-2 text-sm text-[color:var(--color-text-secondary)]">
-                          <div className="flex items-center justify-between">
-                            <dt className="font-medium text-[color:var(--color-text-muted)]">閲覧数</dt>
-                            <dd className="font-semibold text-[color:var(--color-text-primary)]">
-                              {reel.views?.toLocaleString() ?? '—'}
-                            </dd>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <dt className="font-medium text-[color:var(--color-text-muted)]">閲覧率</dt>
-                            <dd className="font-semibold text-[color:var(--color-text-primary)]">
-                              {viewRate !== null ? `${(viewRate * 100).toFixed(1)}%` : '—'}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-                リールデータがありません
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </Card>
 
           <Card className="p-6">
@@ -920,189 +966,128 @@ export function InstagramDashboardView({ data }: Props) {
       )}
 
       {activeTab === 'reels' && (
-        <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">リール一覧</h2>
-              <p className="text-xs text-[color:var(--color-text-muted)]">表示件数 {sortedReels.length}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={reelSortBy}
-                onChange={(event) => setReelSortBy(event.target.value)}
-                className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-              >
-                <option value="date">日付</option>
-                <option value="views">再生数</option>
-                <option value="likes">いいね</option>
-                <option value="saves">保存</option>
-                <option value="comments">コメント</option>
-              </select>
-              <Button
-                variant="secondary"
-                className="h-9 px-3 text-sm"
-                onClick={() => setReelSortOrder(reelSortOrder === 'desc' ? 'asc' : 'desc')}
-              >
-                {reelSortOrder === 'desc' ? '降順' : '昇順'}
-              </Button>
-            </div>
-          </div>
-          <div className="mt-6 space-y-4">
-            {sortedReels.map((reel) => {
-              const thumbnailUrl = resolveMediaUrl(reel.thumbnailUrl, reel.driveImageUrl);
-              return (
-                <div key={reel.instagramId} className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 sm:flex-row">
-                  <div className="h-40 w-full overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] sm:w-32">
-                    {thumbnailUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                    ) : null}
-                  </div>
-                  <div className="flex-1 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
-                      <span>{reel.timestamp ? new Date(reel.timestamp).toLocaleString('ja-JP') : '日付未登録'}</span>
-                      {reel.permalink ? (
-                        <a
-                          href={reel.permalink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)]"
-                        >
-                          Instagramで開く
-                        </a>
-                      ) : null}
-                    </div>
-                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] line-clamp-2">
-                      {reel.caption || 'キャプションなし'}
-                    </p>
-                    <dl className="grid grid-cols-2 gap-y-2 text-sm text-[color:var(--color-text-secondary)] sm:grid-cols-3">
-                      <div>
-                        <dt>再生数</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{reel.views?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>リーチ</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{reel.reach?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>いいね</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{reel.likeCount?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>コメント</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{reel.commentsCount?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>保存</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{reel.saved?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>シェア</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{reel.shares?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                    </dl>
-                  </div>
-                </div>
-              );
-            })}
-            {sortedReels.length === 0 && (
-              <div className="rounded-[var(--radius-sm)] border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-                リールデータがありません
-              </div>
-            )}
-          </div>
-        </Card>
+        data.reelMetricsData && data.reelMetricsData.rows.length > 0 ? (
+          <LiveReelsView
+            data={data.reelMetricsData}
+            rangeStartKey={chartRange.startKey}
+            rangeEndKey={chartRange.endKey}
+            useAllRange={chartRange.useAllRange}
+          />
+        ) : (
+          <Card className="p-8 text-center text-[color:var(--color-text-muted)]">
+            <p className="font-semibold">Graph API リールデータがまだ取得されていません</p>
+            <p className="mt-2 text-xs">
+              ターミナルで <code className="rounded bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-[color:var(--color-text-primary)]">npm run ig:metrics</code> を実行するか、Cloud Scheduler 経由で取得を待ってください。
+            </p>
+          </Card>
+        )
       )}
 
-      {activeTab === 'stories' && (
-        <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ストーリー一覧</h2>
-              <p className="text-xs text-[color:var(--color-text-muted)]">表示件数 {sortedStories.length}</p>
+      {activeTab === 'stories' && (() => {
+        const apiStories = data.storyMetricsData?.rows ?? [];
+        const apiSorted = [...apiStories].sort((a, b) => {
+          const factor = storySortOrder === 'desc' ? 1 : -1;
+          const get = (s: typeof a): number => {
+            switch (storySortBy) {
+              case 'date':
+                return s.publishedAt ? new Date(s.publishedAt).getTime() : 0;
+              case 'reach':
+                return s.reach ?? -Infinity;
+              case 'views':
+                return s.views ?? -Infinity;
+              case 'viewRate':
+                return s.viewRate ?? -Infinity;
+              case 'reactions':
+                return s.totalInteractions ?? -Infinity;
+              default:
+                return 0;
+            }
+          };
+          return (get(b) - get(a)) * factor;
+        });
+        return (
+          <Card className="p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ストーリー一覧</h2>
+                <p className="text-xs text-[color:var(--color-text-muted)]">表示件数 {apiSorted.length}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={storySortBy}
+                  onChange={(event) => setStorySortBy(event.target.value as typeof storySortBy)}
+                  className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                >
+                  <option value="date">日付</option>
+                  <option value="reach">リーチ</option>
+                  <option value="views">閲覧数</option>
+                  <option value="viewRate">閲覧率</option>
+                  <option value="reactions">リアクション</option>
+                </select>
+                <Button
+                  variant="secondary"
+                  className="h-9 px-3 text-sm"
+                  onClick={() => setStorySortOrder(storySortOrder === 'desc' ? 'asc' : 'desc')}
+                >
+                  {storySortOrder === 'desc' ? '降順' : '昇順'}
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={storySortBy}
-                onChange={(event) => setStorySortBy(event.target.value as typeof storySortBy)}
-                className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
-              >
-                <option value="date">日付</option>
-                <option value="reach">リーチ</option>
-                <option value="views">閲覧数</option>
-                <option value="viewRate">閲覧率</option>
-                <option value="reactions">リアクション</option>
-              </select>
-              <Button
-                variant="secondary"
-                className="h-9 px-3 text-sm"
-                onClick={() => setStorySortOrder(storySortOrder === 'desc' ? 'asc' : 'desc')}
-              >
-                {storySortOrder === 'desc' ? '降順' : '昇順'}
-              </Button>
-            </div>
-          </div>
-          <div className="mt-6 space-y-4">
-            {sortedStories.map((story) => {
-              const thumbnailUrl = resolveMediaUrl(story.thumbnailUrl, story.driveImageUrl);
-              const followerCount = resolveFollowerCount(story.timestamp);
-              const reachRate =
-                followerCount && story.reach
-                  ? story.reach / followerCount
-                  : null;
-              return (
-                <div key={story.instagramId} className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 sm:flex-row">
-                  <div className="h-40 w-full overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] sm:w-32">
-                    {thumbnailUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                    ) : null}
-                  </div>
-                  <div className="flex-1 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
-                      <span>{story.timestamp ? new Date(story.timestamp).toLocaleString('ja-JP') : '日付未登録'}</span>
+            {apiSorted.length === 0 ? (
+              <div className="mt-6 rounded-[var(--radius-sm)] border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
+                ストーリーデータがありません。ストーリーは投稿後24時間で消えるため、毎時取得します。
+              </div>
+            ) : (
+              <div className="mt-6 space-y-4">
+                {apiSorted.map((story) => (
+                  <div key={story.instagramId} className="flex items-start gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-3">
+                    {story.thumbnailUrl && (
+                      <a href={story.permalink ?? '#'} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={story.thumbnailUrl} alt="" className="aspect-[9/16] w-24 rounded-md object-cover" loading="lazy" />
+                      </a>
+                    )}
+                    <div className="flex-1 min-w-0 flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
+                        <span>{story.publishedAt ? new Date(story.publishedAt).toLocaleString('ja-JP') : '日付未登録'}</span>
+                        {story.permalink && (
+                          <a href={story.permalink} target="_blank" rel="noopener noreferrer" className="font-medium text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)]">Instagramで開く</a>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-sm md:grid-cols-6">
+                        <div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">閲覧数</div>
+                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.views?.toLocaleString() ?? '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">リーチ</div>
+                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.reach?.toLocaleString() ?? '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">閲覧率</div>
+                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.viewRate !== null ? `${(story.viewRate * 100).toFixed(1)}%` : '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">インタラクション</div>
+                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.totalInteractions?.toLocaleString() ?? '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">プロフ訪問</div>
+                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.profileVisits?.toLocaleString() ?? '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">フォロー</div>
+                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.follows?.toLocaleString() ?? '—'}</div>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-sm font-medium text-[color:var(--color-text-primary)] line-clamp-2">
-                      {story.caption || 'キャプションなし'}
-                    </p>
-                    <dl className="grid grid-cols-2 gap-y-2 text-sm text-[color:var(--color-text-secondary)] sm:grid-cols-3">
-                      <div>
-                        <dt>リーチ</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.reach?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>閲覧数</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.views?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>閲覧率</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">
-                          {reachRate !== null ? `${(reachRate * 100).toFixed(1)}%` : '—'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>返信</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.replies?.toLocaleString() ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>プロフィール訪問</dt>
-                        <dd className="font-semibold text-[color:var(--color-text-primary)]">
-                          {story.profileVisits?.toLocaleString() ?? '—'}
-                        </dd>
-                      </div>
-                    </dl>
                   </div>
-                </div>
-              );
-            })}
-            {sortedStories.length === 0 && (
-              <div className="rounded-[var(--radius-sm)] border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-                ストーリーデータがありません
+                ))}
               </div>
             )}
-          </div>
-        </Card>
-      )}
+          </Card>
+        );
+      })()}
 
       {activeTab === 'scripts' && (
         <Card className="p-6">

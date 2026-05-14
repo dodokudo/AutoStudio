@@ -71,5 +71,8 @@ async function main() {
 
 main().catch((error) => {
   console.error('[sync-reel-metrics] Failed:', error);
+  if (error && typeof error === 'object' && 'errors' in error) {
+    console.error('[sync-reel-metrics] Insert errors detail:', JSON.stringify((error as { errors: unknown }).errors, null, 2));
+  }
   process.exitCode = 1;
 });

@@ -35,6 +35,72 @@ export const THREADS_LP_LINE_SHORT_CODES = [
   'IG_LN2',
 ] as const;
 
+export const INSTAGRAM_LP_LINE_SHORT_CODES = [
+  'IG-TAI2',
+  'IG_LN2',
+  'IG_LINE',
+  'L-opt4-ig',
+] as const;
+
+export async function getInstagramLpLineClicksByRange(start: Date, end: Date): Promise<LinkClicksByDate[]> {
+  const bigquery = createBigQueryClient(projectId);
+  const startKey = formatDateInput(start);
+  const endKey = formatDateInput(end);
+
+  const query = `
+    WITH latest_links AS (
+      SELECT
+        id,
+        short_code,
+        ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) AS rn
+      FROM \`${projectId}.${dataset}.short_links\`
+      WHERE is_active = TRUE
+        AND short_code IN UNNEST(@codes)
+    ),
+    legacy_clicks AS (
+      SELECT
+        DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.click_logs\` cl
+      JOIN latest_links ll ON cl.short_link_id = ll.id
+      WHERE ll.rn = 1
+        AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    ),
+    launchkit_clicks AS (
+      SELECT
+        DATE(occurred_at, "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.launchkit_events\`
+      WHERE event_type = 'line_cta_click'
+        AND source = 'instagram'
+        AND DATE(occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
+    ),
+    combined AS (
+      SELECT date FROM legacy_clicks
+      UNION ALL
+      SELECT date FROM launchkit_clicks
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', date) AS date,
+      COUNT(*) AS clicks
+    FROM combined
+    GROUP BY date
+    ORDER BY date DESC
+  `;
+
+  const [rows] = await bigquery.query({
+    query,
+    params: {
+      codes: [...INSTAGRAM_LP_LINE_SHORT_CODES],
+      startDate: startKey,
+      endDate: endKey,
+    },
+  });
+
+  return rows.map((row: Record<string, unknown>) => ({
+    date: String(row.date),
+    clicks: Number(row.clicks ?? 0),
+  }));
+}
+
 export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Promise<LinkClicksByDate[]> {
   const bigquery = createBigQueryClient(projectId);
   const startKey = formatDateInput(start);

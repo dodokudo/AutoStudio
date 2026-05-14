@@ -1,9 +1,13 @@
+import { spawn } from 'node:child_process';
 import type { BigQuery } from '@google-cloud/bigquery';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 import type { InstagramAccessContext } from './auth';
 import type { InstagramReelMetricSnapshotRow } from './bigquery';
 
 const GRAPH_VERSION = process.env.IG_GRAPH_VERSION ?? 'v25.0';
 const GRAPH_BASE = process.env.IG_GRAPH_BASE ?? `https://graph.facebook.com/${GRAPH_VERSION}`;
+const FFPROBE_PATH = process.env.FFPROBE_PATH ?? ffprobeInstaller.path;
+const FFPROBE_TIMEOUT_MS = 20_000;
 
 const MEDIA_FIELDS = [
   'id',
@@ -13,6 +17,7 @@ const MEDIA_FIELDS = [
   'permalink',
   'timestamp',
   'thumbnail_url',
+  'media_url',
 ].join(',');
 
 const STABLE_REEL_METRICS = [
@@ -51,6 +56,47 @@ export interface InstagramGraphMedia {
   permalink?: string;
   timestamp?: string;
   thumbnail_url?: string;
+  media_url?: string;
+}
+
+export function getVideoDuration(mediaUrl: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const args = [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      mediaUrl,
+    ];
+    let settled = false;
+    const proc = spawn(FFPROBE_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      proc.kill('SIGKILL');
+      resolve(null);
+    }, FFPROBE_TIMEOUT_MS);
+
+    let stdout = '';
+    proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    proc.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      console.warn('[instagram/reelMetrics] ffprobe spawn error:', err);
+      resolve(null);
+    });
+    proc.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code !== 0) {
+        resolve(null);
+        return;
+      }
+      const value = Number.parseFloat(stdout.trim());
+      resolve(Number.isFinite(value) && value > 0 ? value : null);
+    });
+  });
 }
 
 interface InsightValue {
@@ -67,6 +113,7 @@ export interface ReelMetricProbeResult {
   supportedMetrics: Record<string, number | null>;
   unsupportedMetrics: string[];
   rawMetrics: InsightMetric[];
+  durationSeconds: number | null;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -136,12 +183,17 @@ function toNumber(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function completionRate(avgWatchMs: number | null, media: InstagramGraphMedia): number | null {
-  const durationSeconds = Number((media as InstagramGraphMedia & { duration?: unknown }).duration);
-  if (!avgWatchMs || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+function normalizeTimestamp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function completionRate(avgWatchMs: number | null, durationSeconds: number | null): number | null {
+  if (!avgWatchMs || !durationSeconds || durationSeconds <= 0) {
     return null;
   }
-  return avgWatchMs / 1000 / durationSeconds;
+  return (avgWatchMs / 1000) / durationSeconds;
 }
 
 export async function fetchRecentReels(
@@ -166,8 +218,11 @@ export async function probeReelMetrics(
   context: InstagramAccessContext,
   media: InstagramGraphMedia,
 ): Promise<ReelMetricProbeResult> {
-  const stable = await fetchMetricGroup(media.id, context.accessToken, STABLE_REEL_METRICS);
-  const experimental = await fetchMetricGroup(media.id, context.accessToken, EXPERIMENTAL_REEL_METRICS);
+  const [stable, experimental, durationSeconds] = await Promise.all([
+    fetchMetricGroup(media.id, context.accessToken, STABLE_REEL_METRICS),
+    fetchMetricGroup(media.id, context.accessToken, EXPERIMENTAL_REEL_METRICS),
+    media.media_url ? getVideoDuration(media.media_url) : Promise.resolve(null),
+  ]);
   const rawMetrics = [...stable.metrics, ...experimental.metrics];
 
   return {
@@ -175,6 +230,7 @@ export async function probeReelMetrics(
     supportedMetrics: metricMap(rawMetrics),
     unsupportedMetrics: [...stable.unsupported, ...experimental.unsupported],
     rawMetrics,
+    durationSeconds,
   };
 }
 
@@ -200,7 +256,7 @@ export function buildSnapshotRows(
       media_product_type: result.media.media_product_type ?? null,
       media_type: result.media.media_type ?? null,
       permalink: result.media.permalink ?? null,
-      timestamp: result.media.timestamp ?? null,
+      timestamp: normalizeTimestamp(result.media.timestamp),
       thumbnail_url: result.media.thumbnail_url ?? null,
       views: toNumber(metrics.views),
       reach: toNumber(metrics.reach),
@@ -217,7 +273,8 @@ export function buildSnapshotRows(
       facebook_views: toNumber(metrics.facebook_views),
       profile_activity: toNumber(metrics.profile_activity),
       follows: toNumber(metrics.follows),
-      completion_rate: completionRate(avgWatchMs, result.media),
+      duration_seconds: result.durationSeconds,
+      completion_rate: completionRate(avgWatchMs, result.durationSeconds),
       metrics_status: result.unsupportedMetrics.length ? 'partial' : 'complete',
       unsupported_metrics: result.unsupportedMetrics,
       raw_metrics_json: JSON.stringify(result.rawMetrics),
@@ -227,9 +284,9 @@ export function buildSnapshotRows(
 
 export async function insertReelMetricSnapshots(
   bigquery: BigQuery,
-  projectId: string,
+  _projectId: string,
   dataset: string,
-  location: string,
+  _location: string,
   rows: InstagramReelMetricSnapshotRow[],
 ): Promise<void> {
   if (!rows.length) {
@@ -237,76 +294,11 @@ export async function insertReelMetricSnapshots(
     return;
   }
 
-  await bigquery.query({
-    query: `
-      INSERT INTO \`${projectId}.${dataset}.instagram_reel_metric_snapshots\` (
-        snapshot_at,
-        snapshot_date,
-        user_id,
-        instagram_user_id,
-        instagram_id,
-        caption,
-        media_product_type,
-        media_type,
-        permalink,
-        timestamp,
-        thumbnail_url,
-        views,
-        reach,
-        likes,
-        comments,
-        saved,
-        shares,
-        reposts,
-        total_interactions,
-        ig_reels_avg_watch_time_ms,
-        ig_reels_video_view_total_time_ms,
-        reels_skip_rate,
-        crossposted_views,
-        facebook_views,
-        profile_activity,
-        follows,
-        completion_rate,
-        metrics_status,
-        unsupported_metrics,
-        raw_metrics_json,
-        created_at
-      )
-      SELECT
-        TIMESTAMP(S.snapshot_at),
-        PARSE_DATE('%Y-%m-%d', S.snapshot_date),
-        S.user_id,
-        S.instagram_user_id,
-        S.instagram_id,
-        S.caption,
-        S.media_product_type,
-        S.media_type,
-        S.permalink,
-        SAFE.TIMESTAMP(S.timestamp),
-        S.thumbnail_url,
-        S.views,
-        S.reach,
-        S.likes,
-        S.comments,
-        S.saved,
-        S.shares,
-        S.reposts,
-        S.total_interactions,
-        S.ig_reels_avg_watch_time_ms,
-        S.ig_reels_video_view_total_time_ms,
-        S.reels_skip_rate,
-        S.crossposted_views,
-        S.facebook_views,
-        S.profile_activity,
-        S.follows,
-        S.completion_rate,
-        S.metrics_status,
-        S.unsupported_metrics,
-        S.raw_metrics_json,
-        CURRENT_TIMESTAMP()
-      FROM UNNEST(@rows) S
-    `,
-    params: { rows },
-    location,
-  });
+  const createdAt = new Date().toISOString();
+  const rowsToInsert = rows.map((row) => ({ ...row, created_at: createdAt }));
+
+  await bigquery
+    .dataset(dataset)
+    .table('instagram_reel_metric_snapshots')
+    .insert(rowsToInsert);
 }

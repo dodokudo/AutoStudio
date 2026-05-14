@@ -73,6 +73,7 @@ export interface InstagramReelMetricSnapshotRow {
   facebook_views: number | null;
   profile_activity: number | null;
   follows: number | null;
+  duration_seconds: number | null;
   completion_rate: number | null;
   metrics_status: string;
   unsupported_metrics: string[];
@@ -257,6 +258,64 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'created_at', type: 'TIMESTAMP' },
   ], 'date', ['user_id']);
 
+  await ensureTable(dataset, 'instagram_reel_transcripts', [
+    { name: 'instagram_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'transcribed_at', type: 'TIMESTAMP', mode: 'REQUIRED' },
+    { name: 'model_name', type: 'STRING' },
+    { name: 'duration_seconds', type: 'FLOAT64' },
+    { name: 'segments_json', type: 'STRING' },
+    { name: 'raw_text', type: 'STRING' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+  ], 'transcribed_at', ['instagram_id']);
+
+  await ensureTable(dataset, 'instagram_user_insights_snapshots', [
+    { name: 'snapshot_at', type: 'TIMESTAMP', mode: 'REQUIRED' },
+    { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },
+    { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_username', type: 'STRING' },
+    { name: 'followers_count', type: 'INT64' },
+    { name: 'follows_count', type: 'INT64' },
+    { name: 'media_count', type: 'INT64' },
+    { name: 'reach', type: 'INT64' },
+    { name: 'views', type: 'INT64' },
+    { name: 'total_interactions', type: 'INT64' },
+    { name: 'accounts_engaged', type: 'INT64' },
+    { name: 'profile_links_taps', type: 'INT64' },
+    { name: 'likes', type: 'INT64' },
+    { name: 'comments', type: 'INT64' },
+    { name: 'shares', type: 'INT64' },
+    { name: 'saves', type: 'INT64' },
+    { name: 'raw_metrics_json', type: 'STRING' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+  ], 'snapshot_date', ['user_id']);
+
+  await ensureTable(dataset, 'instagram_story_metric_snapshots', [
+    { name: 'snapshot_at', type: 'TIMESTAMP', mode: 'REQUIRED' },
+    { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },
+    { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'media_type', type: 'STRING' },
+    { name: 'permalink', type: 'STRING' },
+    { name: 'timestamp', type: 'TIMESTAMP' },
+    { name: 'thumbnail_url', type: 'STRING' },
+    { name: 'views', type: 'INT64' },
+    { name: 'reach', type: 'INT64' },
+    { name: 'replies', type: 'INT64' },
+    { name: 'shares', type: 'INT64' },
+    { name: 'total_interactions', type: 'INT64' },
+    { name: 'profile_visits', type: 'INT64' },
+    { name: 'follows', type: 'INT64' },
+    { name: 'navigation', type: 'INT64' },
+    { name: 'profile_activity', type: 'INT64' },
+    { name: 'metrics_status', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'unsupported_metrics', type: 'STRING', mode: 'REPEATED' },
+    { name: 'raw_metrics_json', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+  ], 'snapshot_date', ['user_id', 'instagram_id']);
+
   await ensureTable(dataset, 'instagram_reel_metric_snapshots', [
     { name: 'snapshot_at', type: 'TIMESTAMP', mode: 'REQUIRED' },
     { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },
@@ -284,6 +343,7 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'facebook_views', type: 'INT64' },
     { name: 'profile_activity', type: 'INT64' },
     { name: 'follows', type: 'INT64' },
+    { name: 'duration_seconds', type: 'FLOAT64' },
     { name: 'completion_rate', type: 'FLOAT64' },
     { name: 'metrics_status', type: 'STRING', mode: 'REQUIRED' },
     { name: 'unsupported_metrics', type: 'STRING', mode: 'REPEATED' },

@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   images: {
     domains: ['i.ytimg.com'],
   },
+  serverExternalPackages: ['@ffprobe-installer/ffprobe'],
 };
 
 export default withSentryConfig(nextConfig, {

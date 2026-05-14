@@ -1,6 +1,9 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { loadInstagramConfig } from './config';
 import { listLineSourceRegistrations } from '@/lib/lstep/dashboard';
+import { getReelMetricsDashboardData, type ReelMetricsDashboardData } from './reelMetricsDashboard';
+import { getStoryMetricsDashboardData, type StoryMetricsDashboardData } from './storyMetricsDashboard';
+import { getInstagramLpLineClicksByRange } from '@/lib/links/analytics';
 import type { BigQuery } from '@google-cloud/bigquery';
 
 const DEFAULT_DATASET = process.env.IG_BQ_DATASET ?? 'autostudio_instagram';
@@ -52,6 +55,32 @@ export interface ReelScriptSummary {
   inspirationSources: string[];
 }
 
+export interface DailyContentStat {
+  date: string;
+  count: number;
+  views: number;
+}
+
+export interface LatestUserInsights {
+  snapshotAt: string;
+  followersCount: number | null;
+  followsCount: number | null;
+  mediaCount: number | null;
+  reach: number | null;
+  views: number | null;
+  totalInteractions: number | null;
+  accountsEngaged: number | null;
+  profileLinksTaps: number | null;
+}
+
+export interface UserInsightsDailyPoint {
+  date: string;
+  followers: number | null;
+  reach: number | null;
+  views: number | null;
+  totalInteractions: number | null;
+}
+
 export interface InstagramDashboardData {
   followerSeries: FollowerPoint[];
   latestFollower?: FollowerPoint;
@@ -62,6 +91,14 @@ export interface InstagramDashboardData {
   lineRegistrationSeries: { date: string; count: number }[];
   linkClickCount: number | null;
   linkClickSeries: { date: string; count: number }[];
+  reelMetricsData: ReelMetricsDashboardData | null;
+  storyDailyCounts: DailyContentStat[];
+  reelDailyCounts: DailyContentStat[];
+  lpLineCtaClickCount: number | null;
+  lpLineCtaClickSeries: { date: string; clicks: number }[];
+  latestUserInsights: LatestUserInsights | null;
+  userInsightsDailySeries: UserInsightsDailyPoint[];
+  storyMetricsData: StoryMetricsDashboardData | null;
 }
 
 export async function getInstagramDashboardData(projectId: string): Promise<InstagramDashboardData> {
@@ -71,12 +108,24 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
   const client = createBigQueryClient(projectId, DEFAULT_LOCATION);
   console.log('[instagram/dashboard] BigQuery client created');
 
-  const [followerSeries, reels, stories, scripts, linkClickSeries] = await Promise.all([
+  const [followerSeries, reels, stories, scripts, linkClickSeries, reelMetricsData, storyDailyCounts, reelDailyCounts, latestUserInsights, userInsightsDailySeries, storyMetricsData] = await Promise.all([
     fetchFollowerSeries(client, projectId, config.defaultUserId),
     fetchReelHighlights(client, projectId, config.defaultUserId),
     fetchStoryHighlights(client, projectId, config.defaultUserId),
     fetchLatestScripts(client, projectId),
     fetchLinkClickSeries(client, projectId),
+    getReelMetricsDashboardData().catch((err) => {
+      console.warn('[instagram/dashboard] Failed to load reelMetricsData', err);
+      return null;
+    }),
+    fetchStoryDailyCounts(client, projectId, config.defaultUserId),
+    fetchReelDailyCounts(client, projectId, config.defaultUserId),
+    fetchLatestUserInsights(client, projectId),
+    fetchUserInsightsDailySeries(client, projectId),
+    getStoryMetricsDashboardData().catch((err) => {
+      console.warn('[instagram/dashboard] Failed to load storyMetricsData', err);
+      return null;
+    }),
   ]);
 
   console.log('[instagram/dashboard] Data fetched - followerSeries:', followerSeries.length, 'reels:', reels.length, 'stories:', stories.length);
@@ -104,6 +153,15 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
 
   const linkClickCount = linkClickSeries.reduce((sum, point) => sum + point.count, 0);
 
+  let lpLineCtaClickSeries: { date: string; clicks: number }[] = [];
+  let lpLineCtaClickCount: number | null = null;
+  try {
+    lpLineCtaClickSeries = await getInstagramLpLineClicksByRange(lineRangeStart, lineRangeEnd);
+    lpLineCtaClickCount = lpLineCtaClickSeries.reduce((sum, point) => sum + point.clicks, 0);
+  } catch (err) {
+    console.warn('[instagram/dashboard] Failed to load lpLineCtaClick series', err);
+  }
+
   return {
     followerSeries,
     latestFollower: followerSeries[0],
@@ -114,7 +172,146 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     lineRegistrationSeries,
     linkClickCount,
     linkClickSeries,
+    reelMetricsData,
+    storyDailyCounts,
+    reelDailyCounts,
+    lpLineCtaClickCount,
+    lpLineCtaClickSeries,
+    latestUserInsights,
+    userInsightsDailySeries,
+    storyMetricsData,
   };
+}
+
+async function fetchLatestUserInsights(client: BigQuery, projectId: string): Promise<LatestUserInsights | null> {
+  const query = `
+    SELECT
+      snapshot_at,
+      followers_count,
+      follows_count,
+      media_count,
+      reach,
+      views,
+      total_interactions,
+      accounts_engaged,
+      profile_links_taps
+    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_user_insights_snapshots\`
+    ORDER BY snapshot_at DESC
+    LIMIT 1
+  `;
+  try {
+    const [rows] = await client.query({ query, location: DEFAULT_LOCATION });
+    if (!rows.length) return null;
+    const row = rows[0];
+    const snapshotAtRaw = row.snapshot_at;
+    const snapshotAt = snapshotAtRaw && typeof snapshotAtRaw === 'object' && 'value' in snapshotAtRaw
+      ? String(snapshotAtRaw.value)
+      : String(snapshotAtRaw ?? '');
+    return {
+      snapshotAt,
+      followersCount: row.followers_count !== null && row.followers_count !== undefined ? Number(row.followers_count) : null,
+      followsCount: row.follows_count !== null && row.follows_count !== undefined ? Number(row.follows_count) : null,
+      mediaCount: row.media_count !== null && row.media_count !== undefined ? Number(row.media_count) : null,
+      reach: row.reach !== null && row.reach !== undefined ? Number(row.reach) : null,
+      views: row.views !== null && row.views !== undefined ? Number(row.views) : null,
+      totalInteractions: row.total_interactions !== null && row.total_interactions !== undefined ? Number(row.total_interactions) : null,
+      accountsEngaged: row.accounts_engaged !== null && row.accounts_engaged !== undefined ? Number(row.accounts_engaged) : null,
+      profileLinksTaps: row.profile_links_taps !== null && row.profile_links_taps !== undefined ? Number(row.profile_links_taps) : null,
+    };
+  } catch (error) {
+    console.warn('[instagram/dashboard] Failed to fetch latestUserInsights', error);
+    return null;
+  }
+}
+
+async function fetchUserInsightsDailySeries(client: BigQuery, projectId: string): Promise<UserInsightsDailyPoint[]> {
+  const query = `
+    WITH daily_latest AS (
+      SELECT
+        snapshot_date,
+        followers_count,
+        reach,
+        views,
+        total_interactions,
+        ROW_NUMBER() OVER (PARTITION BY snapshot_date ORDER BY snapshot_at DESC) AS rn
+      FROM \`${projectId}.${DEFAULT_DATASET}.instagram_user_insights_snapshots\`
+      WHERE snapshot_date >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 90 DAY)
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', snapshot_date) AS date,
+      followers_count,
+      reach,
+      views,
+      total_interactions
+    FROM daily_latest
+    WHERE rn = 1
+    ORDER BY snapshot_date DESC
+  `;
+  try {
+    const [rows] = await client.query({ query, location: DEFAULT_LOCATION });
+    return rows.map((row) => ({
+      date: String(row.date),
+      followers: row.followers_count !== null && row.followers_count !== undefined ? Number(row.followers_count) : null,
+      reach: row.reach !== null && row.reach !== undefined ? Number(row.reach) : null,
+      views: row.views !== null && row.views !== undefined ? Number(row.views) : null,
+      totalInteractions: row.total_interactions !== null && row.total_interactions !== undefined ? Number(row.total_interactions) : null,
+    }));
+  } catch (error) {
+    console.warn('[instagram/dashboard] Failed to fetch userInsightsDailySeries', error);
+    return [];
+  }
+}
+
+async function fetchStoryDailyCounts(client: BigQuery, projectId: string, userId: string): Promise<DailyContentStat[]> {
+  const query = `
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE(timestamp, 'Asia/Tokyo')) AS date,
+      COUNT(*) AS count,
+      MAX(COALESCE(reach, 0)) AS views
+    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_stories\`
+    WHERE user_id = @user_id
+      AND timestamp IS NOT NULL
+      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+    GROUP BY date
+    ORDER BY date DESC
+  `;
+  try {
+    const [rows] = await client.query({ query, params: { user_id: userId }, location: DEFAULT_LOCATION });
+    return rows.map((row) => ({
+      date: String(row.date),
+      count: Number(row.count ?? 0),
+      views: Number(row.views ?? 0),
+    }));
+  } catch (error) {
+    console.warn('[instagram/dashboard] Failed to fetch story daily counts', error);
+    return [];
+  }
+}
+
+async function fetchReelDailyCounts(client: BigQuery, projectId: string, userId: string): Promise<DailyContentStat[]> {
+  const query = `
+    SELECT
+      FORMAT_DATE('%Y-%m-%d', DATE(timestamp, 'Asia/Tokyo')) AS date,
+      COUNT(*) AS count,
+      MAX(COALESCE(views, 0)) AS views
+    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reels\`
+    WHERE user_id = @user_id
+      AND timestamp IS NOT NULL
+      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+    GROUP BY date
+    ORDER BY date DESC
+  `;
+  try {
+    const [rows] = await client.query({ query, params: { user_id: userId }, location: DEFAULT_LOCATION });
+    return rows.map((row) => ({
+      date: String(row.date),
+      count: Number(row.count ?? 0),
+      views: Number(row.views ?? 0),
+    }));
+  } catch (error) {
+    console.warn('[instagram/dashboard] Failed to fetch reel daily counts', error);
+    return [];
+  }
 }
 
 async function fetchFollowerSeries(client: BigQuery, projectId: string, userId: string): Promise<FollowerPoint[]> {
