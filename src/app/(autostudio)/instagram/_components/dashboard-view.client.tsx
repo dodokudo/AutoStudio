@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { InstagramDashboardData } from '@/lib/instagram/dashboard';
 import LoadingScreen from '@/components/LoadingScreen';
 import { useDateRange, DatePreset } from '@/lib/dateRangeStore';
@@ -155,9 +156,17 @@ const resolveMediaUrl = (...urls: Array<string | null | undefined>): string | nu
   return null;
 };
 
+function parseInstagramTab(value: string | null): InstagramTabKey {
+  if (value === 'reels' || value === 'stories' || value === 'competitors' || value === 'scripts') return value;
+  return 'dashboard';
+}
+
 export function InstagramDashboardView({ data }: Props) {
   const { dateRange, updatePreset } = useDateRange();
-  const [activeTab, setActiveTab] = useState<InstagramTabKey>('dashboard');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<InstagramTabKey>(() => parseInstagramTab(searchParams?.get('tab') ?? null));
   const [pendingTab, setPendingTab] = useState<InstagramTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -609,6 +618,14 @@ export function InstagramDashboardView({ data }: Props) {
             startTransition(() => {
               setActiveTab(nextTab);
             });
+            const params = new URLSearchParams(searchParams?.toString() ?? '');
+            if (nextTab === 'dashboard') {
+              params.delete('tab');
+            } else {
+              params.set('tab', nextTab);
+            }
+            const query = params.toString();
+            router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
           }}
         />
         <DashboardDateRangePicker

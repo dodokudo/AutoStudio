@@ -62,57 +62,6 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
   );
 }
 
-function FunnelVisual({
-  impressions,
-  clicks,
-  lpClicks,
-  lineRegistrations,
-}: {
-  impressions: number;
-  clicks: number;
-  lpClicks: number;
-  lineRegistrations: number;
-}) {
-  const steps = [
-    { label: 'インプレッション', value: impressions, color: 'rgba(10,122,255,0.85)' },
-    { label: '広告リンクCK', value: clicks, color: 'rgba(10,122,255,0.65)' },
-    { label: 'LP内LINE CK', value: lpClicks, color: 'rgba(255,176,32,0.85)' },
-    { label: 'LINE登録', value: lineRegistrations, color: 'rgba(25,195,125,0.85)' },
-  ];
-  const max = Math.max(...steps.map((s) => s.value), 1);
-  return (
-    <Card className="p-6">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル可視化</h2>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">imp → クリック → LP → LINE登録の歩留まり</p>
-      </div>
-      <div className="space-y-2">
-        {steps.map((step, idx) => {
-          const ratio = step.value / max;
-          const prev = idx > 0 ? steps[idx - 1].value : null;
-          const dropRate = prev !== null && prev > 0 ? (step.value / prev) * 100 : null;
-          return (
-            <div key={step.label} className="flex items-center gap-3">
-              <span className="w-32 shrink-0 text-xs text-[color:var(--color-text-secondary)]">{step.label}</span>
-              <div className="relative h-8 flex-1 overflow-hidden rounded bg-[color:var(--color-surface-muted)]">
-                <div
-                  className="absolute inset-y-0 left-0 flex items-center justify-end px-3 text-xs font-semibold text-white"
-                  style={{ width: `${Math.max(2, ratio * 100)}%`, backgroundColor: step.color }}
-                >
-                  {num(step.value)}
-                </div>
-              </div>
-              <span className="w-20 shrink-0 text-right text-xs text-[color:var(--color-text-muted)] tabular-nums">
-                {dropRate !== null ? `→ ${dropRate.toFixed(1)}%` : ''}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
 function PeriodCompareCollapsed({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <Card className="p-6">
@@ -199,8 +148,8 @@ function TopCreativeCard({ row }: { row: AdsByAdRow }) {
   const cvr = row.inlineLinkClicks > 0 ? row.leads / row.inlineLinkClicks : null;
   const imageUrl = row.imageUrl || row.thumbnailUrl;
   return (
-    <div className="flex flex-col rounded-md border border-[color:var(--color-border)] bg-white p-3">
-      <div className="relative mx-auto aspect-[9/16] w-full max-w-[160px] overflow-hidden rounded-md bg-[color:var(--color-surface-muted)]">
+    <div className="flex items-start gap-4 rounded-md border border-[color:var(--color-border)] bg-white p-4">
+      <div className="relative aspect-[9/16] w-28 shrink-0 overflow-hidden rounded-md bg-[color:var(--color-surface-muted)]">
         {imageUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={imageUrl} alt={row.adName} className="h-full w-full object-cover" loading="lazy" />
@@ -211,22 +160,20 @@ function TopCreativeCard({ row }: { row: AdsByAdRow }) {
           {mediaLabel(row.mediaType)}
         </div>
       </div>
-      <p className="mt-2 truncate text-sm font-medium text-[color:var(--color-text-primary)]" title={row.adName}>
-        {row.adName}
-      </p>
-      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
-        <div className="text-[color:var(--color-text-muted)]">消化</div>
-        <div className="text-right font-semibold tabular-nums">{yen(row.spend)}</div>
-        <div className="text-[color:var(--color-text-muted)]">imp</div>
-        <div className="text-right font-semibold tabular-nums">{num(row.impressions)}</div>
-        <div className="text-[color:var(--color-text-muted)]">CTR</div>
-        <div className="text-right font-semibold tabular-nums">{pct(ctr)}</div>
-        <div className="text-[color:var(--color-text-muted)]">LINE</div>
-        <div className="text-right font-semibold tabular-nums">{num(row.leads)}</div>
-        <div className="text-[color:var(--color-text-muted)]">CPA</div>
-        <div className="text-right font-semibold tabular-nums">{cpa !== null ? yen(cpa) : '—'}</div>
-        <div className="text-[color:var(--color-text-muted)]">CVR</div>
-        <div className="text-right font-semibold tabular-nums">{cvr !== null ? pct(cvr) : '—'}</div>
+      <div className="flex-1 min-w-0">
+        <p className="truncate text-sm font-medium text-[color:var(--color-text-primary)]" title={row.adName}>
+          {row.adName}
+        </p>
+        <p className="mt-1 truncate text-xs text-[color:var(--color-text-muted)]">{row.campaignName}</p>
+        <div className="mt-3 grid grid-cols-3 gap-3 text-xs md:grid-cols-7">
+          <div><div className="text-[color:var(--color-text-muted)]">消化</div><div className="font-semibold text-[color:var(--color-text-primary)]">{yen(row.spend)}</div></div>
+          <div><div className="text-[color:var(--color-text-muted)]">imp</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.impressions)}</div></div>
+          <div><div className="text-[color:var(--color-text-muted)]">クリック</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.inlineLinkClicks)}</div></div>
+          <div><div className="text-[color:var(--color-text-muted)]">CTR</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(ctr)}</div></div>
+          <div><div className="text-[color:var(--color-text-muted)]">LINE登録</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.leads)}</div></div>
+          <div><div className="text-[color:var(--color-text-muted)]">CPA</div><div className="font-semibold text-[color:var(--color-text-primary)]">{cpa !== null ? yen(cpa) : '—'}</div></div>
+          <div><div className="text-[color:var(--color-text-muted)]">CVR</div><div className="font-semibold text-[color:var(--color-text-primary)]">{cvr !== null ? pct(cvr) : '—'}</div></div>
+        </div>
       </div>
     </div>
   );
@@ -288,12 +235,30 @@ function PerformanceDetail({ byAd, daily }: { byAd: AdsByAdRow[]; daily: AdsDail
   );
 }
 
+function readTabFromParams(searchParams: URLSearchParams | null): AdsTabKey {
+  const t = searchParams?.get('tab');
+  if (t === 'creative' || t === 'detail') return t;
+  return 'home';
+}
+
 export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, reelAdRows }: AdsDashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<AdsTabKey>('home');
+  const [activeTab, setActiveTab] = useState<AdsTabKey>(() => readTabFromParams(searchParams));
   const [periodCompareOpen, setPeriodCompareOpen] = useState(false);
+
+  const handleTabChange = (value: AdsTabKey) => {
+    setActiveTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'home') {
+      params.delete('tab');
+    } else {
+      params.set('tab', value);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   const handleRangeChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -311,7 +276,6 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, r
   const summary = data.summary;
   const ctr = summary.inlineLinkCtr;
   const lineCvr = summary.inlineLinkClicks > 0 ? summary.lineRegistrations / summary.inlineLinkClicks : null;
-  const lpCvr = summary.launchkitLineClicks > 0 ? summary.lineRegistrations / summary.launchkitLineClicks : null;
 
   return (
     <div className="space-y-6">
@@ -319,7 +283,7 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, r
         <DashboardTabsInteractive
           items={ADS_TAB_ITEMS}
           value={activeTab}
-          onChange={(value) => setActiveTab(value as AdsTabKey)}
+          onChange={(value) => handleTabChange(value as AdsTabKey)}
           className="flex-1 min-w-[260px]"
         />
         <DashboardDateRangePicker
@@ -335,33 +299,24 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, r
         <div className="space-y-6">
           <Card className="p-6">
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">主要指標</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <KpiCard label="消化金額" value={yen(summary.spend)} />
               <KpiCard label="インプレッション" value={num(summary.impressions)} />
               <KpiCard label="広告リンククリック" value={num(summary.inlineLinkClicks)} sub={`CTR ${pct(ctr)}`} />
               <KpiCard label="LINE登録(全流入)" value={num(summary.lineRegistrations)} />
+              <KpiCard label="LINE CPA" value={summary.lineRegistrations > 0 ? yen(summary.lineCpa) : '—'} />
             </div>
             <h2 className="mt-6 text-lg font-semibold text-[color:var(--color-text-primary)]">補助指標</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <KpiCard label="CPM" value={yen(summary.cpm)} />
               <KpiCard label="CPC" value={yen(summary.cpc)} />
-              <KpiCard label="META LEAD CPA" value={summary.leads > 0 ? yen(summary.metaLeadCpa) : '—'} />
-              <KpiCard label="LINE CPA(全流入)" value={summary.lineRegistrations > 0 ? yen(summary.lineCpa) : '—'} />
               <KpiCard label="広告LPC" value={yen(summary.lpc)} />
-              <KpiCard label="LP内LINE CK率" value={pct(summary.lineClickRate)} />
-              <KpiCard label="LP CVR" value={lpCvr !== null ? pct(lpCvr) : '—'} sub="LP内LINE CK→登録" />
+              <KpiCard label="META LEAD CPA" value={summary.leads > 0 ? yen(summary.metaLeadCpa) : '—'} />
               <KpiCard label="全体CVR" value={lineCvr !== null ? pct(lineCvr) : '—'} sub="リンクCK→登録" />
             </div>
           </Card>
 
           <DailyTable daily={data.daily} />
-
-          <FunnelVisual
-            impressions={summary.impressions}
-            clicks={summary.inlineLinkClicks}
-            lpClicks={summary.launchkitLineClicks}
-            lineRegistrations={summary.lineRegistrations}
-          />
 
           <PeriodCompareCollapsed open={periodCompareOpen} onToggle={() => setPeriodCompareOpen((p) => !p)} />
 
@@ -370,18 +325,18 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, r
               <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">上位クリエイティブ TOP3</h2>
               <button
                 type="button"
-                onClick={() => setActiveTab('creative')}
+                onClick={() => handleTabChange('creative')}
                 className="text-sm font-medium text-[color:var(--color-accent)] hover:underline"
               >
                 すべて見る →
               </button>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 space-y-3">
               {topCreatives.map((row) => (
                 <TopCreativeCard key={row.adId} row={row} />
               ))}
               {topCreatives.length === 0 && (
-                <p className="col-span-3 py-8 text-center text-sm text-[color:var(--color-text-muted)]">この期間のクリエイティブデータがありません</p>
+                <p className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">この期間のクリエイティブデータがありません</p>
               )}
             </div>
           </Card>
