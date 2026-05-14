@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import type { ReelAdInsightRow } from '@/lib/ads/reelInsights';
+import type { AdTranscriptSegment, ReelAdInsightRow } from '@/lib/ads/reelInsights';
 
 interface Props {
   rows: ReelAdInsightRow[];
@@ -82,10 +82,75 @@ function RetentionCard({ row, base }: { row: { adsetName: string | null; audienc
   );
 }
 
+function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
+  segments: AdTranscriptSegment[];
+  durationSeconds: number;
+  retentionPoints: Array<{ label: string; ratio: number; color: string }>;
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  return (
+    <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+      <div className="text-xs font-medium text-[color:var(--color-text-primary)]">台本タイムライン（{segments.length}行 / 動画{durationSeconds.toFixed(0)}秒）</div>
+      <div className="relative mt-3 h-7 w-full overflow-hidden rounded bg-white border border-[color:var(--color-border)]">
+        {segments.map((seg, idx) => {
+          const left = Math.max(0, (seg.start / durationSeconds) * 100);
+          const width = Math.max(0.4, ((seg.end - seg.start) / durationSeconds) * 100);
+          return (
+            <button
+              type="button"
+              key={idx}
+              onMouseEnter={() => setHoverIdx(idx)}
+              onMouseLeave={() => setHoverIdx(null)}
+              className="absolute top-0 h-full border-r border-white/60 bg-[color:var(--color-accent)] opacity-50 hover:opacity-100"
+              style={{ left: `${left}%`, width: `${width}%` }}
+              title={`[${seg.start.toFixed(1)}s〜${seg.end.toFixed(1)}s] ${seg.text}`}
+            />
+          );
+        })}
+        {retentionPoints.map((p) => (
+          <div
+            key={p.label}
+            className="pointer-events-none absolute inset-y-0 w-[2px]"
+            style={{ left: `${p.ratio * 100}%`, backgroundColor: p.color }}
+          />
+        ))}
+      </div>
+      <div className="relative mt-1 h-4 w-full text-[10px] text-[color:var(--color-text-muted)]">
+        <span className="absolute left-0">0s</span>
+        {retentionPoints.map((p) => (
+          <span
+            key={p.label}
+            className="absolute -translate-x-1/2 whitespace-nowrap font-semibold"
+            style={{ left: `${p.ratio * 100}%`, color: p.color }}
+          >
+            {p.label}
+          </span>
+        ))}
+        <span className="absolute right-0">{durationSeconds.toFixed(0)}s</span>
+      </div>
+      {hoverIdx !== null && segments[hoverIdx] && (
+        <div className="mt-3 rounded border border-[color:var(--color-border)] bg-white p-2">
+          <div className="text-[10px] text-[color:var(--color-text-muted)]">{segments[hoverIdx].start.toFixed(1)}s 〜 {segments[hoverIdx].end.toFixed(1)}s</div>
+          <div className="mt-1 text-sm text-[color:var(--color-text-primary)]">「{segments[hoverIdx].text}」</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
-  const totalP15s = row.byAdset.reduce((sum, a) => sum + (a.p15s ?? 0), 0);
-  const totalP95 = row.byAdset.reduce((sum, a) => sum + (a.p95 ?? 0), 0);
+  const byAdset = row.byAdset ?? [];
+  const transcriptSegments = row.transcriptSegments ?? [];
+  const totalP15s = byAdset.reduce((sum, a) => sum + (a.p15s ?? 0), 0);
+  const totalP95 = byAdset.reduce((sum, a) => sum + (a.p95 ?? 0), 0);
   const base = row.totalVideoPlays > 0 ? row.totalVideoPlays : Math.max(row.totalImpressions, 1);
+  const duration = row.durationSeconds && row.durationSeconds > 0 ? row.durationSeconds : (transcriptSegments.length ? transcriptSegments[transcriptSegments.length - 1].end : 0);
+  const retentionPoints = row.totalVideoPlays > 0 && duration > 0 ? [
+    { label: '15s', ratio: Math.min(15 / duration, 1), color: 'var(--color-success)' },
+    { label: '25%', ratio: 0.25, color: 'var(--color-accent)' },
+    { label: '50%', ratio: 0.5, color: 'var(--color-warning)' },
+    { label: '75%', ratio: 0.75, color: 'var(--color-error)' },
+  ] : [];
 
   return (
     <Card className="p-4">
@@ -119,6 +184,13 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
             <div><div className="text-[color:var(--color-text-muted)]">CPA</div><div className="font-semibold text-[color:var(--color-text-primary)]">{row.cpa !== null ? yen(row.cpa) : '—'}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">CVR</div><div className="font-semibold text-[color:var(--color-text-primary)]">{row.cvr !== null ? pct(row.cvr * 100, 2) : '—'}</div></div>
           </div>
+          {transcriptSegments.length > 0 && duration > 0 && (
+            <TranscriptTimeline
+              segments={transcriptSegments}
+              durationSeconds={duration}
+              retentionPoints={retentionPoints}
+            />
+          )}
           <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
             <div className="mb-2 text-xs font-medium text-[color:var(--color-text-primary)]">広告全体の視聴維持カーブ</div>
             <div className="space-y-1">
@@ -134,7 +206,7 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
         </div>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {row.byAdset.map((adset) => (
+        {byAdset.map((adset) => (
           <RetentionCard key={adset.adsetId} row={adset} base={Math.max(adset.videoPlays, adset.impressions, 1)} />
         ))}
       </div>
@@ -150,7 +222,7 @@ export function ReelDropoffSection({ rows }: Props) {
     return rows
       .map((row) => ({
         ...row,
-        byAdset: row.byAdset.filter((a) => a.audienceType === filter),
+        byAdset: (row.byAdset ?? []).filter((a) => a.audienceType === filter),
       }))
       .filter((row) => row.byAdset.length > 0);
   }, [rows, filter]);

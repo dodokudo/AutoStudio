@@ -22,6 +22,12 @@ export interface ReelAdAdsetMetrics {
   costPerThruplay: number | null;
 }
 
+export interface AdTranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
 export interface ReelAdInsightRow {
   permalink: string | null;
   adName: string | null;
@@ -42,6 +48,8 @@ export interface ReelAdInsightRow {
   cpa: number | null;
   cpc: number;
   cvr: number | null;
+  durationSeconds: number | null;
+  transcriptSegments: AdTranscriptSegment[];
   byAdset: ReelAdAdsetMetrics[];
 }
 
@@ -95,7 +103,9 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       SUM(g.p100) AS total_p100,
       a_agg.total_clicks,
       a_agg.total_inline_link_clicks,
-      a_agg.total_leads,
+      l_agg.total_leads,
+      ANY_VALUE(t_agg.segments_json) AS segments_json,
+      ANY_VALUE(t_agg.duration_seconds) AS duration_seconds,
       ARRAY_AGG(STRUCT(
         g.adset_id, g.adset_name, g.audience_type,
         g.impressions, g.video_plays, g.p2s, g.p15s, g.p25, g.p50, g.p75, g.p95, g.p100, g.thruplay, g.spend, g.cost_per_thruplay
@@ -127,7 +137,15 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
         AND a.platform_position IS NULL
       GROUP BY c.instagram_permalink_url
     ) l_agg ON g.permalink = l_agg.permalink
-    GROUP BY g.permalink, a_agg.total_clicks, a_agg.total_inline_link_clicks, a_agg.total_leads
+    LEFT JOIN (
+      SELECT instagram_permalink_url AS permalink, segments_json, duration_seconds
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY instagram_permalink_url ORDER BY transcribed_at DESC) AS rn
+        FROM \`${PROJECT_ID}.${DATASET}.meta_ad_reel_transcripts\`
+      )
+      WHERE rn = 1
+    ) t_agg ON g.permalink = t_agg.permalink
+    GROUP BY g.permalink, a_agg.total_clicks, a_agg.total_inline_link_clicks, l_agg.total_leads
     ORDER BY total_impressions DESC
   `;
 
@@ -164,6 +182,18 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
     cpa,
     cpc,
     cvr,
+    durationSeconds: row.duration_seconds !== null && row.duration_seconds !== undefined ? Number(row.duration_seconds) : null,
+    transcriptSegments: (() => {
+      if (!row.segments_json) return [];
+      try {
+        const arr = JSON.parse(String(row.segments_json)) as Array<Record<string, unknown>>;
+        return Array.isArray(arr) ? arr.map((s) => ({
+          start: Number(s.start ?? 0),
+          end: Number(s.end ?? 0),
+          text: String(s.text ?? '').trim(),
+        })) : [];
+      } catch { return []; }
+    })(),
     byAdset: ((row.adsets as Array<Record<string, unknown>>) ?? []).map((a) => ({
       adsetId: String(a.adset_id ?? ''),
       adsetName: (a.adset_name as string) ?? null,
