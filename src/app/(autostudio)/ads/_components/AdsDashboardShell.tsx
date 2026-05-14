@@ -167,7 +167,7 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, r
         />
       </div>
 
-      {activeTab === 'home' ? (
+      {activeTab === 'home' && (
         <div className="space-y-6">
           <Card className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -269,7 +269,9 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, r
             </Card>
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'creative' && (
         <Card className="p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>

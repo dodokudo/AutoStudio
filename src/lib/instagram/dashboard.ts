@@ -3,6 +3,7 @@ import { loadInstagramConfig } from './config';
 import { listLineSourceRegistrations } from '@/lib/lstep/dashboard';
 import { getReelMetricsDashboardData, type ReelMetricsDashboardData } from './reelMetricsDashboard';
 import { getStoryMetricsDashboardData, type StoryMetricsDashboardData } from './storyMetricsDashboard';
+import { getCompetitorDashboardData, type CompetitorDashboardData } from './competitorDashboard';
 import { getInstagramLpLineClicksByRange } from '@/lib/links/analytics';
 import type { BigQuery } from '@google-cloud/bigquery';
 
@@ -99,6 +100,7 @@ export interface InstagramDashboardData {
   latestUserInsights: LatestUserInsights | null;
   userInsightsDailySeries: UserInsightsDailyPoint[];
   storyMetricsData: StoryMetricsDashboardData | null;
+  competitorData: CompetitorDashboardData | null;
 }
 
 export async function getInstagramDashboardData(projectId: string): Promise<InstagramDashboardData> {
@@ -108,7 +110,7 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
   const client = createBigQueryClient(projectId, DEFAULT_LOCATION);
   console.log('[instagram/dashboard] BigQuery client created');
 
-  const [followerSeries, reels, stories, scripts, linkClickSeries, reelMetricsData, storyDailyCounts, reelDailyCounts, latestUserInsights, userInsightsDailySeries, storyMetricsData] = await Promise.all([
+  const [followerSeries, reels, stories, scripts, linkClickSeries, reelMetricsData, storyDailyCounts, reelDailyCounts, latestUserInsights, userInsightsDailySeries, storyMetricsData, competitorData] = await Promise.all([
     fetchFollowerSeries(client, projectId, config.defaultUserId),
     fetchReelHighlights(client, projectId, config.defaultUserId),
     fetchStoryHighlights(client, projectId, config.defaultUserId),
@@ -124,6 +126,10 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     fetchUserInsightsDailySeries(client, projectId),
     getStoryMetricsDashboardData().catch((err) => {
       console.warn('[instagram/dashboard] Failed to load storyMetricsData', err);
+      return null;
+    }),
+    getCompetitorDashboardData().catch((err) => {
+      console.warn('[instagram/dashboard] Failed to load competitorData', err);
       return null;
     }),
   ]);
@@ -180,6 +186,7 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
     latestUserInsights,
     userInsightsDailySeries,
     storyMetricsData,
+    competitorData,
   };
 }
 

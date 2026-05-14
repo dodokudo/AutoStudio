@@ -22,17 +22,19 @@ import { Button } from '@/components/ui/button';
 import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { InsightsCard } from '@/app/(autostudio)/threads/_components/insights-card';
 import { LiveReelsView } from '../live-reels/_components/live-reels-view';
+import { CompetitorTab } from './competitor-tab';
 
 interface Props {
   data: InstagramDashboardData;
 }
 
-type InstagramTabKey = 'dashboard' | 'reels' | 'stories' | 'scripts';
+type InstagramTabKey = 'dashboard' | 'reels' | 'stories' | 'competitors' | 'scripts';
 
 const TAB_SKELETON_SECTIONS: Record<InstagramTabKey, number> = {
   dashboard: 4,
   reels: 3,
   stories: 3,
+  competitors: 3,
   scripts: 2,
 };
 
@@ -549,6 +551,7 @@ export function InstagramDashboardView({ data }: Props) {
     { value: 'dashboard', label: '概要' },
     { value: 'reels', label: 'リール' },
     { value: 'stories', label: 'ストーリー' },
+    { value: 'competitors', label: '競合' },
     { value: 'scripts', label: '台本' },
   ] as const;
 
@@ -1130,6 +1133,17 @@ export function InstagramDashboardView({ data }: Props) {
           </Card>
         );
       })()}
+
+      {activeTab === 'competitors' && (
+        data.competitorData ? (
+          <CompetitorTab data={data.competitorData} />
+        ) : (
+          <Card className="p-8 text-center text-[color:var(--color-text-muted)]">
+            <p className="font-semibold">競合データを読み込めませんでした</p>
+            <p className="mt-2 text-xs">サーバーログを確認してください</p>
+          </Card>
+        )
+      )}
 
       {activeTab === 'scripts' && (
         <Card className="p-6">
