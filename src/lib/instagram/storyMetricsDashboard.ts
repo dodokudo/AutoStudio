@@ -5,6 +5,7 @@ export interface StoryMetricSnapshotView {
   instagramId: string;
   snapshotAt: string;
   publishedAt: string | null;
+  caption: string | null;
   permalink: string | null;
   thumbnailUrl: string | null;
   mediaType: string | null;
@@ -41,6 +42,7 @@ export async function getStoryMetricsDashboardData(): Promise<StoryMetricsDashbo
       instagram_id,
       snapshot_at,
       timestamp AS published_at,
+      caption,
       permalink,
       thumbnail_url,
       media_type,
@@ -77,6 +79,7 @@ export async function getStoryMetricsDashboardData(): Promise<StoryMetricsDashbo
             ? String(publishedAtRaw.value)
             : String(publishedAtRaw)
           : null,
+        caption: row.caption ? String(row.caption) : null,
         permalink: row.permalink ? String(row.permalink) : null,
         thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : null,
         mediaType: row.media_type ? String(row.media_type) : null,

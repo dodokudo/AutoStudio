@@ -6,6 +6,7 @@ const GRAPH_BASE = process.env.IG_GRAPH_BASE ?? `https://graph.facebook.com/${GR
 
 const STORY_FIELDS = [
   'id',
+  'caption',
   'media_type',
   'media_product_type',
   'permalink',
@@ -36,6 +37,7 @@ interface GraphList<T> {
 
 export interface InstagramGraphStory {
   id: string;
+  caption?: string;
   media_type?: string;
   media_product_type?: string;
   permalink?: string;
@@ -59,6 +61,7 @@ export interface StoryMetricSnapshotRow {
   user_id: string;
   instagram_user_id: string;
   instagram_id: string;
+  caption: string | null;
   media_type: string | null;
   permalink: string | null;
   timestamp: string | null;
@@ -200,6 +203,7 @@ export function buildStorySnapshotRows(
       user_id: context.autostudioUserId,
       instagram_user_id: context.instagramUserId,
       instagram_id: result.story.id,
+      caption: result.story.caption ?? null,
       media_type: result.story.media_type ?? null,
       permalink: result.story.permalink ?? null,
       timestamp: normalizeTimestamp(result.story.timestamp),

@@ -297,6 +297,7 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
     { name: 'instagram_user_id', type: 'STRING', mode: 'REQUIRED' },
     { name: 'instagram_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'caption', type: 'STRING' },
     { name: 'media_type', type: 'STRING' },
     { name: 'permalink', type: 'STRING' },
     { name: 'timestamp', type: 'TIMESTAMP' },

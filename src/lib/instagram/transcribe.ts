@@ -1,20 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { GoogleAIFileManager, FileState } from '@google/generative-ai/server';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-function getGeminiApiKey(): string {
-  return process.env.GEMINI_API_KEY ?? '';
-}
-function getTranscribeModel(): string {
-  return process.env.IG_TRANSCRIBE_MODEL ?? 'gemini-2.5-flash';
-}
-
-const PROMPT = `この動画の音声を秒単位のタイムスタンプ付きで文字起こししてください。
-JSON配列のみで返してください。各要素は {"start": 開始秒, "end": 終了秒, "text": "発話内容"} の形式です。
-背景音楽だけのセクションは含めないでください。`;
+const WHISPER_CLI = process.env.WHISPER_CLI ?? '/opt/homebrew/bin/whisper-cli';
+const WHISPER_MODEL = process.env.WHISPER_MODEL ?? '/Users/kudo/whisper-models/ggml-medium.bin';
+const FFMPEG_BIN = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
+const WHISPER_LANG = process.env.WHISPER_LANG ?? 'ja';
 
 export interface TranscriptSegment {
   start: number;
@@ -39,63 +32,107 @@ async function downloadToTemp(mediaUrl: string): Promise<string> {
   return tempPath;
 }
 
-function safeParseSegments(text: string): TranscriptSegment[] {
-  const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) return [];
+function runProc(command: string, args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      proc.kill('SIGKILL');
+      reject(new Error(`Process timed out: ${command}`));
+    }, timeoutMs);
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(`${command} exited with ${code}: ${stderr.slice(0, 500)}`));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function extractAudio(videoPath: string): Promise<string> {
+  const wavPath = videoPath.replace(/\.mp4$/, '') + '.wav';
+  await runProc(FFMPEG_BIN, [
+    '-y', '-i', videoPath,
+    '-vn', '-ac', '1', '-ar', '16000', '-f', 'wav',
+    wavPath,
+  ], 60_000);
+  return wavPath;
+}
+
+interface WhisperJsonSegment {
+  offsets?: { from?: number; to?: number };
+  text?: string;
+}
+
+interface WhisperJsonOutput {
+  transcription?: WhisperJsonSegment[];
+}
+
+function parseWhisperJson(jsonPath: string): TranscriptSegment[] {
   try {
-    const parsed = JSON.parse(jsonMatch[0]) as Array<Record<string, unknown>>;
-    return parsed
-      .filter((item) => typeof item.start === 'number' && typeof item.text === 'string')
-      .map((item) => ({
-        start: Number(item.start),
-        end: typeof item.end === 'number' ? Number(item.end) : Number(item.start),
-        text: String(item.text).trim(),
-      }));
+    const raw = fs.readFileSync(jsonPath, 'utf8');
+    const data = JSON.parse(raw) as WhisperJsonOutput;
+    if (!Array.isArray(data.transcription)) return [];
+    return data.transcription
+      .map((item) => {
+        const fromMs = Number(item.offsets?.from ?? 0);
+        const toMs = Number(item.offsets?.to ?? 0);
+        return {
+          start: fromMs / 1000,
+          end: toMs / 1000,
+          text: String(item.text ?? '').trim(),
+        };
+      })
+      .filter((seg) => seg.text.length > 0);
   } catch {
     return [];
   }
 }
 
 export async function transcribeVideoFromUrl(mediaUrl: string): Promise<TranscribeResult> {
-  const apiKey = getGeminiApiKey();
-  const modelName = getTranscribeModel();
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not set');
+  if (!fs.existsSync(WHISPER_MODEL)) {
+    throw new Error(`Whisper model not found at ${WHISPER_MODEL}. Run: brew install whisper-cpp && download ggml model.`);
   }
-  const tempPath = await downloadToTemp(mediaUrl);
+  if (!fs.existsSync(WHISPER_CLI)) {
+    throw new Error(`whisper-cli not found at ${WHISPER_CLI}`);
+  }
+
+  const videoPath = await downloadToTemp(mediaUrl);
+  let wavPath: string | null = null;
+  let jsonPath: string | null = null;
   try {
-    const fileManager = new GoogleAIFileManager(apiKey);
-    const uploaded = await fileManager.uploadFile(tempPath, { mimeType: 'video/mp4' });
+    wavPath = await extractAudio(videoPath);
+    const outputBase = wavPath.replace(/\.wav$/, '');
+    jsonPath = `${outputBase}.json`;
+    await runProc(WHISPER_CLI, [
+      '-m', WHISPER_MODEL,
+      '-f', wavPath,
+      '-l', WHISPER_LANG,
+      '-oj',
+      '-of', outputBase,
+      '-t', '4',
+    ], 600_000);
 
-    let fileMeta = await fileManager.getFile(uploaded.file.name);
-    let attempts = 0;
-    while (fileMeta.state === FileState.PROCESSING && attempts < 60) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      fileMeta = await fileManager.getFile(uploaded.file.name);
-      attempts += 1;
-    }
-    if (fileMeta.state !== FileState.ACTIVE) {
-      throw new Error(`Gemini file did not become active: ${fileMeta.state}`);
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent([
-      { fileData: { mimeType: 'video/mp4', fileUri: fileMeta.uri } },
-      { text: PROMPT },
-    ]);
-    const rawText = result.response.text();
-    const segments = safeParseSegments(rawText);
-
-    try {
-      await fileManager.deleteFile(fileMeta.name);
-    } catch {
-      // ignore cleanup failure
-    }
-
-    return { segments, rawText, modelName };
+    const segments = parseWhisperJson(jsonPath);
+    const rawText = segments.map((s) => s.text).join(' ');
+    return {
+      segments,
+      rawText,
+      modelName: `whisper-cpp:${path.basename(WHISPER_MODEL)}`,
+    };
   } finally {
-    fs.promises.unlink(tempPath).catch(() => {});
+    if (wavPath) fs.promises.unlink(wavPath).catch(() => {});
+    if (jsonPath) fs.promises.unlink(jsonPath).catch(() => {});
+    fs.promises.unlink(videoPath).catch(() => {});
   }
 }
 

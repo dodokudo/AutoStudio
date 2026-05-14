@@ -631,6 +631,36 @@ export function InstagramDashboardView({ data }: Props) {
           />
 
           <Card className="p-6">
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">コスト指標</h2>
+            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">リール編集外注 1本 3,300円換算</p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(() => {
+                const reelEditUnitPrice = 3300;
+                const editCount = summary.postCount;
+                const editCost = editCount * reelEditUnitPrice;
+                const cpa = summary.lineRegistrations && summary.lineRegistrations > 0
+                  ? editCost / summary.lineRegistrations
+                  : null;
+                const yen = (n: number) => `¥${n.toLocaleString()}`;
+                return (
+                  <>
+                    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
+                      <div className="text-xs text-[color:var(--color-text-muted)]">動画編集費用</div>
+                      <div className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">{yen(editCost)}</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">期間内リール {editCount}本 × ¥{reelEditUnitPrice.toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
+                      <div className="text-xs text-[color:var(--color-text-muted)]">LINE登録CPA</div>
+                      <div className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">{cpa !== null ? yen(Math.round(cpa)) : '—'}</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">編集費用 ÷ LINE登録 {summary.lineRegistrations ?? 0}件</div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </Card>
+
+          <Card className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">フォロワー推移</h2>
@@ -1054,6 +1084,9 @@ export function InstagramDashboardView({ data }: Props) {
                           <a href={story.permalink} target="_blank" rel="noopener noreferrer" className="font-medium text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)]">Instagramで開く</a>
                         )}
                       </div>
+                      {story.caption && (
+                        <p className="line-clamp-2 text-sm text-[color:var(--color-text-primary)]">{story.caption}</p>
+                      )}
                       <div className="grid grid-cols-3 gap-3 text-sm md:grid-cols-6">
                         <div>
                           <div className="text-xs text-[color:var(--color-text-muted)]">閲覧数</div>
