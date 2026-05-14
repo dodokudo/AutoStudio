@@ -390,12 +390,8 @@ async function fetchReelHighlights(client: BigQuery, projectId: string, userId: 
       FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', timestamp) AS timestamp
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reels\`
     WHERE user_id = @user_id
-      AND (
-        timestamp IS NULL
-        OR timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 45 DAY)
-      )
-    ORDER BY COALESCE(views, 0) DESC, timestamp DESC
-    LIMIT 12
+    ORDER BY timestamp DESC
+    LIMIT 500
   `;
 
   try {
