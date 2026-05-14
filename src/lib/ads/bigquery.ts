@@ -57,6 +57,7 @@ export interface AdsDailyPoint {
   date: string;
   spend: number;
   impressions: number;
+  clicks: number;
   inlineLinkClicks: number;
   leads: number;
   purchases: number;
@@ -199,6 +200,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
           CAST(date_start AS STRING) AS date,
           SUM(spend) AS spend,
           SUM(impressions) AS impressions,
+          SUM(clicks) AS clicks,
           SUM(inline_link_clicks) AS inline_link_clicks,
           SUM(meta_leads) AS leads,
           SUM(meta_purchases) AS purchases
@@ -317,6 +319,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
     date: toDateString(row.date),
     spend: toNumber(row.spend),
     impressions: toNumber(row.impressions),
+    clicks: toNumber(row.clicks),
     inlineLinkClicks: toNumber(row.inline_link_clicks),
     leads: toNumber(row.leads),
     purchases: toNumber(row.purchases),
