@@ -1,6 +1,5 @@
 import { BigQuery, Dataset, Table } from '@google-cloud/bigquery';
 import { createBigQueryClient } from '@/lib/bigquery';
-import { loadInstagramConfig } from './config';
 
 export interface CompetitorReelRawRow {
   snapshot_date: string;
@@ -47,13 +46,46 @@ export interface ReelScriptRow {
   inspiration_sources: string[];
 }
 
+export interface InstagramReelMetricSnapshotRow {
+  snapshot_at: string;
+  snapshot_date: string;
+  user_id: string;
+  instagram_user_id: string;
+  instagram_id: string;
+  caption: string | null;
+  media_product_type: string | null;
+  media_type: string | null;
+  permalink: string | null;
+  timestamp: string | null;
+  thumbnail_url: string | null;
+  views: number | null;
+  reach: number | null;
+  likes: number | null;
+  comments: number | null;
+  saved: number | null;
+  shares: number | null;
+  reposts: number | null;
+  total_interactions: number | null;
+  ig_reels_avg_watch_time_ms: number | null;
+  ig_reels_video_view_total_time_ms: number | null;
+  reels_skip_rate: number | null;
+  crossposted_views: number | null;
+  facebook_views: number | null;
+  profile_activity: number | null;
+  follows: number | null;
+  completion_rate: number | null;
+  metrics_status: string;
+  unsupported_metrics: string[];
+  raw_metrics_json: string;
+}
+
 export function createInstagramBigQuery(): BigQuery {
-  const config = loadInstagramConfig();
+  const config = getInstagramStorageConfig();
   return createBigQueryClient(config.projectId, config.location);
 }
 
 export async function ensureInstagramDataset(bigquery?: BigQuery): Promise<Dataset> {
-  const config = loadInstagramConfig();
+  const config = getInstagramStorageConfig();
   const client = bigquery ?? createInstagramBigQuery();
   const dataset = client.dataset(config.dataset);
   const [exists] = await dataset.exists();
@@ -61,6 +93,14 @@ export async function ensureInstagramDataset(bigquery?: BigQuery): Promise<Datas
     await dataset.create({ location: config.location });
   }
   return dataset;
+}
+
+export function getInstagramStorageConfig() {
+  return {
+    projectId: process.env.IG_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID ?? 'mark-454114',
+    dataset: process.env.IG_BQ_DATASET ?? 'autostudio_instagram',
+    location: process.env.IG_GCP_LOCATION ?? process.env.LSTEP_BQ_LOCATION ?? 'asia-northeast1',
+  };
 }
 
 async function ensureTable(
@@ -216,4 +256,38 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'website_clicks', type: 'INT64' },
     { name: 'created_at', type: 'TIMESTAMP' },
   ], 'date', ['user_id']);
+
+  await ensureTable(dataset, 'instagram_reel_metric_snapshots', [
+    { name: 'snapshot_at', type: 'TIMESTAMP', mode: 'REQUIRED' },
+    { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },
+    { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_user_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'instagram_id', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'caption', type: 'STRING' },
+    { name: 'media_product_type', type: 'STRING' },
+    { name: 'media_type', type: 'STRING' },
+    { name: 'permalink', type: 'STRING' },
+    { name: 'timestamp', type: 'TIMESTAMP' },
+    { name: 'thumbnail_url', type: 'STRING' },
+    { name: 'views', type: 'INT64' },
+    { name: 'reach', type: 'INT64' },
+    { name: 'likes', type: 'INT64' },
+    { name: 'comments', type: 'INT64' },
+    { name: 'saved', type: 'INT64' },
+    { name: 'shares', type: 'INT64' },
+    { name: 'reposts', type: 'INT64' },
+    { name: 'total_interactions', type: 'INT64' },
+    { name: 'ig_reels_avg_watch_time_ms', type: 'FLOAT64' },
+    { name: 'ig_reels_video_view_total_time_ms', type: 'FLOAT64' },
+    { name: 'reels_skip_rate', type: 'FLOAT64' },
+    { name: 'crossposted_views', type: 'INT64' },
+    { name: 'facebook_views', type: 'INT64' },
+    { name: 'profile_activity', type: 'INT64' },
+    { name: 'follows', type: 'INT64' },
+    { name: 'completion_rate', type: 'FLOAT64' },
+    { name: 'metrics_status', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'unsupported_metrics', type: 'STRING', mode: 'REPEATED' },
+    { name: 'raw_metrics_json', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+  ], 'snapshot_date', ['user_id', 'instagram_id']);
 }

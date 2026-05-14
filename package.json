@@ -21,6 +21,8 @@
     "ig:generate": "tsx src/scripts/instagram/generateReelScripts.ts",
     "ig:notify": "tsx src/scripts/instagram/notifyReelScripts.ts",
     "ig:sync": "tsx src/scripts/instagram/syncInsightsFromSheet.ts",
+    "ig:metrics": "tsx src/scripts/instagram/syncReelMetricsFromApi.ts",
+    "ig:metrics:probe": "tsx src/scripts/instagram/syncReelMetricsFromApi.ts probe",
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
