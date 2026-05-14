@@ -175,6 +175,38 @@ function TranscriptTimeline({ segments, durationSeconds, retentionPoints, avgWat
         )}
         <span className="absolute right-0">{durationSeconds.toFixed(0)}s</span>
       </div>
+      {dropoffIdx >= 0 && (
+        <div className="mt-3 rounded-md border border-[color:var(--color-error)] bg-[rgba(255,77,79,0.05)] p-3">
+          <div className="text-[11px] font-semibold text-[color:var(--color-error)]">
+            ⚠ 離脱直前の発話（{avgWatchSeconds !== null ? `${avgWatchSeconds.toFixed(1)}秒地点` : ''}）
+          </div>
+          <div className="mt-2 space-y-1">
+            {[dropoffIdx - 2, dropoffIdx - 1, dropoffIdx]
+              .filter((i) => i >= 0 && i < segments.length)
+              .map((i) => {
+                const seg = segments[i];
+                const isExact = i === dropoffIdx;
+                return (
+                  <div
+                    key={i}
+                    className={`flex items-start gap-2 rounded px-2 py-1.5 text-sm leading-relaxed ${
+                      isExact ? 'bg-white font-semibold text-[color:var(--color-error)]' : 'text-[color:var(--color-text-primary)]'
+                    }`}
+                  >
+                    <span className="w-6 shrink-0 text-right text-xs tabular-nums text-[color:var(--color-text-muted)]">
+                      {i + 1}
+                    </span>
+                    <span className="w-14 shrink-0 text-xs tabular-nums text-[color:var(--color-text-muted)]">
+                      {seg.start.toFixed(1)}s
+                    </span>
+                    <span className="flex-1">{seg.text}</span>
+                    {isExact && <span className="shrink-0 text-xs">← ここで離脱</span>}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
       <div className="mt-3 max-h-96 space-y-0.5 overflow-y-auto rounded border border-[color:var(--color-border)] bg-white p-2">
         {segments.map((seg, idx) => {
           const isHover = hoverIdx === idx;
