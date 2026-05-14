@@ -102,11 +102,11 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       )) AS adsets
     FROM grouped g
     LEFT JOIN (
+      -- クリック/CTR はリール限定
       SELECT
         c.instagram_permalink_url AS permalink,
         SUM(a.clicks) AS total_clicks,
-        SUM(a.inline_link_clicks) AS total_inline_link_clicks,
-        SUM(a.meta_leads) AS total_leads
+        SUM(a.inline_link_clicks) AS total_inline_link_clicks
       FROM \`${PROJECT_ID}.${DATASET}.meta_ad_insights_daily\` a
       LEFT JOIN latest_creatives c ON a.ad_id = c.ad_id
       WHERE a.platform_position = 'instagram_reels'
@@ -114,6 +114,19 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
         AND c.instagram_permalink_url IS NOT NULL
       GROUP BY c.instagram_permalink_url
     ) a_agg ON g.permalink = a_agg.permalink
+    LEFT JOIN (
+      -- LINE登録 (meta_leads) は ad 単位の全プレースメント合算
+      -- (Meta API は leads を breakdown=publisher_platform で分割しないため)
+      SELECT
+        c.instagram_permalink_url AS permalink,
+        SUM(a.meta_leads) AS total_leads
+      FROM \`${PROJECT_ID}.${DATASET}.meta_ad_insights_daily\` a
+      LEFT JOIN latest_creatives c ON a.ad_id = c.ad_id
+      WHERE a.date_start BETWEEN @startDate AND @endDate
+        AND c.instagram_permalink_url IS NOT NULL
+        AND a.platform_position IS NULL
+      GROUP BY c.instagram_permalink_url
+    ) l_agg ON g.permalink = l_agg.permalink
     GROUP BY g.permalink, a_agg.total_clicks, a_agg.total_inline_link_clicks, a_agg.total_leads
     ORDER BY total_impressions DESC
   `;

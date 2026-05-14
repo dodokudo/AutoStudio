@@ -160,10 +160,7 @@ export function ReelDropoffSection({ rows }: Props) {
       <Card className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">クリエイティブ別成果（リール広告）</h2>
-            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              {rows.length}件のリール広告 / 消化・CTR・CPA・CVR + 7ポイント視聴維持カーブ（再生→15s→25%→50%→75%→95%→100%） + audience別
-            </p>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">クリエイティブ別成果</h2>
           </div>
           <div className="flex gap-2 text-xs">
             {(['all', 'retargeting', 'cold', 'lookalike'] as const).map((opt) => (
