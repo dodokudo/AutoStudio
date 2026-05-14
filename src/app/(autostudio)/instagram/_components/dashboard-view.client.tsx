@@ -1015,6 +1015,11 @@ export function InstagramDashboardView({ data }: Props) {
 
       {activeTab === 'stories' && (() => {
         const apiStories = data.storyMetricsData?.rows ?? [];
+        const followersCount = data.latestUserInsights?.followersCount ?? null;
+        const computeViewRate = (views: number | null): number | null => {
+          if (views === null || !followersCount || followersCount <= 0) return null;
+          return views / followersCount;
+        };
         const apiSorted = [...apiStories].sort((a, b) => {
           const factor = storySortOrder === 'desc' ? 1 : -1;
           const get = (s: typeof a): number => {
@@ -1026,7 +1031,7 @@ export function InstagramDashboardView({ data }: Props) {
               case 'views':
                 return s.views ?? -Infinity;
               case 'viewRate':
-                return s.viewRate ?? -Infinity;
+                return computeViewRate(s.views) ?? -Infinity;
               case 'reactions':
                 return s.totalInteractions ?? -Infinity;
               default:
@@ -1065,57 +1070,61 @@ export function InstagramDashboardView({ data }: Props) {
             </div>
             {apiSorted.length === 0 ? (
               <div className="mt-6 rounded-[var(--radius-sm)] border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-                ストーリーデータがありません。ストーリーは投稿後24時間で消えるため、毎時取得します。
+                ストーリーデータがありません。
               </div>
             ) : (
               <div className="mt-6 space-y-4">
-                {apiSorted.map((story) => (
-                  <div key={story.instagramId} className="flex items-start gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-3">
-                    {story.thumbnailUrl && (
-                      <a href={story.permalink ?? '#'} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={story.thumbnailUrl} alt="" className="aspect-[9/16] w-24 rounded-md object-cover" loading="lazy" />
-                      </a>
-                    )}
-                    <div className="flex-1 min-w-0 flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
-                        <span>{story.publishedAt ? new Date(story.publishedAt).toLocaleString('ja-JP') : '日付未登録'}</span>
-                        {story.permalink && (
-                          <a href={story.permalink} target="_blank" rel="noopener noreferrer" className="font-medium text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)]">Instagramで開く</a>
-                        )}
+                {apiSorted.map((story) => {
+                  const imageUrl = resolveMediaUrl(story.driveImageUrl, story.thumbnailUrl);
+                  const viewRate = computeViewRate(story.views);
+                  return (
+                    <div key={story.instagramId} className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 sm:flex-row">
+                      <div className="h-40 w-full overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] sm:w-32">
+                        {imageUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                        ) : null}
                       </div>
-                      {story.caption && (
-                        <p className="line-clamp-2 text-sm text-[color:var(--color-text-primary)]">{story.caption}</p>
-                      )}
-                      <div className="grid grid-cols-3 gap-3 text-sm md:grid-cols-6">
-                        <div>
-                          <div className="text-xs text-[color:var(--color-text-muted)]">閲覧数</div>
-                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.views?.toLocaleString() ?? '—'}</div>
+                      <div className="flex-1 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
+                          <span>{story.publishedAt ? new Date(story.publishedAt).toLocaleString('ja-JP') : '日付未登録'}</span>
+                          {story.permalink ? (
+                            <a href={story.permalink} target="_blank" rel="noopener noreferrer" className="font-medium text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)]">Instagramで開く</a>
+                          ) : null}
                         </div>
-                        <div>
-                          <div className="text-xs text-[color:var(--color-text-muted)]">リーチ</div>
-                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.reach?.toLocaleString() ?? '—'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-[color:var(--color-text-muted)]">閲覧率</div>
-                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.viewRate !== null ? `${(story.viewRate * 100).toFixed(1)}%` : '—'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-[color:var(--color-text-muted)]">インタラクション</div>
-                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.totalInteractions?.toLocaleString() ?? '—'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-[color:var(--color-text-muted)]">プロフ訪問</div>
-                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.profileVisits?.toLocaleString() ?? '—'}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-[color:var(--color-text-muted)]">フォロー</div>
-                          <div className="font-semibold text-[color:var(--color-text-primary)]">{story.follows?.toLocaleString() ?? '—'}</div>
-                        </div>
+                        <p className="text-sm font-medium text-[color:var(--color-text-primary)] line-clamp-2">
+                          {story.caption || 'キャプションなし'}
+                        </p>
+                        <dl className="grid grid-cols-2 gap-y-2 text-sm text-[color:var(--color-text-secondary)] sm:grid-cols-3">
+                          <div>
+                            <dt>リーチ</dt>
+                            <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.reach?.toLocaleString() ?? '—'}</dd>
+                          </div>
+                          <div>
+                            <dt>閲覧数</dt>
+                            <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.views?.toLocaleString() ?? '—'}</dd>
+                          </div>
+                          <div>
+                            <dt>閲覧率（フォロワー比）</dt>
+                            <dd className="font-semibold text-[color:var(--color-text-primary)]">{viewRate !== null ? `${(viewRate * 100).toFixed(1)}%` : '—'}</dd>
+                          </div>
+                          <div>
+                            <dt>返信</dt>
+                            <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.replies?.toLocaleString() ?? '—'}</dd>
+                          </div>
+                          <div>
+                            <dt>プロフィール訪問</dt>
+                            <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.profileVisits?.toLocaleString() ?? '—'}</dd>
+                          </div>
+                          <div>
+                            <dt>フォロー</dt>
+                            <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.follows?.toLocaleString() ?? '—'}</dd>
+                          </div>
+                        </dl>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>

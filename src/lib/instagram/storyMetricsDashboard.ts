@@ -8,6 +8,7 @@ export interface StoryMetricSnapshotView {
   caption: string | null;
   permalink: string | null;
   thumbnailUrl: string | null;
+  driveImageUrl: string | null;
   mediaType: string | null;
   views: number | null;
   reach: number | null;
@@ -45,6 +46,7 @@ export async function getStoryMetricsDashboardData(): Promise<StoryMetricsDashbo
       caption,
       permalink,
       thumbnail_url,
+      drive_image_url,
       media_type,
       views,
       reach,
@@ -82,6 +84,7 @@ export async function getStoryMetricsDashboardData(): Promise<StoryMetricsDashbo
         caption: row.caption ? String(row.caption) : null,
         permalink: row.permalink ? String(row.permalink) : null,
         thumbnailUrl: row.thumbnail_url ? String(row.thumbnail_url) : null,
+        driveImageUrl: row.drive_image_url ? String(row.drive_image_url) : null,
         mediaType: row.media_type ? String(row.media_type) : null,
         views,
         reach,
