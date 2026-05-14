@@ -15,7 +15,7 @@ function TranscriptTimeline({
   durationSeconds: number;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const avgPct = avgWatchSeconds && durationSeconds > 0
     ? Math.min(100, Math.max(0, (avgWatchSeconds / durationSeconds) * 100))
@@ -29,6 +29,9 @@ function TranscriptTimeline({
     }
     return lastIdx;
   }, [segments, avgWatchSeconds]);
+
+  // デフォルトで離脱位置のセグメント表示
+  const displayIdx = hoverIdx !== null ? hoverIdx : dropoffIdx >= 0 ? dropoffIdx : null;
 
   return (
     <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
@@ -51,7 +54,7 @@ function TranscriptTimeline({
       </div>
 
       {/* タイムラインバー */}
-      <div className="relative mt-3 h-6 w-full rounded bg-white border border-[color:var(--color-border)]">
+      <div className="relative mt-3 h-6 w-full overflow-hidden rounded bg-white border border-[color:var(--color-border)]">
         {segments.map((seg, idx) => {
           const left = Math.max(0, (seg.start / durationSeconds) * 100);
           const width = Math.max(0.5, ((seg.end - seg.start) / durationSeconds) * 100);
@@ -60,8 +63,8 @@ function TranscriptTimeline({
             <button
               type="button"
               key={idx}
-              onClick={() => setActiveIdx(activeIdx === idx ? null : idx)}
-              onMouseEnter={() => setActiveIdx(idx)}
+              onMouseEnter={() => setHoverIdx(idx)}
+              onMouseLeave={() => setHoverIdx(null)}
               className={`absolute top-0 h-full border-r border-white/60 transition-opacity ${
                 idx === dropoffIdx
                   ? 'bg-[color:var(--color-error)]'
@@ -76,32 +79,39 @@ function TranscriptTimeline({
         })}
         {avgPct !== null && (
           <div
-            className="pointer-events-none absolute top-[-4px] bottom-[-4px] w-[2px] bg-[color:var(--color-error)]"
+            className="pointer-events-none absolute inset-y-0 w-[2px] bg-[color:var(--color-error)]"
             style={{ left: `${avgPct}%` }}
           />
         )}
       </div>
 
       {/* 時間目盛り */}
-      <div className="mt-1 flex justify-between text-[10px] text-[color:var(--color-text-muted)]">
-        <span>0s</span>
-        {avgWatchSeconds !== null && (
-          <span style={{ marginLeft: `calc(${avgPct ?? 0}% - 2em)` }}>
-            ← {avgWatchSeconds.toFixed(1)}s 離脱
+      <div className="relative mt-1 h-4 w-full text-[10px] text-[color:var(--color-text-muted)]">
+        <span className="absolute left-0">0s</span>
+        {avgPct !== null && avgWatchSeconds !== null && (
+          <span
+            className="absolute -translate-x-1/2 whitespace-nowrap font-semibold text-[color:var(--color-error)]"
+            style={{ left: `${avgPct}%` }}
+          >
+            ↑ {avgWatchSeconds.toFixed(1)}s 離脱
           </span>
         )}
-        <span>{durationSeconds.toFixed(0)}s</span>
+        <span className="absolute right-0">{durationSeconds.toFixed(0)}s</span>
       </div>
 
-      {/* 選択されたセグメント詳細 */}
-      {activeIdx !== null && segments[activeIdx] && (
-        <div className="mt-2 rounded border border-[color:var(--color-border)] bg-white p-2">
-          <div className="text-[10px] text-[color:var(--color-text-muted)]">
-            {segments[activeIdx].start.toFixed(1)}s 〜 {segments[activeIdx].end.toFixed(1)}s
-            {activeIdx === dropoffIdx && <span className="ml-2 text-[color:var(--color-error)] font-semibold">離脱位置</span>}
+      {/* デフォルト：離脱位置のセグメント表示。ホバー時はホバー先のセグメント */}
+      {displayIdx !== null && segments[displayIdx] && (
+        <div className={`mt-3 rounded border p-2 ${
+          displayIdx === dropoffIdx
+            ? 'border-[color:var(--color-error)] bg-[rgba(255,77,79,0.06)]'
+            : 'border-[color:var(--color-border)] bg-white'
+        }`}>
+          <div className="flex items-center justify-between text-[10px] text-[color:var(--color-text-muted)]">
+            <span>{segments[displayIdx].start.toFixed(1)}s 〜 {segments[displayIdx].end.toFixed(1)}s</span>
+            {displayIdx === dropoffIdx && <span className="font-semibold text-[color:var(--color-error)]">← ここで平均離脱</span>}
           </div>
           <div className="mt-1 text-sm text-[color:var(--color-text-primary)]">
-            「{segments[activeIdx].text}」
+            「{segments[displayIdx].text}」
           </div>
         </div>
       )}
@@ -118,6 +128,7 @@ function TranscriptTimeline({
                 {seg.start.toFixed(1)}s
               </span>
               <span className="text-[color:var(--color-text-primary)]">{seg.text}</span>
+              {idx === dropoffIdx && <span className="shrink-0 text-[color:var(--color-error)]">← 離脱</span>}
             </div>
           ))}
         </div>
