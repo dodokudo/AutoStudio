@@ -50,7 +50,7 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       SELECT
         c.instagram_permalink_url AS permalink,
         c.ad_name,
-        c.thumbnail_url,
+        COALESCE(c.image_url, c.thumbnail_url) AS thumbnail_url,
         a.adset_id,
         ANY_VALUE(a.adset_name) AS adset_name,
         ANY_VALUE(s.audience_type) AS audience_type,

@@ -71,7 +71,6 @@ function RetentionCard({ row, base }: { row: { adsetName: string | null; audienc
       </div>
       <div className="mt-3 space-y-1">
         <RetentionBar label="再生" value={row.videoPlays} total={base} />
-        <RetentionBar label="2s" value={row.p2s} total={base} />
         <RetentionBar label="15s" value={row.p15s} total={base} />
         <RetentionBar label="25%" value={row.p25} total={base} />
         <RetentionBar label="50%" value={row.p50} total={base} />
@@ -84,13 +83,12 @@ function RetentionCard({ row, base }: { row: { adsetName: string | null; audienc
 }
 
 function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
-  const [expanded, setExpanded] = useState(false);
   return (
     <Card className="p-4">
-      <div className="flex flex-wrap items-start gap-4">
+      <div className="flex items-start gap-4">
         {row.thumbnailUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={row.thumbnailUrl} alt="" className="aspect-[9/16] w-24 shrink-0 rounded-md object-cover" loading="lazy" />
+          <img src={row.thumbnailUrl} alt="" className="aspect-[9/16] w-32 shrink-0 rounded-md object-cover" loading="lazy" />
         )}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -108,7 +106,7 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
               </a>
             )}
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-3 text-xs md:grid-cols-6">
+          <div className="mt-2 grid grid-cols-3 gap-3 text-xs md:grid-cols-6">
             <div><div className="text-[color:var(--color-text-muted)]">消化</div><div className="font-semibold text-[color:var(--color-text-primary)]">{yen(row.totalSpend)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">imp</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalImpressions)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">再生</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalVideoPlays)}</div></div>
@@ -116,22 +114,13 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
             <div><div className="text-[color:var(--color-text-muted)]">50%維持</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP50 / row.totalVideoPlays) * 100 : 0)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">完視聴</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP100 / row.totalVideoPlays) * 100 : 0)}</div></div>
           </div>
-          <button
-            type="button"
-            onClick={() => setExpanded((p) => !p)}
-            className="mt-3 text-xs font-medium text-[color:var(--color-accent)] hover:underline"
-          >
-            {expanded ? 'audience別を閉じる' : `audience別 ${row.byAdset.length}件を見る`}
-          </button>
         </div>
       </div>
-      {expanded && (
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {row.byAdset.map((adset) => (
-            <RetentionCard key={adset.adsetId} row={adset} base={Math.max(adset.videoPlays, adset.impressions, 1)} />
-          ))}
-        </div>
-      )}
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {row.byAdset.map((adset) => (
+          <RetentionCard key={adset.adsetId} row={adset} base={Math.max(adset.videoPlays, adset.impressions, 1)} />
+        ))}
+      </div>
     </Card>
   );
 }
@@ -156,7 +145,7 @@ export function ReelDropoffSection({ rows }: Props) {
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">リール広告 離脱分析</h2>
             <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              {rows.length}件のリール広告 × 8ポイント視聴維持率（再生→2s→15s→25%→50%→75%→95%→100%）
+              {rows.length}件のリール広告 × 7ポイント視聴維持率（再生→15s→25%→50%→75%→95%→100%）
             </p>
           </div>
           <div className="flex gap-2 text-xs">
