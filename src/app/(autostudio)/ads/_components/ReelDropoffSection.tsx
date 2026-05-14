@@ -82,25 +82,50 @@ function RetentionCard({ row, base }: { row: { adsetName: string | null; audienc
   );
 }
 
-function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
+function TranscriptTimeline({ segments, durationSeconds, retentionPoints, avgWatchSeconds }: {
   segments: AdTranscriptSegment[];
   durationSeconds: number;
   retentionPoints: Array<{ label: string; ratio: number; color: string }>;
+  avgWatchSeconds: number | null;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const avgPct = avgWatchSeconds && durationSeconds > 0
+    ? Math.min(100, Math.max(0, (avgWatchSeconds / durationSeconds) * 100))
+    : null;
+
+  const dropoffIdx = useMemo(() => {
+    if (!avgWatchSeconds) return -1;
+    let lastIdx = -1;
+    for (let i = 0; i < segments.length; i += 1) {
+      if (segments[i].start <= avgWatchSeconds) lastIdx = i;
+    }
+    return lastIdx;
+  }, [segments, avgWatchSeconds]);
+
   return (
     <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
-      <div className="text-xs font-medium text-[color:var(--color-text-primary)]">台本タイムライン（{segments.length}行 / 動画{durationSeconds.toFixed(0)}秒）</div>
+      <div className="text-xs font-medium text-[color:var(--color-text-primary)]">
+        台本タイムライン（{segments.length}行 / 動画{durationSeconds.toFixed(0)}秒）
+        {avgWatchSeconds !== null && (
+          <span className="ml-2 text-[color:var(--color-text-muted)]">
+            平均視聴 {avgWatchSeconds.toFixed(1)}秒（視聴維持率 {avgPct !== null ? avgPct.toFixed(1) : '--'}%）
+          </span>
+        )}
+      </div>
       <div className="relative mt-3 h-10 w-full overflow-hidden rounded bg-white border border-[color:var(--color-border)]">
         {segments.map((seg, idx) => {
           const left = Math.max(0, (seg.start / durationSeconds) * 100);
           const width = Math.max(0.4, ((seg.end - seg.start) / durationSeconds) * 100);
           const isHover = hoverIdx === idx;
-          const bg = isHover
-            ? 'rgba(10,122,255,0.95)'
-            : idx % 2 === 0
-              ? 'rgba(10,122,255,0.55)'
-              : 'rgba(10,122,255,0.22)';
+          const isDropoff = idx === dropoffIdx;
+          const bg = isDropoff
+            ? 'rgba(255,77,79,0.85)'
+            : isHover
+              ? 'rgba(10,122,255,0.95)'
+              : idx % 2 === 0
+                ? 'rgba(10,122,255,0.55)'
+                : 'rgba(10,122,255,0.22)';
           return (
             <button
               type="button"
@@ -122,6 +147,12 @@ function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
             style={{ left: `${p.ratio * 100}%`, backgroundColor: p.color }}
           />
         ))}
+        {avgPct !== null && (
+          <div
+            className="pointer-events-none absolute inset-y-0 w-[3px] bg-[color:var(--color-error)]"
+            style={{ left: `${avgPct}%` }}
+          />
+        )}
       </div>
       <div className="relative mt-1 h-4 w-full text-[10px] text-[color:var(--color-text-muted)]">
         <span className="absolute left-0">0s</span>
@@ -134,18 +165,31 @@ function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
             {p.label}
           </span>
         ))}
+        {avgPct !== null && avgWatchSeconds !== null && (
+          <span
+            className="absolute -translate-x-1/2 whitespace-nowrap font-semibold text-[color:var(--color-error)]"
+            style={{ left: `${avgPct}%`, top: '-2px' }}
+          >
+            ↑ {avgWatchSeconds.toFixed(1)}s 離脱
+          </span>
+        )}
         <span className="absolute right-0">{durationSeconds.toFixed(0)}s</span>
       </div>
       <div className="mt-3 max-h-96 space-y-0.5 overflow-y-auto rounded border border-[color:var(--color-border)] bg-white p-2">
         {segments.map((seg, idx) => {
           const isHover = hoverIdx === idx;
+          const isDropoff = idx === dropoffIdx;
           return (
             <div
               key={idx}
               onMouseEnter={() => setHoverIdx(idx)}
               onMouseLeave={() => setHoverIdx(null)}
               className={`flex items-start gap-2 rounded px-2 py-1 text-xs leading-relaxed ${
-                isHover ? 'bg-[rgba(10,122,255,0.10)]' : ''
+                isDropoff
+                  ? 'bg-[rgba(255,77,79,0.10)]'
+                  : isHover
+                    ? 'bg-[rgba(10,122,255,0.10)]'
+                    : ''
               }`}
             >
               <span className="w-6 shrink-0 text-right font-semibold tabular-nums text-[color:var(--color-text-muted)]">
@@ -155,6 +199,9 @@ function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
                 {seg.start.toFixed(1)}s
               </span>
               <span className="flex-1 text-[color:var(--color-text-primary)]">{seg.text}</span>
+              {isDropoff && (
+                <span className="shrink-0 text-[10px] font-semibold text-[color:var(--color-error)]">← 平均離脱</span>
+              )}
             </div>
           );
         })}
@@ -214,6 +261,7 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
               segments={transcriptSegments}
               durationSeconds={duration}
               retentionPoints={retentionPoints}
+              avgWatchSeconds={row.avgWatchSeconds}
             />
           )}
           <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">

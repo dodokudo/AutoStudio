@@ -214,6 +214,47 @@ export async function fetchRecentReels(
   ));
 }
 
+export async function fetchAllReelsSince(
+  context: InstagramAccessContext,
+  sinceIso: string,
+  pageLimit = 100,
+  maxPages = 50,
+): Promise<InstagramGraphMedia[]> {
+  const all: InstagramGraphMedia[] = [];
+  const sinceMs = new Date(sinceIso).getTime();
+  let nextUrl: string | null = null;
+  let page = 0;
+
+  do {
+    page += 1;
+    const result: GraphList<InstagramGraphMedia> = nextUrl
+      ? await graphRequest<GraphList<InstagramGraphMedia>>(nextUrl, context.accessToken)
+      : await graphRequest<GraphList<InstagramGraphMedia>>(
+          `${context.instagramUserId}/media`,
+          context.accessToken,
+          { fields: MEDIA_FIELDS, limit: String(pageLimit) },
+        );
+
+    const pageItems = result.data ?? [];
+    let reachedCutoff = false;
+    for (const m of pageItems) {
+      const ts = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+      if (ts && ts < sinceMs) {
+        reachedCutoff = true;
+        continue;
+      }
+      if (m.media_product_type === 'REELS' || m.media_type === 'VIDEO') {
+        all.push(m);
+      }
+    }
+    console.log(`[fetchAllReelsSince] page ${page}: ${pageItems.length} items, kept ${all.length} reels`);
+    if (reachedCutoff) break;
+    nextUrl = result.paging?.next ?? null;
+  } while (nextUrl && page < maxPages);
+
+  return all;
+}
+
 export async function probeReelMetrics(
   context: InstagramAccessContext,
   media: InstagramGraphMedia,

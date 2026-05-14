@@ -48,6 +48,7 @@ export interface ReelAdInsightRow {
   cpa: number | null;
   cpc: number;
   cvr: number | null;
+  avgWatchSeconds: number | null;
   durationSeconds: number | null;
   transcriptSegments: AdTranscriptSegment[];
   byAdset: ReelAdAdsetMetrics[];
@@ -81,7 +82,8 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
         SUM(a.video_p100_watched_actions) AS p100,
         SUM(a.video_thruplay_watched_actions) AS thruplay,
         SUM(a.spend) AS spend,
-        AVG(a.cost_per_thruplay) AS cost_per_thruplay
+        AVG(a.cost_per_thruplay) AS cost_per_thruplay,
+        SAFE_DIVIDE(SUM(a.video_avg_time_watched_actions * a.impressions), SUM(a.impressions)) AS avg_watch_seconds
       FROM \`${PROJECT_ID}.${DATASET}.meta_ad_insights_daily\` a
       LEFT JOIN latest_creatives c ON a.ad_id = c.ad_id
       LEFT JOIN \`${PROJECT_ID}.${DATASET}.meta_adsets\` s ON a.adset_id = s.adset_id
@@ -101,6 +103,7 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       SUM(g.p75) AS total_p75,
       SUM(g.p95) AS total_p95,
       SUM(g.p100) AS total_p100,
+      SAFE_DIVIDE(SUM(g.avg_watch_seconds * g.impressions), SUM(g.impressions)) AS total_avg_watch_seconds,
       a_agg.total_clicks,
       a_agg.total_inline_link_clicks,
       l_agg.total_leads,
@@ -182,6 +185,7 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
     cpa,
     cpc,
     cvr,
+    avgWatchSeconds: row.total_avg_watch_seconds !== null && row.total_avg_watch_seconds !== undefined ? Number(row.total_avg_watch_seconds) : null,
     durationSeconds: row.duration_seconds !== null && row.duration_seconds !== undefined ? Number(row.duration_seconds) : null,
     transcriptSegments: (() => {
       if (!row.segments_json) return [];
