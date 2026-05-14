@@ -1,0 +1,24 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build','-t','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/meta-ads-adsets:latest','-f','deploy/meta-ads-adsets/Dockerfile','.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/meta-ads-adsets:latest']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'autostudio-meta-ads-adsets'
+      - '--image=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/meta-ads-adsets:latest'
+      - '--region=asia-northeast1'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--max-retries=2'
+      - '--task-timeout=600'
+      - '--env-vars-file=deploy/meta-ads-adsets/env.yaml'
+images:
+  - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/meta-ads-adsets:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

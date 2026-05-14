@@ -141,17 +141,21 @@ async function main() {
 
   const [reelRows] = await bigquery.query({
     query: `
-      WITH ranked AS (
+      WITH unique_reels AS (
         SELECT
           username,
           instagram_media_id,
-          drive_file_id,
-          caption,
-          posted_at,
-          ROW_NUMBER() OVER (PARTITION BY username ORDER BY posted_at DESC) AS rn
+          ANY_VALUE(drive_file_id) AS drive_file_id,
+          ANY_VALUE(caption) AS caption,
+          MAX(posted_at) AS posted_at
         FROM \`${projectId}.${dataset}.competitor_reels_raw\`
         WHERE username IN UNNEST(@usernames)
           AND drive_file_id IS NOT NULL
+        GROUP BY username, instagram_media_id
+      ),
+      ranked AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY username ORDER BY posted_at DESC) AS rn
+        FROM unique_reels
       )
       SELECT username, instagram_media_id, drive_file_id, caption, posted_at
       FROM ranked

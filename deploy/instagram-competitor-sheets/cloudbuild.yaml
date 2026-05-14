@@ -1,0 +1,24 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build','-t','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-sheets:latest','-f','deploy/instagram-competitor-sheets/Dockerfile','.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push','asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-sheets:latest']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'autostudio-instagram-competitor-sheets'
+      - '--image=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-sheets:latest'
+      - '--region=asia-northeast1'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--max-retries=2'
+      - '--task-timeout=600'
+      - '--env-vars-file=deploy/instagram-competitor-sheets/env.yaml'
+images:
+  - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-sheets:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

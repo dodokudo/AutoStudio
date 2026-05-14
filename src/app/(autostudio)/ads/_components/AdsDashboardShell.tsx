@@ -7,20 +7,24 @@ import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRa
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import type { AdsByAdRow, AdsDashboardData } from '@/lib/ads/bigquery';
+import type { ReelAdInsightRow } from '@/lib/ads/reelInsights';
+import { ReelDropoffSection } from './ReelDropoffSection';
 
 interface AdsDashboardShellProps {
   rangeOptions: Array<{ value: string; label: string }>;
   selectedRange: string;
   period: { start: string; end: string };
   data: AdsDashboardData;
+  reelAdRows: ReelAdInsightRow[];
 }
 
-type AdsTabKey = 'home' | 'creative';
+type AdsTabKey = 'home' | 'creative' | 'reels';
 type CreativeSortKey = 'spend' | 'impressions' | 'ctr' | 'inlineLinkClicks' | 'lpc' | 'clicks';
 
 const ADS_TAB_ITEMS: Array<{ id: AdsTabKey; label: string }> = [
   { id: 'home', label: 'ホーム' },
   { id: 'creative', label: 'クリエイティブ' },
+  { id: 'reels', label: 'リール離脱' },
 ];
 
 function yen(value: number | null | undefined): string {
@@ -100,7 +104,7 @@ const CREATIVE_SORT_OPTIONS: Array<{ key: CreativeSortKey; label: string; direct
   { key: 'clicks', label: 'クリック', directionLabel: '多い順' },
 ];
 
-export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }: AdsDashboardShellProps) {
+export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, reelAdRows }: AdsDashboardShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -338,6 +342,8 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data }:
           </div>
         </Card>
       )}
+
+      {activeTab === 'reels' && <ReelDropoffSection rows={reelAdRows} />}
     </div>
   );
 }
