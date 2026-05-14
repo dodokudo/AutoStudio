@@ -91,20 +91,28 @@ function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
   return (
     <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
       <div className="text-xs font-medium text-[color:var(--color-text-primary)]">台本タイムライン（{segments.length}行 / 動画{durationSeconds.toFixed(0)}秒）</div>
-      <div className="relative mt-3 h-7 w-full overflow-hidden rounded bg-white border border-[color:var(--color-border)]">
+      <div className="relative mt-3 h-10 w-full overflow-hidden rounded bg-white border border-[color:var(--color-border)]">
         {segments.map((seg, idx) => {
           const left = Math.max(0, (seg.start / durationSeconds) * 100);
           const width = Math.max(0.4, ((seg.end - seg.start) / durationSeconds) * 100);
+          const isHover = hoverIdx === idx;
+          const bg = isHover
+            ? 'rgba(10,122,255,0.95)'
+            : idx % 2 === 0
+              ? 'rgba(10,122,255,0.55)'
+              : 'rgba(10,122,255,0.22)';
           return (
             <button
               type="button"
               key={idx}
               onMouseEnter={() => setHoverIdx(idx)}
               onMouseLeave={() => setHoverIdx(null)}
-              className="absolute top-0 h-full border-r border-white/60 bg-[color:var(--color-accent)] opacity-50 hover:opacity-100"
-              style={{ left: `${left}%`, width: `${width}%` }}
-              title={`[${seg.start.toFixed(1)}s〜${seg.end.toFixed(1)}s] ${seg.text}`}
-            />
+              className="absolute top-0 flex h-full items-center justify-center overflow-hidden border-r border-white text-[9px] font-semibold text-white"
+              style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bg }}
+              title={`#${idx + 1} [${seg.start.toFixed(1)}s〜${seg.end.toFixed(1)}s] ${seg.text}`}
+            >
+              {width >= 2 ? idx + 1 : ''}
+            </button>
           );
         })}
         {retentionPoints.map((p) => (
@@ -128,12 +136,29 @@ function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
         ))}
         <span className="absolute right-0">{durationSeconds.toFixed(0)}s</span>
       </div>
-      {hoverIdx !== null && segments[hoverIdx] && (
-        <div className="mt-3 rounded border border-[color:var(--color-border)] bg-white p-2">
-          <div className="text-[10px] text-[color:var(--color-text-muted)]">{segments[hoverIdx].start.toFixed(1)}s 〜 {segments[hoverIdx].end.toFixed(1)}s</div>
-          <div className="mt-1 text-sm text-[color:var(--color-text-primary)]">「{segments[hoverIdx].text}」</div>
-        </div>
-      )}
+      <div className="mt-3 max-h-56 space-y-0.5 overflow-y-auto rounded border border-[color:var(--color-border)] bg-white p-2">
+        {segments.map((seg, idx) => {
+          const isHover = hoverIdx === idx;
+          return (
+            <div
+              key={idx}
+              onMouseEnter={() => setHoverIdx(idx)}
+              onMouseLeave={() => setHoverIdx(null)}
+              className={`flex items-start gap-2 rounded px-2 py-1 text-xs leading-relaxed ${
+                isHover ? 'bg-[rgba(10,122,255,0.10)]' : ''
+              }`}
+            >
+              <span className="w-6 shrink-0 text-right font-semibold tabular-nums text-[color:var(--color-text-muted)]">
+                {idx + 1}
+              </span>
+              <span className="w-14 shrink-0 tabular-nums text-[10px] text-[color:var(--color-text-muted)]">
+                {seg.start.toFixed(1)}s
+              </span>
+              <span className="flex-1 text-[color:var(--color-text-primary)]">{seg.text}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
