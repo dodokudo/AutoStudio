@@ -28,12 +28,20 @@ export interface ReelAdInsightRow {
   thumbnailUrl: string | null;
   totalImpressions: number;
   totalSpend: number;
+  totalClicks: number;
+  totalInlineLinkClicks: number;
+  totalLeads: number;
   totalVideoPlays: number;
   totalP25: number;
   totalP50: number;
   totalP75: number;
   totalP95: number;
   totalP100: number;
+  ctr: number;
+  inlineLinkCtr: number;
+  cpa: number | null;
+  cpc: number;
+  cvr: number | null;
   byAdset: ReelAdAdsetMetrics[];
 }
 
@@ -74,40 +82,75 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       GROUP BY permalink, ad_name, thumbnail_url, adset_id
     )
     SELECT
-      permalink,
-      ANY_VALUE(ad_name) AS ad_name,
-      ANY_VALUE(thumbnail_url) AS thumbnail_url,
-      SUM(impressions) AS total_impressions,
-      SUM(spend) AS total_spend,
-      SUM(video_plays) AS total_video_plays,
-      SUM(p25) AS total_p25,
-      SUM(p50) AS total_p50,
-      SUM(p75) AS total_p75,
-      SUM(p95) AS total_p95,
-      SUM(p100) AS total_p100,
+      g.permalink,
+      ANY_VALUE(g.ad_name) AS ad_name,
+      ANY_VALUE(g.thumbnail_url) AS thumbnail_url,
+      SUM(g.impressions) AS total_impressions,
+      SUM(g.spend) AS total_spend,
+      SUM(g.video_plays) AS total_video_plays,
+      SUM(g.p25) AS total_p25,
+      SUM(g.p50) AS total_p50,
+      SUM(g.p75) AS total_p75,
+      SUM(g.p95) AS total_p95,
+      SUM(g.p100) AS total_p100,
+      a_agg.total_clicks,
+      a_agg.total_inline_link_clicks,
+      a_agg.total_leads,
       ARRAY_AGG(STRUCT(
-        adset_id, adset_name, audience_type,
-        impressions, video_plays, p2s, p15s, p25, p50, p75, p95, p100, thruplay, spend, cost_per_thruplay
+        g.adset_id, g.adset_name, g.audience_type,
+        g.impressions, g.video_plays, g.p2s, g.p15s, g.p25, g.p50, g.p75, g.p95, g.p100, g.thruplay, g.spend, g.cost_per_thruplay
       )) AS adsets
-    FROM grouped
-    GROUP BY permalink
+    FROM grouped g
+    LEFT JOIN (
+      SELECT
+        c.instagram_permalink_url AS permalink,
+        SUM(a.clicks) AS total_clicks,
+        SUM(a.inline_link_clicks) AS total_inline_link_clicks,
+        SUM(a.meta_leads) AS total_leads
+      FROM \`${PROJECT_ID}.${DATASET}.meta_ad_insights_daily\` a
+      LEFT JOIN latest_creatives c ON a.ad_id = c.ad_id
+      WHERE a.platform_position = 'instagram_reels'
+        AND a.date_start BETWEEN @startDate AND @endDate
+        AND c.instagram_permalink_url IS NOT NULL
+      GROUP BY c.instagram_permalink_url
+    ) a_agg ON g.permalink = a_agg.permalink
+    GROUP BY g.permalink, a_agg.total_clicks, a_agg.total_inline_link_clicks, a_agg.total_leads
     ORDER BY total_impressions DESC
   `;
 
   const [rows] = await client.query({ query, params: { startDate, endDate } });
 
-  return (rows as Array<Record<string, unknown>>).map((row) => ({
+  return (rows as Array<Record<string, unknown>>).map((row) => {
+    const totalImpressions = Number(row.total_impressions ?? 0);
+    const totalSpend = Number(row.total_spend ?? 0);
+    const totalClicks = Number(row.total_clicks ?? 0);
+    const totalInlineLinkClicks = Number(row.total_inline_link_clicks ?? 0);
+    const totalLeads = Number(row.total_leads ?? 0);
+    const ctr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
+    const inlineLinkCtr = totalImpressions > 0 ? totalInlineLinkClicks / totalImpressions : 0;
+    const cpa = totalLeads > 0 ? totalSpend / totalLeads : null;
+    const cpc = totalInlineLinkClicks > 0 ? totalSpend / totalInlineLinkClicks : 0;
+    const cvr = totalInlineLinkClicks > 0 ? totalLeads / totalInlineLinkClicks : null;
+    return {
     permalink: (row.permalink as string) ?? null,
     adName: (row.ad_name as string) ?? null,
     thumbnailUrl: (row.thumbnail_url as string) ?? null,
-    totalImpressions: Number(row.total_impressions ?? 0),
-    totalSpend: Number(row.total_spend ?? 0),
+    totalImpressions,
+    totalSpend,
+    totalClicks,
+    totalInlineLinkClicks,
+    totalLeads,
     totalVideoPlays: Number(row.total_video_plays ?? 0),
     totalP25: Number(row.total_p25 ?? 0),
     totalP50: Number(row.total_p50 ?? 0),
     totalP75: Number(row.total_p75 ?? 0),
     totalP95: Number(row.total_p95 ?? 0),
     totalP100: Number(row.total_p100 ?? 0),
+    ctr,
+    inlineLinkCtr,
+    cpa,
+    cpc,
+    cvr,
     byAdset: ((row.adsets as Array<Record<string, unknown>>) ?? []).map((a) => ({
       adsetId: String(a.adset_id ?? ''),
       adsetName: (a.adset_name as string) ?? null,
@@ -125,5 +168,6 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       spend: Number(a.spend ?? 0),
       costPerThruplay: a.cost_per_thruplay !== null ? Number(a.cost_per_thruplay) : null,
     })),
-  }));
+    };
+  });
 }

@@ -18,13 +18,12 @@ interface AdsDashboardShellProps {
   reelAdRows: ReelAdInsightRow[];
 }
 
-type AdsTabKey = 'home' | 'creative' | 'reels';
+type AdsTabKey = 'home' | 'creative';
 type CreativeSortKey = 'spend' | 'impressions' | 'ctr' | 'inlineLinkClicks' | 'lpc' | 'clicks';
 
 const ADS_TAB_ITEMS: Array<{ id: AdsTabKey; label: string }> = [
   { id: 'home', label: 'ホーム' },
   { id: 'creative', label: 'クリエイティブ' },
-  { id: 'reels', label: 'リール離脱' },
 ];
 
 function yen(value: number | null | undefined): string {
@@ -271,81 +270,7 @@ export function AdsDashboardShell({ rangeOptions, selectedRange, period, data, r
         </div>
       )}
 
-      {activeTab === 'creative' && (
-        <Card className="p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-semibold text-[color:var(--color-text-primary)]">クリエイティブ別成果</h1>
-              <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                広告素材ごとのサムネイル、消化金額、クリック、CPAを確認できます。
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">並び替え</span>
-              <select
-                value={creativeSort}
-                onChange={(event) => setCreativeSort(event.target.value as CreativeSortKey)}
-                className="h-10 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm font-medium text-[color:var(--color-text-primary)] shadow-sm outline-none transition focus:border-[color:var(--color-text-primary)]"
-                aria-label="クリエイティブの並び替え"
-              >
-                {CREATIVE_SORT_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label} {option.directionLabel}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {sortedCreatives.map((row, index) => (
-              <div key={row.adId} className="overflow-hidden rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-                <div className="grid gap-4 p-4 lg:grid-cols-[auto_auto_minmax(280px,1.5fr)_repeat(5,minmax(96px,1fr))] lg:items-center">
-                  <div className="text-sm font-semibold text-[color:var(--color-text-muted)]">#{index + 1}</div>
-                  <CreativeThumb row={row} />
-                  <div className="min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="line-clamp-2 font-semibold text-[color:var(--color-text-primary)]">{row.adName}</p>
-                        <p className="mt-1 truncate text-xs text-[color:var(--color-text-muted)]">{row.campaignName}</p>
-                      </div>
-                      <span className="shrink-0 rounded bg-[color:var(--color-surface-muted)] px-2 py-1 text-[11px] text-[color:var(--color-text-secondary)]">
-                        {mediaLabel(row.mediaType)}
-                      </span>
-                    </div>
-                    <p className="mt-2 truncate text-xs text-[color:var(--color-text-muted)]">{row.adsetName}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[color:var(--color-text-muted)]">消化金額</p>
-                    <p className="mt-1 font-semibold">{yen(row.spend)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[color:var(--color-text-muted)]">Imp</p>
-                    <p className="mt-1 font-semibold">{num(row.impressions)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[color:var(--color-text-muted)]">CTR</p>
-                    <p className="mt-1 font-semibold">{pct(row.ctr)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[color:var(--color-text-muted)]">リンク</p>
-                    <p className="mt-1 font-semibold">{num(row.inlineLinkClicks)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-[color:var(--color-text-muted)]">LPC</p>
-                    <p className="mt-1 font-semibold">{row.inlineLinkClicks > 0 ? yen(row.lpc) : '—'}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {sortedCreatives.length === 0 ? (
-              <p className="py-12 text-center text-sm text-[color:var(--color-text-muted)]">この期間のクリエイティブデータがありません。</p>
-            ) : null}
-          </div>
-        </Card>
-      )}
-
-      {activeTab === 'reels' && <ReelDropoffSection rows={reelAdRows} />}
+      {activeTab === 'creative' && <ReelDropoffSection rows={reelAdRows} />}
     </div>
   );
 }

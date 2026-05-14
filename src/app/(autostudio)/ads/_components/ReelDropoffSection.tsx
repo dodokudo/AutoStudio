@@ -110,13 +110,14 @@ function PermalinkRow({ row }: { row: ReelAdInsightRow }) {
               </a>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-3 text-xs md:grid-cols-6">
+          <div className="grid grid-cols-3 gap-3 text-xs md:grid-cols-7">
             <div><div className="text-[color:var(--color-text-muted)]">消化</div><div className="font-semibold text-[color:var(--color-text-primary)]">{yen(row.totalSpend)}</div></div>
             <div><div className="text-[color:var(--color-text-muted)]">imp</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalImpressions)}</div></div>
-            <div><div className="text-[color:var(--color-text-muted)]">再生</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalVideoPlays)}</div></div>
-            <div><div className="text-[color:var(--color-text-muted)]">25%維持</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP25 / row.totalVideoPlays) * 100 : 0)}</div></div>
-            <div><div className="text-[color:var(--color-text-muted)]">50%維持</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP50 / row.totalVideoPlays) * 100 : 0)}</div></div>
-            <div><div className="text-[color:var(--color-text-muted)]">完視聴</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.totalVideoPlays > 0 ? (row.totalP100 / row.totalVideoPlays) * 100 : 0)}</div></div>
+            <div><div className="text-[color:var(--color-text-muted)]">CTR</div><div className="font-semibold text-[color:var(--color-text-primary)]">{pct(row.ctr * 100, 2)}</div></div>
+            <div><div className="text-[color:var(--color-text-muted)]">リンククリック</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalInlineLinkClicks)}</div></div>
+            <div><div className="text-[color:var(--color-text-muted)]">LINE登録</div><div className="font-semibold text-[color:var(--color-text-primary)]">{num(row.totalLeads)}</div></div>
+            <div><div className="text-[color:var(--color-text-muted)]">CPA</div><div className="font-semibold text-[color:var(--color-text-primary)]">{row.cpa !== null ? yen(row.cpa) : '—'}</div></div>
+            <div><div className="text-[color:var(--color-text-muted)]">CVR</div><div className="font-semibold text-[color:var(--color-text-primary)]">{row.cvr !== null ? pct(row.cvr * 100, 2) : '—'}</div></div>
           </div>
           <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
             <div className="mb-2 text-xs font-medium text-[color:var(--color-text-primary)]">広告全体の視聴維持カーブ</div>
@@ -159,9 +160,9 @@ export function ReelDropoffSection({ rows }: Props) {
       <Card className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">リール広告 離脱分析</h2>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">クリエイティブ別成果（リール広告）</h2>
             <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              {rows.length}件のリール広告 × 7ポイント視聴維持率（再生→15s→25%→50%→75%→95%→100%）
+              {rows.length}件のリール広告 / 消化・CTR・CPA・CVR + 7ポイント視聴維持カーブ（再生→15s→25%→50%→75%→95%→100%） + audience別
             </p>
           </div>
           <div className="flex gap-2 text-xs">
