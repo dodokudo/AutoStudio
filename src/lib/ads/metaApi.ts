@@ -32,12 +32,19 @@ export interface MetaAdInsight {
   video_p25_watched_actions?: MetaActionMetric[];
   video_p50_watched_actions?: MetaActionMetric[];
   video_p75_watched_actions?: MetaActionMetric[];
+  video_p95_watched_actions?: MetaActionMetric[];
   video_p100_watched_actions?: MetaActionMetric[];
+  video_continuous_2_sec_watched_actions?: MetaActionMetric[];
+  video_15_sec_watched_actions?: MetaActionMetric[];
+  video_30_sec_watched_actions?: MetaActionMetric[];
+  video_thruplay_watched_actions?: MetaActionMetric[];
   video_avg_time_watched_actions?: MetaActionMetric[];
   cost_per_thruplay?: MetaActionMetric[];
   actions?: MetaActionMetric[];
   cost_per_action_type?: MetaActionMetric[];
   action_values?: MetaActionMetric[];
+  publisher_platform?: string;
+  platform_position?: string;
 }
 
 export interface MetaAdCreative {
@@ -169,7 +176,12 @@ export async function fetchMetaAdInsights(options: {
     'video_p25_watched_actions',
     'video_p50_watched_actions',
     'video_p75_watched_actions',
+    'video_p95_watched_actions',
     'video_p100_watched_actions',
+    'video_continuous_2_sec_watched_actions',
+    'video_15_sec_watched_actions',
+    'video_30_sec_watched_actions',
+    'video_thruplay_watched_actions',
     'video_avg_time_watched_actions',
     'cost_per_thruplay',
     'actions',
@@ -182,6 +194,7 @@ export async function fetchMetaAdInsights(options: {
   url.searchParams.set('time_increment', '1');
   url.searchParams.set('limit', '500');
   url.searchParams.set('fields', fields.join(','));
+  url.searchParams.set('breakdowns', 'publisher_platform,platform_position');
   url.searchParams.set('access_token', options.accessToken);
 
   if (options.since && options.until) {
@@ -213,4 +226,45 @@ export async function fetchMetaAdCreatives(options: {
   url.searchParams.set('access_token', options.accessToken);
 
   return fetchPaged<MetaAdWithCreative>(url.toString());
+}
+
+export interface MetaCustomAudience {
+  id?: string;
+  name?: string;
+}
+
+export interface MetaAdSetTargeting {
+  custom_audiences?: MetaCustomAudience[];
+  excluded_custom_audiences?: MetaCustomAudience[];
+  flexible_spec?: unknown;
+  interests?: unknown;
+  geo_locations?: unknown;
+  age_min?: number;
+  age_max?: number;
+}
+
+export interface MetaAdSet {
+  id: string;
+  name?: string;
+  campaign_id?: string;
+  effective_status?: string;
+  targeting?: MetaAdSetTargeting;
+}
+
+export async function fetchMetaAdSets(options: {
+  accessToken: string;
+  adAccountId: string;
+}): Promise<MetaAdSet[]> {
+  const fields = [
+    'id',
+    'name',
+    'campaign_id',
+    'effective_status',
+    'targeting{custom_audiences{id,name},excluded_custom_audiences{id,name},flexible_spec,interests,geo_locations,age_min,age_max}',
+  ];
+  const url = new URL(`${META_GRAPH_BASE}/${options.adAccountId}/adsets`);
+  url.searchParams.set('limit', '500');
+  url.searchParams.set('fields', fields.join(','));
+  url.searchParams.set('access_token', options.accessToken);
+  return fetchPaged<MetaAdSet>(url.toString());
 }

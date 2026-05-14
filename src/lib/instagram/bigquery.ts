@@ -184,6 +184,16 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'created_at', type: 'TIMESTAMP' },
   ], 'snapshot_date', ['script_id']);
 
+  await ensureTable(dataset, 'instagram_competitor_account_history', [
+    { name: 'date', type: 'DATE', mode: 'REQUIRED' },
+    { name: 'username', type: 'STRING', mode: 'REQUIRED' },
+    { name: 'account_url', type: 'STRING' },
+    { name: 'followers_count', type: 'INT64' },
+    { name: 'follows_count', type: 'INT64' },
+    { name: 'media_count', type: 'INT64' },
+    { name: 'created_at', type: 'TIMESTAMP' },
+  ], 'date', ['username']);
+
   await ensureTable(dataset, 'instagram_competitors_private', [
     { name: 'username', type: 'STRING', mode: 'REQUIRED' },
     { name: 'drive_folder_id', type: 'STRING', mode: 'REQUIRED' },
