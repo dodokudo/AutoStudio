@@ -23,6 +23,7 @@ import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { InsightsCard } from '@/app/(autostudio)/threads/_components/insights-card';
 import { LiveReelsView } from '../live-reels/_components/live-reels-view';
 import { CompetitorTab } from './competitor-tab';
+import { ScriptLibraryTab } from './script-library-tab';
 
 interface Props {
   data: InstagramDashboardData;
@@ -1146,46 +1147,13 @@ export function InstagramDashboardView({ data }: Props) {
       )}
 
       {activeTab === 'scripts' && (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">リール台本案</h2>
-          {data.scripts.length > 0 ? (
-            <div className="mt-4 space-y-4">
-              {data.scripts.map((script, index) => (
-                <div key={index} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
-                  <h3 className="text-base font-medium text-[color:var(--color-text-primary)]">{script.title}</h3>
-                  <div className="mt-3 space-y-2 text-sm text-[color:var(--color-text-secondary)]">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Hook</p>
-                      <p className="mt-1 whitespace-pre-line">{script.hook}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Body</p>
-                      <p className="mt-1 whitespace-pre-line">{script.body}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">CTA</p>
-                      <p className="mt-1">{script.cta}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Story</p>
-                      <p className="mt-1 whitespace-pre-line">{script.storyText}</p>
-                    </div>
-                    {script.inspirationSources.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">Inspiration</p>
-                        <p className="mt-1">{script.inspirationSources.join(', ')}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4 rounded-[var(--radius-sm)] border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-              台本データがありません
-            </div>
-          )}
-        </Card>
+        data.scriptLibraryData ? (
+          <ScriptLibraryTab data={data.scriptLibraryData} />
+        ) : (
+          <Card className="p-8 text-center text-[color:var(--color-text-muted)]">
+            <p className="font-semibold">台本ライブラリを読み込めませんでした</p>
+          </Card>
+        )
       )}
         </>
       )}

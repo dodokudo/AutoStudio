@@ -30,6 +30,7 @@
     "ig:transcribe": "tsx src/scripts/instagram/transcribeReels.ts",
     "ig:transcribe-competitors": "tsx src/scripts/instagram/transcribeCompetitors.ts",
     "ig:sync-competitor-sheets": "tsx src/scripts/instagram/syncCompetitorSheets.ts",
+    "ig:sync-competitors": "tsx src/scripts/instagram/syncCompetitorsFromBusinessDiscovery.ts",
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",

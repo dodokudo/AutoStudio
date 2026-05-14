@@ -50,7 +50,7 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       SELECT
         c.instagram_permalink_url AS permalink,
         c.ad_name,
-        c.video_thumbnail_url,
+        c.thumbnail_url,
         a.adset_id,
         ANY_VALUE(a.adset_name) AS adset_name,
         ANY_VALUE(s.audience_type) AS audience_type,
@@ -71,12 +71,12 @@ export async function getReelAdInsights(startDate: string, endDate: string): Pro
       LEFT JOIN \`${PROJECT_ID}.${DATASET}.meta_adsets\` s ON a.adset_id = s.adset_id
       WHERE a.platform_position = 'instagram_reels'
         AND a.date_start BETWEEN @startDate AND @endDate
-      GROUP BY permalink, ad_name, video_thumbnail_url, adset_id
+      GROUP BY permalink, ad_name, thumbnail_url, adset_id
     )
     SELECT
       permalink,
       ANY_VALUE(ad_name) AS ad_name,
-      ANY_VALUE(video_thumbnail_url) AS thumbnail_url,
+      ANY_VALUE(thumbnail_url) AS thumbnail_url,
       SUM(impressions) AS total_impressions,
       SUM(spend) AS total_spend,
       SUM(video_plays) AS total_video_plays,
