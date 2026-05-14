@@ -136,7 +136,7 @@ function TranscriptTimeline({ segments, durationSeconds, retentionPoints }: {
         ))}
         <span className="absolute right-0">{durationSeconds.toFixed(0)}s</span>
       </div>
-      <div className="mt-3 max-h-56 space-y-0.5 overflow-y-auto rounded border border-[color:var(--color-border)] bg-white p-2">
+      <div className="mt-3 max-h-96 space-y-0.5 overflow-y-auto rounded border border-[color:var(--color-border)] bg-white p-2">
         {segments.map((seg, idx) => {
           const isHover = hoverIdx === idx;
           return (

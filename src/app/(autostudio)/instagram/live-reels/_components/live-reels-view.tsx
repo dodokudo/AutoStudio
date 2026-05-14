@@ -14,7 +14,6 @@ function TranscriptTimeline({
   avgWatchSeconds: number | null;
   durationSeconds: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const avgPct = avgWatchSeconds && durationSeconds > 0
@@ -30,27 +29,17 @@ function TranscriptTimeline({
     return lastIdx;
   }, [segments, avgWatchSeconds]);
 
-  // デフォルトで離脱位置のセグメント表示
-  const displayIdx = hoverIdx !== null ? hoverIdx : dropoffIdx >= 0 ? dropoffIdx : null;
-
   return (
     <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs font-medium text-[color:var(--color-text-primary)]">
-          台本タイムライン
+          台本タイムライン（{segments.length}行 / 動画{durationSeconds.toFixed(0)}秒）
           {avgWatchSeconds !== null && (
             <span className="ml-2 text-[color:var(--color-text-muted)]">
-              平均 {avgWatchSeconds.toFixed(1)}秒 / 動画長 {durationSeconds.toFixed(0)}秒（視聴維持率 {avgPct !== null ? avgPct.toFixed(1) : '--'}%）
+              平均 {avgWatchSeconds.toFixed(1)}秒（視聴維持率 {avgPct !== null ? avgPct.toFixed(1) : '--'}%）
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          className="text-xs font-medium text-[color:var(--color-accent)] hover:underline"
-        >
-          {expanded ? '閉じる' : '全文表示'}
-        </button>
       </div>
 
       {/* タイムラインバー */}
@@ -99,40 +88,38 @@ function TranscriptTimeline({
         <span className="absolute right-0">{durationSeconds.toFixed(0)}s</span>
       </div>
 
-      {/* デフォルト：離脱位置のセグメント表示。ホバー時はホバー先のセグメント */}
-      {displayIdx !== null && segments[displayIdx] && (
-        <div className={`mt-3 rounded border p-2 ${
-          displayIdx === dropoffIdx
-            ? 'border-[color:var(--color-error)] bg-[rgba(255,77,79,0.06)]'
-            : 'border-[color:var(--color-border)] bg-white'
-        }`}>
-          <div className="flex items-center justify-between text-[10px] text-[color:var(--color-text-muted)]">
-            <span>{segments[displayIdx].start.toFixed(1)}s 〜 {segments[displayIdx].end.toFixed(1)}s</span>
-            {displayIdx === dropoffIdx && <span className="font-semibold text-[color:var(--color-error)]">← ここで平均離脱</span>}
-          </div>
-          <div className="mt-1 text-sm text-[color:var(--color-text-primary)]">
-            「{segments[displayIdx].text}」
-          </div>
-        </div>
-      )}
-
-      {/* 全文展開 */}
-      {expanded && (
-        <div className="mt-3 space-y-1 max-h-64 overflow-y-auto rounded border border-[color:var(--color-border)] bg-white p-2 text-xs">
-          {segments.map((seg, idx) => (
+      {/* 番号付き台本リスト（常時表示・スクロール可能） */}
+      <div className="mt-3 max-h-96 space-y-0.5 overflow-y-auto rounded border border-[color:var(--color-border)] bg-white p-2">
+        {segments.map((seg, idx) => {
+          const isHover = hoverIdx === idx;
+          const isDropoff = idx === dropoffIdx;
+          return (
             <div
               key={idx}
-              className={`flex gap-2 py-0.5 ${idx === dropoffIdx ? 'rounded bg-[rgba(255,77,79,0.08)] px-1' : ''}`}
+              onMouseEnter={() => setHoverIdx(idx)}
+              onMouseLeave={() => setHoverIdx(null)}
+              className={`flex items-start gap-2 rounded px-2 py-1 text-xs leading-relaxed ${
+                isDropoff
+                  ? 'bg-[rgba(255,77,79,0.10)]'
+                  : isHover
+                    ? 'bg-[rgba(10,122,255,0.08)]'
+                    : ''
+              }`}
             >
-              <span className="shrink-0 w-16 text-[color:var(--color-text-muted)] tabular-nums">
+              <span className="w-6 shrink-0 text-right font-semibold tabular-nums text-[color:var(--color-text-muted)]">
+                {idx + 1}
+              </span>
+              <span className="w-14 shrink-0 tabular-nums text-[10px] text-[color:var(--color-text-muted)]">
                 {seg.start.toFixed(1)}s
               </span>
-              <span className="text-[color:var(--color-text-primary)]">{seg.text}</span>
-              {idx === dropoffIdx && <span className="shrink-0 text-[color:var(--color-error)]">← 離脱</span>}
+              <span className="flex-1 text-[color:var(--color-text-primary)]">{seg.text}</span>
+              {isDropoff && (
+                <span className="shrink-0 text-[10px] font-semibold text-[color:var(--color-error)]">← 平均離脱</span>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
