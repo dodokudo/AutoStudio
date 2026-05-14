@@ -56,7 +56,7 @@ async function main() {
   await ensureInstagramTables(bigquery);
 
   const storage = getInstagramStorageConfig();
-  const rows = buildStorySnapshotRows(context, probeResults);
+  const rows = await buildStorySnapshotRows(context, probeResults);
   await insertStorySnapshots(bigquery, storage.dataset, rows);
 
   console.log(`[sync-story-metrics] Inserted ${rows.length} story snapshots.`);

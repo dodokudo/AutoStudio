@@ -1,5 +1,36 @@
 import type { BigQuery } from '@google-cloud/bigquery';
+import { Storage } from '@google-cloud/storage';
 import type { InstagramAccessContext } from './auth';
+
+const GCS_BUCKET = process.env.IG_STORY_MEDIA_BUCKET ?? 'autostudio-instagram-media';
+
+async function uploadMediaToGcs(mediaUrl: string, instagramId: string, mediaType: string | undefined): Promise<string | null> {
+  try {
+    const ext = mediaType === 'VIDEO' ? 'mp4' : 'jpg';
+    const objectName = `stories/${instagramId}.${ext}`;
+    const storage = new Storage();
+    const bucket = storage.bucket(GCS_BUCKET);
+    const file = bucket.file(objectName);
+    const [exists] = await file.exists();
+    if (exists) {
+      return `https://storage.googleapis.com/${GCS_BUCKET}/${objectName}`;
+    }
+    const response = await fetch(mediaUrl);
+    if (!response.ok) {
+      console.warn(`[instagram/storyMetrics] media download failed: ${response.status}`);
+      return null;
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    await file.save(buffer, {
+      contentType: mediaType === 'VIDEO' ? 'video/mp4' : 'image/jpeg',
+      metadata: { cacheControl: 'public, max-age=31536000' },
+    });
+    return `https://storage.googleapis.com/${GCS_BUCKET}/${objectName}`;
+  } catch (error) {
+    console.warn('[instagram/storyMetrics] uploadMediaToGcs failed:', error);
+    return null;
+  }
+}
 
 const GRAPH_VERSION = process.env.IG_GRAPH_VERSION ?? 'v25.0';
 const GRAPH_BASE = process.env.IG_GRAPH_BASE ?? `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -66,6 +97,8 @@ export interface StoryMetricSnapshotRow {
   permalink: string | null;
   timestamp: string | null;
   thumbnail_url: string | null;
+  media_url: string | null;
+  drive_image_url: string | null;
   views: number | null;
   reach: number | null;
   replies: number | null;
@@ -187,17 +220,22 @@ export async function probeStoryMetrics(
   };
 }
 
-export function buildStorySnapshotRows(
+export async function buildStorySnapshotRows(
   context: InstagramAccessContext,
   probeResults: StoryMetricProbeResult[],
   snapshotAt = new Date(),
-): StoryMetricSnapshotRow[] {
+): Promise<StoryMetricSnapshotRow[]> {
   const snapshotIso = snapshotAt.toISOString();
   const snapshotDate = snapshotIso.slice(0, 10);
 
-  return probeResults.map((result) => {
+  const rows: StoryMetricSnapshotRow[] = [];
+  for (const result of probeResults) {
     const metrics = result.supportedMetrics;
-    return {
+    const sourceUrl = result.story.media_url ?? result.story.thumbnail_url ?? null;
+    const driveImageUrl = sourceUrl
+      ? await uploadMediaToGcs(sourceUrl, result.story.id, result.story.media_type)
+      : null;
+    rows.push({
       snapshot_at: snapshotIso,
       snapshot_date: snapshotDate,
       user_id: context.autostudioUserId,
@@ -208,6 +246,8 @@ export function buildStorySnapshotRows(
       permalink: result.story.permalink ?? null,
       timestamp: normalizeTimestamp(result.story.timestamp),
       thumbnail_url: result.story.thumbnail_url ?? null,
+      media_url: result.story.media_url ?? null,
+      drive_image_url: driveImageUrl,
       views: toNumber(metrics.views),
       reach: toNumber(metrics.reach),
       replies: toNumber(metrics.replies),
@@ -220,8 +260,9 @@ export function buildStorySnapshotRows(
       metrics_status: result.unsupportedMetrics.length ? 'partial' : 'complete',
       unsupported_metrics: result.unsupportedMetrics,
       raw_metrics_json: JSON.stringify(result.rawMetrics),
-    };
-  });
+    });
+  }
+  return rows;
 }
 
 export async function insertStorySnapshots(

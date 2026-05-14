@@ -33,11 +33,28 @@ export async function getStoryMetricsDashboardData(): Promise<StoryMetricsDashbo
   const client = createBigQueryClient(projectId, location);
 
   const query = `
-    WITH latest_per_story AS (
+    WITH agg AS (
       SELECT
-        *,
-        ROW_NUMBER() OVER (PARTITION BY instagram_id ORDER BY snapshot_at DESC) AS rn
+        instagram_id,
+        MAX(snapshot_at) AS snapshot_at,
+        ANY_VALUE(timestamp) AS timestamp,
+        ARRAY_AGG(caption IGNORE NULLS ORDER BY snapshot_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS caption,
+        ARRAY_AGG(permalink IGNORE NULLS ORDER BY snapshot_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS permalink,
+        ARRAY_AGG(thumbnail_url IGNORE NULLS ORDER BY snapshot_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS thumbnail_url,
+        ARRAY_AGG(drive_image_url IGNORE NULLS ORDER BY snapshot_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS drive_image_url,
+        ARRAY_AGG(media_type IGNORE NULLS ORDER BY snapshot_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS media_type,
+        MAX(views) AS views,
+        MAX(reach) AS reach,
+        MAX(replies) AS replies,
+        MAX(shares) AS shares,
+        MAX(total_interactions) AS total_interactions,
+        MAX(profile_visits) AS profile_visits,
+        MAX(follows) AS follows,
+        MAX(navigation) AS navigation,
+        MAX(profile_activity) AS profile_activity,
+        ARRAY_AGG(metrics_status IGNORE NULLS ORDER BY snapshot_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS metrics_status
       FROM \`${projectId}.${dataset}.instagram_story_metric_snapshots\`
+      GROUP BY instagram_id
     )
     SELECT
       instagram_id,
@@ -58,9 +75,8 @@ export async function getStoryMetricsDashboardData(): Promise<StoryMetricsDashbo
       navigation,
       profile_activity,
       metrics_status
-    FROM latest_per_story
-    WHERE rn = 1
-    ORDER BY snapshot_at DESC, COALESCE(views, 0) DESC
+    FROM agg
+    ORDER BY timestamp DESC, COALESCE(views, 0) DESC
     LIMIT 200
   `;
 

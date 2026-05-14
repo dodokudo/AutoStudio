@@ -164,7 +164,7 @@ export function InstagramDashboardView({ data }: Props) {
   const [showDailyTable, setShowDailyTable] = useState(true);
   const [reelSortBy, setReelSortBy] = useState('date');
   const [reelSortOrder, setReelSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [storySortBy, setStorySortBy] = useState<'date' | 'reach' | 'views' | 'viewRate' | 'reactions'>('reach');
+  const [storySortBy, setStorySortBy] = useState<'date' | 'reach' | 'views' | 'viewRate' | 'reactions'>('date');
   const [storySortOrder, setStorySortOrder] = useState<'asc' | 'desc'>('desc');
   const numberFormatter = new Intl.NumberFormat('ja-JP');
   const dateFormatter = new Intl.DateTimeFormat('ja-JP', { month: '2-digit', day: '2-digit' });
