@@ -1016,9 +1016,9 @@ export function InstagramDashboardView({ data }: Props) {
       {activeTab === 'stories' && (() => {
         const apiStories = data.storyMetricsData?.rows ?? [];
         const followersCount = data.latestUserInsights?.followersCount ?? null;
-        const computeViewRate = (views: number | null): number | null => {
-          if (views === null || !followersCount || followersCount <= 0) return null;
-          return views / followersCount;
+        const computeViewRate = (reach: number | null): number | null => {
+          if (reach === null || !followersCount || followersCount <= 0) return null;
+          return reach / followersCount;
         };
         const apiSorted = [...apiStories].sort((a, b) => {
           const factor = storySortOrder === 'desc' ? 1 : -1;
@@ -1031,7 +1031,7 @@ export function InstagramDashboardView({ data }: Props) {
               case 'views':
                 return s.views ?? -Infinity;
               case 'viewRate':
-                return computeViewRate(s.views) ?? -Infinity;
+                return computeViewRate(s.reach) ?? -Infinity;
               case 'reactions':
                 return s.totalInteractions ?? -Infinity;
               default:
@@ -1076,7 +1076,7 @@ export function InstagramDashboardView({ data }: Props) {
               <div className="mt-6 space-y-4">
                 {apiSorted.map((story) => {
                   const imageUrl = resolveMediaUrl(story.driveImageUrl, story.thumbnailUrl);
-                  const viewRate = computeViewRate(story.views);
+                  const viewRate = computeViewRate(story.reach);
                   return (
                     <div key={story.instagramId} className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4 sm:flex-row">
                       <div className="h-40 w-full overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] sm:w-32">
@@ -1105,7 +1105,7 @@ export function InstagramDashboardView({ data }: Props) {
                             <dd className="font-semibold text-[color:var(--color-text-primary)]">{story.views?.toLocaleString() ?? '—'}</dd>
                           </div>
                           <div>
-                            <dt>閲覧率（フォロワー比）</dt>
+                            <dt>閲覧率（リーチ/フォロワー）</dt>
                             <dd className="font-semibold text-[color:var(--color-text-primary)]">{viewRate !== null ? `${(viewRate * 100).toFixed(1)}%` : '—'}</dd>
                           </div>
                           <div>
