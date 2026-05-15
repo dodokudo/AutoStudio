@@ -167,6 +167,27 @@ export function InstagramDashboardView({ data }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<InstagramTabKey>(() => parseInstagramTab(searchParams?.get('tab') ?? null));
+  const [lazyCompetitor, setLazyCompetitor] = useState<typeof data.competitorData>(data.competitorData);
+  const [lazyScriptLibrary, setLazyScriptLibrary] = useState<typeof data.scriptLibraryData>(data.scriptLibraryData);
+  const [lazyLoading, setLazyLoading] = useState<{ competitor: boolean; scripts: boolean }>({ competitor: false, scripts: false });
+
+  // タブ表示時に必要なデータを遅延fetch (キャッシュ済みなら何もしない)
+  useEffect(() => {
+    if (activeTab === 'competitors' && !lazyCompetitor && !lazyLoading.competitor) {
+      setLazyLoading((p) => ({ ...p, competitor: true }));
+      fetch('/api/instagram/competitor').then(r => r.ok ? r.json() : null).then((d) => {
+        if (d) setLazyCompetitor(d);
+        setLazyLoading((p) => ({ ...p, competitor: false }));
+      }).catch(() => setLazyLoading((p) => ({ ...p, competitor: false })));
+    }
+    if (activeTab === 'scripts' && !lazyScriptLibrary && !lazyLoading.scripts) {
+      setLazyLoading((p) => ({ ...p, scripts: true }));
+      fetch('/api/instagram/script-library').then(r => r.ok ? r.json() : null).then((d) => {
+        if (d) setLazyScriptLibrary(d);
+        setLazyLoading((p) => ({ ...p, scripts: false }));
+      }).catch(() => setLazyLoading((p) => ({ ...p, scripts: false })));
+    }
+  }, [activeTab, lazyCompetitor, lazyScriptLibrary, lazyLoading.competitor, lazyLoading.scripts]);
   const [pendingTab, setPendingTab] = useState<InstagramTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -1153,22 +1174,21 @@ export function InstagramDashboardView({ data }: Props) {
       })()}
 
       {activeTab === 'competitors' && (
-        data.competitorData ? (
-          <CompetitorTab data={data.competitorData} />
+        lazyCompetitor ? (
+          <CompetitorTab data={lazyCompetitor} />
         ) : (
           <Card className="p-8 text-center text-[color:var(--color-text-muted)]">
-            <p className="font-semibold">競合データを読み込めませんでした</p>
-            <p className="mt-2 text-xs">サーバーログを確認してください</p>
+            <p className="font-semibold">{lazyLoading.competitor ? '競合データを読み込み中…' : '競合データを読み込めませんでした'}</p>
           </Card>
         )
       )}
 
       {activeTab === 'scripts' && (
-        data.scriptLibraryData ? (
-          <ScriptLibraryTab data={data.scriptLibraryData} />
+        lazyScriptLibrary ? (
+          <ScriptLibraryTab data={lazyScriptLibrary} />
         ) : (
           <Card className="p-8 text-center text-[color:var(--color-text-muted)]">
-            <p className="font-semibold">台本ライブラリを読み込めませんでした</p>
+            <p className="font-semibold">{lazyLoading.scripts ? '台本ライブラリを読み込み中…' : '台本ライブラリを読み込めませんでした'}</p>
           </Card>
         )
       )}

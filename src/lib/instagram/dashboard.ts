@@ -112,7 +112,8 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
   const client = createBigQueryClient(projectId, DEFAULT_LOCATION);
   console.log('[instagram/dashboard] BigQuery client created');
 
-  const [followerSeries, reels, stories, scripts, linkClickSeries, reelMetricsData, storyDailyCounts, reelDailyCounts, latestUserInsights, userInsightsDailySeries, storyMetricsData, competitorData, scriptLibraryData] = await Promise.all([
+  // 競合・台本ライブラリはタブクリック時に遅延ロードする (初期は null)
+  const [followerSeries, reels, stories, scripts, linkClickSeries, reelMetricsData, storyDailyCounts, reelDailyCounts, latestUserInsights, userInsightsDailySeries, storyMetricsData] = await Promise.all([
     fetchFollowerSeries(client, projectId, config.defaultUserId),
     fetchReelHighlights(client, projectId, config.defaultUserId),
     fetchStoryHighlights(client, projectId, config.defaultUserId),
@@ -130,15 +131,9 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
       console.warn('[instagram/dashboard] Failed to load storyMetricsData', err);
       return null;
     }),
-    getCompetitorDashboardData().catch((err) => {
-      console.warn('[instagram/dashboard] Failed to load competitorData', err);
-      return null;
-    }),
-    getScriptLibraryData().catch((err) => {
-      console.warn('[instagram/dashboard] Failed to load scriptLibraryData', err);
-      return null;
-    }),
   ]);
+  const competitorData = null as Awaited<ReturnType<typeof getCompetitorDashboardData>> | null;
+  const scriptLibraryData = null as Awaited<ReturnType<typeof getScriptLibraryData>> | null;
 
   console.log('[instagram/dashboard] Data fetched - followerSeries:', followerSeries.length, 'reels:', reels.length, 'stories:', stories.length);
 
