@@ -167,12 +167,28 @@ export function InstagramDashboardView({ data }: Props) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<InstagramTabKey>(() => parseInstagramTab(searchParams?.get('tab') ?? null));
+  const [lazyReelMetrics, setLazyReelMetrics] = useState<typeof data.reelMetricsData>(data.reelMetricsData);
+  const [lazyStoryMetrics, setLazyStoryMetrics] = useState<typeof data.storyMetricsData>(data.storyMetricsData);
   const [lazyCompetitor, setLazyCompetitor] = useState<typeof data.competitorData>(data.competitorData);
   const [lazyScriptLibrary, setLazyScriptLibrary] = useState<typeof data.scriptLibraryData>(data.scriptLibraryData);
-  const [lazyLoading, setLazyLoading] = useState<{ competitor: boolean; scripts: boolean }>({ competitor: false, scripts: false });
+  const [lazyLoading, setLazyLoading] = useState({ reels: false, stories: false, competitor: false, scripts: false });
 
   // タブ表示時に必要なデータを遅延fetch (キャッシュ済みなら何もしない)
   useEffect(() => {
+    if ((activeTab === 'dashboard' || activeTab === 'reels') && !lazyReelMetrics && !lazyLoading.reels) {
+      setLazyLoading((p) => ({ ...p, reels: true }));
+      fetch('/api/instagram/reel-metrics').then(r => r.ok ? r.json() : null).then((d) => {
+        if (d) setLazyReelMetrics(d);
+        setLazyLoading((p) => ({ ...p, reels: false }));
+      }).catch(() => setLazyLoading((p) => ({ ...p, reels: false })));
+    }
+    if ((activeTab === 'dashboard' || activeTab === 'stories') && !lazyStoryMetrics && !lazyLoading.stories) {
+      setLazyLoading((p) => ({ ...p, stories: true }));
+      fetch('/api/instagram/story-metrics').then(r => r.ok ? r.json() : null).then((d) => {
+        if (d) setLazyStoryMetrics(d);
+        setLazyLoading((p) => ({ ...p, stories: false }));
+      }).catch(() => setLazyLoading((p) => ({ ...p, stories: false })));
+    }
     if (activeTab === 'competitors' && !lazyCompetitor && !lazyLoading.competitor) {
       setLazyLoading((p) => ({ ...p, competitor: true }));
       fetch('/api/instagram/competitor').then(r => r.ok ? r.json() : null).then((d) => {
@@ -187,7 +203,9 @@ export function InstagramDashboardView({ data }: Props) {
         setLazyLoading((p) => ({ ...p, scripts: false }));
       }).catch(() => setLazyLoading((p) => ({ ...p, scripts: false })));
     }
-  }, [activeTab, lazyCompetitor, lazyScriptLibrary, lazyLoading.competitor, lazyLoading.scripts]);
+  }, [activeTab, lazyReelMetrics, lazyStoryMetrics, lazyCompetitor, lazyScriptLibrary, lazyLoading.reels, lazyLoading.stories, lazyLoading.competitor, lazyLoading.scripts]);
+  const reelMetricsData = lazyReelMetrics;
+  const storyMetricsData = lazyStoryMetrics;
   const [pendingTab, setPendingTab] = useState<InstagramTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -486,7 +504,10 @@ export function InstagramDashboardView({ data }: Props) {
         : 0;
 
     const reachTotal = followerSeriesInRange.reduce((sum, point) => sum + (point.reach ?? 0), 0);
-    const postCount = useAllRange ? data.reels.length : filteredReels.length;
+    const reelDailyCountsInRange = useAllRange
+      ? data.reelDailyCounts
+      : data.reelDailyCounts.filter((point) => isWithinDateRange(point.date, startKey, endKey));
+    const postCount = reelDailyCountsInRange.reduce((sum, point) => sum + (point.count ?? 0), 0);
 
     const latestUserInsights = data.latestUserInsights;
     const latestFollowersFromApi = latestUserInsights?.followersCount ?? null;
@@ -527,7 +548,7 @@ export function InstagramDashboardView({ data }: Props) {
       followerGrowth,
       latestReach: reachFromApi !== null ? reachFromApi : reachTotal,
       postCount,
-      totalReels: filteredReels.length,
+      totalReels: postCount,
       totalStories: filteredStories.length,
       lineRegistrations,
       linkClicks,
@@ -890,7 +911,7 @@ export function InstagramDashboardView({ data }: Props) {
               </Button>
             </div>
             {(() => {
-              const apiRows = data.reelMetricsData?.rows ?? [];
+              const apiRows = reelMetricsData?.rows ?? [];
               const filtered = apiRows.filter((row) => {
                 if (chartRange.useAllRange) return true;
                 if (!chartRange.startKey || !chartRange.endKey) return true;
@@ -911,7 +932,7 @@ export function InstagramDashboardView({ data }: Props) {
               if (top5.length === 0) {
                 return (
                   <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-                    リールデータがありません
+                    {lazyLoading.reels ? 'リールデータを読み込み中…' : 'リールデータがありません'}
                   </div>
                 );
               }
@@ -1038,9 +1059,9 @@ export function InstagramDashboardView({ data }: Props) {
       )}
 
       {activeTab === 'reels' && (
-        data.reelMetricsData && data.reelMetricsData.rows.length > 0 ? (
+        reelMetricsData && reelMetricsData.rows.length > 0 ? (
           <LiveReelsView
-            data={data.reelMetricsData}
+            data={reelMetricsData}
             rangeStartKey={chartRange.startKey}
             rangeEndKey={chartRange.endKey}
             useAllRange={chartRange.useAllRange}
@@ -1049,14 +1070,16 @@ export function InstagramDashboardView({ data }: Props) {
           <Card className="p-8 text-center text-[color:var(--color-text-muted)]">
             <p className="font-semibold">Graph API リールデータがまだ取得されていません</p>
             <p className="mt-2 text-xs">
-              ターミナルで <code className="rounded bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-[color:var(--color-text-primary)]">npm run ig:metrics</code> を実行するか、Cloud Scheduler 経由で取得を待ってください。
+              {lazyLoading.reels
+                ? 'リールデータを読み込み中…'
+                : <><code className="rounded bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-[color:var(--color-text-primary)]">npm run ig:metrics</code> を実行するか、Cloud Scheduler 経由で取得を待ってください。</>}
             </p>
           </Card>
         )
       )}
 
       {activeTab === 'stories' && (() => {
-        const apiStories = data.storyMetricsData?.rows ?? [];
+        const apiStories = storyMetricsData?.rows ?? [];
         const followersCount = data.latestUserInsights?.followersCount ?? null;
         const computeViewRate = (reach: number | null): number | null => {
           if (reach === null || !followersCount || followersCount <= 0) return null;
@@ -1112,7 +1135,7 @@ export function InstagramDashboardView({ data }: Props) {
             </div>
             {apiSorted.length === 0 ? (
               <div className="mt-6 rounded-[var(--radius-sm)] border border-dashed border-[color:var(--color-border)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-                ストーリーデータがありません。
+                {lazyLoading.stories ? 'ストーリーデータを読み込み中…' : 'ストーリーデータがありません。'}
               </div>
             ) : (
               <div className="mt-6 space-y-4">

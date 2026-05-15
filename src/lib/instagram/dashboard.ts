@@ -1,10 +1,10 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { loadInstagramConfig } from './config';
 import { listLineSourceRegistrations } from '@/lib/lstep/dashboard';
-import { getReelMetricsDashboardData, type ReelMetricsDashboardData } from './reelMetricsDashboard';
-import { getStoryMetricsDashboardData, type StoryMetricsDashboardData } from './storyMetricsDashboard';
-import { getCompetitorDashboardData, type CompetitorDashboardData } from './competitorDashboard';
-import { getScriptLibraryData, type ScriptLibraryData } from './scriptLibrary';
+import type { ReelMetricsDashboardData } from './reelMetricsDashboard';
+import type { StoryMetricsDashboardData } from './storyMetricsDashboard';
+import type { CompetitorDashboardData } from './competitorDashboard';
+import type { ScriptLibraryData } from './scriptLibrary';
 import { getInstagramLpLineClicksByRange } from '@/lib/links/analytics';
 import type { BigQuery } from '@google-cloud/bigquery';
 
@@ -112,28 +112,22 @@ export async function getInstagramDashboardData(projectId: string): Promise<Inst
   const client = createBigQueryClient(projectId, DEFAULT_LOCATION);
   console.log('[instagram/dashboard] BigQuery client created');
 
-  // 競合・台本ライブラリはタブクリック時に遅延ロードする (初期は null)
-  const [followerSeries, reels, stories, scripts, linkClickSeries, reelMetricsData, storyDailyCounts, reelDailyCounts, latestUserInsights, userInsightsDailySeries, storyMetricsData] = await Promise.all([
+  // 詳細タブ用の重いデータはクライアント側で遅延ロードする。
+  const [followerSeries, stories, linkClickSeries, storyDailyCounts, reelDailyCounts, latestUserInsights, userInsightsDailySeries] = await Promise.all([
     fetchFollowerSeries(client, projectId, config.defaultUserId),
-    fetchReelHighlights(client, projectId, config.defaultUserId),
     fetchStoryHighlights(client, projectId, config.defaultUserId),
-    fetchLatestScripts(client, projectId),
     fetchLinkClickSeries(client, projectId),
-    getReelMetricsDashboardData().catch((err) => {
-      console.warn('[instagram/dashboard] Failed to load reelMetricsData', err);
-      return null;
-    }),
     fetchStoryDailyCounts(client, projectId, config.defaultUserId),
     fetchReelDailyCounts(client, projectId, config.defaultUserId),
     fetchLatestUserInsights(client, projectId),
     fetchUserInsightsDailySeries(client, projectId),
-    getStoryMetricsDashboardData().catch((err) => {
-      console.warn('[instagram/dashboard] Failed to load storyMetricsData', err);
-      return null;
-    }),
   ]);
-  const competitorData = null as Awaited<ReturnType<typeof getCompetitorDashboardData>> | null;
-  const scriptLibraryData = null as Awaited<ReturnType<typeof getScriptLibraryData>> | null;
+  const reels: ReelHighlight[] = [];
+  const scripts: ReelScriptSummary[] = [];
+  const reelMetricsData: ReelMetricsDashboardData | null = null;
+  const storyMetricsData: StoryMetricsDashboardData | null = null;
+  const competitorData: CompetitorDashboardData | null = null;
+  const scriptLibraryData: ScriptLibraryData | null = null;
 
   console.log('[instagram/dashboard] Data fetched - followerSeries:', followerSeries.length, 'reels:', reels.length, 'stories:', stories.length);
 

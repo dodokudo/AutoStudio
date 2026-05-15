@@ -1,17 +1,21 @@
-import { ensureInstagramTables } from '@/lib/instagram/bigquery';
-import { createInstagramBigQuery, loadInstagramConfig } from '@/lib/instagram';
+import { unstable_cache } from 'next/cache';
+import { loadInstagramConfig } from '@/lib/instagram';
 import { getInstagramDashboardData } from '@/lib/instagram/dashboard';
 import { InstagramDashboardView } from './_components/dashboard-view.client';
 import { Banner } from '@/components/ui/banner';
 
-export const revalidate = 3600;
+export const revalidate = 1800;
+
+const getCachedInstagramDashboardData = unstable_cache(
+  async (projectId: string) => getInstagramDashboardData(projectId),
+  ['instagram-dashboard'],
+  { revalidate: 1800 },
+);
 
 export default async function InstagramDashboardPage() {
   try {
     const config = loadInstagramConfig();
-    const bigquery = createInstagramBigQuery();
-    await ensureInstagramTables(bigquery);
-    const data = await getInstagramDashboardData(config.projectId);
+    const data = await getCachedInstagramDashboardData(config.projectId);
 
     return <InstagramDashboardView data={data} />;
   } catch (error) {
