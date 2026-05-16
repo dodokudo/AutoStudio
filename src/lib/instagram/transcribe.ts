@@ -21,6 +21,15 @@ export interface TranscribeResult {
   modelName: string;
 }
 
+interface GeminiTranscriptPayload {
+  segments?: Array<{
+    start?: number;
+    end?: number;
+    text?: string;
+  }>;
+  rawText?: string;
+}
+
 async function downloadToTemp(mediaUrl: string): Promise<string> {
   const tempPath = path.join(os.tmpdir(), `ig-reel-${crypto.randomUUID()}.mp4`);
   const response = await fetch(mediaUrl);
@@ -98,7 +107,144 @@ function parseWhisperJson(jsonPath: string): TranscriptSegment[] {
   }
 }
 
+async function transcribeWithGemini(mediaUrl: string, apiKey: string): Promise<TranscribeResult> {
+  const videoPath = await downloadToTemp(mediaUrl);
+  let fileUri: string | null = null;
+  try {
+    const buffer = await fs.promises.readFile(videoPath);
+    const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
+    const { body, contentType } = createMultipart(buffer, `ig-reel-${crypto.randomUUID()}.mp4`);
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': contentType,
+        'X-Goog-Upload-Protocol': 'multipart',
+      },
+      body: body as unknown as BodyInit,
+    });
+
+    if (!uploadResponse.ok) {
+      const text = await uploadResponse.text();
+      throw new Error(`Gemini upload failed (${uploadResponse.status}): ${text}`);
+    }
+
+    const uploadResult = await uploadResponse.json();
+    fileUri = uploadResult?.file?.uri || uploadResult?.file?.name || null;
+    if (!fileUri) {
+      throw new Error(`Gemini upload did not return file uri: ${JSON.stringify(uploadResult)}`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const generateResponse = await fetch(generateUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { fileData: { mimeType: 'video/mp4', fileUri } },
+              { text: buildGeminiTranscriptPrompt() },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0,
+        },
+      }),
+    });
+
+    if (!generateResponse.ok) {
+      const text = await generateResponse.text();
+      throw new Error(`Gemini generate error (${generateResponse.status}): ${text}`);
+    }
+
+    const result = await generateResponse.json();
+    const rawJson: string | undefined = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawJson) {
+      throw new Error(`Gemini did not return transcript text: ${JSON.stringify(result).slice(0, 500)}`);
+    }
+
+    const payload = JSON.parse(rawJson) as GeminiTranscriptPayload;
+    const segments = normalizeGeminiSegments(payload);
+    const rawText = payload.rawText?.trim() || segments.map((segment) => segment.text).join(' ');
+    return {
+      segments,
+      rawText,
+      modelName: 'gemini-2.5-flash',
+    };
+  } finally {
+    if (fileUri) {
+      deleteGeminiFile(fileUri, apiKey).catch(() => {});
+    }
+    fs.promises.unlink(videoPath).catch(() => {});
+  }
+}
+
+function createMultipart(buffer: Buffer, filename: string): { body: Buffer; contentType: string } {
+  const boundary = `----AutoStudioGeminiBoundary${crypto.randomUUID().replaceAll('-', '')}`;
+  const crlf = '\r\n';
+  const metadata = JSON.stringify({ file: { displayName: filename } });
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}${crlf}Content-Type: application/json; charset=UTF-8${crlf}${crlf}${metadata}${crlf}`),
+    Buffer.from(`--${boundary}${crlf}Content-Type: video/mp4${crlf}${crlf}`),
+    buffer,
+    Buffer.from(`${crlf}--${boundary}--${crlf}`),
+  ]);
+  return { body, contentType: `multipart/related; boundary=${boundary}` };
+}
+
+function buildGeminiTranscriptPrompt(): string {
+  return [
+    'このInstagramリール動画の日本語音声を文字起こししてください。',
+    '返答は必ずJSONのみです。',
+    'segmentsは、意味の区切りごとに開始秒・終了秒・本文を入れてください。',
+    '秒数は動画上の概算で構いませんが、離脱位置分析に使うため時系列順にしてください。',
+    '{',
+    '  "rawText": "全文の文字起こし",',
+    '  "segments": [',
+    '    { "start": 0, "end": 3.2, "text": "発話内容" }',
+    '  ]',
+    '}',
+  ].join('\n');
+}
+
+function normalizeGeminiSegments(payload: GeminiTranscriptPayload): TranscriptSegment[] {
+  const source = Array.isArray(payload.segments) ? payload.segments : [];
+  const segments = source
+    .map((segment, index) => {
+      const start = Number(segment.start ?? index * 5);
+      const end = Number(segment.end ?? start + 5);
+      return {
+        start: Number.isFinite(start) && start >= 0 ? start : index * 5,
+        end: Number.isFinite(end) && end > start ? end : start + 5,
+        text: String(segment.text ?? '').trim(),
+      };
+    })
+    .filter((segment) => segment.text.length > 0);
+
+  if (segments.length) return segments;
+  const rawText = payload.rawText?.trim();
+  return rawText ? [{ start: 0, end: 0, text: rawText }] : [];
+}
+
+async function deleteGeminiFile(fileUri: string, apiKey: string): Promise<void> {
+  const fileId = fileUri.split('/').pop();
+  if (!fileId) return;
+  await fetch(`https://generativelanguage.googleapis.com/v1beta/files/${fileId}`, {
+    method: 'DELETE',
+    headers: { 'x-goog-api-key': apiKey },
+  });
+}
+
 export async function transcribeVideoFromUrl(mediaUrl: string): Promise<TranscribeResult> {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (geminiApiKey) {
+    return transcribeWithGemini(mediaUrl, geminiApiKey);
+  }
+
   if (!fs.existsSync(WHISPER_MODEL)) {
     throw new Error(`Whisper model not found at ${WHISPER_MODEL}. Run: brew install whisper-cpp && download ggml model.`);
   }

@@ -17,7 +17,7 @@
     "worker:threads": "tsx src/scripts/runThreadsPostingWorker.ts",
     "templates:update": "tsx src/scripts/updateTemplateScores.ts",
     "ig:fetch": "tsx src/scripts/instagram/fetchCompetitorReels.ts",
-    "ig:transcribe": "tsx src/scripts/instagram/transcribeCompetitorReels.ts",
+    "ig:transcribe-legacy-competitors": "tsx src/scripts/instagram/transcribeCompetitorReels.ts",
     "ig:generate": "tsx src/scripts/instagram/generateReelScripts.ts",
     "ig:notify": "tsx src/scripts/instagram/notifyReelScripts.ts",
     "ig:sync": "tsx src/scripts/instagram/syncInsightsFromSheet.ts",

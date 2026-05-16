@@ -17,6 +17,7 @@ steps:
       - '--max-retries=1'
       - '--task-timeout=1800'
       - '--env-vars-file=deploy/instagram-transcribe/env.yaml'
+      - '--set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest'
 images:
   - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-transcribe:latest'
 options:
