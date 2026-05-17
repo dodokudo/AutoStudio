@@ -4,12 +4,12 @@ import { getInstagramDashboardData } from '@/lib/instagram/dashboard';
 import { InstagramDashboardView } from './_components/dashboard-view.client';
 import { Banner } from '@/components/ui/banner';
 
-export const revalidate = 1800;
+export const revalidate = 300;
 
 const getCachedInstagramDashboardData = unstable_cache(
   async (projectId: string) => getInstagramDashboardData(projectId),
   ['instagram-dashboard'],
-  { revalidate: 1800 },
+  { revalidate: 300 },
 );
 
 export default async function InstagramDashboardPage() {
