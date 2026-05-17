@@ -40,6 +40,15 @@ const GRAPH_VERSION = process.env.IG_GRAPH_VERSION ?? 'v25.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const MEDIA_LIMIT = Number(process.env.IG_COMPETITOR_MEDIA_LIMIT ?? '30');
 
+// Instagram API は '2025-10-22T12:05:33+0000' 形式を返す。
+// BigQuery TIMESTAMP は +0000（コロン無し）を解釈できないため ISO8601 に正規化する。
+function normalizeTimestamp(value: unknown): string | null {
+  if (!value) return null;
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
 interface BusinessDiscoveryMedia {
   id: string;
   caption?: string;
@@ -152,7 +161,7 @@ async function main() {
         caption: reel.caption ?? null,
         permalink: reel.permalink ?? `https://www.instagram.com/${username}/`,
         media_type: reel.media_product_type ?? reel.media_type ?? 'REELS',
-        posted_at: reel.timestamp ?? new Date().toISOString(),
+        posted_at: normalizeTimestamp(reel.timestamp) ?? nowIso,
         created_at: nowIso,
         sheet_caption: reel.caption ?? null,
         view_count: reel.view_count ?? null,

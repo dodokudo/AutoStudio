@@ -1,0 +1,32 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-bd:latest'
+      - '-f'
+      - 'deploy/instagram-competitor-bd/Dockerfile'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-bd:latest'
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'jobs'
+      - 'deploy'
+      - 'autostudio-instagram-competitor-bd'
+      - '--image=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-bd:latest'
+      - '--region=asia-northeast1'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--max-retries=2'
+      - '--task-timeout=900'
+      - '--env-vars-file=deploy/instagram-competitor-bd/env.yaml'
+images:
+  - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-bd:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s
