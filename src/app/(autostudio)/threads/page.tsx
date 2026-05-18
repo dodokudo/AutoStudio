@@ -12,7 +12,7 @@ import { ReportTab } from "./_components/report-tab";
 import { ScheduleTab } from "./_components/schedule-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
-import { getLinkClicksSummary, getThreadsLinkClicksByRange, getThreadsLpLineClicksByRange } from "@/lib/links/analytics";
+import { getThreadsLinkClicksByRange, getThreadsLpLineClicksByRange } from "@/lib/links/analytics";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
@@ -68,13 +68,6 @@ const getCachedDailyPostStats = unstable_cache(
   { revalidate: 1800 }
 );
 
-const getCachedLinkClicksSummary = unstable_cache(
-  async (startDateISO: string, endDateISO: string) => {
-    return getLinkClicksSummary({ startDate: new Date(startDateISO), endDate: new Date(endDateISO) });
-  },
-  ['threads-link-clicks-summary'],
-  { revalidate: 1800 }
-);
 
 const getCachedCountLineSourceRegistrations = unstable_cache(
   async (projectId: string, startDate?: string, endDate?: string, sourceName?: string) => {
@@ -215,8 +208,6 @@ export default async function ThreadsHome({
       insights,
       lightweightInsights,
       insightsActivity,
-      currentClicks,
-      previousClicks,
       dailyPostStats,
       previousDailyPostStats,
       currentLpLineSeries,
@@ -229,8 +220,6 @@ export default async function ThreadsHome({
         postsQueryEndKey,
         null,
       ),
-      getCachedLinkClicksSummary(rangeStartDate.toISOString(), rangeEndDate.toISOString()),
-      getCachedLinkClicksSummary(previousRangeStart.toISOString(), previousRangeEnd.toISOString()),
       // 日別集計クエリ（軽量）- チャート・概要用
       getCachedDailyPostStats(
         formatDateInput(rangeStartDate),
@@ -294,11 +283,17 @@ export default async function ThreadsHome({
         console.error('[threads/page] Failed to load LINE registrations:', lineError);
       }
 
-      // Threadsカテゴリのみのクリックを取得
-      const currentThreadsClicks = currentClicks.byCategory?.find((item) => item.category === 'threads')?.clicks ?? null;
-      const previousThreadsClicks = previousClicks.byCategory?.find((item) => item.category === 'threads')?.clicks ?? null;
-      linkClicksForRange = currentThreadsClicks;
-      previousLinkClicks = previousThreadsClicks;
+      // Threadsリンククリック: 旧短縮URL(click_logs) + 新LK直URL(launchkit_events page_view) 合算
+      try {
+        const [currentLinkSeries, prevLinkSeries] = await Promise.all([
+          getCachedThreadsLinkClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString()),
+          getCachedThreadsLinkClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString()),
+        ]);
+        linkClicksForRange = currentLinkSeries.reduce((sum, p) => sum + p.clicks, 0);
+        previousLinkClicks = prevLinkSeries.reduce((sum, p) => sum + p.clicks, 0);
+      } catch (clickError) {
+        console.error('[threads/page] Failed to load threads link clicks:', clickError);
+      }
     }
 
     if (lineRegistrationCount === null) {

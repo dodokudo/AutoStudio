@@ -506,6 +506,9 @@ async function fetchLatestScripts(client: BigQuery, projectId: string): Promise<
 }
 
 async function fetchLinkClickSeries(client: BigQuery, projectId: string): Promise<{ date: string; count: number }[]> {
+  // 旧運用: 短縮URL(category='instagram') click_logs
+  // 新運用: lkit.jp直URL からのLPアクセス launchkit_events(page_view, source='instagram')
+  // 両方をUNION ALLして日別合算
   const query = `
     WITH latest_links AS (
       SELECT
@@ -514,16 +517,32 @@ async function fetchLinkClickSeries(client: BigQuery, projectId: string): Promis
         ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) as rn
       FROM \`${projectId}.autostudio_links.short_links\`
       WHERE is_active = true
+    ),
+    legacy_clicks AS (
+      SELECT DATE(c.clicked_at, 'Asia/Tokyo') AS date
+      FROM \`${projectId}.autostudio_links.click_logs\` c
+      JOIN latest_links s
+        ON c.short_link_id = s.id
+        AND s.rn = 1
+      WHERE s.category = 'instagram'
+        AND DATE(c.clicked_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
+    ),
+    launchkit_views AS (
+      SELECT DATE(occurred_at, 'Asia/Tokyo') AS date
+      FROM \`${projectId}.autostudio_links.launchkit_events\`
+      WHERE event_type = 'page_view'
+        AND source = 'instagram'
+        AND DATE(occurred_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
+    ),
+    combined AS (
+      SELECT date FROM legacy_clicks
+      UNION ALL
+      SELECT date FROM launchkit_views
     )
     SELECT
-      FORMAT_DATE('%Y-%m-%d', DATE(c.clicked_at, 'Asia/Tokyo')) as date,
+      FORMAT_DATE('%Y-%m-%d', date) as date,
       COUNT(*) as click_count
-    FROM \`${projectId}.autostudio_links.click_logs\` c
-    JOIN latest_links s
-      ON c.short_link_id = s.id
-      AND s.rn = 1
-    WHERE s.category = 'instagram'
-      AND DATE(c.clicked_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
+    FROM combined
     GROUP BY date
     ORDER BY date DESC
   `;
