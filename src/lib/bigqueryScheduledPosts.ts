@@ -54,35 +54,6 @@ export async function ensureScheduledPostsTable() {
         throw error;
       }
     }
-  } else {
-    // マイグレーション: 新カラムを追加（既存テーブル用）
-    const newColumns = [
-      'main_thread_id',
-      'comment1_thread_id',
-      'comment2_thread_id',
-      'error_message',
-      'comment3',
-      'comment4',
-      'comment5',
-      'comment6',
-      'comment7',
-      'comment8',
-      'comment3_thread_id',
-      'comment4_thread_id',
-      'comment5_thread_id',
-      'comment6_thread_id',
-      'comment7_thread_id',
-      'comment8_thread_id',
-    ];
-    for (const col of newColumns) {
-      try {
-        await client.query({
-          query: `ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\` ADD COLUMN ${col} STRING`,
-        });
-      } catch {
-        // カラムが既に存在する場合は無視
-      }
-    }
   }
 }
 
