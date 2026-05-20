@@ -556,48 +556,120 @@ export function InstagramDashboardView({ data }: Props) {
     };
   }, [data, dateRange, filteredReels, filteredStories]);
 
+  // 前期間の集計 (フォロワー比較・delta 表示用)
+  const previousSummary = useMemo(() => {
+    if (dateRange.preset === 'all') return null;
+    const periodMs = Math.max(dateRange.end.getTime() - dateRange.start.getTime(), 24 * 60 * 60 * 1000);
+    const prevEnd = new Date(dateRange.start.getTime() - 1);
+    const prevStart = new Date(prevEnd.getTime() - periodMs);
+    const prevStartKey = formatDateKey(prevStart);
+    const prevEndKey = formatDateKey(prevEnd);
+
+    const followerInPrev = data.followerSeries.filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey));
+    const reach = followerInPrev.reduce((s, p) => s + (p.reach ?? 0), 0);
+    const postCount = data.reelDailyCounts
+      .filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey))
+      .reduce((s, p) => s + (p.count ?? 0), 0);
+    const lineRegistrations = data.lineRegistrationSeries
+      .filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey))
+      .reduce((s, p) => s + (p.count ?? 0), 0);
+    const linkClicks = data.linkClickSeries
+      .filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey))
+      .reduce((s, p) => s + (p.count ?? 0), 0);
+    const lpLineCtaClicks = (data.lpLineCtaClickSeries ?? [])
+      .filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey))
+      .reduce((s, p) => s + (p.clicks ?? 0), 0);
+
+    const followerAsc = [...followerInPrev].sort((a, b) => a.date.localeCompare(b.date));
+    const prevFollowerEndPoint = followerAsc[followerAsc.length - 1];
+    const prevFollowerStartPoint = followerAsc[0];
+    const prevFollowerCount = prevFollowerEndPoint?.followers ?? null;
+    const prevFollowerGrowth =
+      prevFollowerEndPoint && prevFollowerStartPoint
+        ? (prevFollowerEndPoint.followers ?? 0) - (prevFollowerStartPoint.followers ?? 0)
+        : 0;
+
+    return { reach, postCount, lineRegistrations, linkClicks, lpLineCtaClicks, prevFollowerCount, prevFollowerGrowth };
+  }, [data, dateRange]);
+
   const summaryStats = useMemo(() => {
-    const followerDeltaText =
-      summary.followerGrowth === 0
-        ? '増減 ±0'
-        : `増減 ${summary.followerGrowth > 0 ? '+' : ''}${summary.followerGrowth.toLocaleString()}`;
-    const lineRate =
-      summary.lineRegistrations !== null && summary.latestReach > 0
-        ? `遷移率 ${(summary.lineRegistrations / summary.latestReach * 100).toFixed(2)}%`
-        : '期間内合計';
+    const fmtNum = (n: number) => n.toLocaleString();
+    const fmtDelta = (n: number) => `${n >= 0 ? '+' : ''}${fmtNum(n)}`;
+    const tone = (d: number | null): 'up' | 'down' | 'neutral' => {
+      if (d === null || d === 0) return 'neutral';
+      return d > 0 ? 'up' : 'down';
+    };
+
+    // フォロワー
+    const followerGrowth = summary.followerGrowth;
+
+    // リーチ
+    const reachDelta = previousSummary ? summary.latestReach - previousSummary.reach : null;
+
+    // 投稿
+    const postCount = summary.postCount;
+    const postDelta = previousSummary ? postCount - previousSummary.postCount : null;
+    const periodDays = Math.max(1, Math.round((dateRange.end.getTime() - dateRange.start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+    const postsPerDay = postCount / periodDays;
+
+    // リンククリック
+    const linkClicks = summary.linkClicks ?? 0;
+    const linkClicksPrev = previousSummary?.linkClicks ?? 0;
+    const linkClicksDelta = previousSummary ? linkClicks - linkClicksPrev : null;
+    const ctr = summary.latestReach > 0 ? (linkClicks / summary.latestReach) * 100 : null;
+
+    // LPクリック (LP LINE登録CTA)
+    const lpClicks = summary.lpLineCtaClicks ?? 0;
+    const lpClicksPrev = previousSummary?.lpLineCtaClicks ?? 0;
+    const lpClicksDelta = previousSummary ? lpClicks - lpClicksPrev : null;
+    const lpTransitionRate = linkClicks > 0 ? (lpClicks / linkClicks) * 100 : null;
+
+    // LINE登録
+    const lineRegs = summary.lineRegistrations ?? 0;
+    const lineRegsPrev = previousSummary?.lineRegistrations ?? 0;
+    const lineRegsDelta = previousSummary ? lineRegs - lineRegsPrev : null;
+    const registrationRate = lpClicks > 0 ? (lineRegs / lpClicks) * 100 : null;
+    const cvr = linkClicks > 0 ? (lineRegs / linkClicks) * 100 : null;
+
     return [
       {
         label: 'フォロワー',
-        value: summary.currentFollowers.toLocaleString(),
-        delta: followerDeltaText,
+        value: fmtNum(summary.currentFollowers),
+        delta: fmtDelta(followerGrowth),
+        deltaTone: tone(followerGrowth),
       },
       {
         label: 'リーチ',
-        value: summary.latestReach.toLocaleString(),
-        delta: '期間内合計',
+        value: fmtNum(summary.latestReach),
+        delta: reachDelta !== null ? fmtDelta(reachDelta) : '期間内合計',
+        deltaTone: tone(reachDelta),
       },
       {
         label: '投稿数',
-        value: summary.postCount.toLocaleString(),
-        delta: '期間内合計',
+        value: fmtNum(postCount),
+        delta: `${postDelta !== null ? fmtDelta(postDelta) : ''}投稿 / ${postsPerDay.toFixed(1)}件`,
+        deltaTone: tone(postDelta),
       },
       {
         label: 'リンククリック数',
-        value: summary.linkClicks !== null ? summary.linkClicks.toLocaleString() : '—',
-        delta: '期間内合計',
+        value: fmtNum(linkClicks),
+        delta: `CTR: ${ctr !== null ? ctr.toFixed(2) + '%' : '-'}${linkClicksDelta !== null ? ' / ' + fmtDelta(linkClicksDelta) : ''}`,
+        deltaTone: tone(linkClicksDelta),
       },
       {
-        label: 'LP LINE登録CTA',
-        value: summary.lpLineCtaClicks !== null ? summary.lpLineCtaClicks.toLocaleString() : '—',
-        delta: '期間内合計',
+        label: 'LPクリック',
+        value: fmtNum(lpClicks),
+        delta: `LP遷移率: ${lpTransitionRate !== null ? lpTransitionRate.toFixed(2) + '%' : '-'}${lpClicksDelta !== null ? ' / ' + fmtDelta(lpClicksDelta) : ''}`,
+        deltaTone: tone(lpClicksDelta),
       },
       {
         label: 'LINE登録数',
-        value: summary.lineRegistrations !== null ? summary.lineRegistrations.toLocaleString() : '—',
-        delta: lineRate,
+        value: fmtNum(lineRegs),
+        delta: `登録率: ${registrationRate !== null ? registrationRate.toFixed(2) + '%' : '-'} / CVR: ${cvr !== null ? cvr.toFixed(2) + '%' : '-'}${lineRegsDelta !== null ? ' / ' + fmtDelta(lineRegsDelta) : ''}`,
+        deltaTone: tone(lineRegsDelta),
       },
     ];
-  }, [summary]);
+  }, [summary, previousSummary, dateRange]);
 
   const tabItems = [
     { value: 'dashboard', label: '概要' },
