@@ -511,7 +511,6 @@ export function InstagramDashboardView({ data }: Props) {
 
     const latestUserInsights = data.latestUserInsights;
     const latestFollowersFromApi = latestUserInsights?.followersCount ?? null;
-    const reachFromApi = latestUserInsights?.reach ?? null;
 
     let lineRegistrations: number | null = null;
     if (data.lineRegistrationSeries.length > 0) {
@@ -546,7 +545,7 @@ export function InstagramDashboardView({ data }: Props) {
     return {
       currentFollowers: latestFollowersFromApi ?? latestFollowerPoint?.followers ?? 0,
       followerGrowth,
-      latestReach: reachFromApi !== null ? reachFromApi : reachTotal,
+      latestReach: reachTotal,
       postCount,
       totalReels: postCount,
       totalStories: filteredStories.length,
