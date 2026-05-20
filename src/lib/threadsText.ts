@@ -64,7 +64,7 @@ export function sanitizeThreadsComment(value: string): string {
   return stripWithPatterns(value, COMMENT_LABEL_PATTERNS);
 }
 
-export const TOKUTEN_GUIDE_URL = 'https://lkit.jp/opt-4/th/';
+export const TOKUTEN_GUIDE_URL = 'https://lkit.jp/opt-4/';
 
 const TOKUTEN_GUIDE_PATTERNS = [
   /1000名以上が受け取っている.*Threadsノウハウはこちら/u,
