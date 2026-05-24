@@ -222,7 +222,9 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       // 各投稿にコメントデータを紐付け
       for (const post of posts) {
         const postComments = commentsByPostId.get(post.postedThreadId) || [];
-        post.commentData = postComments.sort((a, b) => a.depth - b.depth);
+        post.commentData = postComments.sort(
+          (a, b) => a.depth - b.depth || (a.timestamp ?? '').localeCompare(b.timestamp ?? ''),
+        );
       }
     }
   } catch (error) {

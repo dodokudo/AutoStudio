@@ -39,7 +39,7 @@ type ReservationEligibility =
   | { eligible: false; reason: string };
 
 function cleanContent(text: string) {
-  return text.replace(/^【メイン投稿】\s*/g, '').replace(/^【コメント\d+】\s*/g, '');
+  return text.replace(/^【メイン投稿】\s*/g, '').replace(/^【コメント(?:欄)?\d+】\s*/g, '');
 }
 
 function evaluateEligibility(post: TopContentPost): ReservationEligibility {
