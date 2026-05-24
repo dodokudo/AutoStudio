@@ -81,7 +81,7 @@ const INITIAL_DISPLAY_COUNT = 20;
 interface TransitionRate {
   from: string;
   to: string;
-  rate: number;
+  rate: number | null;
   views: number;
 }
 
@@ -102,11 +102,10 @@ function calculateTransitionRates(postViews: number, comments: PostCommentData[]
   // メイン投稿 → コメント欄1
   if (sortedComments.length > 0) {
     const firstComment = sortedComments[0];
-    const rate = (firstComment.views / postViews) * 100;
     transitions.push({
       from: 'メイン',
       to: 'コメント欄1',
-      rate,
+      rate: firstComment.views > 0 ? (firstComment.views / postViews) * 100 : null,
       views: firstComment.views,
     });
   }
@@ -115,20 +114,22 @@ function calculateTransitionRates(postViews: number, comments: PostCommentData[]
   for (let i = 1; i < sortedComments.length; i++) {
     const prevComment = sortedComments[i - 1];
     const currComment = sortedComments[i];
-    if (prevComment.views > 0) {
-      const rate = (currComment.views / prevComment.views) * 100;
-      transitions.push({
-        from: `コメント欄${i}`,
-        to: `コメント欄${i + 1}`,
-        rate,
-        views: currComment.views,
-      });
-    }
+    const rate =
+      prevComment.views > 0 && currComment.views > 0
+        ? (currComment.views / prevComment.views) * 100
+        : null;
+    transitions.push({
+      from: `コメント欄${i}`,
+      to: `コメント欄${i + 1}`,
+      rate,
+      views: currComment.views,
+    });
   }
 
   // メイン→最終コメント欄の全体遷移率
   const lastComment = sortedComments[sortedComments.length - 1];
-  const overallRate = postViews > 0 ? (lastComment.views / postViews) * 100 : null;
+  const overallRate =
+    postViews > 0 && lastComment.views > 0 ? (lastComment.views / postViews) * 100 : null;
 
   return {
     transitions,
@@ -222,21 +223,24 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
               // 1投稿目から2投稿目（idx === 0: メイン→コメント欄1）は10%以上で緑
               // 2投稿目以降は80%以上で緑
               const isFirstTransition = idx === 0;
-              const colorClass = isFirstTransition
-                ? t.rate >= 10 ? 'text-green-600' : 'text-red-500'
-                : t.rate >= 80 ? 'text-green-600' : t.rate >= 50 ? 'text-yellow-600' : 'text-red-500';
+              const colorClass =
+                t.rate === null
+                  ? 'text-gray-400'
+                  : isFirstTransition
+                    ? t.rate >= 10 ? 'text-green-600' : 'text-red-500'
+                    : t.rate >= 80 ? 'text-green-600' : t.rate >= 50 ? 'text-yellow-600' : 'text-red-500';
 
               return (
                 <div key={idx} className="flex items-center gap-1">
                   <div className="flex flex-col items-center px-1">
                     <span className="text-gray-400">→</span>
                     <span className={`font-bold ${colorClass}`}>
-                      {t.rate.toFixed(1)}%
+                      {t.rate === null ? '-' : `${t.rate.toFixed(1)}%`}
                     </span>
                   </div>
                   <div className="flex flex-col items-center">
                     <span className="text-gray-500">{t.to}</span>
-                    <span className="font-bold text-gray-700">{t.views.toLocaleString()}</span>
+                    <span className="font-bold text-gray-700">{t.views > 0 ? t.views.toLocaleString() : '-'}</span>
                   </div>
                 </div>
               );
