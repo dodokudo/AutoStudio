@@ -279,12 +279,7 @@ function ReelCard({ row }: { row: ReelMetricRow }) {
         <div className="grid grid-cols-3 gap-4 md:grid-cols-7">
           <MetricCell label="再生数" value={snapshot.views} rating={ratings.views} formatter={formatNumber} />
           <MetricCell label="リーチ" value={snapshot.reach} rating={ratings.reach} formatter={formatNumber} />
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-[color:var(--color-text-muted)]">総再生時間</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-bold text-[color:var(--color-text-primary)]">{formatTotalWatchTime(snapshot.totalWatchTimeSeconds)}</span>
-            </div>
-          </div>
+          <MetricCell label="総再生時間" value={snapshot.totalWatchTimeSeconds} rating={ratings.totalWatchTime} formatter={formatTotalWatchTime} />
           <MetricCell label="平均視聴" value={snapshot.avgWatchTimeSeconds} rating={ratings.avgWatchTime} formatter={formatSeconds} />
           <MetricCell
             label="視聴維持率"

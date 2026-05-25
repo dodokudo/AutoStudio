@@ -57,6 +57,7 @@ export interface ReelMetricRow {
     reach: BenchmarkRating;
     skipRate: BenchmarkRating;
     avgWatchTime: BenchmarkRating;
+    totalWatchTime: BenchmarkRating;
     completionRate: BenchmarkRating;
     likeRate: BenchmarkRating;
     saveRate: BenchmarkRating;
@@ -70,6 +71,7 @@ export interface ReelMetricsDashboardData {
     reach: BenchmarkStats;
     skipRate: BenchmarkStats;
     avgWatchTime: BenchmarkStats;
+    totalWatchTime: BenchmarkStats;
     completionRate: BenchmarkStats;
     likeRate: BenchmarkStats;
     saveRate: BenchmarkStats;
@@ -255,6 +257,7 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
     reach: computeBenchmark(snapshots.map((s) => s.reach)),
     skipRate: computeBenchmark(snapshots.map((s) => s.skipRate)),
     avgWatchTime: computeBenchmark(snapshots.map((s) => s.avgWatchTimeSeconds)),
+    totalWatchTime: computeBenchmark(snapshots.map((s) => s.totalWatchTimeSeconds)),
     completionRate: computeBenchmark(snapshots.map((s) => s.completionRate)),
     likeRate: computeBenchmark(snapshots.map(likeRate)),
     saveRate: computeBenchmark(snapshots.map(saveRate)),
@@ -264,6 +267,7 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
   const reachRank = rankBy(snapshots, (s) => s.reach);
   const skipRank = rankBy(snapshots, (s) => s.skipRate, true);
   const watchRank = rankBy(snapshots, (s) => s.avgWatchTimeSeconds);
+  const totalWatchRank = rankBy(snapshots, (s) => s.totalWatchTimeSeconds);
   const completionRank = rankBy(snapshots, (s) => s.completionRate);
   const likeRateRank = rankBy(snapshots, likeRate);
   const saveRateRank = rankBy(snapshots, saveRate);
@@ -276,6 +280,7 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
       reach: rateFor(snapshot.reach, benchmarks.reach, total, reachRank.get(snapshot.instagramId) ?? null),
       skipRate: rateFor(snapshot.skipRate, benchmarks.skipRate, total, skipRank.get(snapshot.instagramId) ?? null, { lowerIsBetter: true }),
       avgWatchTime: rateFor(snapshot.avgWatchTimeSeconds, benchmarks.avgWatchTime, total, watchRank.get(snapshot.instagramId) ?? null),
+      totalWatchTime: rateFor(snapshot.totalWatchTimeSeconds, benchmarks.totalWatchTime, total, totalWatchRank.get(snapshot.instagramId) ?? null),
       completionRate: rateFor(snapshot.completionRate, benchmarks.completionRate, total, completionRank.get(snapshot.instagramId) ?? null),
       likeRate: rateFor(likeRate(snapshot), benchmarks.likeRate, total, likeRateRank.get(snapshot.instagramId) ?? null),
       saveRate: rateFor(saveRate(snapshot), benchmarks.saveRate, total, saveRateRank.get(snapshot.instagramId) ?? null),
