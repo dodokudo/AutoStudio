@@ -174,6 +174,19 @@ function formatSeconds(value: number | null | undefined): string {
   return `${minutes}分${seconds}秒`;
 }
 
+function formatTotalWatchTime(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '--';
+  if (value < 60) return `${Math.round(value)}秒`;
+  if (value < 3600) {
+    const minutes = Math.floor(value / 60);
+    const seconds = Math.round(value - minutes * 60);
+    return `${minutes}分${seconds}秒`;
+  }
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.round((value - hours * 3600) / 60);
+  return `${hours}時間${minutes}分`;
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return '--';
   const date = new Date(iso);
@@ -263,9 +276,15 @@ function ReelCard({ row }: { row: ReelMetricRow }) {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-4 md:grid-cols-7">
+        <div className="grid grid-cols-3 gap-4 md:grid-cols-8">
           <MetricCell label="再生数" value={snapshot.views} rating={ratings.views} formatter={formatNumber} />
           <MetricCell label="リーチ" value={snapshot.reach} rating={ratings.reach} formatter={formatNumber} />
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-[color:var(--color-text-muted)]">総再生時間</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-bold text-[color:var(--color-text-primary)]">{formatTotalWatchTime(snapshot.totalWatchTimeSeconds)}</span>
+            </div>
+          </div>
           <MetricCell label="平均視聴" value={snapshot.avgWatchTimeSeconds} rating={ratings.avgWatchTime} formatter={formatSeconds} />
           <MetricCell
             label="視聴維持率"
