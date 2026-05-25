@@ -1,5 +1,5 @@
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
-import { countLineRegistrationsByDateRange } from '@/lib/lstep/analytics';
+import { countAdLineRegistrationsByDateRange } from '@/lib/lstep/analytics';
 
 export const META_ADS_DATASET = process.env.META_ADS_BQ_DATASET ?? 'autostudio_ads';
 export const META_AD_INSIGHTS_TABLE = 'meta_ad_insights_daily';
@@ -172,7 +172,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
 
   const client = createBigQueryClient(PROJECT_ID, LOCATION);
   const [lineRegistrations, launchkitLineClicks] = await Promise.all([
-    countLineRegistrationsByDateRange(PROJECT_ID, startDate, endDate).catch(() => 0),
+    countAdLineRegistrationsByDateRange(PROJECT_ID, startDate, endDate).catch(() => 0),
     countLaunchkitLineClicks(startDate, endDate).catch(() => 0),
   ]);
 
