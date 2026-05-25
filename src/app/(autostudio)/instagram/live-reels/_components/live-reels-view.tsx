@@ -276,7 +276,7 @@ function ReelCard({ row }: { row: ReelMetricRow }) {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-4 md:grid-cols-8">
+        <div className="grid grid-cols-3 gap-4 md:grid-cols-7">
           <MetricCell label="再生数" value={snapshot.views} rating={ratings.views} formatter={formatNumber} />
           <MetricCell label="リーチ" value={snapshot.reach} rating={ratings.reach} formatter={formatNumber} />
           <div className="flex flex-col gap-1">
@@ -293,7 +293,6 @@ function ReelCard({ row }: { row: ReelMetricRow }) {
             formatter={(v) => formatPercent(v, 1)}
           />
           <MetricCell label="スキップ率" value={snapshot.skipRate} rating={ratings.skipRate} formatter={(v) => formatPercent(v)} />
-          <MetricCell label="いいね率" value={ratings.likeRate.value} rating={ratings.likeRate} formatter={(v) => formatPercent(v, 2)} />
           <MetricCell label="保存率" value={ratings.saveRate.value} rating={ratings.saveRate} formatter={(v) => formatPercent(v, 2)} />
         </div>
 
