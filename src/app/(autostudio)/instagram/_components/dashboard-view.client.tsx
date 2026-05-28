@@ -974,8 +974,8 @@ export function InstagramDashboardView({ data }: Props) {
           <Card className="p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">リールTOP5</h2>
-                <p className="text-xs text-[color:var(--color-text-muted)]">期間内の上位コンテンツ</p>
+                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">フォロー獲得リールTOP5</h2>
+                <p className="text-xs text-[color:var(--color-text-muted)]">リール経由のフォロー数で並び替え</p>
               </div>
               <Button variant="secondary" className="h-9 px-3 text-sm" onClick={() => setActiveTab('reels')}>
                 詳細
@@ -995,9 +995,12 @@ export function InstagramDashboardView({ data }: Props) {
               });
               const top5 = [...filtered]
                 .sort((a, b) => {
-                  const at = a.snapshot.publishedAt ? new Date(a.snapshot.publishedAt).getTime() : 0;
-                  const bt = b.snapshot.publishedAt ? new Date(b.snapshot.publishedAt).getTime() : 0;
-                  return bt - at;
+                  const af = a.snapshot.follows ?? -Infinity;
+                  const bf = b.snapshot.follows ?? -Infinity;
+                  if (bf !== af) return bf - af;
+                  const av = a.snapshot.views ?? 0;
+                  const bv = b.snapshot.views ?? 0;
+                  return bv - av;
                 })
                 .slice(0, 5);
               if (top5.length === 0) {
@@ -1031,6 +1034,18 @@ export function InstagramDashboardView({ data }: Props) {
                               <dt className="font-medium text-[color:var(--color-text-muted)]">再生数</dt>
                               <dd className="font-semibold text-[color:var(--color-text-primary)]">
                                 {snapshot.views?.toLocaleString() ?? '—'}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-[color:var(--color-text-muted)]">フォロー数</dt>
+                              <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                                {snapshot.follows?.toLocaleString() ?? '—'}
+                              </dd>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <dt className="font-medium text-[color:var(--color-text-muted)]">フォロー率</dt>
+                              <dd className="font-semibold text-[color:var(--color-text-primary)]">
+                                {snapshot.followRate !== null && snapshot.followRate !== undefined ? `${snapshot.followRate.toFixed(2)}%` : '—'}
                               </dd>
                             </div>
                             <div className="flex items-center justify-between">

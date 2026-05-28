@@ -29,6 +29,9 @@ export interface ReelMetricSnapshot {
   crosspostedViews: number | null;
   facebookViews: number | null;
   instagramViews: number | null;
+  profileActivity: number | null;
+  follows: number | null;
+  followRate: number | null;
   durationSeconds: number | null;
   completionRate: number | null;
   metricsStatus: string;
@@ -59,6 +62,8 @@ export interface ReelMetricRow {
     avgWatchTime: BenchmarkRating;
     totalWatchTime: BenchmarkRating;
     completionRate: BenchmarkRating;
+    follows: BenchmarkRating;
+    followRate: BenchmarkRating;
     likeRate: BenchmarkRating;
     saveRate: BenchmarkRating;
   };
@@ -73,6 +78,8 @@ export interface ReelMetricsDashboardData {
     avgWatchTime: BenchmarkStats;
     totalWatchTime: BenchmarkStats;
     completionRate: BenchmarkStats;
+    follows: BenchmarkStats;
+    followRate: BenchmarkStats;
     likeRate: BenchmarkStats;
     saveRate: BenchmarkStats;
   };
@@ -147,6 +154,15 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
         ROW_NUMBER() OVER (PARTITION BY instagram_id ORDER BY snapshot_at DESC) AS rn
       FROM \`${projectId}.${dataset}.instagram_reel_metric_snapshots\`
     ),
+    latest_manual_profile AS (
+      SELECT
+        instagram_id,
+        profile_activity,
+        follows,
+        ROW_NUMBER() OVER (PARTITION BY instagram_id ORDER BY snapshot_at DESC) AS rn
+      FROM \`${projectId}.${dataset}.instagram_reel_metric_snapshots\`
+      WHERE profile_activity IS NOT NULL OR follows IS NOT NULL
+    ),
     latest_transcripts AS (
       SELECT
         instagram_id,
@@ -175,11 +191,15 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
       m.reels_skip_rate,
       m.crossposted_views,
       m.facebook_views,
+      COALESCE(m.profile_activity, p.profile_activity) AS profile_activity,
+      COALESCE(m.follows, p.follows) AS follows,
       m.duration_seconds,
       m.completion_rate,
       m.metrics_status,
       t.segments_json AS transcript_segments_json
     FROM latest_per_reel m
+    LEFT JOIN latest_manual_profile p
+      ON p.instagram_id = m.instagram_id AND p.rn = 1
     LEFT JOIN latest_transcripts t
       ON t.instagram_id = m.instagram_id AND t.rn = 1
     WHERE m.rn = 1
@@ -220,6 +240,9 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
       crosspostedViews: crossposted,
       facebookViews,
       instagramViews: igViews,
+      profileActivity: row.profile_activity !== null && row.profile_activity !== undefined ? Number(row.profile_activity) : null,
+      follows: row.follows !== null && row.follows !== undefined ? Number(row.follows) : null,
+      followRate: row.follows !== null && row.follows !== undefined && views ? (Number(row.follows) / views) * 100 : null,
       durationSeconds: row.duration_seconds !== null && row.duration_seconds !== undefined ? Number(row.duration_seconds) : null,
       completionRate: row.completion_rate !== null && row.completion_rate !== undefined ? Number(row.completion_rate) : null,
       metricsStatus: row.metrics_status ? String(row.metrics_status) : 'unknown',
@@ -251,6 +274,7 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
 
   const likeRate = (s: ReelMetricSnapshot) => (s.likes !== null && s.views ? (s.likes / s.views) * 100 : null);
   const saveRate = (s: ReelMetricSnapshot) => (s.saved !== null && s.views ? (s.saved / s.views) * 100 : null);
+  const followRate = (s: ReelMetricSnapshot) => s.followRate;
 
   const benchmarks = {
     views: computeBenchmark(snapshots.map((s) => s.views)),
@@ -259,6 +283,8 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
     avgWatchTime: computeBenchmark(snapshots.map((s) => s.avgWatchTimeSeconds)),
     totalWatchTime: computeBenchmark(snapshots.map((s) => s.totalWatchTimeSeconds)),
     completionRate: computeBenchmark(snapshots.map((s) => s.completionRate)),
+    follows: computeBenchmark(snapshots.map((s) => s.follows)),
+    followRate: computeBenchmark(snapshots.map(followRate)),
     likeRate: computeBenchmark(snapshots.map(likeRate)),
     saveRate: computeBenchmark(snapshots.map(saveRate)),
   };
@@ -269,6 +295,8 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
   const watchRank = rankBy(snapshots, (s) => s.avgWatchTimeSeconds);
   const totalWatchRank = rankBy(snapshots, (s) => s.totalWatchTimeSeconds);
   const completionRank = rankBy(snapshots, (s) => s.completionRate);
+  const followsRank = rankBy(snapshots, (s) => s.follows);
+  const followRateRank = rankBy(snapshots, followRate);
   const likeRateRank = rankBy(snapshots, likeRate);
   const saveRateRank = rankBy(snapshots, saveRate);
 
@@ -282,6 +310,8 @@ export async function getReelMetricsDashboardData(): Promise<ReelMetricsDashboar
       avgWatchTime: rateFor(snapshot.avgWatchTimeSeconds, benchmarks.avgWatchTime, total, watchRank.get(snapshot.instagramId) ?? null),
       totalWatchTime: rateFor(snapshot.totalWatchTimeSeconds, benchmarks.totalWatchTime, total, totalWatchRank.get(snapshot.instagramId) ?? null),
       completionRate: rateFor(snapshot.completionRate, benchmarks.completionRate, total, completionRank.get(snapshot.instagramId) ?? null),
+      follows: rateFor(snapshot.follows, benchmarks.follows, total, followsRank.get(snapshot.instagramId) ?? null),
+      followRate: rateFor(followRate(snapshot), benchmarks.followRate, total, followRateRank.get(snapshot.instagramId) ?? null),
       likeRate: rateFor(likeRate(snapshot), benchmarks.likeRate, total, likeRateRank.get(snapshot.instagramId) ?? null),
       saveRate: rateFor(saveRate(snapshot), benchmarks.saveRate, total, saveRateRank.get(snapshot.instagramId) ?? null),
     },

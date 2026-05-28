@@ -138,6 +138,8 @@ type SortBy =
   | 'completion'
   | 'skip'
   | 'avg_watch'
+  | 'follows'
+  | 'follow_rate'
   | 'likes'
   | 'saves';
 
@@ -150,6 +152,8 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: 'completion', label: '視聴維持率' },
   { value: 'skip', label: 'スキップ率' },
   { value: 'avg_watch', label: '平均視聴' },
+  { value: 'follows', label: 'フォロー数' },
+  { value: 'follow_rate', label: 'フォロー率' },
   { value: 'likes', label: 'いいね' },
   { value: 'saves', label: '保存' },
 ];
@@ -276,9 +280,11 @@ function ReelCard({ row }: { row: ReelMetricRow }) {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-4 md:grid-cols-7">
+        <div className="grid grid-cols-3 gap-4 md:grid-cols-9">
           <MetricCell label="再生数" value={snapshot.views} rating={ratings.views} formatter={formatNumber} />
           <MetricCell label="リーチ" value={snapshot.reach} rating={ratings.reach} formatter={formatNumber} />
+          <MetricCell label="フォロー数" value={snapshot.follows} rating={ratings.follows} formatter={formatNumber} />
+          <MetricCell label="フォロー率" value={snapshot.followRate} rating={ratings.followRate} formatter={(v) => formatPercent(v, 2)} />
           <MetricCell label="総再生時間" value={snapshot.totalWatchTimeSeconds} rating={ratings.totalWatchTime} formatter={formatTotalWatchTime} />
           <MetricCell label="平均視聴" value={snapshot.avgWatchTimeSeconds} rating={ratings.avgWatchTime} formatter={formatSeconds} />
           <MetricCell
@@ -299,7 +305,11 @@ function ReelCard({ row }: { row: ReelMetricRow }) {
           />
         )}
 
-        <div className="grid grid-cols-3 gap-3 border-t border-[color:var(--color-border)] pt-3 text-xs md:grid-cols-6">
+        <div className="grid grid-cols-3 gap-3 border-t border-[color:var(--color-border)] pt-3 text-xs md:grid-cols-7">
+          <div>
+            <span className="text-[color:var(--color-text-muted)]">プロフィール行動</span>
+            <div className="font-semibold text-[color:var(--color-text-primary)]">{formatNumber(snapshot.profileActivity)}</div>
+          </div>
           <div>
             <span className="text-[color:var(--color-text-muted)]">いいね</span>
             <div className="font-semibold text-[color:var(--color-text-primary)]">{formatNumber(snapshot.likes)}</div>
@@ -349,6 +359,10 @@ function sortRows(rows: ReelMetricRow[], sortBy: SortBy, order: SortOrder): Reel
         return s.skipRate ?? -Infinity;
       case 'avg_watch':
         return s.avgWatchTimeSeconds ?? -Infinity;
+      case 'follows':
+        return s.follows ?? -Infinity;
+      case 'follow_rate':
+        return s.followRate ?? -Infinity;
       case 'likes':
         return r.likeRate.value ?? -Infinity;
       case 'saves':
