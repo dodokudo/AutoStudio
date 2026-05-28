@@ -102,14 +102,14 @@ export async function countAdLineRegistrationsByDateRange(
   const datasetId = DEFAULT_DATASET;
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
 
-  const [columnRow] = await runQuery<{ exists: number }>(client, projectId, datasetId, {
+  const [columnRow] = await runQuery<{ column_count: number }>(client, projectId, datasetId, {
     query: `
-      SELECT COUNT(*) AS exists
+      SELECT COUNT(*) AS column_count
       FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.COLUMNS\`
       WHERE table_name = '${TABLE_NAME}' AND column_name = 'source'
     `,
   });
-  if (!Number(columnRow?.exists ?? 0)) {
+  if (!Number(columnRow?.column_count ?? 0)) {
     return 0;
   }
 
