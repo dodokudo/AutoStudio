@@ -137,6 +137,61 @@ export async function countAdLineRegistrationsByDateRange(
   return Number(row?.total ?? 0);
 }
 
+
+/**
+ * 期間内の「流入経路：広告」LINE登録者数を日別に取得（JST基準）。
+ * adsタブ日別パフォーマンステーブル用。
+ */
+export async function countAdLineRegistrationsDailyByDateRange(
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<Map<string, number>> {
+  const datasetId = DEFAULT_DATASET;
+  const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
+
+  const [columnRow] = await runQuery<{ column_count: number }>(client, projectId, datasetId, {
+    query: `
+      SELECT COUNT(*) AS column_count
+      FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.COLUMNS\`
+      WHERE table_name = '${TABLE_NAME}' AND column_name = 'source'
+    `,
+  });
+  if (!Number(columnRow?.column_count ?? 0)) {
+    return new Map();
+  }
+
+  const [latestSnapshot] = await runQuery<{ snapshot_date: string | null }>(client, projectId, datasetId, {
+    query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM \`${projectId}.${datasetId}.${TABLE_NAME}\``,
+  });
+
+  const snapshotDate = latestSnapshot?.snapshot_date;
+  if (!snapshotDate) {
+    return new Map();
+  }
+
+  const rows = await runQuery<{ date: string; total: number }>(client, projectId, datasetId, {
+    query: `
+      SELECT
+        FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo")) AS date,
+        COUNT(DISTINCT id) AS total
+      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+      WHERE snapshot_date = @snapshotDate
+        AND source = 1
+        AND friend_added_at IS NOT NULL
+        AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+      GROUP BY date
+    `,
+    params: { snapshotDate, startDate, endDate },
+  });
+
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    map.set(row.date, Number(row.total ?? 0));
+  }
+  return map;
+}
+
 export interface SourceCountResult {
   threads: number;
   instagram: number;

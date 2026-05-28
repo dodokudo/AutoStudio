@@ -48,11 +48,11 @@ type ApiReply = {
   has_replies?: boolean;
 };
 
-async function getMyReplies(token: string, postId: string): Promise<ApiReply[]> {
+async function getRepliesPage(token: string, postId: string): Promise<ApiReply[]> {
   const all: ApiReply[] = [];
   let url: string | null = `${GRAPH_BASE}/${postId}/replies?fields=id,text,username,timestamp,permalink,has_replies&limit=100&access_token=${token}`;
   let page = 0;
-  while (url && page < 10) {
+  while (url && page < 5) {
     const r = await fetch(url);
     if (!r.ok) break;
     const data = (await r.json()) as { data?: ApiReply[]; paging?: { next?: string }; error?: unknown };
@@ -62,9 +62,34 @@ async function getMyReplies(token: string, postId: string): Promise<ApiReply[]> 
     page++;
     if (url) await sleep(SLEEP_MS);
   }
-  return all
-    .filter((x) => x.username === MY_USERNAME)
-    .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''));
+  return all;
+}
+
+/**
+ * メイン投稿への直接reply(コメント欄1)、その自分のreplyへの返信(コメント欄2)...
+ * とBFSで辿って自分のコメントツリー全体を取得する。
+ * syncThreadsFromApi.ts の getMyCommentTree と同じロジック。
+ */
+async function getMyCommentTree(token: string, rootPostId: string): Promise<ApiReply[]> {
+  const myReplies: ApiReply[] = [];
+  const queue: Array<{ id: string; depth: number }> = [{ id: rootPostId, depth: 0 }];
+  const processed = new Set<string>();
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (processed.has(current.id)) continue;
+    processed.add(current.id);
+    const replies = await getRepliesPage(token, current.id);
+    for (const reply of replies) {
+      if (reply.username === MY_USERNAME) {
+        myReplies.push({ ...reply });
+        if (reply.has_replies) {
+          queue.push({ id: reply.id, depth: current.depth + 1 });
+        }
+      }
+    }
+    await sleep(SLEEP_MS);
+  }
+  return myReplies;
 }
 
 async function getReplyViews(token: string, commentId: string): Promise<number> {
@@ -142,7 +167,8 @@ async function main() {
 
   for (const raw of targets as Target[]) {
     processedPosts++;
-    const replies = await getMyReplies(token, raw.parent_post_id);
+    // BFS でメイン投稿→自分のreply→そのreplyへの自分の返信... 全階層取得
+    const replies = await getMyCommentTree(token, raw.parent_post_id);
     if (replies.length === 0) {
       apiNoReplies++;
       console.log(`[recover] (${processedPosts}/${targets.length}) post=${raw.parent_post_id} no api replies (legacy=${raw.legacy_count})`);
@@ -156,12 +182,15 @@ async function main() {
       const legacy = raw.legacy_rows[i];
       const views = await getReplyViews(token, reply.id);
       await sleep(SLEEP_MS);
+      const rawTs = reply.timestamp ?? legacy.timestamp;
+      // BigQuery streaming insert は "+0000" 形式を拒否する。ISO 8601 extended に正規化
+      const normalizedTs = rawTs ? new Date(rawTs).toISOString() : new Date().toISOString();
       updates.push({
         old_id: legacy.comment_id,
         new_id: reply.id,
         parent_post_id: raw.parent_post_id,
         text: reply.text ?? legacy.text,
-        timestamp: reply.timestamp ?? legacy.timestamp,
+        timestamp: normalizedTs,
         permalink: reply.permalink ?? null,
         has_replies: !!reply.has_replies,
         views,

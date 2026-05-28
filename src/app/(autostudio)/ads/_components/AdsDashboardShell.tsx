@@ -112,7 +112,7 @@ function DailyTable({ daily }: { daily: AdsDailyPoint[] }) {
               <th className="py-2 px-3 font-medium text-right">imp</th>
               <th className="py-2 px-3 font-medium text-right">クリック</th>
               <th className="py-2 px-3 font-medium text-right">CTR</th>
-              <th className="py-2 px-3 font-medium text-right">Meta Lead</th>
+              <th className="py-2 px-3 font-medium text-right">LINE登録</th>
               <th className="py-2 px-3 font-medium text-right">CPA</th>
               <th className="py-2 pl-3 font-medium text-right">CVR</th>
             </tr>
@@ -120,8 +120,8 @@ function DailyTable({ daily }: { daily: AdsDailyPoint[] }) {
           <tbody>
             {sorted.map((row) => {
               const ctr = row.impressions > 0 ? row.inlineLinkClicks / row.impressions : 0;
-              const cpa = row.leads > 0 ? row.spend / row.leads : null;
-              const cvr = row.inlineLinkClicks > 0 ? row.leads / row.inlineLinkClicks : null;
+              const cpa = row.lineRegistrations > 0 ? row.spend / row.lineRegistrations : null;
+              const cvr = row.inlineLinkClicks > 0 ? row.lineRegistrations / row.inlineLinkClicks : null;
               return (
                 <tr key={row.date} className="border-b border-[color:var(--color-border)] last:border-0">
                   <td className="py-2 pr-3 font-medium text-[color:var(--color-text-primary)]">{row.date}</td>
@@ -129,7 +129,7 @@ function DailyTable({ daily }: { daily: AdsDailyPoint[] }) {
                   <td className="py-2 px-3 text-right tabular-nums">{num(row.impressions)}</td>
                   <td className="py-2 px-3 text-right tabular-nums">{num(row.inlineLinkClicks)}</td>
                   <td className="py-2 px-3 text-right tabular-nums">{pct(ctr)}</td>
-                  <td className="py-2 px-3 text-right tabular-nums">{num(row.leads)}</td>
+                  <td className="py-2 px-3 text-right tabular-nums">{num(row.lineRegistrations)}</td>
                   <td className="py-2 px-3 text-right tabular-nums">{cpa !== null ? yen(cpa) : '—'}</td>
                   <td className="py-2 pl-3 text-right tabular-nums">{cvr !== null ? pct(cvr) : '—'}</td>
                 </tr>

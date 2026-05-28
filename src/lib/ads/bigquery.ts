@@ -1,5 +1,5 @@
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
-import { countAdLineRegistrationsByDateRange } from '@/lib/lstep/analytics';
+import { countAdLineRegistrationsByDateRange, countAdLineRegistrationsDailyByDateRange } from '@/lib/lstep/analytics';
 
 export const META_ADS_DATASET = process.env.META_ADS_BQ_DATASET ?? 'autostudio_ads';
 export const META_AD_INSIGHTS_TABLE = 'meta_ad_insights_daily';
@@ -61,6 +61,7 @@ export interface AdsDailyPoint {
   inlineLinkClicks: number;
   leads: number;
   purchases: number;
+  lineRegistrations: number;
 }
 
 export interface AdsByAdRow {
@@ -171,7 +172,7 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
   }
 
   const client = createBigQueryClient(PROJECT_ID, LOCATION);
-  const [lineRegistrations, launchkitLineClicks] = await Promise.all([
+  const [lineRegistrations, launchkitLineClicks, dailyLineRegistrations] = await Promise.all([
     countAdLineRegistrationsByDateRange(PROJECT_ID, startDate, endDate).catch((err) => {
       console.error('[ads/bigquery] countAdLineRegistrationsByDateRange failed:', err);
       return 0;
@@ -179,6 +180,10 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
     countLaunchkitLineClicks(startDate, endDate).catch((err) => {
       console.error('[ads/bigquery] countLaunchkitLineClicks failed:', err);
       return 0;
+    }),
+    countAdLineRegistrationsDailyByDateRange(PROJECT_ID, startDate, endDate).catch((err) => {
+      console.error('[ads/bigquery] countAdLineRegistrationsDailyByDateRange failed:', err);
+      return new Map<string, number>();
     }),
   ]);
 
@@ -321,15 +326,19 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
     lineClickRate: safeRate(launchkitLineClicks, inlineLinkClicks),
   };
 
-  const daily = (dailyRows[0] as Array<Record<string, unknown>>).map((row) => ({
-    date: toDateString(row.date),
-    spend: toNumber(row.spend),
-    impressions: toNumber(row.impressions),
-    clicks: toNumber(row.clicks),
-    inlineLinkClicks: toNumber(row.inline_link_clicks),
-    leads: toNumber(row.leads),
-    purchases: toNumber(row.purchases),
-  }));
+  const daily = (dailyRows[0] as Array<Record<string, unknown>>).map((row) => {
+    const date = toDateString(row.date);
+    return {
+      date,
+      spend: toNumber(row.spend),
+      impressions: toNumber(row.impressions),
+      clicks: toNumber(row.clicks),
+      inlineLinkClicks: toNumber(row.inline_link_clicks),
+      leads: toNumber(row.leads),
+      purchases: toNumber(row.purchases),
+      lineRegistrations: dailyLineRegistrations.get(date) ?? 0,
+    };
+  });
 
   const byAd = (adRows[0] as Array<Record<string, unknown>>).map((row) => {
     const rowSpend = toNumber(row.spend);
