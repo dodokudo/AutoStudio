@@ -172,8 +172,14 @@ export async function getAdsDashboardData(startDate: string, endDate: string): P
 
   const client = createBigQueryClient(PROJECT_ID, LOCATION);
   const [lineRegistrations, launchkitLineClicks] = await Promise.all([
-    countAdLineRegistrationsByDateRange(PROJECT_ID, startDate, endDate).catch(() => 0),
-    countLaunchkitLineClicks(startDate, endDate).catch(() => 0),
+    countAdLineRegistrationsByDateRange(PROJECT_ID, startDate, endDate).catch((err) => {
+      console.error('[ads/bigquery] countAdLineRegistrationsByDateRange failed:', err);
+      return 0;
+    }),
+    countLaunchkitLineClicks(startDate, endDate).catch((err) => {
+      console.error('[ads/bigquery] countLaunchkitLineClicks failed:', err);
+      return 0;
+    }),
   ]);
 
   const [summaryRows, dailyRows, adRows, mediaRows, latestRows] = await Promise.all([

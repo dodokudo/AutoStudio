@@ -9,13 +9,13 @@ export const dynamic = 'force-dynamic';
 const getCachedAdsDashboardData = unstable_cache(
   async (startDate: string, endDate: string) => getAdsDashboardData(startDate, endDate),
   ['ads-dashboard-data'],
-  { revalidate: 1800 },
+  { revalidate: 60 },
 );
 
 const getCachedReelAdInsights = unstable_cache(
   async (startDate: string, endDate: string) => getReelAdInsights(startDate, endDate),
   ['ads-reel-insights'],
-  { revalidate: 1800 },
+  { revalidate: 60 },
 );
 
 export default async function AdsPage({

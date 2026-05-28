@@ -5,8 +5,9 @@ const DEFAULT_PROJECT_ID = 'mark-454114';
 
 export function resolveProjectId(value?: string): string {
   const candidate = value ?? process.env.BQ_PROJECT_ID ?? DEFAULT_PROJECT_ID;
-  const trimmed = candidate.trim();
-  const unquoted = trimmed.replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+  // 実改行・タブと、リテラル "\n" "\r" "\t" が紛れ込むケース両方を除去
+  const cleaned = candidate.replace(/\\[nrt]/g, '').replace(/[\s]/g, '');
+  const unquoted = cleaned.replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
   return unquoted || DEFAULT_PROJECT_ID;
 }
 
