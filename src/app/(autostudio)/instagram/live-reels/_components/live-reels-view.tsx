@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { BenchmarkRating, ReelMetricRow, ReelMetricsDashboardData, TranscriptSegment } from '@/lib/instagram/reelMetricsDashboard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -242,6 +242,97 @@ function MetricCell({ label, value, rating, formatter }: {
   );
 }
 
+interface ReelMediaResponse {
+  mediaUrl: string | null;
+  thumbnailUrl: string | null;
+  permalink: string | null;
+}
+
+const OPENING_CHECKPOINTS = [0, 0.6, 1.2, 1.8, 2.4, 3];
+
+function ReelOpeningPreview({ instagramId, thumbnailUrl }: { instagramId: string; thumbnailUrl: string | null }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [media, setMedia] = useState<ReelMediaResponse | null>(null);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+
+  async function loadMedia() {
+    if (status === 'ready' || status === 'loading') return;
+    setStatus('loading');
+    try {
+      const response = await fetch(`/api/instagram/reel-media/${instagramId}`);
+      if (!response.ok) throw new Error(`failed: ${response.status}`);
+      const data = await response.json() as ReelMediaResponse;
+      if (!data.mediaUrl) throw new Error('media_url missing');
+      setMedia(data);
+      setStatus('ready');
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  function jumpTo(seconds: number) {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = seconds;
+    video.pause();
+  }
+
+  return (
+    <div className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-xs font-medium text-[color:var(--color-text-primary)]">冒頭3秒チェック</div>
+          <p className="text-[11px] text-[color:var(--color-text-muted)]">
+            0.6秒刻みで止めて、最初に何が映っているか・何回切り替わっているかを見る用。
+          </p>
+        </div>
+        {status === 'idle' && (
+          <Button variant="secondary" className="h-8 px-3 text-xs" onClick={loadMedia}>
+            動画を読み込む
+          </Button>
+        )}
+        {status === 'loading' && <span className="text-xs text-[color:var(--color-text-muted)]">読み込み中...</span>}
+        {status === 'error' && (
+          <Button variant="secondary" className="h-8 px-3 text-xs" onClick={() => { setStatus('idle'); setMedia(null); }}>
+            取得失敗・再試行
+          </Button>
+        )}
+      </div>
+
+      {status === 'ready' && media?.mediaUrl && (
+        <div className="mt-3 grid gap-3 md:grid-cols-[180px_1fr]">
+          <video
+            ref={videoRef}
+            src={media.mediaUrl}
+            poster={thumbnailUrl ?? media.thumbnailUrl ?? undefined}
+            className="aspect-[9/16] w-full max-w-[180px] rounded-md bg-black object-cover"
+            controls
+            playsInline
+            preload="metadata"
+          />
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {OPENING_CHECKPOINTS.map((seconds) => (
+                <button
+                  key={seconds}
+                  type="button"
+                  onClick={() => jumpTo(seconds)}
+                  className="rounded border border-[color:var(--color-border)] bg-white px-2 py-2 text-xs font-semibold tabular-nums text-[color:var(--color-text-primary)] hover:border-[color:var(--color-accent)]"
+                >
+                  {seconds.toFixed(1)}秒
+                </button>
+              ))}
+            </div>
+            <div className="rounded border border-[color:var(--color-border)] bg-white p-3 text-xs leading-relaxed text-[color:var(--color-text-secondary)]">
+              見るポイント: 1カット目の画面、人物だけか資料/実績が出ているか、0〜3秒で画面が何回変わるか、テロップが読めるか。
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReelCard({ row }: { row: ReelMetricRow }) {
   const { snapshot, ratings } = row;
 
@@ -304,6 +395,8 @@ function ReelCard({ row }: { row: ReelMetricRow }) {
             durationSeconds={snapshot.durationSeconds}
           />
         )}
+
+        <ReelOpeningPreview instagramId={snapshot.instagramId} thumbnailUrl={snapshot.thumbnailUrl} />
 
         <div className="grid grid-cols-3 gap-3 border-t border-[color:var(--color-border)] pt-3 text-xs md:grid-cols-7">
           <div>
