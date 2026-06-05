@@ -9,11 +9,15 @@ const DAILY_METRICS = [
   'views',
   'total_interactions',
   'accounts_engaged',
+  'profile_views',
   'profile_links_taps',
+  'website_clicks',
   'likes',
   'comments',
   'shares',
   'saves',
+  'replies',
+  'reposts',
 ];
 
 export interface UserInsightSnapshotRow {
@@ -29,11 +33,15 @@ export interface UserInsightSnapshotRow {
   views: number | null;
   total_interactions: number | null;
   accounts_engaged: number | null;
+  profile_views: number | null;
   profile_links_taps: number | null;
+  website_clicks: number | null;
   likes: number | null;
   comments: number | null;
   shares: number | null;
   saves: number | null;
+  replies: number | null;
+  reposts: number | null;
   raw_metrics_json: string;
 }
 
@@ -158,11 +166,15 @@ export async function fetchUserInsightsSnapshot(
     views: toNumber(metricMap.views),
     total_interactions: toNumber(metricMap.total_interactions),
     accounts_engaged: toNumber(metricMap.accounts_engaged),
+    profile_views: toNumber(metricMap.profile_views),
     profile_links_taps: toNumber(metricMap.profile_links_taps),
+    website_clicks: toNumber(metricMap.website_clicks),
     likes: toNumber(metricMap.likes),
     comments: toNumber(metricMap.comments),
     shares: toNumber(metricMap.shares),
     saves: toNumber(metricMap.saves),
+    replies: toNumber(metricMap.replies),
+    reposts: toNumber(metricMap.reposts),
     raw_metrics_json: JSON.stringify(insights),
   };
 }

@@ -72,7 +72,11 @@ export interface LatestUserInsights {
   views: number | null;
   totalInteractions: number | null;
   accountsEngaged: number | null;
+  profileViews: number | null;
   profileLinksTaps: number | null;
+  websiteClicks: number | null;
+  replies: number | null;
+  reposts: number | null;
 }
 
 export interface UserInsightsDailyPoint {
@@ -81,6 +85,7 @@ export interface UserInsightsDailyPoint {
   reach: number | null;
   views: number | null;
   totalInteractions: number | null;
+  profileViews: number | null;
 }
 
 export interface InstagramDashboardData {
@@ -197,7 +202,11 @@ async function fetchLatestUserInsights(client: BigQuery, projectId: string): Pro
       views,
       total_interactions,
       accounts_engaged,
-      profile_links_taps
+      profile_views,
+      profile_links_taps,
+      website_clicks,
+      replies,
+      reposts
     FROM \`${projectId}.${DEFAULT_DATASET}.instagram_user_insights_snapshots\`
     ORDER BY snapshot_at DESC
     LIMIT 1
@@ -219,7 +228,11 @@ async function fetchLatestUserInsights(client: BigQuery, projectId: string): Pro
       views: row.views !== null && row.views !== undefined ? Number(row.views) : null,
       totalInteractions: row.total_interactions !== null && row.total_interactions !== undefined ? Number(row.total_interactions) : null,
       accountsEngaged: row.accounts_engaged !== null && row.accounts_engaged !== undefined ? Number(row.accounts_engaged) : null,
+      profileViews: row.profile_views !== null && row.profile_views !== undefined ? Number(row.profile_views) : null,
       profileLinksTaps: row.profile_links_taps !== null && row.profile_links_taps !== undefined ? Number(row.profile_links_taps) : null,
+      websiteClicks: row.website_clicks !== null && row.website_clicks !== undefined ? Number(row.website_clicks) : null,
+      replies: row.replies !== null && row.replies !== undefined ? Number(row.replies) : null,
+      reposts: row.reposts !== null && row.reposts !== undefined ? Number(row.reposts) : null,
     };
   } catch (error) {
     console.warn('[instagram/dashboard] Failed to fetch latestUserInsights', error);
@@ -236,6 +249,7 @@ async function fetchUserInsightsDailySeries(client: BigQuery, projectId: string)
         reach,
         views,
         total_interactions,
+        profile_views,
         ROW_NUMBER() OVER (PARTITION BY snapshot_date ORDER BY snapshot_at DESC) AS rn
       FROM \`${projectId}.${DEFAULT_DATASET}.instagram_user_insights_snapshots\`
       WHERE snapshot_date >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 90 DAY)
@@ -245,7 +259,8 @@ async function fetchUserInsightsDailySeries(client: BigQuery, projectId: string)
       followers_count,
       reach,
       views,
-      total_interactions
+      total_interactions,
+      profile_views
     FROM daily_latest
     WHERE rn = 1
     ORDER BY snapshot_date DESC
@@ -258,6 +273,7 @@ async function fetchUserInsightsDailySeries(client: BigQuery, projectId: string)
       reach: row.reach !== null && row.reach !== undefined ? Number(row.reach) : null,
       views: row.views !== null && row.views !== undefined ? Number(row.views) : null,
       totalInteractions: row.total_interactions !== null && row.total_interactions !== undefined ? Number(row.total_interactions) : null,
+      profileViews: row.profile_views !== null && row.profile_views !== undefined ? Number(row.profile_views) : null,
     }));
   } catch (error) {
     console.warn('[instagram/dashboard] Failed to fetch userInsightsDailySeries', error);

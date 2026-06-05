@@ -346,6 +346,13 @@ export function InstagramDashboardView({ data }: Props) {
       linkClickMap.set(point.date, point.count);
     });
 
+    const profileViewsMap = new Map<string, number>();
+    data.userInsightsDailySeries.forEach((point) => {
+      if (point.profileViews !== null) {
+        profileViewsMap.set(point.date, point.profileViews);
+      }
+    });
+
     return sorted.map((point, index) => {
       const delta = index === 0
         ? 0
@@ -353,6 +360,7 @@ export function InstagramDashboardView({ data }: Props) {
       const followerDelta = Math.max(0, delta); // マイナスの場合は0にする
       const lineRegistrations = lineRegistrationMap.get(point.date) ?? 0;
       const linkClicks = linkClickMap.get(point.date) ?? 0;
+      const profileViews = profileViewsMap.get(point.date) ?? null;
       const postCount = reelPostCounts[point.date] ?? 0;
       const storyStats = storyDailyStats[point.date];
       const storyPostCount = storyStats?.count ?? 0;
@@ -364,13 +372,14 @@ export function InstagramDashboardView({ data }: Props) {
         followerDelta,
         lineRegistrations,
         linkClicks,
+        profileViews,
         postCount,
         storyPostCount,
         storyViews,
         storyViewRate,
       };
     });
-  }, [data.followerSeries, data.lineRegistrationSeries, data.linkClickSeries, reelPostCounts, storyDailyStats]);
+  }, [data.followerSeries, data.lineRegistrationSeries, data.linkClickSeries, data.userInsightsDailySeries, reelPostCounts, storyDailyStats]);
 
   const chartRange = useMemo(() => {
     const startKey = formatDateKey(dateRange.start);
@@ -629,6 +638,7 @@ export function InstagramDashboardView({ data }: Props) {
     const lineRegsDelta = previousSummary ? lineRegs - lineRegsPrev : null;
     const registrationRate = lpClicks > 0 ? (lineRegs / lpClicks) * 100 : null;
     const cvr = linkClicks > 0 ? (lineRegs / linkClicks) * 100 : null;
+    const profileViews = data.latestUserInsights?.profileViews ?? null;
 
     return [
       {
@@ -654,6 +664,12 @@ export function InstagramDashboardView({ data }: Props) {
         value: fmtNum(linkClicks),
         delta: `CTR: ${ctr !== null ? ctr.toFixed(2) + '%' : '-'}${linkClicksDelta !== null ? ' / ' + fmtDelta(linkClicksDelta) : ''}`,
         deltaTone: tone(linkClicksDelta),
+      },
+      {
+        label: 'プロフィールアクセス',
+        value: profileViews !== null ? fmtNum(profileViews) : '—',
+        delta: 'アカウントインサイト最新値',
+        deltaTone: 'neutral' as const,
       },
       {
         label: 'LPクリック',
@@ -819,6 +835,7 @@ export function InstagramDashboardView({ data }: Props) {
                     <col className="w-[70px]" />
                     <col className="w-[70px]" />
                     <col className="w-[90px]" />
+                    <col className="w-[110px]" />
                     <col className="w-[80px]" />
                     <col className="w-[80px]" />
                     <col className="w-[100px]" />
@@ -832,6 +849,7 @@ export function InstagramDashboardView({ data }: Props) {
                       <th className="px-3 py-2 text-right">増加</th>
                       <th className="px-3 py-2 text-right">投稿</th>
                       <th className="px-3 py-2 text-right">リーチ</th>
+                      <th className="px-3 py-2 text-right">プロフアクセス</th>
                       <th className="px-3 py-2 text-right">クリック</th>
                       <th className="px-3 py-2 text-right">LINE</th>
                       <th className="px-3 py-2 text-right">ストーリー投稿</th>
@@ -867,6 +885,9 @@ export function InstagramDashboardView({ data }: Props) {
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-primary)]">
                             {numberFormatter.format(item.impressions ?? 0)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-primary)]">
+                            {item.profileViews !== null ? numberFormatter.format(item.profileViews) : '—'}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-[color:var(--color-text-primary)]">
                             {numberFormatter.format(item.linkClicks ?? 0)}

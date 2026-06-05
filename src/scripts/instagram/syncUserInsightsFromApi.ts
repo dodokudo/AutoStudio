@@ -30,7 +30,11 @@ async function main() {
     views: row.views,
     interactions: row.total_interactions,
     engaged: row.accounts_engaged,
+    profile_views: row.profile_views,
     profile_taps: row.profile_links_taps,
+    website_clicks: row.website_clicks,
+    replies: row.replies,
+    reposts: row.reposts,
   });
 
   if (isProbeOnly()) {
