@@ -513,6 +513,10 @@ export function InstagramDashboardView({ data }: Props) {
         : 0;
 
     const reachTotal = followerSeriesInRange.reduce((sum, point) => sum + (point.reach ?? 0), 0);
+    const userInsightsInRange = useAllRange
+      ? data.userInsightsDailySeries
+      : data.userInsightsDailySeries.filter((point) => isWithinDateRange(point.date, startKey, endKey));
+    const profileViews = userInsightsInRange.reduce((sum, point) => sum + (point.profileViews ?? 0), 0);
     const reelDailyCountsInRange = useAllRange
       ? data.reelDailyCounts
       : data.reelDailyCounts.filter((point) => isWithinDateRange(point.date, startKey, endKey));
@@ -561,6 +565,7 @@ export function InstagramDashboardView({ data }: Props) {
       lineRegistrations,
       linkClicks,
       lpLineCtaClicks,
+      profileViews,
     };
   }, [data, dateRange, filteredReels, filteredStories]);
 
@@ -575,6 +580,9 @@ export function InstagramDashboardView({ data }: Props) {
 
     const followerInPrev = data.followerSeries.filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey));
     const reach = followerInPrev.reduce((s, p) => s + (p.reach ?? 0), 0);
+    const profileViews = data.userInsightsDailySeries
+      .filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey))
+      .reduce((s, p) => s + (p.profileViews ?? 0), 0);
     const postCount = data.reelDailyCounts
       .filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey))
       .reduce((s, p) => s + (p.count ?? 0), 0);
@@ -597,7 +605,7 @@ export function InstagramDashboardView({ data }: Props) {
         ? (prevFollowerEndPoint.followers ?? 0) - (prevFollowerStartPoint.followers ?? 0)
         : 0;
 
-    return { reach, postCount, lineRegistrations, linkClicks, lpLineCtaClicks, prevFollowerCount, prevFollowerGrowth };
+    return { reach, profileViews, postCount, lineRegistrations, linkClicks, lpLineCtaClicks, prevFollowerCount, prevFollowerGrowth };
   }, [data, dateRange]);
 
   const summaryStats = useMemo(() => {
@@ -618,7 +626,10 @@ export function InstagramDashboardView({ data }: Props) {
     const linkClicks = summary.linkClicks ?? 0;
     const linkClicksPrev = previousSummary?.linkClicks ?? 0;
     const linkClicksDelta = previousSummary ? linkClicks - linkClicksPrev : null;
-    const ctr = summary.latestReach > 0 ? (linkClicks / summary.latestReach) * 100 : null;
+    const profileViews = summary.profileViews ?? 0;
+    const profileViewsDelta = previousSummary ? profileViews - previousSummary.profileViews : null;
+    const profileViewRate = summary.latestReach > 0 ? (profileViews / summary.latestReach) * 100 : null;
+    const profileToLinkRate = profileViews > 0 ? (linkClicks / profileViews) * 100 : null;
 
     // LPクリック (LP LINE登録CTA)
     const lpClicks = summary.lpLineCtaClicks ?? 0;
@@ -632,7 +643,6 @@ export function InstagramDashboardView({ data }: Props) {
     const lineRegsDelta = previousSummary ? lineRegs - lineRegsPrev : null;
     const registrationRate = lpClicks > 0 ? (lineRegs / lpClicks) * 100 : null;
     const cvr = linkClicks > 0 ? (lineRegs / linkClicks) * 100 : null;
-    const profileViews = data.latestUserInsights?.profileViews ?? null;
 
     return [
       {
@@ -649,14 +659,14 @@ export function InstagramDashboardView({ data }: Props) {
       },
       {
         label: 'プロフィールアクセス',
-        value: profileViews !== null ? fmtNum(profileViews) : '—',
-        delta: 'アカウントインサイト最新値',
-        deltaTone: 'neutral' as const,
+        value: fmtNum(profileViews),
+        delta: `リーチ→プロフ: ${profileViewRate !== null ? profileViewRate.toFixed(2) + '%' : '-'}${profileViewsDelta !== null ? ' / ' + fmtDelta(profileViewsDelta) : ''}`,
+        deltaTone: tone(profileViewsDelta),
       },
       {
         label: 'リンククリック数',
         value: fmtNum(linkClicks),
-        delta: `CTR: ${ctr !== null ? ctr.toFixed(2) + '%' : '-'}${linkClicksDelta !== null ? ' / ' + fmtDelta(linkClicksDelta) : ''}`,
+        delta: `プロフ→リンク: ${profileToLinkRate !== null ? profileToLinkRate.toFixed(2) + '%' : '-'}${linkClicksDelta !== null ? ' / ' + fmtDelta(linkClicksDelta) : ''}`,
         deltaTone: tone(linkClicksDelta),
       },
       {
