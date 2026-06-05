@@ -614,12 +614,6 @@ export function InstagramDashboardView({ data }: Props) {
     // リーチ
     const reachDelta = previousSummary ? summary.latestReach - previousSummary.reach : null;
 
-    // 投稿
-    const postCount = summary.postCount;
-    const postDelta = previousSummary ? postCount - previousSummary.postCount : null;
-    const periodDays = Math.max(1, Math.round((dateRange.end.getTime() - dateRange.start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
-    const postsPerDay = postCount / periodDays;
-
     // リンククリック
     const linkClicks = summary.linkClicks ?? 0;
     const linkClicksPrev = previousSummary?.linkClicks ?? 0;
@@ -654,22 +648,16 @@ export function InstagramDashboardView({ data }: Props) {
         deltaTone: tone(reachDelta),
       },
       {
-        label: '投稿数',
-        value: fmtNum(postCount),
-        delta: `${postDelta !== null ? fmtDelta(postDelta) : ''}投稿 / ${postsPerDay.toFixed(1)}件`,
-        deltaTone: tone(postDelta),
+        label: 'プロフィールアクセス',
+        value: profileViews !== null ? fmtNum(profileViews) : '—',
+        delta: 'アカウントインサイト最新値',
+        deltaTone: 'neutral' as const,
       },
       {
         label: 'リンククリック数',
         value: fmtNum(linkClicks),
         delta: `CTR: ${ctr !== null ? ctr.toFixed(2) + '%' : '-'}${linkClicksDelta !== null ? ' / ' + fmtDelta(linkClicksDelta) : ''}`,
         deltaTone: tone(linkClicksDelta),
-      },
-      {
-        label: 'プロフィールアクセス',
-        value: profileViews !== null ? fmtNum(profileViews) : '—',
-        delta: 'アカウントインサイト最新値',
-        deltaTone: 'neutral' as const,
       },
       {
         label: 'LPクリック',
