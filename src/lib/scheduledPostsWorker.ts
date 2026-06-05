@@ -242,6 +242,12 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     console.log(`[scheduledPostsWorker] Partial completion: ${post.schedule_id} (${combinedError})`);
     return { success: true, mainThreadId, commentThreadIds, error: combinedError };
   } else {
+    if (!mainThreadId) {
+      const errorMessage = 'Main thread ID missing after posting flow';
+      await updateScheduledPostRow(post, { status: 'failed', errorMessage });
+      console.error(`[scheduledPostsWorker] Refusing to mark posted without main thread ID: ${post.schedule_id}`);
+      return { success: false, commentThreadIds, error: errorMessage };
+    }
     // 全完了
     await updateScheduledPostRow(post, { status: 'posted' });
     console.log(`[scheduledPostsWorker] Successfully completed: ${post.schedule_id}`);
