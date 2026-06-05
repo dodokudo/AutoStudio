@@ -4,7 +4,7 @@ import {
   listScheduledPosts,
   updateScheduledPost,
   getScheduledPostById,
-  claimScheduledPost,
+  claimScheduledPostBySchedule,
   type ScheduledPostRow,
 } from '@/lib/bigqueryScheduledPosts';
 
@@ -77,6 +77,16 @@ async function fetchOnePendingPost(): Promise<ScheduledPostRow | undefined> {
   });
 }
 
+function updateScheduledPostRow(
+  post: ScheduledPostRow,
+  params: Parameters<typeof updateScheduledPost>[1],
+) {
+  return updateScheduledPost(post.schedule_id, {
+    ...params,
+    matchScheduledTimeIso: post.scheduled_time,
+  });
+}
+
 /**
  * 'processing' のまま10分以上経過した投稿を 'scheduled' に戻す
  */
@@ -98,7 +108,7 @@ async function recoverStuckPosts(): Promise<number> {
     console.log(
       `[scheduledPostsWorker] Recovering stuck post: ${item.schedule_id} (stuck since ${item.updated_at})`,
     );
-    await updateScheduledPost(item.schedule_id, { status: 'scheduled' });
+    await updateScheduledPostRow(item, { status: 'scheduled' });
     recovered++;
   }
 
@@ -129,11 +139,11 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       mainThreadId = await postThreadWithRetry(post.main_text);
       console.log(`[scheduledPostsWorker] Main thread posted: ${mainThreadId}`);
       // 進捗を即座にBigQueryへ保存
-      await updateScheduledPost(post.schedule_id, { mainThreadId });
+      await updateScheduledPostRow(post, { mainThreadId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[scheduledPostsWorker] Main thread failed: ${post.schedule_id}`, errorMessage);
-      await updateScheduledPost(post.schedule_id, { status: 'failed', errorMessage: `Main: ${errorMessage}` });
+      await updateScheduledPostRow(post, { status: 'failed', errorMessage: `Main: ${errorMessage}` });
       return { success: false, commentThreadIds, error: errorMessage };
     }
   } else {
@@ -181,7 +191,7 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       console.warn(
         `[scheduledPostsWorker] Normalized comment${comment.index} CTA text before posting`,
       );
-      await updateScheduledPost(post.schedule_id, { [comment.valueKey]: normalizedText });
+      await updateScheduledPostRow(post, { [comment.valueKey]: normalizedText });
       comment.text = normalizedText;
     }
 
@@ -205,7 +215,7 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       console.log(`[scheduledPostsWorker] Posting comment${comment.index}...`);
       const threadId = await postThreadWithRetry(comment.text, replyToId);
       console.log(`[scheduledPostsWorker] Comment${comment.index} posted: ${threadId}`);
-      await updateScheduledPost(post.schedule_id, { [comment.updateKey]: threadId });
+      await updateScheduledPostRow(post, { [comment.updateKey]: threadId });
       commentThreadIds[comment.index] = threadId;
       replyToId = threadId;
     } catch (error) {
@@ -221,19 +231,19 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     const combinedError = errors.length > 0
       ? `${errors.join('; ')}; timeout-yield`
       : 'timeout-yield';
-    await updateScheduledPost(post.schedule_id, { status: 'partial', errorMessage: combinedError });
+    await updateScheduledPostRow(post, { status: 'partial', errorMessage: combinedError });
     console.log(`[scheduledPostsWorker] Timeout yield: ${post.schedule_id} (${combinedError})`);
     return { success: true, mainThreadId, commentThreadIds, error: combinedError };
   }
   if (errors.length > 0) {
     // メインは成功したがコメントが失敗 → partial
     const combinedError = errors.join('; ');
-    await updateScheduledPost(post.schedule_id, { status: 'partial', errorMessage: combinedError });
+    await updateScheduledPostRow(post, { status: 'partial', errorMessage: combinedError });
     console.log(`[scheduledPostsWorker] Partial completion: ${post.schedule_id} (${combinedError})`);
     return { success: true, mainThreadId, commentThreadIds, error: combinedError };
   } else {
     // 全完了
-    await updateScheduledPost(post.schedule_id, { status: 'posted' });
+    await updateScheduledPostRow(post, { status: 'posted' });
     console.log(`[scheduledPostsWorker] Successfully completed: ${post.schedule_id}`);
     return { success: true, mainThreadId, commentThreadIds };
   }
@@ -274,7 +284,7 @@ export async function processScheduledPosts(): Promise<{
   }
 
   // 3. アトミックにclaimする（レース条件防止）
-  const claimed = await claimScheduledPost(post.schedule_id);
+  const claimed = await claimScheduledPostBySchedule(post.schedule_id, post.scheduled_time);
   if (!claimed) {
     console.log(
       `[scheduledPostsWorker] Post already claimed by another cron: ${post.schedule_id}`,
@@ -283,7 +293,9 @@ export async function processScheduledPosts(): Promise<{
   }
 
   // 4. 最新データを再取得（thread ID等の最新状態を反映）
-  const freshPost = await getScheduledPostById(post.schedule_id);
+  const freshPost = await getScheduledPostById(post.schedule_id, {
+    matchScheduledTimeIso: post.scheduled_time,
+  });
   if (!freshPost) {
     console.log(`[scheduledPostsWorker] Post not found after claim: ${post.schedule_id}`);
     return { processed: 0, succeeded: 0, failed: 0, recovered, results: [] };

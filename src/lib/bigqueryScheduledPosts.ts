@@ -101,6 +101,10 @@ export type ScheduledPostRow = {
   error_message?: string | null;
 };
 
+type ScheduleMatchOptions = {
+  matchScheduledTimeIso?: string | null;
+};
+
 export async function listScheduledPosts(params: { startDate?: string; endDate?: string }) {
   await ensureScheduledPostsTable();
   const conditions: string[] = [];
@@ -195,8 +199,9 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
   })) as ScheduledPostRow[];
 }
 
-export async function getScheduledPostById(scheduleId: string) {
+export async function getScheduledPostById(scheduleId: string, options: ScheduleMatchOptions = {}) {
   await ensureScheduledPostsTable();
+  const matchClause = options.matchScheduledTimeIso ? 'AND sp.scheduled_time = @matchScheduledTime' : '';
   const sql = `
     SELECT
       sp.schedule_id,
@@ -236,9 +241,13 @@ export async function getScheduledPostById(scheduleId: string) {
       FROM \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\`
     ) tp ON sp.plan_id = tp.plan_id AND tp.rn = 1
     WHERE sp.schedule_id = @scheduleId
+      ${matchClause}
+    ORDER BY sp.scheduled_time DESC, sp.updated_at DESC
     LIMIT 1
   `;
-  const rows = await query(sql, { scheduleId });
+  const rows = await query(sql, options.matchScheduledTimeIso
+    ? { scheduleId, matchScheduledTime: new Date(options.matchScheduledTimeIso) }
+    : { scheduleId });
   const row = rows[0];
   if (!row) return undefined;
   return {
@@ -345,6 +354,7 @@ export async function updateScheduledPost(
     comment7ThreadId?: string | null;
     comment8ThreadId?: string | null;
     errorMessage?: string | null;
+    matchScheduledTimeIso?: string | null;
   },
 ) {
   await ensureScheduledPostsTable();
@@ -466,10 +476,19 @@ export async function updateScheduledPost(
     types.errorMessage = 'STRING';
   }
 
+  const matchClause = params.matchScheduledTimeIso
+    ? 'AND scheduled_time = @matchScheduledTime'
+    : '';
+  if (params.matchScheduledTimeIso) {
+    queryParams.matchScheduledTime = new Date(params.matchScheduledTimeIso);
+    types.matchScheduledTime = 'TIMESTAMP';
+  }
+
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
     SET ${setClauses.join(', ')}
     WHERE schedule_id = @scheduleId
+      ${matchClause}
   `;
 
   await client.query({
@@ -485,15 +504,31 @@ export async function updateScheduledPost(
  * status = 'scheduled' の場合のみ 'processing' に変更し、成功したかを返す
  */
 export async function claimScheduledPost(scheduleId: string): Promise<boolean> {
+  return claimScheduledPostBySchedule(scheduleId);
+}
+
+export async function claimScheduledPostBySchedule(
+  scheduleId: string,
+  matchScheduledTimeIso?: string | null,
+): Promise<boolean> {
   await ensureScheduledPostsTable();
+  const matchClause = matchScheduledTimeIso ? 'AND scheduled_time = @matchScheduledTime' : '';
+  const params: Record<string, unknown> = { scheduleId };
+  const types: Record<string, string> = {};
+  if (matchScheduledTimeIso) {
+    params.matchScheduledTime = new Date(matchScheduledTimeIso);
+    types.matchScheduledTime = 'TIMESTAMP';
+  }
   const sql = `
     UPDATE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
     SET status = 'processing', updated_at = CURRENT_TIMESTAMP()
     WHERE schedule_id = @scheduleId AND status IN ('scheduled', 'partial')
+      ${matchClause}
   `;
   const [job] = await client.createQueryJob({
     query: sql,
-    params: { scheduleId },
+    params,
+    types: Object.keys(types).length ? types : undefined,
   });
   await job.getQueryResults();
   const [metadata] = await job.getMetadata();
