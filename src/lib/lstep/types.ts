@@ -31,14 +31,23 @@ export interface UserSurveyRow {
   answer_flag: number;
 }
 
+export interface UserInfoRow {
+  snapshot_date: string;
+  user_id: string;
+  field_id: string;
+  field_name: string;
+  field_value: string;
+}
+
 export interface NormalizedLstepData {
   userCore: UserCoreRow[];
   userTags: UserTagRow[];
   userSources: UserSourceRow[];
   userSurveys: UserSurveyRow[];
+  userInfo: UserInfoRow[];
 }
 
-export type ColumnCategory = 'core' | 'tag' | 'source' | 'survey' | 'other';
+export type ColumnCategory = 'core' | 'tag' | 'source' | 'survey' | 'info' | 'other';
 
 export interface ColumnDescriptor {
   index: number;

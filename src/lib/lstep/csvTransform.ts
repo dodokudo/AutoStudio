@@ -35,6 +35,7 @@ export function transformLstepCsv(buffer: Buffer, snapshotDate: string): Normali
     userTags: [],
     userSources: [],
     userSurveys: [],
+    userInfo: [],
   };
 
   for (const row of dataRows) {
@@ -91,6 +92,19 @@ export function transformLstepCsv(buffer: Buffer, snapshotDate: string): Normali
             user_id: coreRow.user_id,
             question: stripPrefix(descriptor.label, /^アンケート[:：]\s*/),
             answer_flag: parseFlag(value),
+          });
+          break;
+        case 'info':
+          // 友だち情報は自由テキスト。値が入っている行のみ保存する
+          if (!coreRow.user_id || !value) {
+            break;
+          }
+          normalized.userInfo.push({
+            snapshot_date: snapshotDate,
+            user_id: coreRow.user_id,
+            field_id: descriptor.internalId ?? `info_column_${index}`,
+            field_name: descriptor.label ?? descriptor.internalId ?? `友だち情報${index}`,
+            field_value: value,
           });
           break;
         case 'other':
@@ -163,6 +177,10 @@ function determineCategory(params: {
 
   if (internalId && internalId.startsWith('タグ_')) {
     return 'tag';
+  }
+
+  if (internalId && internalId.startsWith('友だち情報_')) {
+    return 'info';
   }
 
   return 'other';

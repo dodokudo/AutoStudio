@@ -45,6 +45,7 @@ async function main(): Promise<void> {
     console.log(`  - user_tags: ${normalized.userTags.length} rows`);
     console.log(`  - user_sources: ${normalized.userSources.length} rows`);
     console.log(`  - user_surveys: ${normalized.userSurveys.length} rows`);
+    console.log(`  - user_info: ${normalized.userInfo.length} rows`);
 
     // Persist processed files
     const processedObjects = await persistProcessedFiles(
@@ -81,6 +82,7 @@ interface ProcessedObjectPaths {
   userTags: string;
   userSources: string;
   userSurveys: string;
+  userInfo: string;
 }
 
 async function persistProcessedFiles(
@@ -99,6 +101,7 @@ async function persistProcessedFiles(
     { key: 'userTags', table: 'user_tags', rows: data.userTags },
     { key: 'userSources', table: 'user_sources', rows: data.userSources },
     { key: 'userSurveys', table: 'user_surveys', rows: data.userSurveys },
+    { key: 'userInfo', table: 'user_info', rows: data.userInfo },
   ];
 
   const results: Partial<ProcessedObjectPaths> = {};
@@ -128,6 +131,7 @@ async function ensureDatasetAndTables(bigquery: BigQuery, datasetId: string, loc
   await ensureTable(dataset, 'user_tags', USER_TAGS_SCHEMA, 'snapshot_date', ['user_id', 'tag_name']);
   await ensureTable(dataset, 'user_sources', USER_SOURCES_SCHEMA, 'snapshot_date', ['user_id', 'source_name']);
   await ensureTable(dataset, 'user_surveys', USER_SURVEYS_SCHEMA, 'snapshot_date', ['user_id', 'question']);
+  await ensureTable(dataset, 'user_info', USER_INFO_SCHEMA, 'snapshot_date', ['user_id', 'field_name']);
 }
 
 async function ensureDataset(bigquery: BigQuery, datasetId: string, location: string): Promise<Dataset> {
@@ -171,6 +175,7 @@ async function loadIntoBigQuery(
     { table: 'user_tags', objectName: objects.userTags },
     { table: 'user_sources', objectName: objects.userSources },
     { table: 'user_surveys', objectName: objects.userSurveys },
+    { table: 'user_info', objectName: objects.userInfo },
   ];
 
   for (const jobDef of jobs) {
@@ -276,6 +281,14 @@ const USER_SURVEYS_SCHEMA: SchemaField[] = [
   { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
   { name: 'question', type: 'STRING', mode: 'REQUIRED' },
   { name: 'answer_flag', type: 'INT64', mode: 'REQUIRED' },
+];
+
+const USER_INFO_SCHEMA: SchemaField[] = [
+  { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },
+  { name: 'user_id', type: 'STRING', mode: 'REQUIRED' },
+  { name: 'field_id', type: 'STRING', mode: 'REQUIRED' },
+  { name: 'field_name', type: 'STRING', mode: 'REQUIRED' },
+  { name: 'field_value', type: 'STRING', mode: 'REQUIRED' },
 ];
 
 main().catch((error) => {

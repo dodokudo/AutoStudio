@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   '/api/threads/comments/execute',
   '/api/sales/cron/',
   '/api/launchkit/events',
+  '/api/agency/public',
 ];
 
 export function middleware(request: NextRequest) {

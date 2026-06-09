@@ -180,6 +180,7 @@ function normalizeColumnName(name: string): string {
     .replace(/^男$/g, 'gender_male')
     .replace(/^女$/g, 'gender_female')
     .replace(/アンケート：フォーム流入/g, 'survey_form_inflow')
+    .replace(/流入元/g, 'inflow_source')
     .replace(/ID/g, 'id')
     .replace(/表示名/g, 'display_name')
     .replace(/友だち追加日時/g, 'friend_added_at')

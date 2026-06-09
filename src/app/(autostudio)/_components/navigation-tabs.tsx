@@ -16,6 +16,7 @@ const navItems = [
   { id: 'youtube', href: '/youtube', label: 'YouTube' },
   { id: 'links', href: '/links', label: 'Links' },
   { id: 'launchkit', href: '/launchkit', label: 'LaunchKit' },
+  { id: 'agency', href: '/agency', label: '代理店' },
 ];
 
 export function NavigationTabs() {
