@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
     if (!lpId) {
       return NextResponse.json({ error: 'lpId is required' }, { status: 400, headers });
     }
-    if (eventType !== 'page_view' && eventType !== 'line_cta_click') {
+    const allowedEventTypes = ['page_view', 'line_cta_click', 'chapter_view', 'cta_click'];
+    if (!allowedEventTypes.includes(eventType)) {
       return NextResponse.json({ error: 'invalid eventType' }, { status: 400, headers });
     }
 

@@ -10,7 +10,7 @@ const bigquery = createBigQueryClient(projectId);
 
 export type LaunchkitGenre = 'opt' | 'seminar' | 'consult' | 'other';
 export type LaunchkitSource = 'threads' | 'instagram' | 'ad' | 'note' | 'youtube' | 'other';
-export type LaunchkitEventType = 'page_view' | 'line_cta_click';
+export type LaunchkitEventType = 'page_view' | 'line_cta_click' | 'chapter_view' | 'cta_click';
 
 export interface LaunchkitLP {
   id: string;
