@@ -1,5 +1,6 @@
 import { postThread } from '@/lib/threadsApi';
 import { normalizeTokutenGuideComment } from '@/lib/threadsText';
+import { resolveThreadsAccountKey, type ThreadsAccountKey } from '@/lib/threadsAccounts';
 import {
   listScheduledPosts,
   updateScheduledPost,
@@ -39,10 +40,11 @@ function isScheduledTimePassed(scheduledTimeIso: string): boolean {
 async function postThreadWithRetry(
   text: string,
   replyToId?: string,
+  accountKey?: ThreadsAccountKey,
 ): Promise<string> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await postThread(text, replyToId);
+      return await postThread(text, replyToId, undefined, accountKey);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.warn(
@@ -130,13 +132,14 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
   const startedAt = Date.now();
   const errors: string[] = [];
   const commentThreadIds: Record<number, string | undefined> = {};
+  const accountKey = resolveThreadsAccountKey(post.target_account_key ?? 'main');
 
   // 1. メイン投稿（既に投稿済みならスキップ）
   let mainThreadId = post.main_thread_id || undefined;
   if (!mainThreadId) {
     try {
-      console.log('[scheduledPostsWorker] Posting main thread...');
-      mainThreadId = await postThreadWithRetry(post.main_text);
+      console.log('[scheduledPostsWorker] Posting main thread...', { accountKey });
+      mainThreadId = await postThreadWithRetry(post.main_text, undefined, accountKey);
       console.log(`[scheduledPostsWorker] Main thread posted: ${mainThreadId}`);
       // 進捗を即座にBigQueryへ保存
       await updateScheduledPostRow(post, { mainThreadId });
@@ -213,7 +216,7 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       await new Promise((resolve) => setTimeout(resolve, delay));
 
       console.log(`[scheduledPostsWorker] Posting comment${comment.index}...`);
-      const threadId = await postThreadWithRetry(comment.text, replyToId);
+      const threadId = await postThreadWithRetry(comment.text, replyToId, accountKey);
       console.log(`[scheduledPostsWorker] Comment${comment.index} posted: ${threadId}`);
       await updateScheduledPostRow(post, { [comment.updateKey]: threadId });
       commentThreadIds[comment.index] = threadId;

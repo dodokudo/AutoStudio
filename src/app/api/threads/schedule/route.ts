@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { insertScheduledPost, listScheduledPosts, toJstIsoString } from '@/lib/bigqueryScheduledPosts';
 import { updateLatestPlanContent } from '@/lib/bigqueryPlans';
 import { normalizeTokutenGuideComment } from '@/lib/threadsText';
+import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
 
 function validateTextLength(label: string, value?: string) {
   if (!value || value.trim().length === 0) {
@@ -27,8 +28,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('start') || undefined;
     const endDate = searchParams.get('end') || undefined;
+    const accountKey = resolveThreadsAccountKey(searchParams.get('account'));
 
-    const items = await listScheduledPosts({ startDate, endDate });
+    const items = await listScheduledPosts({ startDate, endDate, accountKey });
     return NextResponse.json({ items });
   } catch (error) {
     console.error('[threads/schedule] GET failed', error);
@@ -40,6 +42,8 @@ export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
     const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, status, planId } = payload ?? {};
+    const targetAccountKey = resolveThreadsAccountKey(payload?.targetAccountKey ?? payload?.accountKey);
+    const sourceAccountKey = resolveThreadsAccountKey(payload?.sourceAccountKey ?? targetAccountKey);
 
     if (!scheduledAt || typeof scheduledAt !== 'string') {
       return NextResponse.json({ error: 'scheduledAt is required' }, { status: 400 });
@@ -83,6 +87,8 @@ export async function POST(request: NextRequest) {
       planId: typeof planId === 'string' ? planId : null,
       scheduledTimeIso,
       status: typeof status === 'string' ? status : 'scheduled',
+      sourceAccountKey,
+      targetAccountKey,
       mainText: String(mainText),
       comment1: String(comment1),
       comment2: String(comment2),

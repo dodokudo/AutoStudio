@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScheduleCalendar } from './schedule-calendar';
 import { ScheduleEditor } from './schedule-editor';
 import type { ScheduledPost } from './schedule-types';
+import type { ThreadsAccountKey } from '@/lib/threadsAccounts';
 
 type GeneratedContent = {
   mainText: string;
@@ -39,6 +40,8 @@ function mapItem(raw: Record<string, unknown>): ScheduledPost {
     scheduledAtJst: String(raw.scheduled_at_jst ?? ''),
     scheduledDate: String(raw.scheduled_date ?? ''),
     status: String(raw.status ?? 'scheduled'),
+    sourceAccountKey: raw.source_account_key ? String(raw.source_account_key) : null,
+    targetAccountKey: raw.target_account_key ? String(raw.target_account_key) : null,
     mainText: String(raw.main_text ?? ''),
     comment1: String(raw.comment1 ?? ''),
     comment2: String(raw.comment2 ?? ''),
@@ -61,7 +64,15 @@ function getJstNow() {
   return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
 }
 
-export function ScheduleTab() {
+export function ScheduleTab({
+  accountKey,
+  accountLabel,
+  isReadOnly = false,
+}: {
+  accountKey: ThreadsAccountKey;
+  accountLabel: string;
+  isReadOnly?: boolean;
+}) {
   const [currentMonth, setCurrentMonth] = useState(() => getJstNow());
   const [selectedDate, setSelectedDate] = useState(() => formatDateKey(getJstNow()));
   const [items, setItems] = useState<ScheduledPost[]>([]);
@@ -129,7 +140,7 @@ export function ScheduleTab() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ start: range.start, end: range.end });
+      const params = new URLSearchParams({ start: range.start, end: range.end, account: accountKey });
       const res = await fetch(`/api/threads/schedule?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) {
@@ -142,7 +153,7 @@ export function ScheduleTab() {
     } finally {
       setLoading(false);
     }
-  }, [range.end, range.start]);
+  }, [accountKey, range.end, range.start]);
 
   useEffect(() => {
     loadSchedules();
@@ -199,6 +210,9 @@ export function ScheduleTab() {
   }) => {
     setSaving(true);
     try {
+      if (isReadOnly) {
+        throw new Error('合算表示では予約を作成できません。本垢またはサブ垢を選んでください。');
+      }
       const hasId = Boolean(payload.scheduleId);
       const res = await fetch(
         hasId ? `/api/threads/schedule/${payload.scheduleId}` : '/api/threads/schedule',
@@ -217,6 +231,8 @@ export function ScheduleTab() {
             comment7: payload.comment7,
             comment8: payload.comment8,
             status: payload.status,
+            sourceAccountKey: selectedItem?.sourceAccountKey ?? accountKey,
+            targetAccountKey: accountKey,
           }),
         },
       );
@@ -265,6 +281,9 @@ export function ScheduleTab() {
     if (!confirm('今すぐ投稿しますか？')) return;
     setPublishing(true);
     try {
+      if (isReadOnly) {
+        throw new Error('合算表示では即時投稿できません。本垢またはサブ垢を選んでください。');
+      }
       const res = await fetch('/api/threads/schedule/publish-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -278,6 +297,8 @@ export function ScheduleTab() {
           comment6: payload.comment6,
           comment7: payload.comment7,
           comment8: payload.comment8,
+          accountKey,
+          targetAccountKey: accountKey,
         }),
       });
       const data = await res.json();
@@ -327,6 +348,8 @@ export function ScheduleTab() {
           onPublishNow={handlePublishNow}
           generatedContent={generatedContent}
           onGeneratedContentConsumed={clearGeneratedContent}
+          accountLabel={accountLabel}
+          isReadOnly={isReadOnly}
         />
       </div>
     </div>

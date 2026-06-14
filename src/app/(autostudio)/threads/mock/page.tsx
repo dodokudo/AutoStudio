@@ -410,7 +410,7 @@ export default function ThreadsUiRefreshMock() {
       ) : activeTab === 'insights' ? (
         <section className="section-stack">
           <AccountInsightsCard data={ACCOUNT_INSIGHTS_MOCK} note="レポート期間: 直近7日間 (モック)" />
-          <TopContentCard posts={TOP_CONTENT_SAMPLE} sortOption={topContentSort} onSortChange={setTopContentSort} />
+          <TopContentCard posts={TOP_CONTENT_SAMPLE} sortOption={topContentSort} onSortChange={setTopContentSort} accountKey="main" />
           <TemplateSummary items={TEMPLATE_SUMMARY_SAMPLE} />
         </section>
       ) : (

@@ -30,6 +30,7 @@ interface LineSourceCountOptions {
   startDate?: string;
   endDate?: string;
   sourceName?: string;
+  sourceNames?: string[];
   datasetId?: string;
 }
 
@@ -175,7 +176,7 @@ function resolveLineSourceDateRange(options: LineSourceCountOptions): { startDat
 
 export async function countLineSourceRegistrations(
   projectId: string,
-  { startDate, endDate, sourceName = 'Threads', datasetId = DEFAULT_DATASET }: LineSourceCountOptions,
+  { startDate, endDate, sourceName = 'Threads', sourceNames, datasetId = DEFAULT_DATASET }: LineSourceCountOptions,
 ): Promise<number> {
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
 
@@ -183,6 +184,8 @@ export async function countLineSourceRegistrations(
     startDate,
     endDate,
   });
+
+  const resolvedSourceNames = sourceNames?.length ? sourceNames : [sourceName];
 
   // source_nameは「Threads」「Threads ポスト」「Threads プロフ」など複数あるのでLIKE検索
   const [row] = await runQuery<{ total: bigint | number | string | null }>(client, projectId, datasetId, {
@@ -194,13 +197,17 @@ export async function countLineSourceRegistrations(
           ON core.user_id = sources.user_id
           AND core.snapshot_date = sources.snapshot_date
         WHERE DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
-          AND sources.source_name LIKE CONCAT(@sourceName, '%')
+          AND EXISTS (
+            SELECT 1
+            FROM UNNEST(@sourceNames) AS candidate_source
+            WHERE sources.source_name LIKE CONCAT(candidate_source, '%')
+          )
           AND sources.source_flag = 1
       )
       SELECT COUNT(*) AS total
       FROM matched_users
     `,
-    params: { startDate: resolvedStart, endDate: resolvedEnd, sourceName },
+    params: { startDate: resolvedStart, endDate: resolvedEnd, sourceNames: resolvedSourceNames },
   });
 
   return normalizeNumeric(row?.total);
@@ -210,7 +217,8 @@ export async function listLineSourceRegistrations(
   projectId: string,
   options: LineSourceCountOptions = {},
 ): Promise<LineSourceRegistrationPoint[]> {
-  const { sourceName = 'Threads', datasetId = DEFAULT_DATASET } = options;
+  const { sourceName = 'Threads', sourceNames, datasetId = DEFAULT_DATASET } = options;
+  const resolvedSourceNames = sourceNames?.length ? sourceNames : [sourceName];
   const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
   const { startDate, endDate } = resolveLineSourceDateRange(options);
 
@@ -229,7 +237,11 @@ export async function listLineSourceRegistrations(
             ON core.user_id = sources.user_id
             AND core.snapshot_date = sources.snapshot_date
           WHERE DATE(TIMESTAMP(core.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
-            AND sources.source_name LIKE CONCAT(@sourceName, '%')
+            AND EXISTS (
+              SELECT 1
+              FROM UNNEST(@sourceNames) AS candidate_source
+              WHERE sources.source_name LIKE CONCAT(candidate_source, '%')
+            )
             AND sources.source_flag = 1
         )
         SELECT
@@ -239,7 +251,7 @@ export async function listLineSourceRegistrations(
         GROUP BY joined_date
         ORDER BY joined_date DESC
       `,
-      params: { startDate, endDate, sourceName },
+      params: { startDate, endDate, sourceNames: resolvedSourceNames },
     },
   );
 

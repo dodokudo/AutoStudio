@@ -17,11 +17,12 @@ type TabItem = {
 interface ThreadsTabShellProps {
   tabItems: TabItem[];
   activeTab: ThreadsTabKey;
+  accountSelector?: React.ReactNode;
   rangeSelector?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function ThreadsTabShell({ tabItems, activeTab, rangeSelector, children }: ThreadsTabShellProps) {
+export function ThreadsTabShell({ tabItems, activeTab, accountSelector, rangeSelector, children }: ThreadsTabShellProps) {
   const pathname = usePathname();
 
   const tabLinks = useMemo(
@@ -60,7 +61,10 @@ export function ThreadsTabShell({ tabItems, activeTab, rangeSelector, children }
             );
           })}
         </nav>
-        {rangeSelector ?? null}
+        <div className="flex flex-wrap items-center gap-2">
+          {accountSelector ?? null}
+          {rangeSelector ?? null}
+        </div>
       </div>
 
       {children}

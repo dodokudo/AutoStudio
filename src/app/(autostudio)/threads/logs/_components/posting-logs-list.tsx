@@ -4,6 +4,7 @@ interface PostingLog {
   log_id: string;
   plan_id: string;
   status: string;
+  target_account_key?: string;
   posted_thread_id?: string;
   error_message?: string;
   posted_at?: string;
@@ -91,6 +92,10 @@ export function PostingLogsList({ logs }: PostingLogsListProps) {
                     >
                       <span>{status.icon}</span>
                       {status.label}
+                    </span>
+
+                    <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                      {log.target_account_key === 'sub' ? 'サブ垢' : '本垢'}
                     </span>
 
                     <span className="text-xs text-muted-foreground">

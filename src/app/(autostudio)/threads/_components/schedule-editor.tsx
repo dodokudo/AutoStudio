@@ -51,6 +51,8 @@ type ScheduleEditorProps = {
   }) => Promise<void>;
   generatedContent: GeneratedContent | null;
   onGeneratedContentConsumed: () => void;
+  accountLabel: string;
+  isReadOnly?: boolean;
 };
 
 export function ScheduleEditor({
@@ -62,6 +64,8 @@ export function ScheduleEditor({
   onPublishNow,
   generatedContent,
   onGeneratedContentConsumed,
+  accountLabel,
+  isReadOnly = false,
 }: ScheduleEditorProps) {
   const [scheduledAt, setScheduledAt] = useState('');
   const [mainText, setMainText] = useState('');
@@ -164,6 +168,10 @@ export function ScheduleEditor({
       setError('未入力または文字数超過の項目があります。');
       return;
     }
+    if (isReadOnly) {
+      setError('合算表示では予約を作成できません。本垢またはサブ垢を選んでください。');
+      return;
+    }
     setError(null);
     await onSave({
       scheduleId: selectedItem?.scheduleId,
@@ -186,6 +194,10 @@ export function ScheduleEditor({
       setError('メイン投稿とコメントを入力してください。');
       return;
     }
+    if (isReadOnly) {
+      setError('合算表示では即時投稿できません。本垢またはサブ垢を選んでください。');
+      return;
+    }
     setError(null);
     await onPublishNow({
       mainText,
@@ -205,7 +217,7 @@ export function ScheduleEditor({
       <header className="mb-4">
         <h2 className="text-base font-semibold text-[color:var(--color-text-primary)]">予約エディタ</h2>
         <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
-          {selectedItem ? '選択中の予約を編集' : '新規予約を作成'}
+          {selectedItem ? '選択中の予約を編集' : '新規予約を作成'} / 投稿先: {accountLabel}
         </p>
       </header>
 
@@ -225,7 +237,7 @@ export function ScheduleEditor({
             <button
               type="button"
               className="mt-2 h-[42px] rounded-[var(--radius-lg)] bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-              disabled={isPublishing || isSaving}
+              disabled={isPublishing || isSaving || isReadOnly}
               onClick={handlePublishNow}
             >
               {isPublishing ? '投稿中...' : '今すぐ投稿'}
@@ -304,7 +316,7 @@ export function ScheduleEditor({
           <button
             type="button"
             className="ui-button-secondary"
-            disabled={isSaving}
+            disabled={isSaving || isReadOnly}
             onClick={() => handleSubmit('draft')}
           >
             {isSaving ? '保存中...' : '下書き保存'}
@@ -312,7 +324,7 @@ export function ScheduleEditor({
           <button
             type="button"
             className="ui-button-primary"
-            disabled={isSaving}
+            disabled={isSaving || isReadOnly}
             onClick={() => handleSubmit('scheduled')}
           >
             {isSaving ? '登録中...' : '予約登録'}

@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
+import {
+  THREADS_ACCOUNTS,
+  getThreadsAccount,
+  type ThreadsAccountKey,
+} from '@/lib/threadsAccounts';
 
 type SortOption = 'postedAt' | 'views' | 'likes';
 
@@ -29,6 +34,7 @@ interface TopContentCardProps {
   posts: TopContentPost[];
   sortOption: SortOption;
   onSortChange: (option: SortOption) => void;
+  accountKey: ThreadsAccountKey;
 }
 
 const COMMENT_SLOT_LIMIT = 7;
@@ -285,11 +291,12 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
   );
 }
 
-export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCardProps) {
+export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: TopContentCardProps) {
   const [showAll, setShowAll] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [reserveTarget, setReserveTarget] = useState<TopContentPost | null>(null);
   const [scheduledAt, setScheduledAt] = useState('');
+  const [targetAccountKey, setTargetAccountKey] = useState<ThreadsAccountKey>('main');
   const [draftMainText, setDraftMainText] = useState('');
   const [draftComments, setDraftComments] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -319,6 +326,7 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
   const openReserveModal = (post: TopContentPost) => {
     setReserveTarget(post);
     setScheduledAt(getDefaultScheduledAt());
+    setTargetAccountKey(accountKey === 'all' ? 'main' : accountKey);
     setDraftMainText(cleanContent(post.content ?? ''));
     setDraftComments((post.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c) => cleanContent(c.text ?? '')));
     setSubmitError(null);
@@ -349,6 +357,8 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
         comment7: comments[6] ?? '',
         comment8: '',
         status: 'scheduled',
+        sourceAccountKey: accountKey,
+        targetAccountKey,
       };
       const res = await fetch('/api/threads/schedule', {
         method: 'POST',
@@ -473,6 +483,32 @@ export function TopContentCard({ posts, sortOption, onSortChange }: TopContentCa
                 </p>
               );
             })()}
+            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-secondary)]">
+              投稿元 / 投稿先
+            </label>
+            <div className="mb-3 grid grid-cols-2 gap-3">
+              <div className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-2">
+                <p className="text-[10px] font-medium text-[color:var(--color-text-muted)]">投稿元</p>
+                <p className="mt-1 text-sm font-medium text-[color:var(--color-text-primary)]">
+                  {accountKey === 'all' ? '合算表示' : getThreadsAccount(accountKey).label}
+                </p>
+              </div>
+              <label className="block rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2">
+                <span className="text-[10px] font-medium text-[color:var(--color-text-muted)]">投稿先</span>
+                <select
+                  value={targetAccountKey}
+                  onChange={(event) => setTargetAccountKey(event.target.value as ThreadsAccountKey)}
+                  className="mt-1 w-full bg-white text-sm font-medium text-[color:var(--color-text-primary)] focus:outline-none"
+                  disabled={submitting}
+                >
+                  {THREADS_ACCOUNTS.map((account) => (
+                    <option key={account.key} value={account.key}>
+                      {account.label} {account.handle}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-secondary)]">
               投稿日時（JST）
             </label>

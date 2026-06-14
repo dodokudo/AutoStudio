@@ -1,4 +1,9 @@
 import { createBigQueryClient } from './bigquery';
+import {
+  getThreadsAccount,
+  resolveThreadsAccountKey,
+  type ThreadsAccountKey,
+} from './threadsAccounts';
 
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 
@@ -9,32 +14,44 @@ if (!THREADS_POSTING_ENABLED) {
   console.info('[threadsApi] THREADS_POSTING_ENABLED is false. Using dry-run mode.');
 }
 
+type TokenCacheEntry = {
+  token: string;
+  expiresAt: number;
+};
+
 // ANALYCAのBigQueryからトークンを取得（キャッシュ: 5分）
-let _cachedToken: string | null = null;
-let _cachedTokenExpiry = 0;
+const _cachedTokens = new Map<string, TokenCacheEntry>();
 const TOKEN_CACHE_MS = 5 * 60 * 1000;
 
-async function getThreadsToken(): Promise<string | null> {
+function resolveThreadsUserId(accountKey?: ThreadsAccountKey): string {
+  if (!accountKey && THREADS_BUSINESS_ID) {
+    return THREADS_BUSINESS_ID;
+  }
+  return getThreadsAccount(resolveThreadsAccountKey(accountKey)).threadsUserId;
+}
+
+async function getThreadsToken(accountKey?: ThreadsAccountKey): Promise<string | null> {
   // 環境変数にあればそれを使う（フォールバック）
   const envToken = process.env.THREADS_TOKEN?.trim();
+  const userId = resolveThreadsUserId(accountKey);
 
   const now = Date.now();
-  if (_cachedToken && now < _cachedTokenExpiry) {
-    return _cachedToken;
+  const cached = _cachedTokens.get(userId);
+  if (cached && now < cached.expiresAt) {
+    return cached.token;
   }
 
   try {
     const bq = createBigQueryClient();
-    const userId = THREADS_BUSINESS_ID || '10012809578833342';
     const [rows] = await bq.query({
       query: `SELECT threads_access_token FROM \`mark-454114.analyca.users\` WHERE user_id = @userId AND threads_access_token IS NOT NULL AND threads_token_expires_at > CURRENT_TIMESTAMP() LIMIT 1`,
       params: { userId },
     });
     if (rows.length > 0 && rows[0].threads_access_token) {
-      _cachedToken = rows[0].threads_access_token;
-      _cachedTokenExpiry = now + TOKEN_CACHE_MS;
-      console.log('[threadsApi] Token fetched from ANALYCA BigQuery (cached 5min)');
-      return _cachedToken;
+      const token = String(rows[0].threads_access_token);
+      _cachedTokens.set(userId, { token, expiresAt: now + TOKEN_CACHE_MS });
+      console.log('[threadsApi] Token fetched from ANALYCA BigQuery (cached 5min)', { userId });
+      return token;
     }
   } catch (err) {
     console.warn('[threadsApi] Failed to fetch token from ANALYCA BigQuery:', err instanceof Error ? err.message : err);
@@ -48,8 +65,11 @@ async function getThreadsToken(): Promise<string | null> {
   return null;
 }
 
-async function request(path: string, options: RequestInit & { params?: Record<string, string> } = {}) {
-  const token = await getThreadsToken();
+async function request(
+  path: string,
+  options: RequestInit & { params?: Record<string, string>; accountKey?: ThreadsAccountKey } = {},
+) {
+  const token = await getThreadsToken(options.accountKey);
   const url = new URL(`${GRAPH_BASE}/${path}`);
   if (options.params) {
     Object.entries(options.params).forEach(([key, value]) => url.searchParams.append(key, value));
@@ -71,7 +91,8 @@ async function request(path: string, options: RequestInit & { params?: Record<st
   return res.json();
 }
 
-async function createContainer(text: string, replyToId?: string, linkUrl?: string) {
+async function createContainer(text: string, replyToId?: string, linkUrl?: string, accountKey?: ThreadsAccountKey) {
+  const userId = resolveThreadsUserId(accountKey);
   const body: Record<string, unknown> = {
     text,
     media_type: 'TEXT',
@@ -87,20 +108,22 @@ async function createContainer(text: string, replyToId?: string, linkUrl?: strin
 
   console.log('[threadsApi] createContainer body:', body);
 
-  const response = await request(`${THREADS_BUSINESS_ID}/threads`, {
+  const response = await request(`${userId}/threads`, {
     method: 'POST',
     body: JSON.stringify(body),
+    accountKey,
   });
 
   console.log('[threadsApi] createContainer response:', response);
   return response.id as string;
 }
 
-async function waitForContainer(containerId: string) {
+async function waitForContainer(containerId: string, accountKey?: ThreadsAccountKey) {
   for (let i = 0; i < 10; i += 1) {
     const statusRes = await request(containerId, {
       method: 'GET',
       params: { fields: 'status,error_message' },
+      accountKey,
     });
     if (statusRes.status === 'ERROR') {
       throw new Error(statusRes.error_message ?? 'Container creation failed');
@@ -113,14 +136,16 @@ async function waitForContainer(containerId: string) {
   throw new Error('Timed out waiting for container');
 }
 
-async function publishContainer(containerId: string) {
+async function publishContainer(containerId: string, accountKey?: ThreadsAccountKey) {
+  const userId = resolveThreadsUserId(accountKey);
   // まずコンテナの準備が完了するまで待つ
-  await waitForContainer(containerId);
+  await waitForContainer(containerId, accountKey);
 
   // 準備完了後に公開
-  const res = await request(`${THREADS_BUSINESS_ID}/threads_publish`, {
+  const res = await request(`${userId}/threads_publish`, {
     method: 'POST',
     params: { creation_id: containerId },
+    accountKey,
   });
 
   if (res.id) {
@@ -132,12 +157,13 @@ async function publishContainer(containerId: string) {
   const statusRes = await request(containerId, {
     method: 'GET',
     params: { fields: 'id' },
+    accountKey,
   });
   console.log('[threadsApi] Status response ID:', statusRes.id);
   return statusRes.id as string;
 }
 
-export async function postThread(text: string, replyToId?: string, linkUrl?: string) {
+export async function postThread(text: string, replyToId?: string, linkUrl?: string, accountKey?: ThreadsAccountKey) {
   // Threads API の500文字制限バリデーション
   const THREADS_TEXT_LIMIT = 500;
   if (text.length > THREADS_TEXT_LIMIT) {
@@ -159,6 +185,8 @@ export async function postThread(text: string, replyToId?: string, linkUrl?: str
     postingEnabled: THREADS_POSTING_ENABLED,
     environment: process.env.NODE_ENV,
     hasBusinessId: !!THREADS_BUSINESS_ID,
+    accountKey: resolveThreadsAccountKey(accountKey),
+    threadsUserId: resolveThreadsUserId(accountKey),
     rawEnvValue: rawEnv,
     rawEnvLength: rawEnv?.length,
     trimmedEnvValue: trimmedEnv,
@@ -178,23 +206,25 @@ export async function postThread(text: string, replyToId?: string, linkUrl?: str
     return mockId;
   }
 
-  const token = await getThreadsToken();
-  if (!token || !THREADS_BUSINESS_ID) {
+  const token = await getThreadsToken(accountKey);
+  const userId = resolveThreadsUserId(accountKey);
+  if (!token || !userId) {
     const credentialError = new Error('Threads API credentials are not configured');
     console.error('[threadsApi] Credential check failed:', {
       hasToken: !!token,
-      hasBusinessId: !!THREADS_BUSINESS_ID,
+      hasBusinessId: !!userId,
+      accountKey: resolveThreadsAccountKey(accountKey),
       environment: process.env.NODE_ENV
     });
     throw credentialError;
   }
 
   console.log('[threadsApi] Creating container...');
-  const containerId = await createContainer(text, replyToId, linkUrl);
+  const containerId = await createContainer(text, replyToId, linkUrl, accountKey);
   console.log('[threadsApi] Container created:', containerId);
 
   console.log('[threadsApi] Publishing container...');
-  const threadId = await publishContainer(containerId);
+  const threadId = await publishContainer(containerId, accountKey);
   console.log('[threadsApi] Thread published successfully:', threadId);
 
   return threadId;
@@ -208,19 +238,21 @@ export interface ThreadInsights {
   quotes?: number;
 }
 
-export async function getThreadInsights(threadId: string): Promise<ThreadInsights> {
-  const token = await getThreadsToken();
-  if (!token || !THREADS_BUSINESS_ID) {
+export async function getThreadInsights(threadId: string, accountKey?: ThreadsAccountKey): Promise<ThreadInsights> {
+  const token = await getThreadsToken(accountKey);
+  const userId = resolveThreadsUserId(accountKey);
+  if (!token || !userId) {
     throw new Error('Threads API credentials are not configured');
   }
 
   try {
     // Use the business account ID instead of thread ID for insights
-    const response = await request(`${THREADS_BUSINESS_ID}/threads_insights`, {
+    const response = await request(`${userId}/threads_insights`, {
       params: {
         metric: 'views,likes,replies,reposts,quotes',
         media_id: threadId
-      }
+      },
+      accountKey,
     });
 
     // Threads APIのレスポンス形式に合わせて解析

@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { PostInsight, PostComment } from '@/lib/threadsInsightsData';
+import type { ThreadsAccountKey } from '@/lib/threadsAccounts';
 import { Card } from '@/components/ui/card';
 import { InsightsCard } from './insights-card';
 import { TopContentCard } from './top-content-card';
@@ -45,6 +46,7 @@ interface InsightsTabProps {
   }>;
   maxImpressions?: number;
   maxFollowerDelta?: number;
+  accountKey: ThreadsAccountKey;
 }
 
 type TopContentSort = 'postedAt' | 'views' | 'likes';
@@ -61,6 +63,7 @@ export function InsightsTab({
   performanceSeries,
   maxImpressions,
   maxFollowerDelta,
+  accountKey,
 }: InsightsTabProps) {
   const [topContentSort, setTopContentSort] = useState<TopContentSort>('views');
   const [showDailyTable, setShowDailyTable] = useState(true);
@@ -85,7 +88,8 @@ export function InsightsTab({
         const startDate = formatDateInput(start);
         const endDate = formatDateInput(end);
 
-        const res = await fetch(`/api/threads/posts?startDate=${startDate}&endDate=${endDate}`);
+        const params = new URLSearchParams({ startDate, endDate, account: accountKey });
+        const res = await fetch(`/api/threads/posts?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to fetch posts');
         const data = await res.json();
         setPosts(data.posts ?? []);
@@ -98,7 +102,7 @@ export function InsightsTab({
     };
 
     fetchPosts();
-  }, [initialPosts, selectedRangeValue, customStart, customEnd]);
+  }, [initialPosts, selectedRangeValue, customStart, customEnd, accountKey]);
 
   const chartData = (performanceSeries ?? []).map((item) => {
     let displayDate = item.date;
@@ -407,7 +411,12 @@ export function InsightsTab({
             }))}
           />
 
-          <TopContentCard posts={topContentData} sortOption={topContentSort} onSortChange={setTopContentSort} />
+          <TopContentCard
+            posts={topContentData}
+            sortOption={topContentSort}
+            onSortChange={setTopContentSort}
+            accountKey={accountKey}
+          />
         </>
       )}
     </div>

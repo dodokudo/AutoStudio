@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
@@ -10,6 +11,7 @@ interface PostingLog {
   log_id: string;
   plan_id: string;
   status: string;
+  target_account_key?: string;
   posted_thread_id?: string;
   error_message?: string;
   posted_at?: string;
@@ -35,15 +37,25 @@ function toIsoDate(raw: { value?: string } | string | number | Date | null | und
   return undefined;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const client = createBigQueryClient(PROJECT_ID);
+    const accountKey = resolveThreadsAccountKey(request.nextUrl.searchParams.get('account'));
+    const whereClause = accountKey === 'all' ? '' : "WHERE COALESCE(l.target_account_key, 'main') = @accountKey";
+
+    await client.query({
+      query: `
+        ALTER TABLE \`${PROJECT_ID}.${DATASET}.${LOG_TABLE}\`
+        ADD COLUMN IF NOT EXISTS target_account_key STRING
+      `,
+    });
 
     const query = `
       SELECT
         l.log_id,
         l.plan_id,
         l.status,
+        COALESCE(l.target_account_key, 'main') AS target_account_key,
         l.posted_thread_id,
         l.error_message,
         l.posted_at,
@@ -55,16 +67,21 @@ export async function GET() {
       FROM \`${PROJECT_ID}.${DATASET}.${LOG_TABLE}\` l
       LEFT JOIN \`${PROJECT_ID}.${DATASET}.${PLAN_TABLE}\` p
         ON l.plan_id = p.plan_id
+      ${whereClause}
       ORDER BY l.created_at DESC
       LIMIT 50
     `;
 
-    const [rows] = await client.query({ query });
+    const [rows] = await client.query({
+      query,
+      params: accountKey === 'all' ? {} : { accountKey },
+    });
 
     const logs: PostingLog[] = rows.map((row: {
       log_id?: string;
       plan_id?: string;
       status?: string;
+      target_account_key?: string;
       posted_thread_id?: string;
       error_message?: string;
       posted_at?: { value?: string } | string | number | Date | null;
@@ -77,6 +94,7 @@ export async function GET() {
       log_id: row.log_id || '',
       plan_id: row.plan_id || '',
       status: row.status || 'unknown',
+      target_account_key: row.target_account_key || 'main',
       posted_thread_id: row.posted_thread_id || undefined,
       error_message: row.error_message || undefined,
       posted_at: toIsoDate(row.posted_at),

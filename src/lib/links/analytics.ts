@@ -1,5 +1,9 @@
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import { formatDateInput } from '@/lib/dateRangePresets';
+import {
+  getLaunchkitSlugPrefixesForAccount,
+  type ThreadsAccountKey,
+} from '@/lib/threadsAccounts';
 
 const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
@@ -101,10 +105,23 @@ export async function getInstagramLpLineClicksByRange(start: Date, end: Date): P
   }));
 }
 
-export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Promise<LinkClicksByDate[]> {
+export async function getThreadsLpLineClicksByRange(
+  start: Date,
+  end: Date,
+  accountKey?: ThreadsAccountKey,
+): Promise<LinkClicksByDate[]> {
   const bigquery = createBigQueryClient(projectId);
   const startKey = formatDateInput(start);
   const endKey = formatDateInput(end);
+  const slugPrefixes = accountKey ? getLaunchkitSlugPrefixesForAccount(accountKey) : [];
+  const includeLegacyClicks = accountKey !== 'sub';
+  const launchkitAccountJoin = slugPrefixes.length
+    ? `
+      JOIN \`${projectId}.${dataset}.launchkit_lps\` lp
+        ON launchkit_events.lp_id = lp.id
+        AND (${slugPrefixes.map((_, index) => `lp.slug = @slugPrefix${index} OR STARTS_WITH(lp.slug, CONCAT(@slugPrefix${index}, '/'))`).join(' OR ')})
+    `
+    : '';
 
   // 旧運用: AutoStudio短縮URL(L-opt4-th等)のクリック click_logs
   // 新運用: LaunchKit直URL+JS計測 launchkit_events(line_cta_click, source='threads')
@@ -125,15 +142,17 @@ export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Pro
       FROM \`${projectId}.${dataset}.click_logs\` cl
       JOIN latest_links ll ON cl.short_link_id = ll.id
       WHERE ll.rn = 1
+        AND @includeLegacyClicks = TRUE
         AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
     ),
     launchkit_clicks AS (
       SELECT
-        DATE(occurred_at, "Asia/Tokyo") AS date
-      FROM \`${projectId}.${dataset}.launchkit_events\`
-      WHERE event_type = 'line_cta_click'
-        AND source = 'threads'
-        AND DATE(occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
+        DATE(launchkit_events.occurred_at, "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.launchkit_events\` launchkit_events
+      ${launchkitAccountJoin}
+      WHERE launchkit_events.event_type = 'line_cta_click'
+        AND launchkit_events.source = 'threads'
+        AND DATE(launchkit_events.occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
     ),
     combined AS (
       SELECT date FROM legacy_clicks
@@ -154,6 +173,8 @@ export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Pro
       codes: [...THREADS_LP_LINE_SHORT_CODES],
       startDate: startKey,
       endDate: endKey,
+      includeLegacyClicks,
+      ...Object.fromEntries(slugPrefixes.map((prefix, index) => [`slugPrefix${index}`, prefix])),
     },
   });
 
@@ -163,8 +184,8 @@ export async function getThreadsLpLineClicksByRange(start: Date, end: Date): Pro
   }));
 }
 
-export async function getThreadsLpLineClicksTotal(start: Date, end: Date): Promise<number> {
-  const series = await getThreadsLpLineClicksByRange(start, end);
+export async function getThreadsLpLineClicksTotal(start: Date, end: Date, accountKey?: ThreadsAccountKey): Promise<number> {
+  const series = await getThreadsLpLineClicksByRange(start, end, accountKey);
   return series.reduce((sum, entry) => sum + entry.clicks, 0);
 }
 
@@ -175,8 +196,21 @@ export async function getThreadsLinkClicks(): Promise<LinkClicksByDate[]> {
   return getThreadsLinkClicksByRange(start, end);
 }
 
-export async function getThreadsLinkClicksByRange(start: Date, end: Date): Promise<LinkClicksByDate[]> {
+export async function getThreadsLinkClicksByRange(
+  start: Date,
+  end: Date,
+  accountKey?: ThreadsAccountKey,
+): Promise<LinkClicksByDate[]> {
   const bigquery = createBigQueryClient(projectId);
+  const slugPrefixes = accountKey ? getLaunchkitSlugPrefixesForAccount(accountKey) : [];
+  const includeLegacyClicks = accountKey !== 'sub';
+  const launchkitAccountJoin = slugPrefixes.length
+    ? `
+      JOIN \`${projectId}.${dataset}.launchkit_lps\` lp
+        ON launchkit_events.lp_id = lp.id
+        AND (${slugPrefixes.map((_, index) => `lp.slug = @slugPrefix${index} OR STARTS_WITH(lp.slug, CONCAT(@slugPrefix${index}, '/'))`).join(' OR ')})
+    `
+    : '';
 
   // 旧運用: Threads投稿に貼った短縮URL(category='threads') click_logs
   // 新運用: lkit.jp直URL からのLPアクセス launchkit_events(page_view, source='threads')
@@ -196,15 +230,17 @@ export async function getThreadsLinkClicksByRange(start: Date, end: Date): Promi
       FROM \`${projectId}.${dataset}.click_logs\` cl
       INNER JOIN latest_links ll ON cl.short_link_id = ll.id
       WHERE ll.rn = 1
+        AND @includeLegacyClicks = TRUE
         AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
     ),
     launchkit_views AS (
       SELECT
-        DATE(occurred_at, "Asia/Tokyo") AS date
-      FROM \`${projectId}.${dataset}.launchkit_events\`
-      WHERE event_type = 'page_view'
-        AND source = 'threads'
-        AND DATE(occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
+        DATE(launchkit_events.occurred_at, "Asia/Tokyo") AS date
+      FROM \`${projectId}.${dataset}.launchkit_events\` launchkit_events
+      ${launchkitAccountJoin}
+      WHERE launchkit_events.event_type = 'page_view'
+        AND launchkit_events.source = 'threads'
+        AND DATE(launchkit_events.occurred_at, "Asia/Tokyo") BETWEEN @startDate AND @endDate
     ),
     combined AS (
       SELECT date FROM legacy_clicks
@@ -224,6 +260,8 @@ export async function getThreadsLinkClicksByRange(start: Date, end: Date): Promi
     params: {
       startDate: start.toISOString().slice(0, 10),
       endDate: end.toISOString().slice(0, 10),
+      includeLegacyClicks,
+      ...Object.fromEntries(slugPrefixes.map((prefix, index) => [`slugPrefix${index}`, prefix])),
     },
   });
 

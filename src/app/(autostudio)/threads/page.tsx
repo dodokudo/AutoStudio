@@ -1,4 +1,5 @@
 import { unstable_cache } from 'next/cache';
+import Link from 'next/link';
 import { getThreadsInsights, type ThreadsInsightsOptions } from "@/lib/threadsInsights";
 import { getLightweightInsights } from "@/lib/threadsAccountSummary";
 import { listPlanSummaries } from "@/lib/bigqueryPlans";
@@ -13,6 +14,13 @@ import { ScheduleTab } from "./_components/schedule-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getThreadsLinkClicksByRange, getThreadsLpLineClicksByRange } from "@/lib/links/analytics";
+import {
+  THREADS_ACCOUNT_OPTIONS,
+  getLineSourceNamesForAccount,
+  getThreadsAccount,
+  resolveThreadsAccountKey,
+  type ThreadsAccountKey,
+} from "@/lib/threadsAccounts";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
@@ -53,16 +61,16 @@ const getCachedThreadsDashboard = unstable_cache(
 );
 
 const getCachedThreadsInsightsData = unstable_cache(
-  async (startDate?: string, endDate?: string, dailyMetricsLimit?: number | null) => {
-    return getThreadsInsightsData({ startDate, endDate, dailyMetricsLimit });
+  async (startDate?: string, endDate?: string, dailyMetricsLimit?: number | null, accountKey?: ThreadsAccountKey) => {
+    return getThreadsInsightsData({ startDate, endDate, dailyMetricsLimit, accountKey });
   },
   ['threads-insights-data'],
   { revalidate: 1800 }
 );
 
 const getCachedDailyPostStats = unstable_cache(
-  async (startDate?: string, endDate?: string) => {
-    return getDailyPostStats({ startDate, endDate });
+  async (startDate?: string, endDate?: string, accountKey?: ThreadsAccountKey) => {
+    return getDailyPostStats({ startDate, endDate, accountKey });
   },
   ['threads-daily-post-stats'],
   { revalidate: 1800 }
@@ -70,32 +78,32 @@ const getCachedDailyPostStats = unstable_cache(
 
 
 const getCachedCountLineSourceRegistrations = unstable_cache(
-  async (projectId: string, startDate?: string, endDate?: string, sourceName?: string) => {
-    return countLineSourceRegistrations(projectId, { startDate, endDate, sourceName });
+  async (projectId: string, startDate?: string, endDate?: string, sourceNames?: string[]) => {
+    return countLineSourceRegistrations(projectId, { startDate, endDate, sourceNames });
   },
   ['threads-count-line-source-registrations'],
   { revalidate: 1800 }
 );
 
 const getCachedListLineSourceRegistrations = unstable_cache(
-  async (projectId: string, startDate?: string, endDate?: string, sourceName?: string) => {
-    return listLineSourceRegistrations(projectId, { startDate, endDate, sourceName });
+  async (projectId: string, startDate?: string, endDate?: string, sourceNames?: string[]) => {
+    return listLineSourceRegistrations(projectId, { startDate, endDate, sourceNames });
   },
   ['threads-list-line-source-registrations'],
   { revalidate: 1800 }
 );
 
 const getCachedThreadsLinkClicksByRange = unstable_cache(
-  async (startISO: string, endISO: string) => {
-    return getThreadsLinkClicksByRange(new Date(startISO), new Date(endISO));
+  async (startISO: string, endISO: string, accountKey?: ThreadsAccountKey) => {
+    return getThreadsLinkClicksByRange(new Date(startISO), new Date(endISO), accountKey);
   },
   ['threads-link-clicks-by-range'],
   { revalidate: 1800 }
 );
 
 const getCachedThreadsLpLineClicksByRange = unstable_cache(
-  async (startISO: string, endISO: string) => {
-    return getThreadsLpLineClicksByRange(new Date(startISO), new Date(endISO));
+  async (startISO: string, endISO: string, accountKey?: ThreadsAccountKey) => {
+    return getThreadsLpLineClicksByRange(new Date(startISO), new Date(endISO), accountKey);
   },
   ['threads-lp-line-clicks-by-range'],
   { revalidate: 1800 }
@@ -116,6 +124,10 @@ export default async function ThreadsHome({
   const rangeParam = typeof resolvedSearchParams?.range === "string" ? resolvedSearchParams.range : undefined;
   const startParam = typeof resolvedSearchParams?.start === "string" ? resolvedSearchParams.start : undefined;
   const endParam = typeof resolvedSearchParams?.end === "string" ? resolvedSearchParams.end : undefined;
+  const accountParam = typeof resolvedSearchParams?.account === "string" ? resolvedSearchParams.account : undefined;
+  const selectedAccountKey = resolveThreadsAccountKey(accountParam);
+  const selectedAccount = getThreadsAccount(selectedAccountKey);
+  const lineSourceNames = getLineSourceNamesForAccount(selectedAccountKey);
   const selectedRangeValue: UnifiedRangePreset = isUnifiedRangePreset(rangeParam) ? rangeParam : '7d';
   const resolvedRange = resolveDateRange(selectedRangeValue, startParam, endParam);
   const rangeValueForUi = resolvedRange.preset;
@@ -142,6 +154,7 @@ export default async function ThreadsHome({
 
   const sharedParams = new URLSearchParams();
   if (rangeValueForUi) sharedParams.set('range', rangeValueForUi);
+  sharedParams.set('account', selectedAccountKey);
   if (rangeValueForUi === 'custom') {
     if (customStart) sharedParams.set('start', customStart);
     if (customEnd) sharedParams.set('end', customEnd);
@@ -165,6 +178,32 @@ export default async function ThreadsHome({
     };
   });
 
+  const accountSelector = (
+    <div className="flex flex-wrap items-center gap-1 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1">
+      {THREADS_ACCOUNT_OPTIONS.map((account) => {
+        const params = new URLSearchParams(sharedParams.toString());
+        params.set('account', account.key);
+        if (activeTab) params.set('tab', activeTab);
+        const isActive = account.key === selectedAccountKey;
+        return (
+          <Link
+            key={account.key}
+            href={`?${params.toString()}`}
+            scroll={false}
+            className={[
+              'rounded-[var(--radius-md)] px-3 py-1.5 text-xs font-medium transition-colors',
+              isActive
+                ? 'bg-[color:var(--color-accent)] text-white'
+                : 'text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]',
+            ].join(' ')}
+          >
+            {account.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+
   try {
     if (activeTab === 'post') {
       const [planSummaries, dashboard] = await Promise.all([
@@ -176,6 +215,7 @@ export default async function ThreadsHome({
         <ThreadsTabShell
           tabItems={tabItems}
           activeTab={activeTab}
+          accountSelector={accountSelector}
           rangeSelector={
             <InsightsRangeSelector
               options={rangeSelectorOptions}
@@ -219,18 +259,21 @@ export default async function ThreadsHome({
         postsQueryStartKey,
         postsQueryEndKey,
         null,
+        selectedAccountKey,
       ),
       // 日別集計クエリ（軽量）- チャート・概要用
       getCachedDailyPostStats(
         formatDateInput(rangeStartDate),
         formatDateInput(rangeEndDate),
+        selectedAccountKey,
       ),
       getCachedDailyPostStats(
         formatDateInput(previousRangeStart),
         formatDateInput(previousRangeEnd),
+        selectedAccountKey,
       ),
-      getCachedThreadsLpLineClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString()),
-      getCachedThreadsLpLineClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString()),
+      getCachedThreadsLpLineClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString(), selectedAccountKey),
+      getCachedThreadsLpLineClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString(), selectedAccountKey),
     ]);
 
     const lpLineClicksForRange = currentLpLineSeries.reduce((sum, entry) => sum + entry.clicks, 0);
@@ -269,12 +312,12 @@ export default async function ThreadsHome({
           getCachedCountLineSourceRegistrations(PROJECT_ID,
             rangeStartKey,
             rangeEndKey,
-            'Threads',
+            lineSourceNames,
           ),
           getCachedCountLineSourceRegistrations(PROJECT_ID,
             previousRangeStartKey,
             previousRangeEndKey,
-            'Threads',
+            lineSourceNames,
           ),
         ]);
         lineRegistrationCount = currentLineCount;
@@ -286,8 +329,8 @@ export default async function ThreadsHome({
       // Threadsリンククリック: 旧短縮URL(click_logs) + 新LK直URL(launchkit_events page_view) 合算
       try {
         const [currentLinkSeries, prevLinkSeries] = await Promise.all([
-          getCachedThreadsLinkClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString()),
-          getCachedThreadsLinkClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString()),
+          getCachedThreadsLinkClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString(), selectedAccountKey),
+          getCachedThreadsLinkClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString(), selectedAccountKey),
         ]);
         linkClicksForRange = currentLinkSeries.reduce((sum, p) => sum + p.clicks, 0);
         previousLinkClicks = prevLinkSeries.reduce((sum, p) => sum + p.clicks, 0);
@@ -301,7 +344,7 @@ export default async function ThreadsHome({
         lineRegistrationCount = await getCachedCountLineSourceRegistrations(PROJECT_ID,
           undefined,
           undefined,
-          'Threads',
+          lineSourceNames,
         );
       } catch (lineError) {
         console.error('[threads/page] Failed to load default LINE registrations:', lineError);
@@ -498,7 +541,7 @@ export default async function ThreadsHome({
       const lineRegistrationSeries = await getCachedListLineSourceRegistrations(PROJECT_ID,
         formatDateInput(chartWindowStart),
         formatDateInput(chartWindowEnd),
-        'Threads',
+        lineSourceNames,
       );
       lineRegistrationsByDate = lineRegistrationSeries.reduce<Record<string, number>>((acc, point) => {
         acc[point.date] = point.count;
@@ -511,7 +554,7 @@ export default async function ThreadsHome({
     // Threadsカテゴリのリンククリック数を日別で取得
     let linkClicksByDate: Record<string, number> = {};
     try {
-      const linkClicksSeries = await getCachedThreadsLinkClicksByRange(chartWindowStart.toISOString(), chartWindowEnd.toISOString());
+      const linkClicksSeries = await getCachedThreadsLinkClicksByRange(chartWindowStart.toISOString(), chartWindowEnd.toISOString(), selectedAccountKey);
       linkClicksByDate = linkClicksSeries.reduce<Record<string, number>>((acc, point) => {
         acc[point.date] = point.clicks;
         return acc;
@@ -576,6 +619,7 @@ export default async function ThreadsHome({
       <ThreadsTabShell
         tabItems={tabItems}
         activeTab={activeTab}
+        accountSelector={accountSelector}
         rangeSelector={
           <InsightsRangeSelector
             options={rangeSelectorOptions}
@@ -586,7 +630,7 @@ export default async function ThreadsHome({
         }
       >
         {activeTab === 'schedule' ? (
-          <ScheduleTab />
+          <ScheduleTab accountKey={selectedAccountKey} accountLabel={selectedAccount.label} isReadOnly={selectedAccountKey === 'all'} />
         ) : activeTab === 'insights' ? (
           <InsightsTab
             selectedRangeValue={rangeValueForUi}
@@ -597,6 +641,7 @@ export default async function ThreadsHome({
             performanceSeries={displayedPerformanceSeries}
             maxImpressions={maxImpressionsValue}
             maxFollowerDelta={maxFollowerDeltaValue}
+            accountKey={selectedAccountKey}
           />
         ) : activeTab === 'competitor' ? (
           <CompetitorTabLight

@@ -5,6 +5,8 @@ export type ScheduledPost = {
   scheduledAtJst: string;
   scheduledDate: string;
   status: string;
+  sourceAccountKey?: string | null;
+  targetAccountKey?: string | null;
   mainText: string;
   comment1: string;
   comment2: string;

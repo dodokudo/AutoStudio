@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getThreadsInsightsData } from '@/lib/threadsInsightsData';
+import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
 
 export const revalidate = 300;
 
@@ -8,8 +9,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get('startDate') ?? undefined;
     const endDate = searchParams.get('endDate') ?? undefined;
+    const accountKey = resolveThreadsAccountKey(searchParams.get('account'));
 
-    const data = await getThreadsInsightsData({ startDate, endDate, limit: null });
+    const data = await getThreadsInsightsData({ startDate, endDate, limit: null, accountKey });
 
     return NextResponse.json({
       posts: data.posts,

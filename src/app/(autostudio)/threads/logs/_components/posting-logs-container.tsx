@@ -1,12 +1,15 @@
 "use client";
 
 import useSWR from 'swr';
+import { useSearchParams } from 'next/navigation';
 import { PostingLogsList } from './posting-logs-list';
+import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
 
 interface PostingLog {
   log_id: string;
   plan_id: string;
   status: string;
+  target_account_key?: string;
   posted_thread_id?: string;
   error_message?: string;
   posted_at?: string;
@@ -31,7 +34,9 @@ const fetcher = async (url: string): Promise<LogsResponse> => {
 };
 
 export function PostingLogsContainer() {
-  const { data, error, isLoading } = useSWR<LogsResponse>('/api/threads/logs', fetcher, {
+  const searchParams = useSearchParams();
+  const accountKey = resolveThreadsAccountKey(searchParams.get('account'));
+  const { data, error, isLoading } = useSWR<LogsResponse>(`/api/threads/logs?account=${accountKey}`, fetcher, {
     revalidateOnFocus: false,
     refreshInterval: 30000, // 30秒ごとに更新
   });

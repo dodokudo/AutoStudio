@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { postThread } from '@/lib/threadsApi';
+import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
 
 interface PublishNowRequest {
   mainText: string;
@@ -11,6 +12,8 @@ interface PublishNowRequest {
   comment6?: string;
   comment7?: string;
   comment8?: string;
+  accountKey?: string;
+  targetAccountKey?: string;
 }
 
 function validateTextLength(text: string, fieldName: string): string | null {
@@ -27,6 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as PublishNowRequest;
     const { mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8 } = body;
+    const targetAccountKey = resolveThreadsAccountKey(body.targetAccountKey ?? body.accountKey);
 
     // バリデーション
     const mainError = validateTextLength(mainText, 'メイン投稿');
@@ -58,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // メイン投稿
     console.log('[threads/schedule/publish-now] Posting main thread...');
-    const mainThreadId = await postThread(mainText);
+    const mainThreadId = await postThread(mainText, undefined, undefined, targetAccountKey);
     console.log('[threads/schedule/publish-now] Main thread posted:', mainThreadId);
 
     const commentIds: Record<number, string | undefined> = {};
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
       if (!comment.text || !comment.text.trim()) continue;
       await new Promise((resolve) => setTimeout(resolve, 2000));
       console.log(`[threads/schedule/publish-now] Posting comment${comment.index}...`);
-      const id = await postThread(comment.text, replyToId);
+      const id = await postThread(comment.text, replyToId, undefined, targetAccountKey);
       console.log(`[threads/schedule/publish-now] Comment${comment.index} posted:`, id);
       commentIds[comment.index] = id;
       replyToId = id;

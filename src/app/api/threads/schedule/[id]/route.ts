@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteScheduledPost, getScheduledPostById, toJstIsoString, updateScheduledPost } from '@/lib/bigqueryScheduledPosts';
 import { normalizeTokutenGuideComment } from '@/lib/threadsText';
+import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
 
 function validateTextLength(label: string, value?: string) {
   if (!value) return null;
@@ -20,6 +21,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const payload = await request.json();
     const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, status, planId } = payload ?? {};
+    const targetAccountKey = payload?.targetAccountKey || payload?.accountKey
+      ? resolveThreadsAccountKey(payload?.targetAccountKey ?? payload?.accountKey)
+      : undefined;
+    const sourceAccountKey = payload?.sourceAccountKey
+      ? resolveThreadsAccountKey(payload.sourceAccountKey)
+      : undefined;
 
     const mainError = validateTextLength('メイン投稿', mainText);
     if (mainError) {
@@ -58,6 +65,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       planId: typeof planId === 'string' ? planId : undefined,
       scheduledTimeIso,
       status: typeof status === 'string' ? status : undefined,
+      sourceAccountKey,
+      targetAccountKey,
       mainText: typeof mainText === 'string' ? mainText : undefined,
       comment1: typeof comment1 === 'string' ? comment1 : undefined,
       comment2: typeof comment2 === 'string' ? comment2 : undefined,

@@ -1,8 +1,10 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
+import { getThreadsUserIdsForAccount, type ThreadsAccountKey } from './threadsAccounts';
 import type { ThreadInsights } from './threadsApi';
 
 const DATASET = 'autostudio_threads';
+const ANALYCA_DATASET = 'analyca';
 const PROJECT_ID = resolveProjectId();
 const POSTS_LIMIT = 200;
 const CACHE_TTL_MS = 1000 * 60 * 30;
@@ -55,6 +57,7 @@ export interface ThreadsInsightsDataOptions {
   endDate?: string;
   limit?: number | null;
   dailyMetricsLimit?: number | null;
+  accountKey?: ThreadsAccountKey;
 }
 
 function toPlain(value: unknown): string {
@@ -97,24 +100,30 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
     endDate: options.endDate ?? null,
     limit: options.limit ?? POSTS_LIMIT,
     dailyMetricsLimit: options.dailyMetricsLimit ?? 90,
+    accountKey: options.accountKey ?? null,
   });
   if (cachedActivity && now - cachedFetchedAt < CACHE_TTL_MS && cachedOptionKey === optionKey) {
     return cachedActivity;
   }
 
+  const accountUserIds = options.accountKey ? getThreadsUserIdsForAccount(options.accountKey) : [];
+  const useAnalycaSource = accountUserIds.length > 0;
+
   let posts: PostInsight[] = [];
   try {
-    const queryConditions: string[] = [
-      'post_id IS NOT NULL',
-      "post_id != ''",
-    ];
+    const queryConditions: string[] = useAnalycaSource
+      ? ['user_id IN UNNEST(@userIds)', 'threads_id IS NOT NULL', "threads_id != ''"]
+      : ['post_id IS NOT NULL', "post_id != ''"];
     const params: Record<string, unknown> = {};
+    if (useAnalycaSource) {
+      params.userIds = accountUserIds;
+    }
     if (options.startDate) {
-      queryConditions.push('DATE(posted_at) >= @startDate');
+      queryConditions.push(useAnalycaSource ? 'DATE(timestamp) >= @startDate' : 'DATE(posted_at) >= @startDate');
       params.startDate = options.startDate;
     }
     if (options.endDate) {
-      queryConditions.push('DATE(posted_at) <= @endDate');
+      queryConditions.push(useAnalycaSource ? 'DATE(timestamp) <= @endDate' : 'DATE(posted_at) <= @endDate');
       params.endDate = options.endDate;
     }
 
@@ -125,19 +134,36 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       params.limit = resolvedLimit;
     }
 
-    const query = `
-      SELECT
-        post_id,
-        posted_at,
-        updated_at,
-        content,
-        impressions_total,
-        likes_total
-      FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
-      WHERE ${queryConditions.join(' AND ')}
-      ORDER BY posted_at DESC NULLS LAST, updated_at DESC NULLS LAST
-      ${limitClause}
-    `;
+    const query = useAnalycaSource
+      ? `
+        SELECT
+          threads_id AS post_id,
+          timestamp AS posted_at,
+          updated_at,
+          text AS content,
+          views AS impressions_total,
+          likes AS likes_total,
+          replies AS replies_total,
+          reposts AS reposts_total,
+          quotes AS quotes_total
+        FROM \`${PROJECT_ID}.${ANALYCA_DATASET}.threads_posts\`
+        WHERE ${queryConditions.join(' AND ')}
+        ORDER BY timestamp DESC NULLS LAST, updated_at DESC NULLS LAST
+        ${limitClause}
+      `
+      : `
+        SELECT
+          post_id,
+          posted_at,
+          updated_at,
+          content,
+          impressions_total,
+          likes_total
+        FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
+        WHERE ${queryConditions.join(' AND ')}
+        ORDER BY posted_at DESC NULLS LAST, updated_at DESC NULLS LAST
+        ${limitClause}
+      `;
 
     const [rows] = await client.query({
       query,
@@ -169,6 +195,9 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
           insights: {
             impressions,
             likes,
+            replies: Number(row.replies_total ?? 0) || 0,
+            reposts: Number(row.reposts_total ?? 0) || 0,
+            quotes: Number(row.quotes_total ?? 0) || 0,
           },
         } satisfies PostInsight;
       })
@@ -178,10 +207,17 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
     console.error('[threadsInsightsData] Failed to read threads_posts', error);
   }
 
-  // コメントデータを取得して投稿に紐付ける
   try {
     const postIds = posts.map((p) => p.postedThreadId);
     if (postIds.length > 0) {
+      const commentConditions = useAnalycaSource
+        ? 'user_id IN UNNEST(@userIds) AND parent_post_id IN UNNEST(@postIds)'
+        : 'parent_post_id IN UNNEST(@postIds)';
+      const commentParams: Record<string, unknown> = { postIds };
+      if (useAnalycaSource) {
+        commentParams.userIds = accountUserIds;
+      }
+
       const [commentRows] = await client.query({
         query: `
           SELECT
@@ -191,14 +227,13 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
             timestamp,
             depth,
             views
-          FROM \`${PROJECT_ID}.${DATASET}.threads_comments\`
-          WHERE parent_post_id IN UNNEST(@postIds)
+          FROM \`${PROJECT_ID}.${useAnalycaSource ? ANALYCA_DATASET : DATASET}.threads_comments\`
+          WHERE ${commentConditions}
           ORDER BY parent_post_id, depth ASC
         `,
-        params: { postIds },
+        params: commentParams,
       });
 
-      // 投稿IDごとにコメントをグループ化
       const commentsByPostId = new Map<string, PostComment[]>();
       for (const row of commentRows as Record<string, unknown>[]) {
         const parentPostId = toPlain(row.parent_post_id);
@@ -219,7 +254,6 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
         commentsByPostId.get(parentPostId)!.push(comment);
       }
 
-      // 各投稿にコメントデータを紐付け
       for (const post of posts) {
         const postComments = commentsByPostId.get(post.postedThreadId) || [];
         post.commentData = postComments.sort(
@@ -228,20 +262,24 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       }
     }
   } catch (error) {
-    // threads_commentsテーブルが存在しない場合はスキップ
     console.warn('[threadsInsightsData] threads_comments table not found or query failed', error);
   }
 
   let dailyMetrics: DailyFollowerMetric[] = [];
   try {
-    const dailyMetricConditions = ['date IS NOT NULL'];
+    const dailyMetricConditions = useAnalycaSource
+      ? ['date IS NOT NULL', 'user_id IN UNNEST(@dailyMetricUserIds)']
+      : ['date IS NOT NULL'];
     const dailyMetricParams: Record<string, unknown> = {};
+    if (useAnalycaSource) {
+      dailyMetricParams.dailyMetricUserIds = accountUserIds;
+    }
     if (options.startDate) {
-      dailyMetricConditions.push('date >= @dailyMetricStartDate');
+      dailyMetricConditions.push(useAnalycaSource ? 'date >= @dailyMetricStartDate' : 'date >= @dailyMetricStartDate');
       dailyMetricParams.dailyMetricStartDate = options.startDate;
     }
     if (options.endDate) {
-      dailyMetricConditions.push('date <= @dailyMetricEndDate');
+      dailyMetricConditions.push(useAnalycaSource ? 'date <= @dailyMetricEndDate' : 'date <= @dailyMetricEndDate');
       dailyMetricParams.dailyMetricEndDate = options.endDate;
     }
     const shouldLimitDailyMetrics = options.dailyMetricsLimit !== null;
@@ -251,8 +289,18 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       dailyMetricParams.dailyMetricsLimit = resolvedDailyMetricsLimit;
     }
 
-    const [rows] = await client.query({
-      query: `
+    const dailyQuery = useAnalycaSource
+      ? `
+        SELECT
+          date,
+          SUM(COALESCE(followers_count, 0)) AS followers_snapshot
+        FROM \`${PROJECT_ID}.${ANALYCA_DATASET}.threads_daily_metrics\`
+        WHERE ${dailyMetricConditions.join(' AND ')}
+        GROUP BY date
+        ORDER BY date DESC
+        ${dailyMetricsLimitClause}
+      `
+      : `
         SELECT
           date,
           followers_snapshot
@@ -260,7 +308,10 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
         WHERE ${dailyMetricConditions.join(' AND ')}
         ORDER BY date DESC
         ${dailyMetricsLimitClause}
-      `,
+      `;
+
+    const [rows] = await client.query({
+      query: dailyQuery,
       params: dailyMetricParams,
     });
 
@@ -295,31 +346,47 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
  */
 export async function getDailyPostStats(options: ThreadsInsightsDataOptions = {}): Promise<DailyPostStats[]> {
   try {
-    const queryConditions: string[] = [
-      'post_id IS NOT NULL',
-      "post_id != ''",
-    ];
+    const accountUserIds = options.accountKey ? getThreadsUserIdsForAccount(options.accountKey) : [];
+    const useAnalycaSource = accountUserIds.length > 0;
+    const queryConditions: string[] = useAnalycaSource
+      ? ['threads_id IS NOT NULL', "threads_id != ''", 'user_id IN UNNEST(@userIds)']
+      : ['post_id IS NOT NULL', "post_id != ''"];
     const params: Record<string, unknown> = {};
+    if (useAnalycaSource) {
+      params.userIds = accountUserIds;
+    }
     if (options.startDate) {
-      queryConditions.push('DATE(posted_at) >= @startDate');
+      queryConditions.push(useAnalycaSource ? 'DATE(timestamp) >= @startDate' : 'DATE(posted_at) >= @startDate');
       params.startDate = options.startDate;
     }
     if (options.endDate) {
-      queryConditions.push('DATE(posted_at) <= @endDate');
+      queryConditions.push(useAnalycaSource ? 'DATE(timestamp) <= @endDate' : 'DATE(posted_at) <= @endDate');
       params.endDate = options.endDate;
     }
 
-    const query = `
-      SELECT
-        DATE(posted_at) as date,
-        COUNT(*) as post_count,
-        SUM(COALESCE(impressions_total, 0)) as impressions,
-        SUM(COALESCE(likes_total, 0)) as likes
-      FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
-      WHERE ${queryConditions.join(' AND ')}
-      GROUP BY DATE(posted_at)
-      ORDER BY date DESC
-    `;
+    const query = useAnalycaSource
+      ? `
+        SELECT
+          DATE(timestamp) as date,
+          COUNT(*) as post_count,
+          SUM(COALESCE(views, 0)) as impressions,
+          SUM(COALESCE(likes, 0)) as likes
+        FROM \`${PROJECT_ID}.${ANALYCA_DATASET}.threads_posts\`
+        WHERE ${queryConditions.join(' AND ')}
+        GROUP BY DATE(timestamp)
+        ORDER BY date DESC
+      `
+      : `
+        SELECT
+          DATE(posted_at) as date,
+          COUNT(*) as post_count,
+          SUM(COALESCE(impressions_total, 0)) as impressions,
+          SUM(COALESCE(likes_total, 0)) as likes
+        FROM \`${PROJECT_ID}.${DATASET}.threads_posts\`
+        WHERE ${queryConditions.join(' AND ')}
+        GROUP BY DATE(posted_at)
+        ORDER BY date DESC
+      `;
 
     const [rows] = await client.query({
       query,

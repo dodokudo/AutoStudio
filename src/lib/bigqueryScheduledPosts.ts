@@ -1,5 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
+import type { ThreadsAccountKey } from './threadsAccounts';
 
 const DATASET = 'autostudio_threads';
 const PROJECT_ID = resolveProjectId();
@@ -13,6 +14,8 @@ const SCHEDULE_TABLE_SCHEMA = [
   { name: 'plan_id', type: 'STRING' },
   { name: 'scheduled_time', type: 'TIMESTAMP' },
   { name: 'status', type: 'STRING' },
+  { name: 'source_account_key', type: 'STRING' },
+  { name: 'target_account_key', type: 'STRING' },
   { name: 'main_text', type: 'STRING' },
   { name: 'comment1', type: 'STRING' },
   { name: 'comment2', type: 'STRING' },
@@ -55,6 +58,18 @@ export async function ensureScheduledPostsTable() {
       }
     }
   }
+  await client.query({
+    query: `
+      ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
+      ADD COLUMN IF NOT EXISTS source_account_key STRING
+    `,
+  });
+  await client.query({
+    query: `
+      ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
+      ADD COLUMN IF NOT EXISTS target_account_key STRING
+    `,
+  });
 }
 
 function toPlain(value: unknown): string {
@@ -75,6 +90,8 @@ export type ScheduledPostRow = {
   scheduled_at_jst: string;
   scheduled_date: string;
   status: string;
+  source_account_key?: ThreadsAccountKey | null;
+  target_account_key?: ThreadsAccountKey | null;
   main_text: string;
   comment1: string;
   comment2: string;
@@ -105,7 +122,7 @@ type ScheduleMatchOptions = {
   matchScheduledTimeIso?: string | null;
 };
 
-export async function listScheduledPosts(params: { startDate?: string; endDate?: string }) {
+export async function listScheduledPosts(params: { startDate?: string; endDate?: string; accountKey?: ThreadsAccountKey }) {
   await ensureScheduledPostsTable();
   const conditions: string[] = [];
   const queryParams: Record<string, unknown> = {};
@@ -120,6 +137,11 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     queryParams.endDate = params.endDate;
   }
 
+  if (params.accountKey && params.accountKey !== 'all') {
+    conditions.push("COALESCE(sp.target_account_key, 'main') = @accountKey");
+    queryParams.accountKey = params.accountKey;
+  }
+
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const sql = `
@@ -128,6 +150,8 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
       sp.plan_id,
       sp.scheduled_time,
       sp.status,
+      sp.source_account_key,
+      sp.target_account_key,
       sp.main_text,
       sp.comment1,
       sp.comment2,
@@ -172,6 +196,8 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     scheduled_at_jst: toPlain(row.scheduled_at_jst),
     scheduled_date: toPlain(row.scheduled_date),
     status: toPlain(row.status) || 'scheduled',
+    source_account_key: (toPlain(row.source_account_key) || null) as ThreadsAccountKey | null,
+    target_account_key: (toPlain(row.target_account_key) || null) as ThreadsAccountKey | null,
     main_text: toPlain(row.main_text),
     comment1: toPlain(row.comment1),
     comment2: toPlain(row.comment2),
@@ -208,6 +234,8 @@ export async function getScheduledPostById(scheduleId: string, options: Schedule
       sp.plan_id,
       sp.scheduled_time,
       sp.status,
+      sp.source_account_key,
+      sp.target_account_key,
       sp.main_text,
       sp.comment1,
       sp.comment2,
@@ -257,6 +285,8 @@ export async function getScheduledPostById(scheduleId: string, options: Schedule
     scheduled_at_jst: toPlain(row.scheduled_at_jst),
     scheduled_date: toPlain(row.scheduled_date),
     status: toPlain(row.status) || 'scheduled',
+    source_account_key: (toPlain(row.source_account_key) || null) as ThreadsAccountKey | null,
+    target_account_key: (toPlain(row.target_account_key) || null) as ThreadsAccountKey | null,
     main_text: toPlain(row.main_text),
     comment1: toPlain(row.comment1),
     comment2: toPlain(row.comment2),
@@ -289,6 +319,8 @@ export async function insertScheduledPost(params: {
   planId?: string | null;
   scheduledTimeIso: string;
   status: string;
+  sourceAccountKey?: ThreadsAccountKey | null;
+  targetAccountKey?: ThreadsAccountKey | null;
   mainText: string;
   comment1: string;
   comment2: string;
@@ -302,8 +334,8 @@ export async function insertScheduledPost(params: {
   await ensureScheduledPostsTable();
   const sql = `
     INSERT INTO \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-    (schedule_id, plan_id, scheduled_time, status, main_text, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, created_at, updated_at)
-    VALUES (@scheduleId, @planId, @scheduledTime, @status, @mainText, @comment1, @comment2, @comment3, @comment4, @comment5, @comment6, @comment7, @comment8, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+    (schedule_id, plan_id, scheduled_time, status, source_account_key, target_account_key, main_text, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, created_at, updated_at)
+    VALUES (@scheduleId, @planId, @scheduledTime, @status, @sourceAccountKey, @targetAccountKey, @mainText, @comment1, @comment2, @comment3, @comment4, @comment5, @comment6, @comment7, @comment8, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
   `;
   await client.query({
     query: sql,
@@ -312,6 +344,8 @@ export async function insertScheduledPost(params: {
       planId: params.planId ?? null,
       scheduledTime: new Date(params.scheduledTimeIso),
       status: params.status,
+      sourceAccountKey: params.sourceAccountKey ?? params.targetAccountKey ?? 'main',
+      targetAccountKey: params.targetAccountKey ?? 'main',
       mainText: params.mainText,
       comment1: params.comment1,
       comment2: params.comment2,
@@ -324,6 +358,8 @@ export async function insertScheduledPost(params: {
     },
     types: {
       planId: 'STRING',
+      sourceAccountKey: 'STRING',
+      targetAccountKey: 'STRING',
     },
   });
   return getScheduledPostById(params.scheduleId);
@@ -335,6 +371,8 @@ export async function updateScheduledPost(
     planId?: string | null;
     scheduledTimeIso?: string | null;
     status?: string | null;
+    sourceAccountKey?: ThreadsAccountKey | null;
+    targetAccountKey?: ThreadsAccountKey | null;
     mainText?: string | null;
     comment1?: string | null;
     comment2?: string | null;
@@ -379,6 +417,16 @@ export async function updateScheduledPost(
     setClauses.push('status = @status');
     queryParams.status = params.status;
     types.status = 'STRING';
+  }
+  if (params.sourceAccountKey !== undefined) {
+    setClauses.push('source_account_key = @sourceAccountKey');
+    queryParams.sourceAccountKey = params.sourceAccountKey;
+    types.sourceAccountKey = 'STRING';
+  }
+  if (params.targetAccountKey !== undefined) {
+    setClauses.push('target_account_key = @targetAccountKey');
+    queryParams.targetAccountKey = params.targetAccountKey;
+    types.targetAccountKey = 'STRING';
   }
   if (params.mainText !== undefined) {
     setClauses.push('main_text = @mainText');

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { postThread } from '@/lib/threadsApi';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { resolveThreadsAccountKey, type ThreadsAccountKey } from '@/lib/threadsAccounts';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
@@ -11,6 +12,7 @@ const LOG_TABLE_SCHEMA = [
   { name: 'log_id', type: 'STRING' },
   { name: 'job_id', type: 'STRING' },
   { name: 'plan_id', type: 'STRING' },
+  { name: 'target_account_key', type: 'STRING' },
   { name: 'status', type: 'STRING' },
   { name: 'posted_thread_id', type: 'STRING' },
   { name: 'error_message', type: 'STRING' },
@@ -23,6 +25,7 @@ const COMMENT_SCHEDULE_SCHEMA = [
   { name: 'schedule_id', type: 'STRING' },
   { name: 'plan_id', type: 'STRING' },
   { name: 'parent_thread_id', type: 'STRING' },
+  { name: 'target_account_key', type: 'STRING' },
   { name: 'comment_order', type: 'INTEGER' },
   { name: 'comment_text', type: 'STRING' },
   { name: 'scheduled_time', type: 'TIMESTAMP' },
@@ -68,6 +71,12 @@ async function ensureLogTable() {
       }
     }
   }
+  await client.query({
+    query: `
+      ALTER TABLE \`${PROJECT_ID}.${DATASET}.${LOG_TABLE}\`
+      ADD COLUMN IF NOT EXISTS target_account_key STRING
+    `,
+  });
 }
 
 async function ensureCommentScheduleTable() {
@@ -85,10 +94,18 @@ async function ensureCommentScheduleTable() {
       }
     }
   }
+  await client.query({
+    query: `
+      ALTER TABLE \`${PROJECT_ID}.${DATASET}.${COMMENT_SCHEDULE_TABLE}\`
+      ADD COLUMN IF NOT EXISTS target_account_key STRING
+    `,
+  });
 }
 
 interface PublishRequest {
   plan_id: string;
+  accountKey?: string;
+  targetAccountKey?: string;
 }
 
 function validateTextLength(mainText?: string, comments?: { text: string }[]): string | null {
@@ -107,7 +124,12 @@ function validateTextLength(mainText?: string, comments?: { text: string }[]): s
   return null;
 }
 
-async function scheduleComments(planId: string, mainThreadId: string, comments: { order: number; text: string }[]) {
+async function scheduleComments(
+  planId: string,
+  mainThreadId: string,
+  comments: { order: number; text: string }[],
+  accountKey: ThreadsAccountKey,
+) {
   for (let i = 0; i < comments.length; i++) {
     const comment = comments[i];
     const delayMinutes = (i + 1) * 2; // 2分, 4分, 6分...の間隔
@@ -119,8 +141,8 @@ async function scheduleComments(planId: string, mainThreadId: string, comments: 
 
     const insertScheduleQuery = `
       INSERT INTO \`${PROJECT_ID}.${DATASET}.comment_schedules\`
-      (schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status, created_at)
-      VALUES (@schedule_id, @plan_id, @parent_thread_id, @comment_order, @comment_text, @scheduled_time, @status, CURRENT_TIMESTAMP())
+      (schedule_id, plan_id, parent_thread_id, target_account_key, comment_order, comment_text, scheduled_time, status, created_at)
+      VALUES (@schedule_id, @plan_id, @parent_thread_id, @target_account_key, @comment_order, @comment_text, @scheduled_time, @status, CURRENT_TIMESTAMP())
     `;
 
     await client.query({
@@ -129,6 +151,7 @@ async function scheduleComments(planId: string, mainThreadId: string, comments: 
         schedule_id: scheduleId,
         plan_id: planId,
         parent_thread_id: mainThreadId,
+        target_account_key: accountKey,
         comment_order: comment.order,
         comment_text: comment.text,
         scheduled_time: scheduledTime.toISOString(),
@@ -144,6 +167,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as PublishRequest;
     const { plan_id } = body;
+    const targetAccountKey = resolveThreadsAccountKey(body.targetAccountKey ?? body.accountKey);
 
     if (!plan_id) {
       return NextResponse.json({ error: 'plan_id is required' }, { status: 400 });
@@ -199,22 +223,22 @@ export async function POST(request: NextRequest) {
     console.log(`[threads/publish] Posting main thread...`);
     const { textWithoutUrl, url } = extractUrlFromText(plan.main_text);
     console.log(`[threads/publish] Text: "${textWithoutUrl.substring(0, 50)}...", URL: ${url || 'none'}`);
-    const mainThreadId = await postThread(textWithoutUrl, undefined, url);
+    const mainThreadId = await postThread(textWithoutUrl, undefined, url, targetAccountKey);
     console.log(`[threads/publish] Main thread posted with ID: ${mainThreadId}`);
 
     // Schedule comments for delayed posting
     const commentResults: { order: number; thread_id: string }[] = [];
     if (comments.length > 0) {
       console.log(`[threads/publish] Scheduling ${comments.length} comments for delayed posting...`);
-      await scheduleComments(plan_id, mainThreadId, comments);
+      await scheduleComments(plan_id, mainThreadId, comments, targetAccountKey);
     }
 
     // Create log entry
     const logId = `log-${plan_id}-${Date.now()}`;
     const insertLogQuery = `
       INSERT INTO \`${PROJECT_ID}.${DATASET}.${LOG_TABLE}\`
-      (log_id, plan_id, status, posted_thread_id, posted_at, created_at)
-      VALUES (@log_id, @plan_id, @status, @posted_thread_id, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+      (log_id, plan_id, target_account_key, status, posted_thread_id, posted_at, created_at)
+      VALUES (@log_id, @plan_id, @target_account_key, @status, @posted_thread_id, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
     `;
 
     await client.query({
@@ -222,6 +246,7 @@ export async function POST(request: NextRequest) {
       params: {
         log_id: logId,
         plan_id: plan_id,
+        target_account_key: targetAccountKey,
         status: 'success',
         posted_thread_id: mainThreadId
       }
@@ -248,8 +273,8 @@ export async function POST(request: NextRequest) {
         const logId = `log-${body.plan_id}-${Date.now()}-error`;
         const insertErrorLogQuery = `
           INSERT INTO \`${PROJECT_ID}.${DATASET}.${LOG_TABLE}\`
-          (log_id, plan_id, status, error_message, created_at)
-          VALUES (@log_id, @plan_id, @status, @error_message, CURRENT_TIMESTAMP())
+          (log_id, plan_id, target_account_key, status, error_message, created_at)
+          VALUES (@log_id, @plan_id, @target_account_key, @status, @error_message, CURRENT_TIMESTAMP())
         `;
 
         await client.query({
@@ -257,6 +282,7 @@ export async function POST(request: NextRequest) {
           params: {
             log_id: logId,
             plan_id: body.plan_id,
+            target_account_key: resolveThreadsAccountKey(body.targetAccountKey ?? body.accountKey),
             status: 'failed',
             error_message: (error as Error).message
           }

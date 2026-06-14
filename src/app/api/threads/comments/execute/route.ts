@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { postThread } from '@/lib/threadsApi';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
@@ -35,9 +36,16 @@ export async function POST() {
 
     const client = createBigQueryClient(PROJECT_ID);
 
+    await client.query({
+      query: `
+        ALTER TABLE \`${PROJECT_ID}.${DATASET}.comment_schedules\`
+        ADD COLUMN IF NOT EXISTS target_account_key STRING
+      `,
+    });
+
     // 実行予定時刻を過ぎた未実行のコメントを取得（リトライ上限あり）
     const getPendingCommentsQuery = `
-      SELECT schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status, IFNULL(retry_count, 0) as retry_count
+      SELECT schedule_id, plan_id, parent_thread_id, target_account_key, comment_order, comment_text, scheduled_time, status, IFNULL(retry_count, 0) as retry_count
       FROM \`${PROJECT_ID}.${DATASET}.comment_schedules\`
       WHERE (status = 'pending' OR (status = 'failed' AND TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), scheduled_time, MINUTE) >= 1))
         AND scheduled_time <= CURRENT_TIMESTAMP()
@@ -82,7 +90,8 @@ export async function POST() {
         // URLはテキストに含めたまま投稿（link_attachmentはコメントでは表示されないため使わない）
         console.log(`[threads/comments/execute] Text: "${comment.comment_text}"`);
 
-        const commentThreadId = await postThread(comment.comment_text, replyToId);
+        const accountKey = resolveThreadsAccountKey(comment.target_account_key ?? 'main');
+        const commentThreadId = await postThread(comment.comment_text, replyToId, undefined, accountKey);
 
         console.log(`[threads/comments/execute] Comment ${comment.comment_order} posted with ID: ${commentThreadId}`);
 
