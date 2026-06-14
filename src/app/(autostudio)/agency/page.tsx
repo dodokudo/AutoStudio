@@ -18,7 +18,7 @@ export default async function AgencyPage() {
       <div>
         <h1 className="text-2xl font-bold text-[color:var(--color-text-primary)]">代理店</h1>
         <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">
-          2026-06-14以降にLINE登録した友だちの、流入元（友だち情報）別の登録数・購入数
+          2026-06-14以降にLINE登録した友だちの、流入元（友だち情報）別の登録数・アンケート回答・セミナー申し込み・購入
           {stats?.updatedAt ? ` ｜ データ更新日: ${stats.updatedAt}` : ''}
         </p>
       </div>
@@ -42,9 +42,9 @@ export default async function AgencyPage() {
                     <th className="px-4 py-3">順位</th>
                     <th className="px-4 py-3">流入元</th>
                     <th className="px-4 py-3 text-right">登録数</th>
-                    <th className="px-4 py-3 text-right">FE購入</th>
-                    <th className="px-4 py-3 text-right">BE購入</th>
-                    <th className="px-4 py-3 text-right">成約</th>
+                    <th className="px-4 py-3 text-right">アンケート回答</th>
+                    <th className="px-4 py-3 text-right">セミナー申し込み</th>
+                    <th className="px-4 py-3 text-right">購入</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -53,9 +53,9 @@ export default async function AgencyPage() {
                       <td className="px-4 py-3 font-semibold">{index + 1}</td>
                       <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">{row.agency}</td>
                       <td className="px-4 py-3 text-right">{row.registrations}</td>
-                      <td className="px-4 py-3 text-right">{row.fePurchases}</td>
-                      <td className="px-4 py-3 text-right">{row.bePurchases}</td>
-                      <td className="px-4 py-3 text-right">{row.contracts}</td>
+                      <td className="px-4 py-3 text-right">{row.surveyResponses}</td>
+                      <td className="px-4 py-3 text-right">{row.seminarApplications}</td>
+                      <td className="px-4 py-3 text-right">{row.purchases}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -72,9 +72,9 @@ export default async function AgencyPage() {
                     <th className="px-4 py-3">登録日</th>
                     <th className="px-4 py-3">流入元</th>
                     <th className="px-4 py-3 text-right">登録数</th>
-                    <th className="px-4 py-3 text-right">FE購入</th>
-                    <th className="px-4 py-3 text-right">BE購入</th>
-                    <th className="px-4 py-3 text-right">成約</th>
+                    <th className="px-4 py-3 text-right">アンケート回答</th>
+                    <th className="px-4 py-3 text-right">セミナー申し込み</th>
+                    <th className="px-4 py-3 text-right">購入</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -83,9 +83,9 @@ export default async function AgencyPage() {
                       <td className="px-4 py-3">{row.date ?? '不明'}</td>
                       <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">{row.agency}</td>
                       <td className="px-4 py-3 text-right">{row.registrations}</td>
-                      <td className="px-4 py-3 text-right">{row.fePurchases}</td>
-                      <td className="px-4 py-3 text-right">{row.bePurchases}</td>
-                      <td className="px-4 py-3 text-right">{row.contracts}</td>
+                      <td className="px-4 py-3 text-right">{row.surveyResponses}</td>
+                      <td className="px-4 py-3 text-right">{row.seminarApplications}</td>
+                      <td className="px-4 py-3 text-right">{row.purchases}</td>
                     </tr>
                   ))}
                 </tbody>

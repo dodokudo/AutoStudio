@@ -2,27 +2,27 @@ import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
 
 const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 
-// 購入・成約の判定タグ（user_tags.tag_name の実値）
-const FE_TAG = '3M:FE購入';
-const BE_TAG = '3M:BE購入';
-const CONTRACT_TAGS = ['TH：成約', 'TAI：成約', 'TAI2:購入'];
+// 通常アンケートの回答完了タグ。現行取込では user_surveys.question = '回答完了' にも入る。
+const SURVEY_RESPONSE_TAG_NAMES = ['アンケート：回答完了'];
+const SURVEY_RESPONSE_TAG_IDS = ['8087272', 'タグ_8087272'];
+const SURVEY_COMPLETED_QUESTION = '回答完了';
 const AGENCY_START_DATE = '2026-06-14';
 
 export interface AgencyDailyRow {
   date: string | null;
   agency: string;
   registrations: number;
-  fePurchases: number;
-  bePurchases: number;
-  contracts: number;
+  surveyResponses: number;
+  seminarApplications: number;
+  purchases: number;
 }
 
 export interface AgencySummary {
   agency: string;
   registrations: number;
-  fePurchases: number;
-  bePurchases: number;
-  contracts: number;
+  surveyResponses: number;
+  seminarApplications: number;
+  purchases: number;
 }
 
 export interface AgencyStats {
@@ -36,9 +36,9 @@ interface RawRow {
   reg_date: { value: string } | string | null;
   agency: string;
   registrations: number;
-  fe_purchases: number;
-  be_purchases: number;
-  contracts: number;
+  survey_responses: number;
+  seminar_applications: number;
+  purchases: number;
 }
 
 function toDateString(value: RawRow['reg_date']): string | null {
@@ -63,6 +63,9 @@ export async function getAgencyStats(): Promise<AgencyStats> {
       tags_latest AS (
         SELECT MAX(snapshot_date) AS sd FROM ${table('user_tags')}
       ),
+      surveys_latest AS (
+        SELECT MAX(snapshot_date) AS sd FROM ${table('user_surveys')}
+      ),
       agency_users AS (
         SELECT DISTINCT i.user_id, i.field_value AS agency
         FROM ${table('user_info')} i, info_latest
@@ -78,37 +81,43 @@ export async function getAgencyStats(): Promise<AgencyStats> {
         WHERE c.snapshot_date = core_latest.sd
         GROUP BY c.user_id
       ),
-      purchases AS (
-        SELECT
-          t.user_id,
-          MAX(IF(t.tag_name = @feTag AND t.tag_flag = 1, 1, 0)) AS fe,
-          MAX(IF(t.tag_name = @beTag AND t.tag_flag = 1, 1, 0)) AS be,
-          MAX(IF(t.tag_name IN UNNEST(@contractTags) AND t.tag_flag = 1, 1, 0)) AS contracted
-        FROM ${table('user_tags')} t, tags_latest
-        WHERE t.snapshot_date = tags_latest.sd
-          AND t.tag_name IN UNNEST(@allTags)
-        GROUP BY t.user_id
+      survey_responses AS (
+        SELECT DISTINCT user_id
+        FROM (
+          SELECT t.user_id
+          FROM ${table('user_tags')} t, tags_latest
+          WHERE t.snapshot_date = tags_latest.sd
+            AND (t.tag_name IN UNNEST(@surveyResponseTagNames) OR t.tag_id IN UNNEST(@surveyResponseTagIds))
+            AND t.tag_flag = 1
+
+          UNION DISTINCT
+
+          SELECT s.user_id
+          FROM ${table('user_surveys')} s, surveys_latest
+          WHERE s.snapshot_date = surveys_latest.sd
+            AND s.question = @surveyCompletedQuestion
+            AND s.answer_flag = 1
+        )
       )
       SELECT
         (SELECT sd FROM info_latest) AS snapshot_date,
         a.agency,
         c.reg_date,
         COUNT(*) AS registrations,
-        SUM(COALESCE(p.fe, 0)) AS fe_purchases,
-        SUM(COALESCE(p.be, 0)) AS be_purchases,
-        SUM(COALESCE(p.contracted, 0)) AS contracts
+        COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
+        0 AS seminar_applications,
+        0 AS purchases
       FROM agency_users a
       LEFT JOIN core c USING (user_id)
-      LEFT JOIN purchases p USING (user_id)
+      LEFT JOIN survey_responses sr USING (user_id)
       WHERE c.reg_date >= DATE(@agencyStartDate)
       GROUP BY a.agency, c.reg_date
       ORDER BY c.reg_date DESC
     `,
     params: {
-      feTag: FE_TAG,
-      beTag: BE_TAG,
-      contractTags: CONTRACT_TAGS,
-      allTags: [FE_TAG, BE_TAG, ...CONTRACT_TAGS],
+      surveyResponseTagNames: SURVEY_RESPONSE_TAG_NAMES,
+      surveyResponseTagIds: SURVEY_RESPONSE_TAG_IDS,
+      surveyCompletedQuestion: SURVEY_COMPLETED_QUESTION,
       agencyStartDate: AGENCY_START_DATE,
     },
   });
@@ -119,9 +128,9 @@ export async function getAgencyStats(): Promise<AgencyStats> {
     date: toDateString(row.reg_date),
     agency: row.agency,
     registrations: Number(row.registrations ?? 0),
-    fePurchases: Number(row.fe_purchases ?? 0),
-    bePurchases: Number(row.be_purchases ?? 0),
-    contracts: Number(row.contracts ?? 0),
+    surveyResponses: Number(row.survey_responses ?? 0),
+    seminarApplications: Number(row.seminar_applications ?? 0),
+    purchases: Number(row.purchases ?? 0),
   }));
 
   const summaryMap = new Map<string, AgencySummary>();
@@ -129,19 +138,19 @@ export async function getAgencyStats(): Promise<AgencyStats> {
     const entry = summaryMap.get(row.agency) ?? {
       agency: row.agency,
       registrations: 0,
-      fePurchases: 0,
-      bePurchases: 0,
-      contracts: 0,
+      surveyResponses: 0,
+      seminarApplications: 0,
+      purchases: 0,
     };
     entry.registrations += row.registrations;
-    entry.fePurchases += row.fePurchases;
-    entry.bePurchases += row.bePurchases;
-    entry.contracts += row.contracts;
+    entry.surveyResponses += row.surveyResponses;
+    entry.seminarApplications += row.seminarApplications;
+    entry.purchases += row.purchases;
     summaryMap.set(row.agency, entry);
   }
 
   const summary = Array.from(summaryMap.values()).sort(
-    (a, b) => b.registrations - a.registrations || b.fePurchases - a.fePurchases,
+    (a, b) => b.registrations - a.registrations || b.surveyResponses - a.surveyResponses,
   );
 
   const updatedAt = rawRows.length > 0 ? toDateString(rawRows[0].snapshot_date) : null;
