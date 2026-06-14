@@ -6,6 +6,7 @@ const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 const FE_TAG = '3M:FE購入';
 const BE_TAG = '3M:BE購入';
 const CONTRACT_TAGS = ['TH：成約', 'TAI：成約', 'TAI2:購入'];
+const AGENCY_START_DATE = '2026-06-14';
 
 export interface AgencyDailyRow {
   date: string | null;
@@ -99,6 +100,7 @@ export async function getAgencyStats(): Promise<AgencyStats> {
       FROM agency_users a
       LEFT JOIN core c USING (user_id)
       LEFT JOIN purchases p USING (user_id)
+      WHERE c.reg_date >= DATE(@agencyStartDate)
       GROUP BY a.agency, c.reg_date
       ORDER BY c.reg_date DESC
     `,
@@ -107,6 +109,7 @@ export async function getAgencyStats(): Promise<AgencyStats> {
       beTag: BE_TAG,
       contractTags: CONTRACT_TAGS,
       allTags: [FE_TAG, BE_TAG, ...CONTRACT_TAGS],
+      agencyStartDate: AGENCY_START_DATE,
     },
   });
 

@@ -18,7 +18,7 @@ export default async function AgencyPage() {
       <div>
         <h1 className="text-2xl font-bold text-[color:var(--color-text-primary)]">代理店</h1>
         <p className="mt-2 text-sm text-[color:var(--color-text-secondary)]">
-          流入元（友だち情報）別の登録数・購入数
+          2026-06-14以降にLINE登録した友だちの、流入元（友だち情報）別の登録数・購入数
           {stats?.updatedAt ? ` ｜ データ更新日: ${stats.updatedAt}` : ''}
         </p>
       </div>
