@@ -1,5 +1,6 @@
 import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { getThreadsInsights, type ThreadsInsightsOptions } from "@/lib/threadsInsights";
 import { getLightweightInsights } from "@/lib/threadsAccountSummary";
 import { listPlanSummaries } from "@/lib/bigqueryPlans";
@@ -204,6 +205,24 @@ export default async function ThreadsHome({
     </div>
   );
 
+  const renderTabShell = (children: ReactNode) => (
+    <ThreadsTabShell
+      tabItems={tabItems}
+      activeTab={activeTab}
+      accountSelector={accountSelector}
+      rangeSelector={
+        <InsightsRangeSelector
+          options={rangeSelectorOptions}
+          value={rangeValueForUi}
+          customStart={customStart}
+          customEnd={customEnd}
+        />
+      }
+    >
+      {children}
+    </ThreadsTabShell>
+  );
+
   try {
     if (activeTab === 'post') {
       const [planSummaries, dashboard] = await Promise.all([
@@ -211,26 +230,31 @@ export default async function ThreadsHome({
         getCachedThreadsDashboard(),
       ]);
 
-      return (
-        <ThreadsTabShell
-          tabItems={tabItems}
-          activeTab={activeTab}
-          accountSelector={accountSelector}
-          rangeSelector={
-            <InsightsRangeSelector
-              options={rangeSelectorOptions}
-              value={rangeValueForUi}
-              customStart={customStart}
-              customEnd={customEnd}
-            />
-          }
-        >
+      return renderTabShell(
           <PostTab
             planSummaries={planSummaries}
             recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
-          />
-        </ThreadsTabShell>
+          />,
       );
+    }
+
+    if (activeTab === 'schedule') {
+      return renderTabShell(
+        <ScheduleTab accountKey={selectedAccountKey} accountLabel={selectedAccount.label} isReadOnly={selectedAccountKey === 'all'} />,
+      );
+    }
+
+    if (activeTab === 'competitor') {
+      return renderTabShell(
+        <CompetitorTabLight
+          startDate={formatDateInput(resolvedRange.start)}
+          endDate={formatDateInput(resolvedRange.end)}
+        />,
+      );
+    }
+
+    if (activeTab === 'report') {
+      return renderTabShell(<ReportTab />);
     }
 
     const { start: rangeStartDate, end: rangeEndDate } = selectedRangeWindow;
@@ -616,22 +640,7 @@ export default async function ThreadsHome({
     );
 
     return (
-      <ThreadsTabShell
-        tabItems={tabItems}
-        activeTab={activeTab}
-        accountSelector={accountSelector}
-        rangeSelector={
-          <InsightsRangeSelector
-            options={rangeSelectorOptions}
-            value={rangeValueForUi}
-            customStart={customStart}
-            customEnd={customEnd}
-          />
-        }
-      >
-        {activeTab === 'schedule' ? (
-          <ScheduleTab accountKey={selectedAccountKey} accountLabel={selectedAccount.label} isReadOnly={selectedAccountKey === 'all'} />
-        ) : activeTab === 'insights' ? (
+      renderTabShell(
           <InsightsTab
             selectedRangeValue={rangeValueForUi}
             customStart={customStart}
@@ -642,16 +651,8 @@ export default async function ThreadsHome({
             maxImpressions={maxImpressionsValue}
             maxFollowerDelta={maxFollowerDeltaValue}
             accountKey={selectedAccountKey}
-          />
-        ) : activeTab === 'competitor' ? (
-          <CompetitorTabLight
-            startDate={formatDateInput(resolvedRange.start)}
-            endDate={formatDateInput(resolvedRange.end)}
-          />
-        ) : (
-          <ReportTab />
-        )}
-      </ThreadsTabShell>
+          />,
+      )
     );
   } catch (error) {
     console.error('[threads/page] Error occurred:', error);
