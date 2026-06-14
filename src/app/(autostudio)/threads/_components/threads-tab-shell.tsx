@@ -35,7 +35,7 @@ export function ThreadsTabShell({ tabItems, activeTab, accountSelector, rangeSel
   );
 
   return (
-    <div className="threads-fluid-page section-stack min-w-0">
+    <div className="section-stack min-w-0">
       <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <nav className="-mx-1 flex min-w-0 max-w-full gap-1 overflow-x-auto px-1 pb-1 scrollbar-hide xl:flex-wrap xl:items-end xl:overflow-visible xl:pb-0">
           {tabLinks.map((item) => {

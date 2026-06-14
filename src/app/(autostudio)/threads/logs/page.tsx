@@ -2,7 +2,7 @@ import { PostingLogsContainer } from './_components/posting-logs-container';
 
 export default function ThreadsLogsPage() {
   return (
-    <div className="container max-w-7xl space-y-8 py-6">
+    <div className="w-full min-w-0 space-y-8 py-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold tracking-tight">投稿ログ</h1>
         <p className="text-muted-foreground">

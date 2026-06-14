@@ -84,17 +84,13 @@ a:focus-visible {
 
   .page-container {
     margin: 0 auto;
-    width: min(1200px, 100%);
+    width: min(1680px, 100%);
     padding: 0 clamp(1rem, 2vw, 2.5rem);
     max-width: 100%;
     overflow-x: clip;
   }
 
   .page-container:has(.launch-detail-wide) {
-    width: min(1400px, 100%);
-  }
-
-  .page-container:has(.threads-fluid-page) {
     width: min(1680px, 100%);
   }
 

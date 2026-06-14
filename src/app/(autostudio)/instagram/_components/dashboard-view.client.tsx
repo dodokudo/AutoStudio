@@ -732,7 +732,7 @@ export function InstagramDashboardView({ data }: Props) {
   }
 
   return (
-    <div className="section-stack mx-auto max-w-6xl pb-12" style={{ gap: '20px' }}>
+    <div className="section-stack w-full min-w-0 pb-12" style={{ gap: '20px' }}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <DashboardTabsInteractive
           items={tabItems.map((tab) => ({ id: tab.value, label: tab.label }))}
