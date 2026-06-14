@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { postThread } from '@/lib/threadsApi';
 import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
+import {
+  MAX_COMMENT_MEDIA_ITEMS,
+  MAX_THREADS_MEDIA_ITEMS,
+  normalizeThreadsMediaItems,
+  type ThreadsMediaItem,
+} from '@/lib/threadsMedia';
 
 interface PublishNowRequest {
   mainText: string;
-  comment1: string;
-  comment2: string;
+  comment1?: string;
+  comment2?: string;
   comment3?: string;
   comment4?: string;
   comment5?: string;
   comment6?: string;
   comment7?: string;
   comment8?: string;
+  mediaItems?: ThreadsMediaItem[];
+  comment1MediaItems?: ThreadsMediaItem[];
+  comment2MediaItems?: ThreadsMediaItem[];
   accountKey?: string;
   targetAccountKey?: string;
 }
@@ -31,19 +40,29 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as PublishNowRequest;
     const { mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8 } = body;
     const targetAccountKey = resolveThreadsAccountKey(body.targetAccountKey ?? body.accountKey);
+    if (Array.isArray(body.mediaItems) && body.mediaItems.length > MAX_THREADS_MEDIA_ITEMS) {
+      return NextResponse.json({ error: `メディアは最大${MAX_THREADS_MEDIA_ITEMS}件までです` }, { status: 400 });
+    }
+    if (Array.isArray(body.comment1MediaItems) && body.comment1MediaItems.length > MAX_COMMENT_MEDIA_ITEMS) {
+      return NextResponse.json({ error: `コメント1のメディアは最大${MAX_COMMENT_MEDIA_ITEMS}件までです` }, { status: 400 });
+    }
+    if (Array.isArray(body.comment2MediaItems) && body.comment2MediaItems.length > MAX_COMMENT_MEDIA_ITEMS) {
+      return NextResponse.json({ error: `コメント2のメディアは最大${MAX_COMMENT_MEDIA_ITEMS}件までです` }, { status: 400 });
+    }
+    const mediaItems = normalizeThreadsMediaItems(body.mediaItems);
+    const comment1MediaItems = normalizeThreadsMediaItems(body.comment1MediaItems);
+    const comment2MediaItems = normalizeThreadsMediaItems(body.comment2MediaItems);
 
     // バリデーション
     const mainError = validateTextLength(mainText, 'メイン投稿');
     if (mainError) {
       return NextResponse.json({ error: mainError }, { status: 400 });
     }
-    const comment1Error = validateTextLength(comment1, 'コメント1');
-    if (comment1Error) {
-      return NextResponse.json({ error: comment1Error }, { status: 400 });
+    if (typeof comment1 === 'string' && comment1.length > 500) {
+      return NextResponse.json({ error: 'コメント1は500文字以内である必要があります' }, { status: 400 });
     }
-    const comment2Error = validateTextLength(comment2, 'コメント2');
-    if (comment2Error) {
-      return NextResponse.json({ error: comment2Error }, { status: 400 });
+    if (typeof comment2 === 'string' && comment2.length > 500) {
+      return NextResponse.json({ error: 'コメント2は500文字以内である必要があります' }, { status: 400 });
     }
     for (const [label, value] of [
       ['コメント3', comment3],
@@ -62,13 +81,13 @@ export async function POST(request: NextRequest) {
 
     // メイン投稿
     console.log('[threads/schedule/publish-now] Posting main thread...');
-    const mainThreadId = await postThread(mainText, undefined, undefined, targetAccountKey);
+    const mainThreadId = await postThread({ text: mainText, mediaItems }, undefined, undefined, targetAccountKey);
     console.log('[threads/schedule/publish-now] Main thread posted:', mainThreadId);
 
     const commentIds: Record<number, string | undefined> = {};
-    const commentList: Array<{ index: number; text?: string }> = [
-      { index: 1, text: comment1 },
-      { index: 2, text: comment2 },
+    const commentList: Array<{ index: number; text?: string; mediaItems?: ThreadsMediaItem[] }> = [
+      { index: 1, text: comment1, mediaItems: comment1MediaItems },
+      { index: 2, text: comment2, mediaItems: comment2MediaItems },
       { index: 3, text: comment3 },
       { index: 4, text: comment4 },
       { index: 5, text: comment5 },
@@ -82,7 +101,12 @@ export async function POST(request: NextRequest) {
       if (!comment.text || !comment.text.trim()) continue;
       await new Promise((resolve) => setTimeout(resolve, 2000));
       console.log(`[threads/schedule/publish-now] Posting comment${comment.index}...`);
-      const id = await postThread(comment.text, replyToId, undefined, targetAccountKey);
+      const id = await postThread(
+        { text: comment.text, mediaItems: comment.mediaItems, replyToId },
+        undefined,
+        undefined,
+        targetAccountKey,
+      );
       console.log(`[threads/schedule/publish-now] Comment${comment.index} posted:`, id);
       commentIds[comment.index] = id;
       replyToId = id;

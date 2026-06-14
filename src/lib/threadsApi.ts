@@ -4,6 +4,7 @@ import {
   resolveThreadsAccountKey,
   type ThreadsAccountKey,
 } from './threadsAccounts';
+import type { ThreadsMediaItem } from './threadsMedia';
 
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 
@@ -91,21 +92,8 @@ async function request(
   return res.json();
 }
 
-async function createContainer(text: string, replyToId?: string, linkUrl?: string, accountKey?: ThreadsAccountKey) {
+async function createContainer(body: Record<string, unknown>, accountKey?: ThreadsAccountKey) {
   const userId = resolveThreadsUserId(accountKey);
-  const body: Record<string, unknown> = {
-    text,
-    media_type: 'TEXT',
-  };
-
-  if (replyToId) {
-    body.reply_to_id = replyToId;
-  }
-
-  if (linkUrl) {
-    body.link_attachment = linkUrl;
-  }
-
   console.log('[threadsApi] createContainer body:', body);
 
   const response = await request(`${userId}/threads`, {
@@ -119,7 +107,7 @@ async function createContainer(text: string, replyToId?: string, linkUrl?: strin
 }
 
 async function waitForContainer(containerId: string, accountKey?: ThreadsAccountKey) {
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < 30; i += 1) {
     const statusRes = await request(containerId, {
       method: 'GET',
       params: { fields: 'status,error_message' },
@@ -163,7 +151,15 @@ async function publishContainer(containerId: string, accountKey?: ThreadsAccount
   return statusRes.id as string;
 }
 
-export async function postThread(text: string, replyToId?: string, linkUrl?: string, accountKey?: ThreadsAccountKey) {
+export async function postThread(
+  input: string | { text: string; mediaItems?: ThreadsMediaItem[]; replyToId?: string },
+  legacyReplyToId?: string,
+  linkUrl?: string,
+  accountKey?: ThreadsAccountKey,
+) {
+  let text = typeof input === 'string' ? input : input.text;
+  const replyToId = typeof input === 'string' ? legacyReplyToId : input.replyToId;
+  const mediaItems = typeof input === 'string' ? [] : (input.mediaItems || []).slice(0, 10);
   // Threads API の500文字制限バリデーション
   const THREADS_TEXT_LIMIT = 500;
   if (text.length > THREADS_TEXT_LIMIT) {
@@ -182,6 +178,7 @@ export async function postThread(text: string, replyToId?: string, linkUrl?: str
     replyToId,
     hasLinkUrl: !!linkUrl,
     linkUrl,
+    mediaCount: mediaItems.length,
     postingEnabled: THREADS_POSTING_ENABLED,
     environment: process.env.NODE_ENV,
     hasBusinessId: !!THREADS_BUSINESS_ID,
@@ -220,7 +217,42 @@ export async function postThread(text: string, replyToId?: string, linkUrl?: str
   }
 
   console.log('[threadsApi] Creating container...');
-  const containerId = await createContainer(text, replyToId, linkUrl, accountKey);
+  let containerId: string;
+  if (mediaItems.length === 0) {
+    containerId = await createContainer({
+      text,
+      media_type: 'TEXT',
+      ...(replyToId ? { reply_to_id: replyToId } : {}),
+      ...(linkUrl ? { link_attachment: linkUrl } : {}),
+    }, accountKey);
+  } else if (mediaItems.length === 1) {
+    const item = mediaItems[0];
+    containerId = await createContainer({
+      text,
+      media_type: item.type,
+      ...(item.type === 'VIDEO' ? { video_url: item.url } : { image_url: item.url }),
+      ...(item.altText ? { alt_text: item.altText } : {}),
+      ...(replyToId ? { reply_to_id: replyToId } : {}),
+    }, accountKey);
+  } else {
+    const childIds: string[] = [];
+    for (const item of mediaItems) {
+      const childId = await createContainer({
+        media_type: item.type,
+        ...(item.type === 'VIDEO' ? { video_url: item.url } : { image_url: item.url }),
+        is_carousel_item: true,
+        ...(item.altText ? { alt_text: item.altText } : {}),
+      }, accountKey);
+      await waitForContainer(childId, accountKey);
+      childIds.push(childId);
+    }
+    containerId = await createContainer({
+      text,
+      media_type: 'CAROUSEL',
+      children: childIds.join(','),
+      ...(replyToId ? { reply_to_id: replyToId } : {}),
+    }, accountKey);
+  }
   console.log('[threadsApi] Container created:', containerId);
 
   console.log('[threadsApi] Publishing container...');

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScheduleCalendar } from './schedule-calendar';
 import { ScheduleEditor } from './schedule-editor';
-import type { ScheduledPost } from './schedule-types';
+import type { ScheduledPost, ScheduledPostMediaItem } from './schedule-types';
 import type { ThreadsAccountKey } from '@/lib/threadsAccounts';
 
 type GeneratedContent = {
@@ -32,6 +32,25 @@ function monthKey(value: string) {
   return value.slice(0, 7);
 }
 
+function parseMediaItems(raw: Record<string, unknown>, prefix: 'main' | 'comment1' | 'comment2'): ScheduledPostMediaItem[] {
+  try {
+    const urls = JSON.parse(String(raw[`${prefix}_media_urls`] ?? '[]'));
+    const types = JSON.parse(String(raw[`${prefix}_media_types`] ?? '[]'));
+    const altTexts = JSON.parse(String(raw[`${prefix}_media_alt_texts`] ?? '[]'));
+    if (!Array.isArray(urls) || !Array.isArray(types)) return [];
+    return urls
+      .map((url, index): ScheduledPostMediaItem | null => {
+        if (typeof url !== 'string' || !url.trim()) return null;
+        const type = types[index] === 'VIDEO' ? 'VIDEO' : 'IMAGE';
+        const altText = typeof altTexts[index] === 'string' ? altTexts[index] : undefined;
+        return { url, type, altText };
+      })
+      .filter((item): item is ScheduledPostMediaItem => Boolean(item));
+  } catch {
+    return [];
+  }
+}
+
 function mapItem(raw: Record<string, unknown>): ScheduledPost {
   return {
     scheduleId: String(raw.schedule_id ?? ''),
@@ -43,8 +62,11 @@ function mapItem(raw: Record<string, unknown>): ScheduledPost {
     sourceAccountKey: raw.source_account_key ? String(raw.source_account_key) : null,
     targetAccountKey: raw.target_account_key ? String(raw.target_account_key) : null,
     mainText: String(raw.main_text ?? ''),
+    mediaItems: parseMediaItems(raw, 'main'),
     comment1: String(raw.comment1 ?? ''),
+    comment1MediaItems: parseMediaItems(raw, 'comment1'),
     comment2: String(raw.comment2 ?? ''),
+    comment2MediaItems: parseMediaItems(raw, 'comment2'),
     comment3: String(raw.comment3 ?? ''),
     comment4: String(raw.comment4 ?? ''),
     comment5: String(raw.comment5 ?? ''),
@@ -206,6 +228,9 @@ export function ScheduleTab({
     comment6: string;
     comment7: string;
     comment8: string;
+    mediaItems: ScheduledPostMediaItem[];
+    comment1MediaItems: ScheduledPostMediaItem[];
+    comment2MediaItems: ScheduledPostMediaItem[];
     status: 'draft' | 'scheduled';
   }) => {
     setSaving(true);
@@ -222,8 +247,11 @@ export function ScheduleTab({
           body: JSON.stringify({
             scheduledAt: payload.scheduledAt,
             mainText: payload.mainText,
+            mediaItems: payload.mediaItems,
             comment1: payload.comment1,
+            comment1MediaItems: payload.comment1MediaItems,
             comment2: payload.comment2,
+            comment2MediaItems: payload.comment2MediaItems,
             comment3: payload.comment3,
             comment4: payload.comment4,
             comment5: payload.comment5,
@@ -277,6 +305,9 @@ export function ScheduleTab({
     comment6: string;
     comment7: string;
     comment8: string;
+    mediaItems: ScheduledPostMediaItem[];
+    comment1MediaItems: ScheduledPostMediaItem[];
+    comment2MediaItems: ScheduledPostMediaItem[];
   }) => {
     if (!confirm('今すぐ投稿しますか？')) return;
     setPublishing(true);
@@ -289,8 +320,11 @@ export function ScheduleTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mainText: payload.mainText,
+          mediaItems: payload.mediaItems,
           comment1: payload.comment1,
+          comment1MediaItems: payload.comment1MediaItems,
           comment2: payload.comment2,
+          comment2MediaItems: payload.comment2MediaItems,
           comment3: payload.comment3,
           comment4: payload.comment4,
           comment5: payload.comment5,
@@ -342,6 +376,7 @@ export function ScheduleTab({
         <ScheduleEditor
           selectedDate={selectedDate}
           selectedItem={selectedItem}
+          accountKey={accountKey}
           isSaving={saving}
           isPublishing={publishing}
           onSave={handleSave}

@@ -1,3 +1,10 @@
+export type ScheduledPostMediaItem = {
+  url: string;
+  type: 'IMAGE' | 'VIDEO';
+  name?: string;
+  altText?: string;
+};
+
 export type ScheduledPost = {
   scheduleId: string;
   planId?: string | null;
@@ -8,8 +15,11 @@ export type ScheduledPost = {
   sourceAccountKey?: string | null;
   targetAccountKey?: string | null;
   mainText: string;
+  mediaItems: ScheduledPostMediaItem[];
   comment1: string;
+  comment1MediaItems: ScheduledPostMediaItem[];
   comment2: string;
+  comment2MediaItems: ScheduledPostMediaItem[];
   comment3: string;
   comment4: string;
   comment5: string;

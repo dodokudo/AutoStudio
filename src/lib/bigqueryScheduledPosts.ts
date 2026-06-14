@@ -8,6 +8,7 @@ const TABLE = 'scheduled_posts';
 const PLAN_TABLE = 'thread_post_plans';
 
 const client: BigQuery = createBigQueryClient(PROJECT_ID);
+let ensureScheduledPostsTablePromise: Promise<void> | null = null;
 
 const SCHEDULE_TABLE_SCHEMA = [
   { name: 'schedule_id', type: 'STRING' },
@@ -17,8 +18,17 @@ const SCHEDULE_TABLE_SCHEMA = [
   { name: 'source_account_key', type: 'STRING' },
   { name: 'target_account_key', type: 'STRING' },
   { name: 'main_text', type: 'STRING' },
+  { name: 'main_media_urls', type: 'STRING' },
+  { name: 'main_media_types', type: 'STRING' },
+  { name: 'main_media_alt_texts', type: 'STRING' },
   { name: 'comment1', type: 'STRING' },
+  { name: 'comment1_media_urls', type: 'STRING' },
+  { name: 'comment1_media_types', type: 'STRING' },
+  { name: 'comment1_media_alt_texts', type: 'STRING' },
   { name: 'comment2', type: 'STRING' },
+  { name: 'comment2_media_urls', type: 'STRING' },
+  { name: 'comment2_media_types', type: 'STRING' },
+  { name: 'comment2_media_alt_texts', type: 'STRING' },
   { name: 'comment3', type: 'STRING' },
   { name: 'comment4', type: 'STRING' },
   { name: 'comment5', type: 'STRING' },
@@ -44,7 +54,7 @@ async function query<T = Record<string, unknown>>(sql: string, params?: Record<s
   return rows as T[];
 }
 
-export async function ensureScheduledPostsTable() {
+async function ensureScheduledPostsTableInternal() {
   const dataset = client.dataset(DATASET);
   const table = dataset.table(TABLE);
   const [exists] = await table.exists();
@@ -70,6 +80,34 @@ export async function ensureScheduledPostsTable() {
       ADD COLUMN IF NOT EXISTS target_account_key STRING
     `,
   });
+  for (const column of [
+    'main_media_urls',
+    'main_media_types',
+    'main_media_alt_texts',
+    'comment1_media_urls',
+    'comment1_media_types',
+    'comment1_media_alt_texts',
+    'comment2_media_urls',
+    'comment2_media_types',
+    'comment2_media_alt_texts',
+  ]) {
+    await client.query({
+      query: `
+        ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
+        ADD COLUMN IF NOT EXISTS ${column} STRING
+      `,
+    });
+  }
+}
+
+export async function ensureScheduledPostsTable() {
+  if (!ensureScheduledPostsTablePromise) {
+    ensureScheduledPostsTablePromise = ensureScheduledPostsTableInternal().catch((error) => {
+      ensureScheduledPostsTablePromise = null;
+      throw error;
+    });
+  }
+  await ensureScheduledPostsTablePromise;
 }
 
 function toPlain(value: unknown): string {
@@ -93,8 +131,17 @@ export type ScheduledPostRow = {
   source_account_key?: ThreadsAccountKey | null;
   target_account_key?: ThreadsAccountKey | null;
   main_text: string;
+  main_media_urls?: string;
+  main_media_types?: string;
+  main_media_alt_texts?: string;
   comment1: string;
+  comment1_media_urls?: string;
+  comment1_media_types?: string;
+  comment1_media_alt_texts?: string;
   comment2: string;
+  comment2_media_urls?: string;
+  comment2_media_types?: string;
+  comment2_media_alt_texts?: string;
   comment3: string;
   comment4: string;
   comment5: string;
@@ -123,6 +170,7 @@ type ScheduleMatchOptions = {
 };
 
 export async function listScheduledPosts(params: { startDate?: string; endDate?: string; accountKey?: ThreadsAccountKey }) {
+  await ensureScheduledPostsTable();
   const conditions: string[] = [];
   const queryParams: Record<string, unknown> = {};
 
@@ -152,8 +200,17 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
       sp.source_account_key,
       sp.target_account_key,
       sp.main_text,
+      sp.main_media_urls,
+      sp.main_media_types,
+      sp.main_media_alt_texts,
       sp.comment1,
+      sp.comment1_media_urls,
+      sp.comment1_media_types,
+      sp.comment1_media_alt_texts,
       sp.comment2,
+      sp.comment2_media_urls,
+      sp.comment2_media_types,
+      sp.comment2_media_alt_texts,
       sp.comment3,
       sp.comment4,
       sp.comment5,
@@ -198,8 +255,17 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
     source_account_key: (toPlain(row.source_account_key) || null) as ThreadsAccountKey | null,
     target_account_key: (toPlain(row.target_account_key) || null) as ThreadsAccountKey | null,
     main_text: toPlain(row.main_text),
+    main_media_urls: toPlain(row.main_media_urls) || '[]',
+    main_media_types: toPlain(row.main_media_types) || '[]',
+    main_media_alt_texts: toPlain(row.main_media_alt_texts) || '[]',
     comment1: toPlain(row.comment1),
+    comment1_media_urls: toPlain(row.comment1_media_urls) || '[]',
+    comment1_media_types: toPlain(row.comment1_media_types) || '[]',
+    comment1_media_alt_texts: toPlain(row.comment1_media_alt_texts) || '[]',
     comment2: toPlain(row.comment2),
+    comment2_media_urls: toPlain(row.comment2_media_urls) || '[]',
+    comment2_media_types: toPlain(row.comment2_media_types) || '[]',
+    comment2_media_alt_texts: toPlain(row.comment2_media_alt_texts) || '[]',
     comment3: toPlain(row.comment3),
     comment4: toPlain(row.comment4),
     comment5: toPlain(row.comment5),
@@ -225,6 +291,7 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
 }
 
 export async function getScheduledPostById(scheduleId: string, options: ScheduleMatchOptions = {}) {
+  await ensureScheduledPostsTable();
   const matchClause = options.matchScheduledTimeIso ? 'AND sp.scheduled_time = @matchScheduledTime' : '';
   const sql = `
     SELECT
@@ -235,8 +302,17 @@ export async function getScheduledPostById(scheduleId: string, options: Schedule
       sp.source_account_key,
       sp.target_account_key,
       sp.main_text,
+      sp.main_media_urls,
+      sp.main_media_types,
+      sp.main_media_alt_texts,
       sp.comment1,
+      sp.comment1_media_urls,
+      sp.comment1_media_types,
+      sp.comment1_media_alt_texts,
       sp.comment2,
+      sp.comment2_media_urls,
+      sp.comment2_media_types,
+      sp.comment2_media_alt_texts,
       sp.comment3,
       sp.comment4,
       sp.comment5,
@@ -286,8 +362,17 @@ export async function getScheduledPostById(scheduleId: string, options: Schedule
     source_account_key: (toPlain(row.source_account_key) || null) as ThreadsAccountKey | null,
     target_account_key: (toPlain(row.target_account_key) || null) as ThreadsAccountKey | null,
     main_text: toPlain(row.main_text),
+    main_media_urls: toPlain(row.main_media_urls) || '[]',
+    main_media_types: toPlain(row.main_media_types) || '[]',
+    main_media_alt_texts: toPlain(row.main_media_alt_texts) || '[]',
     comment1: toPlain(row.comment1),
+    comment1_media_urls: toPlain(row.comment1_media_urls) || '[]',
+    comment1_media_types: toPlain(row.comment1_media_types) || '[]',
+    comment1_media_alt_texts: toPlain(row.comment1_media_alt_texts) || '[]',
     comment2: toPlain(row.comment2),
+    comment2_media_urls: toPlain(row.comment2_media_urls) || '[]',
+    comment2_media_types: toPlain(row.comment2_media_types) || '[]',
+    comment2_media_alt_texts: toPlain(row.comment2_media_alt_texts) || '[]',
     comment3: toPlain(row.comment3),
     comment4: toPlain(row.comment4),
     comment5: toPlain(row.comment5),
@@ -320,8 +405,17 @@ export async function insertScheduledPost(params: {
   sourceAccountKey?: ThreadsAccountKey | null;
   targetAccountKey?: ThreadsAccountKey | null;
   mainText: string;
+  mainMediaUrls?: string;
+  mainMediaTypes?: string;
+  mainMediaAltTexts?: string;
   comment1: string;
+  comment1MediaUrls?: string;
+  comment1MediaTypes?: string;
+  comment1MediaAltTexts?: string;
   comment2: string;
+  comment2MediaUrls?: string;
+  comment2MediaTypes?: string;
+  comment2MediaAltTexts?: string;
   comment3?: string;
   comment4?: string;
   comment5?: string;
@@ -332,8 +426,8 @@ export async function insertScheduledPost(params: {
   await ensureScheduledPostsTable();
   const sql = `
     INSERT INTO \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-    (schedule_id, plan_id, scheduled_time, status, source_account_key, target_account_key, main_text, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, created_at, updated_at)
-    VALUES (@scheduleId, @planId, @scheduledTime, @status, @sourceAccountKey, @targetAccountKey, @mainText, @comment1, @comment2, @comment3, @comment4, @comment5, @comment6, @comment7, @comment8, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+    (schedule_id, plan_id, scheduled_time, status, source_account_key, target_account_key, main_text, main_media_urls, main_media_types, main_media_alt_texts, comment1, comment1_media_urls, comment1_media_types, comment1_media_alt_texts, comment2, comment2_media_urls, comment2_media_types, comment2_media_alt_texts, comment3, comment4, comment5, comment6, comment7, comment8, created_at, updated_at)
+    VALUES (@scheduleId, @planId, @scheduledTime, @status, @sourceAccountKey, @targetAccountKey, @mainText, @mainMediaUrls, @mainMediaTypes, @mainMediaAltTexts, @comment1, @comment1MediaUrls, @comment1MediaTypes, @comment1MediaAltTexts, @comment2, @comment2MediaUrls, @comment2MediaTypes, @comment2MediaAltTexts, @comment3, @comment4, @comment5, @comment6, @comment7, @comment8, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
   `;
   await client.query({
     query: sql,
@@ -345,8 +439,17 @@ export async function insertScheduledPost(params: {
       sourceAccountKey: params.sourceAccountKey ?? params.targetAccountKey ?? 'main',
       targetAccountKey: params.targetAccountKey ?? 'main',
       mainText: params.mainText,
+      mainMediaUrls: params.mainMediaUrls ?? '[]',
+      mainMediaTypes: params.mainMediaTypes ?? '[]',
+      mainMediaAltTexts: params.mainMediaAltTexts ?? '[]',
       comment1: params.comment1,
+      comment1MediaUrls: params.comment1MediaUrls ?? '[]',
+      comment1MediaTypes: params.comment1MediaTypes ?? '[]',
+      comment1MediaAltTexts: params.comment1MediaAltTexts ?? '[]',
       comment2: params.comment2,
+      comment2MediaUrls: params.comment2MediaUrls ?? '[]',
+      comment2MediaTypes: params.comment2MediaTypes ?? '[]',
+      comment2MediaAltTexts: params.comment2MediaAltTexts ?? '[]',
       comment3: params.comment3 ?? '',
       comment4: params.comment4 ?? '',
       comment5: params.comment5 ?? '',
@@ -358,6 +461,15 @@ export async function insertScheduledPost(params: {
       planId: 'STRING',
       sourceAccountKey: 'STRING',
       targetAccountKey: 'STRING',
+      mainMediaUrls: 'STRING',
+      mainMediaTypes: 'STRING',
+      mainMediaAltTexts: 'STRING',
+      comment1MediaUrls: 'STRING',
+      comment1MediaTypes: 'STRING',
+      comment1MediaAltTexts: 'STRING',
+      comment2MediaUrls: 'STRING',
+      comment2MediaTypes: 'STRING',
+      comment2MediaAltTexts: 'STRING',
     },
   });
   return getScheduledPostById(params.scheduleId);
@@ -372,8 +484,17 @@ export async function updateScheduledPost(
     sourceAccountKey?: ThreadsAccountKey | null;
     targetAccountKey?: ThreadsAccountKey | null;
     mainText?: string | null;
+    mainMediaUrls?: string | null;
+    mainMediaTypes?: string | null;
+    mainMediaAltTexts?: string | null;
     comment1?: string | null;
+    comment1MediaUrls?: string | null;
+    comment1MediaTypes?: string | null;
+    comment1MediaAltTexts?: string | null;
     comment2?: string | null;
+    comment2MediaUrls?: string | null;
+    comment2MediaTypes?: string | null;
+    comment2MediaAltTexts?: string | null;
     comment3?: string | null;
     comment4?: string | null;
     comment5?: string | null;
@@ -431,15 +552,60 @@ export async function updateScheduledPost(
     queryParams.mainText = params.mainText;
     types.mainText = 'STRING';
   }
+  if (params.mainMediaUrls !== undefined) {
+    setClauses.push('main_media_urls = @mainMediaUrls');
+    queryParams.mainMediaUrls = params.mainMediaUrls;
+    types.mainMediaUrls = 'STRING';
+  }
+  if (params.mainMediaTypes !== undefined) {
+    setClauses.push('main_media_types = @mainMediaTypes');
+    queryParams.mainMediaTypes = params.mainMediaTypes;
+    types.mainMediaTypes = 'STRING';
+  }
+  if (params.mainMediaAltTexts !== undefined) {
+    setClauses.push('main_media_alt_texts = @mainMediaAltTexts');
+    queryParams.mainMediaAltTexts = params.mainMediaAltTexts;
+    types.mainMediaAltTexts = 'STRING';
+  }
   if (params.comment1 !== undefined) {
     setClauses.push('comment1 = @comment1');
     queryParams.comment1 = params.comment1;
     types.comment1 = 'STRING';
   }
+  if (params.comment1MediaUrls !== undefined) {
+    setClauses.push('comment1_media_urls = @comment1MediaUrls');
+    queryParams.comment1MediaUrls = params.comment1MediaUrls;
+    types.comment1MediaUrls = 'STRING';
+  }
+  if (params.comment1MediaTypes !== undefined) {
+    setClauses.push('comment1_media_types = @comment1MediaTypes');
+    queryParams.comment1MediaTypes = params.comment1MediaTypes;
+    types.comment1MediaTypes = 'STRING';
+  }
+  if (params.comment1MediaAltTexts !== undefined) {
+    setClauses.push('comment1_media_alt_texts = @comment1MediaAltTexts');
+    queryParams.comment1MediaAltTexts = params.comment1MediaAltTexts;
+    types.comment1MediaAltTexts = 'STRING';
+  }
   if (params.comment2 !== undefined) {
     setClauses.push('comment2 = @comment2');
     queryParams.comment2 = params.comment2;
     types.comment2 = 'STRING';
+  }
+  if (params.comment2MediaUrls !== undefined) {
+    setClauses.push('comment2_media_urls = @comment2MediaUrls');
+    queryParams.comment2MediaUrls = params.comment2MediaUrls;
+    types.comment2MediaUrls = 'STRING';
+  }
+  if (params.comment2MediaTypes !== undefined) {
+    setClauses.push('comment2_media_types = @comment2MediaTypes');
+    queryParams.comment2MediaTypes = params.comment2MediaTypes;
+    types.comment2MediaTypes = 'STRING';
+  }
+  if (params.comment2MediaAltTexts !== undefined) {
+    setClauses.push('comment2_media_alt_texts = @comment2MediaAltTexts');
+    queryParams.comment2MediaAltTexts = params.comment2MediaAltTexts;
+    types.comment2MediaAltTexts = 'STRING';
   }
   if (params.comment3 !== undefined) {
     setClauses.push('comment3 = @comment3');
