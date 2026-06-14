@@ -193,7 +193,7 @@ export default async function ThreadsHome({
             className={[
               'rounded-[var(--radius-md)] px-3 py-1.5 text-xs font-medium transition-colors',
               isActive
-                ? 'bg-[color:var(--color-accent)] text-white'
+                ? 'bg-blue-50 text-[color:var(--color-accent)] ring-1 ring-blue-100'
                 : 'text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]',
             ].join(' ')}
           >
