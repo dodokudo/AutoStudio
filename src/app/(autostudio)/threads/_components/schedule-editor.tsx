@@ -213,7 +213,7 @@ export function ScheduleEditor({
   };
 
   return (
-    <section className="ui-card h-fit">
+    <section className="ui-card h-fit min-w-0">
       <header className="mb-4">
         <h2 className="text-base font-semibold text-[color:var(--color-text-primary)]">予約エディタ</h2>
         <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
@@ -222,7 +222,7 @@ export function ScheduleEditor({
       </header>
 
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
             予約日時（JST）
             <input
@@ -312,10 +312,10 @@ export function ScheduleEditor({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <button
             type="button"
-            className="ui-button-secondary"
+            className="ui-button-secondary justify-center"
             disabled={isSaving || isReadOnly}
             onClick={() => handleSubmit('draft')}
           >
@@ -323,7 +323,7 @@ export function ScheduleEditor({
           </button>
           <button
             type="button"
-            className="ui-button-primary"
+            className="ui-button-primary justify-center"
             disabled={isSaving || isReadOnly}
             onClick={() => handleSubmit('scheduled')}
           >

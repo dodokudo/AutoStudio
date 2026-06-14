@@ -123,7 +123,6 @@ type ScheduleMatchOptions = {
 };
 
 export async function listScheduledPosts(params: { startDate?: string; endDate?: string; accountKey?: ThreadsAccountKey }) {
-  await ensureScheduledPostsTable();
   const conditions: string[] = [];
   const queryParams: Record<string, unknown> = {};
 
@@ -226,7 +225,6 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
 }
 
 export async function getScheduledPostById(scheduleId: string, options: ScheduleMatchOptions = {}) {
-  await ensureScheduledPostsTable();
   const matchClause = options.matchScheduledTimeIso ? 'AND sp.scheduled_time = @matchScheduledTime' : '';
   const sql = `
     SELECT

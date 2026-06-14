@@ -94,6 +94,10 @@ a:focus-visible {
     width: min(1400px, 100%);
   }
 
+  .page-container:has(.threads-fluid-page) {
+    width: min(1680px, 100%);
+  }
+
   .section-stack {
     display: grid;
     gap: 32px;

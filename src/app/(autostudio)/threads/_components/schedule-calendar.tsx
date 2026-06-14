@@ -101,14 +101,14 @@ export function ScheduleCalendar({
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {/* AI生成セクション */}
       <section className="ui-card">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs font-semibold text-[color:var(--color-text-primary)]">AIで生成</p>
           <button
             type="button"
-            className="ui-button-secondary"
+            className="ui-button-secondary justify-center"
             onClick={onGenerate}
             disabled={isGenerating}
           >
@@ -145,12 +145,12 @@ export function ScheduleCalendar({
       </section>
 
       <section className="ui-card">
-        <header className="flex items-center justify-between gap-2">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-[color:var(--color-text-primary)]">予約カレンダー</h2>
             <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{monthLabel} / JST</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <button
               className="ui-button-secondary px-3 py-1 text-xs"
               onClick={() => onMonthChange(new Date(year, month - 1, 1))}
@@ -216,12 +216,12 @@ export function ScheduleCalendar({
       </section>
 
       <section className="ui-card">
-        <header className="mb-3 flex items-center justify-between">
+        <header className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">予約一覧</h3>
             <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{selectedDate} / JST</p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {isLoading ? <span className="mr-2 text-xs text-[color:var(--color-text-muted)]">読み込み中...</span> : null}
             {([
               { key: 'all', label: '一覧' },

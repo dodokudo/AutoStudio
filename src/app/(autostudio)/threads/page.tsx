@@ -179,7 +179,7 @@ export default async function ThreadsHome({
   });
 
   const accountSelector = (
-    <div className="flex flex-wrap items-center gap-1 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1">
+    <div className="grid w-full min-w-0 grid-cols-3 gap-1 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1 sm:w-auto sm:flex sm:flex-wrap sm:items-center">
       {THREADS_ACCOUNT_OPTIONS.map((account) => {
         const params = new URLSearchParams(sharedParams.toString());
         params.set('account', account.key);
@@ -191,7 +191,7 @@ export default async function ThreadsHome({
             href={`?${params.toString()}`}
             scroll={false}
             className={[
-              'rounded-[var(--radius-md)] px-3 py-1.5 text-xs font-medium transition-colors',
+              'min-w-0 rounded-[var(--radius-md)] px-3 py-1.5 text-center text-xs font-medium transition-colors',
               isActive
                 ? 'bg-blue-50 text-[color:var(--color-accent)] ring-1 ring-blue-100'
                 : 'text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)] hover:text-[color:var(--color-text-primary)]',

@@ -35,9 +35,9 @@ export function ThreadsTabShell({ tabItems, activeTab, accountSelector, rangeSel
   );
 
   return (
-    <div className="section-stack">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <nav className="flex flex-wrap items-end gap-1">
+    <div className="threads-fluid-page section-stack min-w-0">
+      <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <nav className="-mx-1 flex min-w-0 max-w-full gap-1 overflow-x-auto px-1 pb-1 scrollbar-hide xl:flex-wrap xl:items-end xl:overflow-visible xl:pb-0">
           {tabLinks.map((item) => {
             const isActive = item.id === activeTab;
             return (
@@ -47,7 +47,7 @@ export function ThreadsTabShell({ tabItems, activeTab, accountSelector, rangeSel
                 prefetch={true}
                 scroll={false}
                 className={classNames(
-                  'relative whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]',
+                  'relative shrink-0 whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]',
                   isActive
                     ? 'text-[color:var(--color-accent)]'
                     : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]',
@@ -61,7 +61,7 @@ export function ThreadsTabShell({ tabItems, activeTab, accountSelector, rangeSel
             );
           })}
         </nav>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:justify-end">
           {accountSelector ?? null}
           {rangeSelector ?? null}
         </div>

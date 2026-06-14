@@ -88,6 +88,7 @@ export function InsightsRangeSelector({ options, value, customStart, customEnd }
       customApplyLabel="反映"
       customApplyLoading={isPending}
       latestLabel={latestLabel}
+      className="w-full sm:w-auto"
     />
   );
 }
