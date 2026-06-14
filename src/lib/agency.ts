@@ -63,16 +63,19 @@ export async function getAgencyStats(): Promise<AgencyStats> {
         SELECT MAX(snapshot_date) AS sd FROM ${table('user_tags')}
       ),
       agency_users AS (
-        SELECT i.user_id, i.field_value AS agency
+        SELECT DISTINCT i.user_id, i.field_value AS agency
         FROM ${table('user_info')} i, info_latest
         WHERE i.snapshot_date = info_latest.sd
           AND i.field_name = '流入元'
       ),
       core AS (
         -- friend_added_at は "YYYY-MM-DD HH:MM:SS"（JST）の文字列。日付部分をそのまま使う
-        SELECT c.user_id, SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(c.friend_added_at, 1, 10)) AS reg_date
+        SELECT
+          c.user_id,
+          SAFE.PARSE_DATE('%Y-%m-%d', SUBSTR(ANY_VALUE(c.friend_added_at), 1, 10)) AS reg_date
         FROM ${table('user_core')} c, core_latest
         WHERE c.snapshot_date = core_latest.sd
+        GROUP BY c.user_id
       ),
       purchases AS (
         SELECT
