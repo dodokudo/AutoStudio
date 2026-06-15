@@ -45,6 +45,54 @@ export interface AttributeAnalysis {
   goalRevenue: Array<{ label: string; count: number; percent: number }>;
 }
 
+function emptyAttributeAnalysis(): AttributeAnalysis {
+  return {
+    gender: [
+      { label: '男性', count: 0, percent: 0 },
+      { label: '女性', count: 0, percent: 0 },
+    ],
+    age: ['20代', '30代', '40代', '50代', '60代'].map((label) => ({ label, count: 0, percent: 0 })),
+    job: ['会社員', 'フリーランス', '経営者', '主婦', '学生'].map((label) => ({ label, count: 0, percent: 0 })),
+    currentRevenue: ['0円', '1-10万', '10-50万', '50-100万', '100-500万', '500-1000万', '1000万over'].map(
+      (label) => ({ label, count: 0, percent: 0 }),
+    ),
+    goalRevenue: ['10万over', '50万over', '100万over', '300万over', '500万over', '1000万over'].map((label) => ({
+      label,
+      count: 0,
+      percent: 0,
+    })),
+  };
+}
+
+const ATTRIBUTE_COLUMNS = [
+  'gender_male',
+  'gender_female',
+  'survey_completed',
+  '20s',
+  '30s',
+  '40s',
+  '50s',
+  '60s',
+  'job_employee',
+  'job_freelance',
+  'job_business_owner',
+  'job_housewife',
+  'job_student',
+  'revenue_m0yen',
+  'revenue_m1to10man',
+  'revenue_m10to50man',
+  'revenue_m50to100man',
+  'revenue_m100to500man',
+  'revenue_m500to1000man',
+  'revenue_m1000manover',
+  'goal_m10manover',
+  'goal_m50manover',
+  'goal_m100manover',
+  'goal_m300manover',
+  'goal_m500manover',
+  'goal_m1000manover',
+];
+
 export interface LstepAnalyticsData {
   funnel: FunnelAnalysis;
   dailyRegistrations: DailyRegistration[];
@@ -786,27 +834,38 @@ async function getAttributeAnalysis(
   datasetId: string,
   snapshotDate: string,
 ): Promise<AttributeAnalysis> {
+  const hasAttributeColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, ATTRIBUTE_COLUMNS);
+  if (!hasAttributeColumns) {
+    return emptyAttributeAnalysis();
+  }
+
   const defaultGender = [
     { label: '男性', count: 0, percent: 0 },
     { label: '女性', count: 0, percent: 0 },
   ];
   // 年齢層（アンケート完了者のみ）
-  const genderRows = await runQuery<{ gender_male: number; gender_female: number; total: number }>(
-    client,
-    projectId,
-    datasetId,
-    {
-      query: `
-        SELECT
-          COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
-          COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
-          COUNT(DISTINCT id) AS total
-        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-        WHERE snapshot_date = @snapshotDate
-      `,
-      params: { snapshotDate },
-    },
-  );
+  const hasGenderColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, [
+    'gender_male',
+    'gender_female',
+  ]);
+  const genderRows = hasGenderColumns
+    ? await runQuery<{ gender_male: number; gender_female: number; total: number }>(
+        client,
+        projectId,
+        datasetId,
+        {
+          query: `
+            SELECT
+              COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
+              COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
+              COUNT(DISTINCT id) AS total
+            FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+            WHERE snapshot_date = @snapshotDate
+          `,
+          params: { snapshotDate },
+        },
+      )
+    : [{ gender_male: 0, gender_female: 0, total: 0 }];
 
   const male = Number(genderRows?.[0]?.gender_male ?? 0);
   const female = Number(genderRows?.[0]?.gender_female ?? 0);
@@ -1034,29 +1093,40 @@ async function getAttributeAnalysisByDateRange(
   startDate?: string,
   endDate?: string,
 ): Promise<AttributeAnalysis> {
+  const hasAttributeColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, ATTRIBUTE_COLUMNS);
+  if (!hasAttributeColumns) {
+    return emptyAttributeAnalysis();
+  }
+
   const dateFilter = startDate && endDate
     ? 'AND DATE(friend_added_at) BETWEEN @startDate AND @endDate'
     : '';
 
   // 性別（期間指定）
-  const genderRows = await runQuery<{ gender_male: number; gender_female: number; total: number }>(
-    client,
-    projectId,
-    datasetId,
-    {
-      query: `
-        SELECT
-          COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
-          COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
-          COUNT(DISTINCT id) AS total
-        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-        WHERE snapshot_date = @snapshotDate
-          AND friend_added_at IS NOT NULL
-          ${dateFilter}
-      `,
-      params: { snapshotDate, startDate, endDate },
-    },
-  );
+  const hasGenderColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, [
+    'gender_male',
+    'gender_female',
+  ]);
+  const genderRows = hasGenderColumns
+    ? await runQuery<{ gender_male: number; gender_female: number; total: number }>(
+        client,
+        projectId,
+        datasetId,
+        {
+          query: `
+            SELECT
+              COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
+              COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
+              COUNT(DISTINCT id) AS total
+            FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+            WHERE snapshot_date = @snapshotDate
+              AND friend_added_at IS NOT NULL
+              ${dateFilter}
+          `,
+          params: { snapshotDate, startDate, endDate },
+        },
+      )
+    : [{ gender_male: 0, gender_female: 0, total: 0 }];
 
   const male = Number(genderRows?.[0]?.gender_male ?? 0);
   const female = Number(genderRows?.[0]?.gender_female ?? 0);
@@ -1323,6 +1393,26 @@ async function getAttributeAnalysisByDateRange(
 interface QueryOptions {
   query: string;
   params?: Record<string, unknown>;
+}
+
+async function tableHasColumns(
+  client: BigQuery,
+  projectId: string,
+  datasetId: string,
+  tableName: string,
+  columnNames: string[],
+): Promise<boolean> {
+  const rows = await runQuery<{ column_name: string }>(client, projectId, datasetId, {
+    query: `
+      SELECT column_name
+      FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.COLUMNS\`
+      WHERE table_name = @tableName
+        AND column_name IN UNNEST(@columnNames)
+    `,
+    params: { tableName, columnNames },
+  });
+
+  return new Set(rows.map((row) => row.column_name)).size === columnNames.length;
 }
 
 async function runQuery<T extends Record<string, unknown>>(

@@ -2,6 +2,11 @@ import { getAgencyStats, type AgencyStats } from '@/lib/agency';
 
 export const dynamic = 'force-dynamic';
 
+function formatRate(numerator: number, denominator: number): string {
+  if (denominator <= 0) return '0.0%';
+  return `${((numerator / denominator) * 100).toFixed(1)}%`;
+}
+
 export default async function AgencyPage() {
   let stats: AgencyStats | null = null;
   let loadError = false;
@@ -43,8 +48,11 @@ export default async function AgencyPage() {
                     <th className="px-4 py-3">流入元</th>
                     <th className="px-4 py-3 text-right">登録数</th>
                     <th className="px-4 py-3 text-right">アンケート回答</th>
+                    <th className="px-4 py-3 text-right">回答率</th>
                     <th className="px-4 py-3 text-right">セミナー申し込み</th>
+                    <th className="px-4 py-3 text-right">申込率</th>
                     <th className="px-4 py-3 text-right">購入</th>
+                    <th className="px-4 py-3 text-right">購入率</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -54,8 +62,17 @@ export default async function AgencyPage() {
                       <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">{row.agency}</td>
                       <td className="px-4 py-3 text-right">{row.registrations}</td>
                       <td className="px-4 py-3 text-right">{row.surveyResponses}</td>
+                      <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                        {formatRate(row.surveyResponses, row.registrations)}
+                      </td>
                       <td className="px-4 py-3 text-right">{row.seminarApplications}</td>
+                      <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                        {formatRate(row.seminarApplications, row.registrations)}
+                      </td>
                       <td className="px-4 py-3 text-right">{row.purchases}</td>
+                      <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                        {formatRate(row.purchases, row.registrations)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -73,8 +90,11 @@ export default async function AgencyPage() {
                     <th className="px-4 py-3">流入元</th>
                     <th className="px-4 py-3 text-right">登録数</th>
                     <th className="px-4 py-3 text-right">アンケート回答</th>
+                    <th className="px-4 py-3 text-right">回答率</th>
                     <th className="px-4 py-3 text-right">セミナー申し込み</th>
+                    <th className="px-4 py-3 text-right">申込率</th>
                     <th className="px-4 py-3 text-right">購入</th>
+                    <th className="px-4 py-3 text-right">購入率</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -84,8 +104,17 @@ export default async function AgencyPage() {
                       <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">{row.agency}</td>
                       <td className="px-4 py-3 text-right">{row.registrations}</td>
                       <td className="px-4 py-3 text-right">{row.surveyResponses}</td>
+                      <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                        {formatRate(row.surveyResponses, row.registrations)}
+                      </td>
                       <td className="px-4 py-3 text-right">{row.seminarApplications}</td>
+                      <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                        {formatRate(row.seminarApplications, row.registrations)}
+                      </td>
                       <td className="px-4 py-3 text-right">{row.purchases}</td>
+                      <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                        {formatRate(row.purchases, row.registrations)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

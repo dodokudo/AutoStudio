@@ -55,16 +55,19 @@ export async function getAgencyStats(): Promise<AgencyStats> {
   const [rows] = await client.query({
     query: `
       WITH info_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_info')}
+        SELECT MAX(snapshot_date) AS sd
+        FROM ${table('user_info')}
+        WHERE field_name = '流入元'
+          AND NULLIF(TRIM(field_value), '') IS NOT NULL
       ),
       core_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_core')}
+        SELECT sd FROM info_latest
       ),
       tags_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_tags')}
+        SELECT sd FROM info_latest
       ),
       surveys_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_surveys')}
+        SELECT sd FROM info_latest
       ),
       agency_users AS (
         SELECT DISTINCT i.user_id, i.field_value AS agency
