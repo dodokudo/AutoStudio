@@ -18,6 +18,7 @@ import path from 'node:path';
 import { createBigQueryClient, getDataset } from '../lib/bigquery';
 import { BigQuery, TableField } from '@google-cloud/bigquery';
 import { notifyThreadsSyncFailure, notifyThreadsDataStale } from '../lib/notifications';
+import { THREADS_ACCOUNTS, type ThreadsAccount } from '../lib/threadsAccounts';
 
 loadEnv();
 loadEnv({ path: path.resolve(process.cwd(), '.env.local') });
@@ -33,27 +34,27 @@ const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 const THREADS_BUSINESS_ID = process.env.THREADS_BUSINESS_ID?.trim();
 
 // ANALYCAのBigQueryからトークンを取得（環境変数はフォールバック）
-async function resolveThreadsToken(): Promise<string> {
+async function resolveThreadsToken(account: ThreadsAccount): Promise<string> {
   try {
     const bq = createBigQueryClient(PROJECT_ID);
-    const userId = THREADS_BUSINESS_ID || '10012809578833342';
+    const userId = account.key === 'main' ? (THREADS_BUSINESS_ID || account.threadsUserId) : account.threadsUserId;
     const [rows] = await bq.query({
       query: `SELECT threads_access_token FROM \`mark-454114.analyca.users\` WHERE user_id = @userId AND threads_access_token IS NOT NULL AND threads_token_expires_at > CURRENT_TIMESTAMP() LIMIT 1`,
       params: { userId },
     });
     if (rows.length > 0 && rows[0].threads_access_token) {
-      console.log('[syncThreadsFromApi] Token fetched from ANALYCA BigQuery');
+      console.log(`[syncThreadsFromApi] Token fetched from ANALYCA BigQuery for ${account.key}`);
       return rows[0].threads_access_token;
     }
   } catch (err) {
-    console.warn('[syncThreadsFromApi] Failed to fetch token from ANALYCA BigQuery:', err instanceof Error ? err.message : err);
+    console.warn(`[syncThreadsFromApi] Failed to fetch token for ${account.key} from ANALYCA BigQuery:`, err instanceof Error ? err.message : err);
   }
-  const envToken = process.env.THREADS_TOKEN?.trim();
+  const envToken = account.key === 'main' ? process.env.THREADS_TOKEN?.trim() : undefined;
   if (envToken) {
     console.warn('[syncThreadsFromApi] Using fallback env THREADS_TOKEN');
     return envToken;
   }
-  throw new Error('No valid Threads token available (ANALYCA BigQuery and env both failed)');
+  throw new Error(`No valid Threads token available for ${account.key} (ANALYCA BigQuery and env both failed)`);
 }
 
 // ============================================================================
@@ -332,10 +333,10 @@ async function getMyCommentTree(
 // 同期処理
 // ============================================================================
 
-async function syncAccountInsights(bigQueryClient: BigQuery, accessToken: string, threadsUserId: string): Promise<void> {
-  console.log('[syncThreadsFromApi] === Syncing Account Insights ===');
+async function syncAccountInsights(bigQueryClient: BigQuery, accessToken: string, account: ThreadsAccount): Promise<void> {
+  console.log(`[syncThreadsFromApi] === Syncing Account Insights: ${account.key} ===`);
 
-  const insights = await getThreadsUserInsights(accessToken, threadsUserId);
+  const insights = await getThreadsUserInsights(accessToken, account.threadsUserId);
   const followersCount = insights.followers_count || 0;
   const profileViews = insights.views || 0;  // プロフィールビュー（GASと同じ）
   const dateStr = insights.dateStr; // API取得時に計算したJSTの昨日
@@ -350,29 +351,46 @@ async function syncAccountInsights(bigQueryClient: BigQuery, accessToken: string
   // MERGE で upsert（dateはDATE型にキャスト）
   const query = `
     MERGE \`${PROJECT_ID}.${DATASET_ID}.threads_daily_metrics\` T
-    USING (SELECT DATE(@date) as date, @followers_snapshot as followers_snapshot, @profile_views as profile_views) S
-    ON T.date = S.date
+    USING (
+      SELECT
+        DATE(@date) as date,
+        @account_key as account_key,
+        @threads_user_id as threads_user_id,
+        @followers_snapshot as followers_snapshot,
+        @profile_views as profile_views,
+        CURRENT_TIMESTAMP() as collected_at
+    ) S
+    ON COALESCE(T.account_key, 'main') = S.account_key
+      AND COALESCE(T.threads_user_id, '10012809578833342') = S.threads_user_id
+      AND T.date = S.date
     WHEN MATCHED THEN
-      UPDATE SET followers_snapshot = S.followers_snapshot, profile_views = S.profile_views
+      UPDATE SET
+        followers_snapshot = S.followers_snapshot,
+        profile_views = S.profile_views,
+        collected_at = S.collected_at,
+        account_key = S.account_key,
+        threads_user_id = S.threads_user_id
     WHEN NOT MATCHED THEN
-      INSERT (date, followers_snapshot, profile_views)
-      VALUES (S.date, S.followers_snapshot, S.profile_views)
+      INSERT (date, followers_snapshot, profile_views, collected_at, account_key, threads_user_id)
+      VALUES (S.date, S.followers_snapshot, S.profile_views, S.collected_at, S.account_key, S.threads_user_id)
   `;
 
   await bigQueryClient.query({
     query,
     params: {
       date: dateStr,
+      account_key: account.key,
+      threads_user_id: account.threadsUserId,
       followers_snapshot: followersCount,
       profile_views: profileViews,
     },
   });
 
-  console.log(`[syncThreadsFromApi] Account insights saved for ${dateStr}`);
+  console.log(`[syncThreadsFromApi] Account insights saved for ${account.key} ${dateStr}`);
 }
 
-async function syncPosts(bigQueryClient: BigQuery, accessToken: string): Promise<void> {
-  console.log('[syncThreadsFromApi] === Syncing Posts ===');
+async function syncPosts(bigQueryClient: BigQuery, accessToken: string, account: ThreadsAccount): Promise<void> {
+  console.log(`[syncThreadsFromApi] === Syncing Posts: ${account.key} ===`);
 
   const posts = await getThreadsPosts(accessToken, 50);
 
@@ -400,6 +418,8 @@ async function syncPosts(bigQueryClient: BigQuery, accessToken: string): Promise
       media_type: post.media_type,
       is_quote_post: post.is_quote_post || false,
       updated_at: new Date().toISOString(),
+      account_key: account.key,
+      threads_user_id: account.threadsUserId,
     });
 
     // API制限対策
@@ -413,7 +433,13 @@ async function syncPosts(bigQueryClient: BigQuery, accessToken: string): Promise
 
   // 既存のpost_idを取得
   const [existingRows] = await bigQueryClient.query({
-    query: `SELECT post_id FROM \`${PROJECT_ID}.${DATASET_ID}.threads_posts\``,
+    query: `
+      SELECT post_id
+      FROM \`${PROJECT_ID}.${DATASET_ID}.threads_posts\`
+      WHERE COALESCE(account_key, 'main') = @account_key
+        AND COALESCE(threads_user_id, '10012809578833342') = @threads_user_id
+    `,
+    params: { account_key: account.key, threads_user_id: account.threadsUserId },
   });
   const existingPostIds = new Set((existingRows as Array<{post_id: string}>).map(r => r.post_id));
 
@@ -427,8 +453,8 @@ async function syncPosts(bigQueryClient: BigQuery, accessToken: string): Promise
   for (const post of newPosts) {
     const query = `
       INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.threads_posts\`
-      (post_id, posted_at, permalink, content, impressions_total, likes_total, replies_total, reposts_total, quotes_total, media_type, is_quote_post, updated_at)
-      VALUES (@post_id, @posted_at, @permalink, @content, @impressions_total, @likes_total, @replies_total, @reposts_total, @quotes_total, @media_type, @is_quote_post, @updated_at)
+      (post_id, posted_at, permalink, content, impressions_total, likes_total, replies_total, reposts_total, quotes_total, media_type, is_quote_post, updated_at, account_key, threads_user_id)
+      VALUES (@post_id, @posted_at, @permalink, @content, @impressions_total, @likes_total, @replies_total, @reposts_total, @quotes_total, @media_type, @is_quote_post, @updated_at, @account_key, @threads_user_id)
     `;
 
     try {
@@ -450,8 +476,12 @@ async function syncPosts(bigQueryClient: BigQuery, accessToken: string): Promise
           replies_total = @replies_total,
           reposts_total = @reposts_total,
           quotes_total = @quotes_total,
-          updated_at = @updated_at
+          updated_at = @updated_at,
+          account_key = @account_key,
+          threads_user_id = @threads_user_id
       WHERE post_id = @post_id
+        AND COALESCE(account_key, 'main') = @account_key
+        AND COALESCE(threads_user_id, '10012809578833342') = @threads_user_id
     `;
 
     try {
@@ -472,8 +502,8 @@ async function syncPosts(bigQueryClient: BigQuery, accessToken: string): Promise
   console.log(`[syncThreadsFromApi] Posts synced successfully`);
 }
 
-async function syncComments(bigQueryClient: BigQuery, accessToken: string, myUsername: string): Promise<void> {
-  console.log('[syncThreadsFromApi] === Syncing Comments ===');
+async function syncComments(bigQueryClient: BigQuery, accessToken: string, myUsername: string, account: ThreadsAccount): Promise<void> {
+  console.log(`[syncThreadsFromApi] === Syncing Comments: ${account.key} ===`);
   console.log(`[syncThreadsFromApi] Username: ${myUsername}`);
 
   // まず投稿一覧を取得
@@ -505,7 +535,13 @@ async function syncComments(bigQueryClient: BigQuery, accessToken: string, myUse
 
   // 既存のcomment_idを取得
   const [existingRows] = await bigQueryClient.query({
-    query: `SELECT comment_id FROM \`${PROJECT_ID}.${DATASET_ID}.threads_comments\``,
+    query: `
+      SELECT comment_id
+      FROM \`${PROJECT_ID}.${DATASET_ID}.threads_comments\`
+      WHERE COALESCE(account_key, 'main') = @account_key
+        AND COALESCE(threads_user_id, '10012809578833342') = @threads_user_id
+    `,
+    params: { account_key: account.key, threads_user_id: account.threadsUserId },
   });
   const existingCommentIds = new Set((existingRows as Array<{comment_id: string}>).map(r => r.comment_id));
 
@@ -520,8 +556,8 @@ async function syncComments(bigQueryClient: BigQuery, accessToken: string, myUse
   for (const comment of newComments) {
     const query = `
       INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.threads_comments\`
-      (comment_id, parent_post_id, text, timestamp, permalink, has_replies, depth, views, created_at, updated_at)
-      VALUES (@comment_id, @parent_post_id, @text, @timestamp, @permalink, @has_replies, @depth, @views, @created_at, @updated_at)
+      (comment_id, parent_post_id, text, timestamp, permalink, has_replies, depth, views, created_at, updated_at, account_key, threads_user_id)
+      VALUES (@comment_id, @parent_post_id, @text, @timestamp, @permalink, @has_replies, @depth, @views, @created_at, @updated_at, @account_key, @threads_user_id)
     `;
 
     try {
@@ -531,6 +567,8 @@ async function syncComments(bigQueryClient: BigQuery, accessToken: string, myUse
           ...comment,
           created_at: now,
           updated_at: now,
+          account_key: account.key,
+          threads_user_id: account.threadsUserId,
         },
       });
     } catch (error) {
@@ -542,8 +580,13 @@ async function syncComments(bigQueryClient: BigQuery, accessToken: string, myUse
   for (const comment of existingComments) {
     const query = `
       UPDATE \`${PROJECT_ID}.${DATASET_ID}.threads_comments\`
-      SET views = @views, updated_at = @updated_at
+      SET views = @views,
+          updated_at = @updated_at,
+          account_key = @account_key,
+          threads_user_id = @threads_user_id
       WHERE comment_id = @comment_id
+        AND COALESCE(account_key, 'main') = @account_key
+        AND COALESCE(threads_user_id, '10012809578833342') = @threads_user_id
     `;
 
     try {
@@ -553,6 +596,8 @@ async function syncComments(bigQueryClient: BigQuery, accessToken: string, myUse
           comment_id: comment.comment_id,
           views: comment.views,
           updated_at: now,
+          account_key: account.key,
+          threads_user_id: account.threadsUserId,
         },
       });
     } catch (error) {
@@ -595,6 +640,8 @@ async function ensureCommentsTable(bigQueryClient: BigQuery): Promise<void> {
       { name: 'views', type: 'INT64' },
       { name: 'created_at', type: 'TIMESTAMP' },
       { name: 'updated_at', type: 'TIMESTAMP' },
+      { name: 'account_key', type: 'STRING' },
+      { name: 'threads_user_id', type: 'STRING' },
     ];
 
     await table.create({ schema });
@@ -628,7 +675,18 @@ async function ensurePostsTableColumns(bigQueryClient: BigQuery): Promise<void> 
 async function checkLatestDataDate(bigQueryClient: BigQuery): Promise<string | null> {
   try {
     const [rows] = await bigQueryClient.query({
-      query: `SELECT MAX(date) as latest_date FROM \`${PROJECT_ID}.${DATASET_ID}.threads_daily_metrics\``,
+      query: `
+        SELECT MIN(latest_date) as latest_date
+        FROM (
+          SELECT
+            account_key,
+            MAX(date) as latest_date
+          FROM \`${PROJECT_ID}.${DATASET_ID}.threads_daily_metrics\`
+          WHERE account_key IN UNNEST(@account_keys)
+          GROUP BY account_key
+        )
+      `,
+      params: { account_keys: THREADS_ACCOUNTS.map((account) => account.key) },
     });
     if (rows && rows.length > 0 && rows[0].latest_date) {
       // BigQueryのDATE型は { value: 'YYYY-MM-DD' } の形式で返される
@@ -662,59 +720,61 @@ async function main() {
   console.log(`[syncThreadsFromApi] Starting sync with mode: ${mode}`);
   console.log(`[syncThreadsFromApi] THREADS_BUSINESS_ID: ${THREADS_BUSINESS_ID ? 'set' : 'NOT SET'}`);
 
-  let THREADS_TOKEN: string;
-  try {
-    THREADS_TOKEN = await resolveThreadsToken();
-    console.log(`[syncThreadsFromApi] THREADS_TOKEN: resolved`);
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    await notifyThreadsSyncFailure(mode, error);
-    throw new Error(error);
-  }
-
   const bigQueryClient = createBigQueryClient(PROJECT_ID);
 
-  // まずアカウント情報を取得してユーザー名とIDを確認
-  console.log('[syncThreadsFromApi] Fetching account info...');
-  let accountInfo;
   try {
-    accountInfo = await getThreadsAccountInfo(THREADS_TOKEN);
-    console.log(`[syncThreadsFromApi] Account: ${accountInfo.username} (ID: ${accountInfo.id})`);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('[syncThreadsFromApi] Failed to fetch account info:', errorMessage);
+    for (const account of THREADS_ACCOUNTS) {
+      console.log(`[syncThreadsFromApi] --- Account sync start: ${account.key} (${account.handle}) ---`);
 
-    // トークン期限切れの可能性が高いのでメール通知
-    await notifyThreadsSyncFailure(mode, `アカウント情報の取得に失敗: ${errorMessage}`);
-    process.exitCode = 1;
-    return;
-  }
+      let threadsToken: string;
+      try {
+        threadsToken = await resolveThreadsToken(account);
+        console.log(`[syncThreadsFromApi] THREADS_TOKEN resolved for ${account.key}`);
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        await notifyThreadsSyncFailure(mode, `${account.label}: ${error}`);
+        throw new Error(error);
+      }
 
-  try {
-    switch (mode) {
-      case 'account':
-        await syncAccountInsights(bigQueryClient, THREADS_TOKEN, accountInfo.id);
-        // アカウントインサイト同期後にデータの鮮度をチェック
-        await checkDataFreshness(bigQueryClient);
-        break;
-      case 'posts':
-        await syncPosts(bigQueryClient, THREADS_TOKEN);
-        break;
-      case 'comments':
-        await syncComments(bigQueryClient, THREADS_TOKEN, accountInfo.username);
-        break;
-      case 'posts-comments':
-        await syncPosts(bigQueryClient, THREADS_TOKEN);
-        await syncComments(bigQueryClient, THREADS_TOKEN, accountInfo.username);
-        break;
-      case 'all':
-      default:
-        await syncAccountInsights(bigQueryClient, THREADS_TOKEN, accountInfo.id);
-        await syncPosts(bigQueryClient, THREADS_TOKEN);
-        await syncComments(bigQueryClient, THREADS_TOKEN, accountInfo.username);
-        // 全モードの場合もデータの鮮度をチェック
-        await checkDataFreshness(bigQueryClient);
-        break;
+      console.log(`[syncThreadsFromApi] Fetching account info for ${account.key}...`);
+      let accountInfo;
+      try {
+        accountInfo = await getThreadsAccountInfo(threadsToken);
+        console.log(`[syncThreadsFromApi] Account: ${accountInfo.username} (ID: ${accountInfo.id})`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[syncThreadsFromApi] Failed to fetch account info for ${account.key}:`, errorMessage);
+        await notifyThreadsSyncFailure(mode, `${account.label}: アカウント情報の取得に失敗: ${errorMessage}`);
+        throw error;
+      }
+
+      switch (mode) {
+        case 'account':
+          await syncAccountInsights(bigQueryClient, threadsToken, account);
+          break;
+        case 'posts':
+          await syncPosts(bigQueryClient, threadsToken, account);
+          break;
+        case 'comments':
+          await syncComments(bigQueryClient, threadsToken, accountInfo.username, account);
+          break;
+        case 'posts-comments':
+          await syncPosts(bigQueryClient, threadsToken, account);
+          await syncComments(bigQueryClient, threadsToken, accountInfo.username, account);
+          break;
+        case 'all':
+        default:
+          await syncAccountInsights(bigQueryClient, threadsToken, account);
+          await syncPosts(bigQueryClient, threadsToken, account);
+          await syncComments(bigQueryClient, threadsToken, accountInfo.username, account);
+          break;
+      }
+
+      console.log(`[syncThreadsFromApi] --- Account sync completed: ${account.key} ---`);
+    }
+
+    if (mode === 'account' || mode === 'all') {
+      await checkDataFreshness(bigQueryClient);
     }
 
     console.log('[syncThreadsFromApi] Sync completed successfully');
