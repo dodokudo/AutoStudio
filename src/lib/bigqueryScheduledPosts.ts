@@ -27,8 +27,6 @@ const SCHEDULE_TABLE_SCHEMA = [
   { name: 'comment1_media_alt_texts', type: 'STRING' },
   { name: 'comment2', type: 'STRING' },
   { name: 'comment2_media_urls', type: 'STRING' },
-  { name: 'comment2_media_types', type: 'STRING' },
-  { name: 'comment2_media_alt_texts', type: 'STRING' },
   { name: 'comment3', type: 'STRING' },
   { name: 'comment4', type: 'STRING' },
   { name: 'comment5', type: 'STRING' },
@@ -68,33 +66,18 @@ async function ensureScheduledPostsTableInternal() {
       }
     }
   }
-  await client.query({
-    query: `
-      ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-      ADD COLUMN IF NOT EXISTS source_account_key STRING
-    `,
-  });
-  await client.query({
-    query: `
-      ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-      ADD COLUMN IF NOT EXISTS target_account_key STRING
-    `,
-  });
-  for (const column of [
-    'main_media_urls',
-    'main_media_types',
-    'main_media_alt_texts',
-    'comment1_media_urls',
-    'comment1_media_types',
-    'comment1_media_alt_texts',
-    'comment2_media_urls',
-    'comment2_media_types',
-    'comment2_media_alt_texts',
-  ]) {
+
+  const [metadata] = await table.getMetadata();
+  const existingColumns = new Set(
+    ((metadata.schema?.fields ?? []) as Array<{ name?: string }>).map((field) => field.name).filter(Boolean),
+  );
+  const missingColumns = SCHEDULE_TABLE_SCHEMA.filter((field) => !existingColumns.has(field.name));
+
+  for (const column of missingColumns) {
     await client.query({
       query: `
         ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-        ADD COLUMN IF NOT EXISTS ${column} STRING
+        ADD COLUMN ${column.name} ${column.type}
       `,
     });
   }
@@ -209,8 +192,8 @@ export async function listScheduledPosts(params: { startDate?: string; endDate?:
       sp.comment1_media_alt_texts,
       sp.comment2,
       sp.comment2_media_urls,
-      sp.comment2_media_types,
-      sp.comment2_media_alt_texts,
+      NULL AS comment2_media_types,
+      NULL AS comment2_media_alt_texts,
       sp.comment3,
       sp.comment4,
       sp.comment5,
@@ -311,8 +294,8 @@ export async function getScheduledPostById(scheduleId: string, options: Schedule
       sp.comment1_media_alt_texts,
       sp.comment2,
       sp.comment2_media_urls,
-      sp.comment2_media_types,
-      sp.comment2_media_alt_texts,
+      NULL AS comment2_media_types,
+      NULL AS comment2_media_alt_texts,
       sp.comment3,
       sp.comment4,
       sp.comment5,
@@ -426,8 +409,8 @@ export async function insertScheduledPost(params: {
   await ensureScheduledPostsTable();
   const sql = `
     INSERT INTO \`${PROJECT_ID}.${DATASET}.${TABLE}\`
-    (schedule_id, plan_id, scheduled_time, status, source_account_key, target_account_key, main_text, main_media_urls, main_media_types, main_media_alt_texts, comment1, comment1_media_urls, comment1_media_types, comment1_media_alt_texts, comment2, comment2_media_urls, comment2_media_types, comment2_media_alt_texts, comment3, comment4, comment5, comment6, comment7, comment8, created_at, updated_at)
-    VALUES (@scheduleId, @planId, @scheduledTime, @status, @sourceAccountKey, @targetAccountKey, @mainText, @mainMediaUrls, @mainMediaTypes, @mainMediaAltTexts, @comment1, @comment1MediaUrls, @comment1MediaTypes, @comment1MediaAltTexts, @comment2, @comment2MediaUrls, @comment2MediaTypes, @comment2MediaAltTexts, @comment3, @comment4, @comment5, @comment6, @comment7, @comment8, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
+    (schedule_id, plan_id, scheduled_time, status, source_account_key, target_account_key, main_text, main_media_urls, main_media_types, main_media_alt_texts, comment1, comment1_media_urls, comment1_media_types, comment1_media_alt_texts, comment2, comment2_media_urls, comment3, comment4, comment5, comment6, comment7, comment8, created_at, updated_at)
+    VALUES (@scheduleId, @planId, @scheduledTime, @status, @sourceAccountKey, @targetAccountKey, @mainText, @mainMediaUrls, @mainMediaTypes, @mainMediaAltTexts, @comment1, @comment1MediaUrls, @comment1MediaTypes, @comment1MediaAltTexts, @comment2, @comment2MediaUrls, @comment3, @comment4, @comment5, @comment6, @comment7, @comment8, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())
   `;
   await client.query({
     query: sql,
@@ -448,8 +431,6 @@ export async function insertScheduledPost(params: {
       comment1MediaAltTexts: params.comment1MediaAltTexts ?? '[]',
       comment2: params.comment2,
       comment2MediaUrls: params.comment2MediaUrls ?? '[]',
-      comment2MediaTypes: params.comment2MediaTypes ?? '[]',
-      comment2MediaAltTexts: params.comment2MediaAltTexts ?? '[]',
       comment3: params.comment3 ?? '',
       comment4: params.comment4 ?? '',
       comment5: params.comment5 ?? '',
@@ -468,8 +449,6 @@ export async function insertScheduledPost(params: {
       comment1MediaTypes: 'STRING',
       comment1MediaAltTexts: 'STRING',
       comment2MediaUrls: 'STRING',
-      comment2MediaTypes: 'STRING',
-      comment2MediaAltTexts: 'STRING',
     },
   });
   return getScheduledPostById(params.scheduleId);
@@ -596,16 +575,6 @@ export async function updateScheduledPost(
     setClauses.push('comment2_media_urls = @comment2MediaUrls');
     queryParams.comment2MediaUrls = params.comment2MediaUrls;
     types.comment2MediaUrls = 'STRING';
-  }
-  if (params.comment2MediaTypes !== undefined) {
-    setClauses.push('comment2_media_types = @comment2MediaTypes');
-    queryParams.comment2MediaTypes = params.comment2MediaTypes;
-    types.comment2MediaTypes = 'STRING';
-  }
-  if (params.comment2MediaAltTexts !== undefined) {
-    setClauses.push('comment2_media_alt_texts = @comment2MediaAltTexts');
-    queryParams.comment2MediaAltTexts = params.comment2MediaAltTexts;
-    types.comment2MediaAltTexts = 'STRING';
   }
   if (params.comment3 !== undefined) {
     setClauses.push('comment3 = @comment3');
