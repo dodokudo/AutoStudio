@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { revalidateTag, unstable_cache } from 'next/cache';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import type {
   ShortLink,
@@ -19,6 +20,7 @@ const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
 const FUNNEL_TABLE = 'link_funnels';
 const FUNNEL_STEP_TABLE = 'link_funnel_steps';
+const SHORT_LINKS_CACHE_TAG = 'short-links';
 
 const bigquery = createBigQueryClient(projectId);
 const lstepDataset = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
@@ -112,9 +114,14 @@ export async function getShortLinkByCode(shortCode: string): Promise<ShortLink |
 export function invalidateShortLinkCache(): void {
   shortLinkCache = null;
   shortLinkCacheFetchedAt = 0;
+  try {
+    revalidateTag(SHORT_LINKS_CACHE_TAG, { expire: 0 });
+  } catch {
+    // revalidateTag is only available inside Next.js runtime contexts.
+  }
 }
 
-export async function getAllShortLinks(): Promise<ShortLink[]> {
+async function getAllShortLinksFromBigQuery(): Promise<ShortLink[]> {
   const query = `
     WITH ranked_links AS (
       SELECT
@@ -143,6 +150,12 @@ export async function getAllShortLinks(): Promise<ShortLink[]> {
   const [rows] = await bigquery.query({ query });
   return rows as ShortLink[];
 }
+
+export const getAllShortLinks = unstable_cache(
+  getAllShortLinksFromBigQuery,
+  ['autostudio-short-links'],
+  { revalidate: 300, tags: [SHORT_LINKS_CACHE_TAG] },
+);
 
 async function ensureLinkFunnelTables() {
   const datasetRef = bigquery.dataset(dataset);
