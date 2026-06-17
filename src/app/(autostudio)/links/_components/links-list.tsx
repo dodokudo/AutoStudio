@@ -95,6 +95,8 @@ export function LinksList() {
                       {link.category === 'youtube' && 'YouTube'}
                       {link.category === 'line' && 'LINE'}
                       {link.category === 'ad' && '広告'}
+                      {link.category === 'note' && 'note'}
+                      {link.category === 'agency' && '代理店'}
                     </span>
                   )}
                 </td>

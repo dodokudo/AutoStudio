@@ -18,6 +18,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   instagram: 'Instagram',
   youtube: 'YouTube',
   ad: '広告',
+  line: 'LINE',
+  note: 'note',
+  agency: '代理店',
   uncategorized: '未分類',
 };
 
