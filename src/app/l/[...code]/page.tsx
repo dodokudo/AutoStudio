@@ -1,7 +1,7 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getShortLinkByCode, logClick } from '@/lib/links/bigquery';
 import { headers } from 'next/headers';
-import RedirectClient from './redirect-client';
+import { after } from 'next/server';
 
 interface PageProps {
   params: Promise<{ code: string[] }>;
@@ -41,16 +41,18 @@ export default async function ShortLinkRedirect({ params }: PageProps) {
     return null;
   }
 
-  await logClick(shortLink.id, {
-    referrer,
-    userAgent,
-    ipAddress,
-    deviceType: getDeviceType(userAgent),
-  }).catch((error) => {
-    console.error('Failed to log click:', error);
+  after(() => {
+    logClick(shortLink.id, {
+      referrer,
+      userAgent,
+      ipAddress,
+      deviceType: getDeviceType(userAgent),
+    }).catch((error) => {
+      console.error('Failed to log click:', error);
+    });
   });
 
-  return <RedirectClient destinationUrl={shortLink.destinationUrl} />;
+  redirect(shortLink.destinationUrl);
 }
 
 function isCrawlerUserAgent(userAgent: string): boolean {
