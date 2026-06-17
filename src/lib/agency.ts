@@ -12,6 +12,7 @@ export interface AgencyDailyRow {
   date: string | null;
   agency: string;
   registrations: number;
+  blockedWithin7Days: number;
   surveyResponses: number;
   seminarApplications: number;
   purchases: number;
@@ -20,6 +21,7 @@ export interface AgencyDailyRow {
 export interface AgencySummary {
   agency: string;
   registrations: number;
+  blockedWithin7Days: number;
   surveyResponses: number;
   seminarApplications: number;
   purchases: number;
@@ -36,6 +38,7 @@ interface RawRow {
   reg_date: { value: string } | string | null;
   agency: string;
   registrations: number;
+  blocked_within_7_days: number;
   survey_responses: number;
   seminar_applications: number;
   purchases: number;
@@ -84,6 +87,14 @@ export async function getAgencyStats(): Promise<AgencyStats> {
         WHERE c.snapshot_date = core_latest.sd
         GROUP BY c.user_id
       ),
+      first_blocked AS (
+        SELECT
+          user_id,
+          MIN(snapshot_date) AS first_blocked_date
+        FROM ${table('user_core')}
+        WHERE blocked = TRUE
+        GROUP BY user_id
+      ),
       survey_responses AS (
         SELECT DISTINCT user_id
         FROM (
@@ -107,11 +118,16 @@ export async function getAgencyStats(): Promise<AgencyStats> {
         a.agency,
         c.reg_date,
         COUNT(*) AS registrations,
+        COUNTIF(
+          fb.first_blocked_date IS NOT NULL
+          AND fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY)
+        ) AS blocked_within_7_days,
         COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
         0 AS seminar_applications,
         0 AS purchases
       FROM agency_users a
       LEFT JOIN core c USING (user_id)
+      LEFT JOIN first_blocked fb USING (user_id)
       LEFT JOIN survey_responses sr USING (user_id)
       WHERE c.reg_date >= DATE(@agencyStartDate)
       GROUP BY a.agency, c.reg_date
@@ -131,6 +147,7 @@ export async function getAgencyStats(): Promise<AgencyStats> {
     date: toDateString(row.reg_date),
     agency: row.agency,
     registrations: Number(row.registrations ?? 0),
+    blockedWithin7Days: Number(row.blocked_within_7_days ?? 0),
     surveyResponses: Number(row.survey_responses ?? 0),
     seminarApplications: Number(row.seminar_applications ?? 0),
     purchases: Number(row.purchases ?? 0),
@@ -141,11 +158,13 @@ export async function getAgencyStats(): Promise<AgencyStats> {
     const entry = summaryMap.get(row.agency) ?? {
       agency: row.agency,
       registrations: 0,
+      blockedWithin7Days: 0,
       surveyResponses: 0,
       seminarApplications: 0,
       purchases: 0,
     };
     entry.registrations += row.registrations;
+    entry.blockedWithin7Days += row.blockedWithin7Days;
     entry.surveyResponses += row.surveyResponses;
     entry.seminarApplications += row.seminarApplications;
     entry.purchases += row.purchases;
