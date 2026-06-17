@@ -1,3 +1,4 @@
+import { get } from '@vercel/edge-config';
 import { NextFetchEvent, NextRequest, NextResponse } from 'next/server';
 import { EDGE_SHORT_LINKS, type EdgeShortLink } from '@/lib/links/edgeRedirectMap';
 
@@ -53,9 +54,25 @@ function buildOgpHtml(shortLink: EdgeShortLink): string {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}">${imageMeta}</head><body></body></html>`;
 }
 
-function getShortLinkFromEdgeMap(pathname: string): EdgeShortLink | null {
+function getShortCode(pathname: string): string | null {
   if (!pathname.startsWith('/l/')) return null;
-  const code = decodeURIComponent(pathname.slice('/l/'.length).replace(/\/$/, ''));
+  return decodeURIComponent(pathname.slice('/l/'.length).replace(/\/$/, ''));
+}
+
+async function getShortLink(pathname: string): Promise<EdgeShortLink | null> {
+  const code = getShortCode(pathname);
+  if (!code) return null;
+
+  if (process.env.EDGE_CONFIG) {
+    try {
+      const edgeConfigLinks = await get<Record<string, EdgeShortLink>>('short_links');
+      const shortLink = edgeConfigLinks?.[code];
+      if (shortLink) return shortLink;
+    } catch (error) {
+      console.error('Failed to read short links from Edge Config:', error);
+    }
+  }
+
   return EDGE_SHORT_LINKS[code] ?? null;
 }
 
@@ -81,8 +98,8 @@ function logShortLinkClick(request: NextRequest, event: NextFetchEvent, shortLin
   );
 }
 
-function handleShortLink(request: NextRequest, event: NextFetchEvent): NextResponse | null {
-  const shortLink = getShortLinkFromEdgeMap(request.nextUrl.pathname);
+async function handleShortLink(request: NextRequest, event: NextFetchEvent): Promise<NextResponse | null> {
+  const shortLink = await getShortLink(request.nextUrl.pathname);
   if (!shortLink) return null;
 
   const userAgent = request.headers.get('user-agent') || '';
@@ -105,10 +122,10 @@ function handleShortLink(request: NextRequest, event: NextFetchEvent): NextRespo
   });
 }
 
-export function middleware(request: NextRequest, event: NextFetchEvent) {
+export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
 
-  const shortLinkResponse = handleShortLink(request, event);
+  const shortLinkResponse = await handleShortLink(request, event);
   if (shortLinkResponse) {
     return shortLinkResponse;
   }

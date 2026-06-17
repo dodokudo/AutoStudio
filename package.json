@@ -64,6 +64,7 @@
     "@sentry/nextjs": "^10.40.0",
     "@tavily/core": "^0.5.12",
     "@types/uuid": "^10.0.0",
+    "@vercel/edge-config": "^1.4.3",
     "better-sqlite3": "^12.6.2",
     "chart.js": "^4.5.1",
     "csv-parse": "^5.5.6",
