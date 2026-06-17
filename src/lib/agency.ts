@@ -4,6 +4,8 @@ const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 
 // 通常アンケートの回答完了タグ。現行取込では user_surveys.question = '回答完了' にも入る。
 const SURVEY_RESPONSE_TAG_NAMES = ['アンケート：回答完了'];
+const SEMINAR_APPLICATION_TAG_NAMES = ['【2026.5】セミナー申込総数'];
+const PURCHASE_TAG_NAMES = ['Threads教材'];
 const SURVEY_RESPONSE_TAG_IDS = ['8087272', 'タグ_8087272'];
 const SURVEY_COMPLETED_QUESTION = '回答完了';
 const AGENCY_START_DATE = '2026-06-14';
@@ -112,6 +114,20 @@ export async function getAgencyStats(): Promise<AgencyStats> {
             AND s.question = @surveyCompletedQuestion
             AND s.answer_flag = 1
         )
+      ),
+      seminar_applications AS (
+        SELECT DISTINCT t.user_id
+        FROM ${table('user_tags')} t, tags_latest
+        WHERE t.snapshot_date = tags_latest.sd
+          AND t.tag_name IN UNNEST(@seminarApplicationTagNames)
+          AND t.tag_flag = 1
+      ),
+      purchases AS (
+        SELECT DISTINCT t.user_id
+        FROM ${table('user_tags')} t, tags_latest
+        WHERE t.snapshot_date = tags_latest.sd
+          AND t.tag_name IN UNNEST(@purchaseTagNames)
+          AND t.tag_flag = 1
       )
       SELECT
         (SELECT sd FROM info_latest) AS snapshot_date,
@@ -123,12 +139,14 @@ export async function getAgencyStats(): Promise<AgencyStats> {
           AND fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY)
         ) AS blocked_within_7_days,
         COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
-        0 AS seminar_applications,
-        0 AS purchases
+        COUNTIF(sa.user_id IS NOT NULL) AS seminar_applications,
+        COUNTIF(p.user_id IS NOT NULL) AS purchases
       FROM agency_users a
       LEFT JOIN core c USING (user_id)
       LEFT JOIN first_blocked fb USING (user_id)
       LEFT JOIN survey_responses sr USING (user_id)
+      LEFT JOIN seminar_applications sa USING (user_id)
+      LEFT JOIN purchases p USING (user_id)
       WHERE c.reg_date >= DATE(@agencyStartDate)
       GROUP BY a.agency, c.reg_date
       ORDER BY c.reg_date DESC
@@ -137,6 +155,8 @@ export async function getAgencyStats(): Promise<AgencyStats> {
       surveyResponseTagNames: SURVEY_RESPONSE_TAG_NAMES,
       surveyResponseTagIds: SURVEY_RESPONSE_TAG_IDS,
       surveyCompletedQuestion: SURVEY_COMPLETED_QUESTION,
+      seminarApplicationTagNames: SEMINAR_APPLICATION_TAG_NAMES,
+      purchaseTagNames: PURCHASE_TAG_NAMES,
       agencyStartDate: AGENCY_START_DATE,
     },
   });
