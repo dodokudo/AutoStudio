@@ -31,8 +31,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(stats, {
       headers: {
         ...CORS_HEADERS,
-        // データ更新は1日1回（Lstep取り込み）なので10分キャッシュで十分
-        'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=3600',
+        'Cache-Control': 'no-store, no-cache, max-age=0, must-revalidate',
       },
     });
   } catch (error) {
