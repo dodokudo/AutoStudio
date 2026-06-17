@@ -28,7 +28,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const stats = await getAgencyStats();
-    return NextResponse.json(stats, {
+    const agency = request.nextUrl.searchParams.get('agency')?.trim();
+    const payload = agency
+      ? {
+          updatedAt: stats.updatedAt,
+          partner: stats.summary.find((row) => row.agency === agency) ?? null,
+          summary: stats.summary.filter((row) => row.agency === agency),
+          daily: stats.daily.filter((row) => row.agency === agency),
+          ranking: stats.summary,
+        }
+      : stats;
+
+    return NextResponse.json(payload, {
       headers: {
         ...CORS_HEADERS,
         'Cache-Control': 'no-store, no-cache, max-age=0, must-revalidate',
