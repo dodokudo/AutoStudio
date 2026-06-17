@@ -18,6 +18,8 @@ export interface AgencyDailyRow {
   surveyResponses: number;
   seminarApplications: number;
   purchases: number;
+  purchasesWithin30Days: number;
+  qualifiedListRewards: number;
 }
 
 export interface AgencySummary {
@@ -27,6 +29,8 @@ export interface AgencySummary {
   surveyResponses: number;
   seminarApplications: number;
   purchases: number;
+  purchasesWithin30Days: number;
+  qualifiedListRewards: number;
 }
 
 export interface AgencyStats {
@@ -44,6 +48,8 @@ interface RawRow {
   survey_responses: number;
   seminar_applications: number;
   purchases: number;
+  purchases_within_30_days: number;
+  qualified_list_rewards: number;
 }
 
 function toDateString(value: RawRow['reg_date']): string | null {
@@ -128,6 +134,16 @@ export async function getAgencyStats(): Promise<AgencyStats> {
         WHERE t.snapshot_date = tags_latest.sd
           AND t.tag_name IN UNNEST(@purchaseTagNames)
           AND t.tag_flag = 1
+      ),
+      first_purchases AS (
+        SELECT
+          t.user_id,
+          MIN(t.snapshot_date) AS first_purchase_date
+        FROM ${table('user_tags')} t
+        WHERE t.tag_name IN UNNEST(@purchaseTagNames)
+          AND t.tag_flag = 1
+          AND t.snapshot_date >= DATE(@agencyStartDate)
+        GROUP BY t.user_id
       )
       SELECT
         (SELECT sd FROM info_latest) AS snapshot_date,
@@ -140,13 +156,25 @@ export async function getAgencyStats(): Promise<AgencyStats> {
         ) AS blocked_within_7_days,
         COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
         COUNTIF(sa.user_id IS NOT NULL) AS seminar_applications,
-        COUNTIF(p.user_id IS NOT NULL) AS purchases
+        COUNTIF(p.user_id IS NOT NULL) AS purchases,
+        COUNTIF(
+          fp.first_purchase_date IS NOT NULL
+          AND fp.first_purchase_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 30 DAY)
+        ) AS purchases_within_30_days,
+        COUNTIF(
+          sr.user_id IS NOT NULL
+          AND NOT COALESCE(
+            fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY),
+            FALSE
+          )
+        ) AS qualified_list_rewards
       FROM agency_users a
       LEFT JOIN core c USING (user_id)
       LEFT JOIN first_blocked fb USING (user_id)
       LEFT JOIN survey_responses sr USING (user_id)
       LEFT JOIN seminar_applications sa USING (user_id)
       LEFT JOIN purchases p USING (user_id)
+      LEFT JOIN first_purchases fp USING (user_id)
       WHERE c.reg_date >= DATE(@agencyStartDate)
       GROUP BY a.agency, c.reg_date
       ORDER BY c.reg_date DESC
@@ -171,6 +199,8 @@ export async function getAgencyStats(): Promise<AgencyStats> {
     surveyResponses: Number(row.survey_responses ?? 0),
     seminarApplications: Number(row.seminar_applications ?? 0),
     purchases: Number(row.purchases ?? 0),
+    purchasesWithin30Days: Number(row.purchases_within_30_days ?? 0),
+    qualifiedListRewards: Number(row.qualified_list_rewards ?? 0),
   }));
 
   const summaryMap = new Map<string, AgencySummary>();
@@ -182,12 +212,16 @@ export async function getAgencyStats(): Promise<AgencyStats> {
       surveyResponses: 0,
       seminarApplications: 0,
       purchases: 0,
+      purchasesWithin30Days: 0,
+      qualifiedListRewards: 0,
     };
     entry.registrations += row.registrations;
     entry.blockedWithin7Days += row.blockedWithin7Days;
     entry.surveyResponses += row.surveyResponses;
     entry.seminarApplications += row.seminarApplications;
     entry.purchases += row.purchases;
+    entry.purchasesWithin30Days += row.purchasesWithin30Days;
+    entry.qualifiedListRewards += row.qualifiedListRewards;
     summaryMap.set(row.agency, entry);
   }
 
