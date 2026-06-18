@@ -71,7 +71,7 @@ async function patchEdgeConfig(
     {
       method: 'PATCH',
       headers: {
-        authorization: `Bearer ${apiToken}`,
+        authorization: `Bearer ${token}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
