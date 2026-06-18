@@ -68,11 +68,12 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
         body: JSON.stringify(formData),
       });
 
-      if (response.ok) {
+      const data = await response.json();
+
+      if (response.ok && data.edgeSynced !== false) {
         router.push('/links');
         router.refresh();
       } else {
-        const data = await response.json();
         setError(data.error || 'リンクの更新に失敗しました');
       }
     } catch (err) {

@@ -81,9 +81,9 @@ export const EDGE_SHORT_LINKS: Record<string, EdgeShortLink> = {
   },
   "6mpo": {
     "id": "e5b3a4f9-cbba-4ddb-8ef3-bba382e329b7",
-    "destinationUrl": "https://nexus-sync.net/tamop_tpo",
+    "destinationUrl": "https://nexus-sync.net/tamop_k",
     "title": "今すぐ特典を受け取る！",
-    "ogpImageUrl": "https://storage.googleapis.com/analyca-media/ogp/threads-ai-master/threads-ai-master-video-book-v2.png"
+    "ogpImageUrl": "https://storage.googleapis.com/analyca-media/ogp/threads-ai-master/threads-ai-master-ogp-v1.png"
   },
   "6po": {
     "id": "c288a6bd-2db4-4ac3-9449-1394773f593b",

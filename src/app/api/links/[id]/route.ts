@@ -20,8 +20,18 @@ export async function PUT(
     });
 
     const edgeSync = await syncShortLinksToEdgeConfig([shortLink]);
+    if (!edgeSync.synced) {
+      return NextResponse.json(
+        {
+          error: 'リンク情報は保存されましたが、高速配信用データへの反映に失敗しました。Vercel API tokenを確認してください。',
+          edgeSynced: false,
+          details: edgeSync.error,
+        },
+        { status: 502 },
+      );
+    }
 
-    return NextResponse.json({ success: true, edgeSynced: edgeSync.synced });
+    return NextResponse.json({ success: true, edgeSynced: true });
   } catch (error) {
     console.error('Failed to update short link:', error);
     return NextResponse.json({ error: 'Failed to update short link' }, { status: 500 });
