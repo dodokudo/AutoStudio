@@ -21,6 +21,7 @@ export interface PostInsight {
   planId: string;
   postedThreadId: string;
   postedAt: string;
+  accountKey: ThreadsAccountKey;
   templateId: string;
   theme: string;
   mainText: string;
@@ -139,6 +140,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
     const query = `
       SELECT
         post_id,
+        COALESCE(account_key, 'main') AS account_key,
         posted_at,
         updated_at,
         content,
@@ -175,6 +177,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
           planId: postedThreadId,
           postedThreadId,
           postedAt,
+          accountKey: row.account_key === 'sub' ? 'sub' : 'main',
           templateId: 'unknown',
           theme: 'Threads投稿',
           mainText: toPlain(row.content ?? ''),

@@ -43,7 +43,7 @@ export const THREADS_ACCOUNT_OPTIONS = [
 ];
 
 export function resolveThreadsAccountKey(value: unknown): ThreadsAccountKey {
-  return value === 'sub' || value === 'all' ? value : 'main';
+  return value === 'main' || value === 'sub' ? value : 'all';
 }
 
 export function getThreadsAccount(key: ThreadsAccountKey) {
