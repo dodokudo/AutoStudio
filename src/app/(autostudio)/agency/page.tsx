@@ -437,12 +437,25 @@ export default async function AgencyPage({
     );
   } else if (activeTab === 'management') {
     content = (
-      <AgencyRewardPanel rows={filteredSummary} previousRows={previousSummary} title="代理店管理" note={noteText} />
+      <AgencyRewardPanel
+        rows={filteredSummary}
+        previousRows={previousSummary}
+        initialRewardSettings={stats?.rewardSettings}
+        title="代理店管理"
+        note={noteText}
+      />
     );
   } else {
     content = (
       <div className="space-y-5">
-        <AgencyRewardPanel rows={filteredSummary} previousRows={previousSummary} title="全体管理" note={noteText} showTable={false} />
+        <AgencyRewardPanel
+          rows={filteredSummary}
+          previousRows={previousSummary}
+          initialRewardSettings={stats?.rewardSettings}
+          title="全体管理"
+          note={noteText}
+          showTable={false}
+        />
         <SectionPanel title="ランキング">
           <RankingTable
             rows={filteredSummary}

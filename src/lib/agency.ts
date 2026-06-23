@@ -1,4 +1,5 @@
 import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
+import { getAgencyRewardSettings, type AgencyRewardRule } from '@/lib/agencyRewards';
 
 const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 
@@ -37,6 +38,7 @@ export interface AgencyStats {
   updatedAt: string | null;
   summary: AgencySummary[];
   daily: AgencyDailyRow[];
+  rewardSettings: Record<string, AgencyRewardRule>;
 }
 
 interface RawRow {
@@ -228,8 +230,9 @@ export async function getAgencyStats(): Promise<AgencyStats> {
   const summary = Array.from(summaryMap.values()).sort(
     (a, b) => b.registrations - a.registrations || b.surveyResponses - a.surveyResponses,
   );
+  const rewardSettings = await getAgencyRewardSettings(summary.map((row) => row.agency));
 
   const updatedAt = rawRows.length > 0 ? toDateString(rawRows[0].snapshot_date) : null;
 
-  return { updatedAt, summary, daily };
+  return { updatedAt, summary, daily, rewardSettings };
 }

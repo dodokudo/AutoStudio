@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Card } from '@/components/ui/card';
 import { classNames } from '@/lib/classNames';
+import type { AgencyRewardRule } from '@/lib/agencyRewards';
 
 type RewardMode = 'performance' | 'list';
 
@@ -19,7 +20,10 @@ type AgencyRewardRow = {
 
 type CalculatedRewardRow = AgencyRewardRow & {
   mode: RewardMode;
+  listRewardUnit: number;
   performanceRewardUnit: number;
+  revenueUnit: number;
+  updatedAt: string | null;
   revenue: number;
   payout: number;
   roas: number | null;
@@ -29,10 +33,12 @@ type CalculatedRewardRow = AgencyRewardRow & {
 
 type RewardMetricTone = 'up' | 'down' | 'neutral';
 
-const STORAGE_KEY = 'autostudio:agency-reward-settings:v1';
-const LIST_REWARD_UNIT_YEN = 500;
-const PERFORMANCE_REWARD_UNIT_YEN = 20000;
-const PURCHASE_REVENUE_UNIT_YEN = 100000;
+const DEFAULT_REWARD_RULE = {
+  mode: 'list' as RewardMode,
+  listRewardUnit: 500,
+  performanceRewardUnit: 20000,
+  revenueUnit: 100000,
+};
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('ja-JP').format(value);
@@ -57,26 +63,6 @@ function formatDelta(value: number, formatter: (value: number) => string): strin
   return `${value > 0 ? '+' : ''}${formatter(value)}`;
 }
 
-function loadSettings(): { modes: Record<string, RewardMode>; performanceRewardUnits: Record<string, number> } {
-  if (typeof window === 'undefined') return { modes: {}, performanceRewardUnits: {} };
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { modes: {}, performanceRewardUnits: {} };
-    const parsed = JSON.parse(raw) as {
-      modes?: Record<string, RewardMode>;
-      performanceRewardUnits?: Record<string, number>;
-      purchaseRewardUnit?: number;
-    };
-    return {
-      modes: parsed.modes ?? {},
-      performanceRewardUnits: parsed.performanceRewardUnits ?? {},
-    };
-  } catch {
-    return { modes: {}, performanceRewardUnits: {} };
-  }
-}
-
 const toneTextClass: Record<RewardMetricTone, string> = {
   up: 'text-[#137a4c]',
   down: 'text-[#b42318]',
@@ -99,46 +85,88 @@ function resolveDeltaTone(value: number | null, inverse = false): RewardMetricTo
 export function AgencyRewardPanel({
   rows,
   previousRows = [],
+  initialRewardSettings = {},
   title = '実績概要',
   note,
   showTable = true,
 }: {
   rows: AgencyRewardRow[];
   previousRows?: AgencyRewardRow[];
+  initialRewardSettings?: Record<string, AgencyRewardRule>;
   title?: string;
   note?: string;
   showTable?: boolean;
 }) {
-  const [modes, setModes] = useState<Record<string, RewardMode>>({});
-  const [performanceRewardUnits, setPerformanceRewardUnits] = useState<Record<string, number>>({});
-  const [settingsReady, setSettingsReady] = useState(false);
+  const [rewardSettings, setRewardSettings] = useState<Record<string, AgencyRewardRule>>(initialRewardSettings);
+  const [savingAgencies, setSavingAgencies] = useState<Record<string, boolean>>({});
+  const [saveErrors, setSaveErrors] = useState<Record<string, string | undefined>>({});
 
   useEffect(() => {
-    const settings = loadSettings();
-    setModes(settings.modes);
-    setPerformanceRewardUnits(settings.performanceRewardUnits);
-    setSettingsReady(true);
-  }, []);
+    setRewardSettings(initialRewardSettings);
+  }, [initialRewardSettings]);
 
-  useEffect(() => {
-    if (!settingsReady) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ modes, performanceRewardUnits }));
-  }, [modes, performanceRewardUnits, settingsReady]);
+  const getRule = (agency: string): AgencyRewardRule => ({
+    ...DEFAULT_REWARD_RULE,
+    ...(rewardSettings[agency] ?? {}),
+    agency,
+    updatedAt: rewardSettings[agency]?.updatedAt ?? null,
+  });
+
+  const updateRule = (agency: string, patch: Partial<AgencyRewardRule>) => {
+    setRewardSettings((current) => ({
+      ...current,
+      [agency]: {
+        ...DEFAULT_REWARD_RULE,
+        ...(current[agency] ?? {}),
+        ...patch,
+        agency,
+        updatedAt: patch.updatedAt ?? current[agency]?.updatedAt ?? null,
+      },
+    }));
+  };
+
+  const saveRule = async (agency: string, nextRule?: AgencyRewardRule) => {
+    const rule = nextRule ?? getRule(agency);
+    setSavingAgencies((current) => ({ ...current, [agency]: true }));
+    setSaveErrors((current) => ({ ...current, [agency]: undefined }));
+
+    try {
+      const response = await fetch('/api/agency/reward-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rule),
+      });
+      const payload = await response.json() as { success?: boolean; data?: AgencyRewardRule; error?: string };
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error ?? '保存に失敗しました');
+      }
+      setRewardSettings((current) => ({ ...current, [agency]: payload.data! }));
+    } catch (error) {
+      setSaveErrors((current) => ({
+        ...current,
+        [agency]: error instanceof Error ? error.message : '保存に失敗しました',
+      }));
+    } finally {
+      setSavingAgencies((current) => ({ ...current, [agency]: false }));
+    }
+  };
 
   const calculateRows = (targetRows: AgencyRewardRow[]): CalculatedRewardRow[] => {
     return targetRows.map((row) => {
-      const mode = modes[row.agency] ?? 'list';
-      const performanceRewardUnit = performanceRewardUnits[row.agency] ?? PERFORMANCE_REWARD_UNIT_YEN;
-      const revenue = row.purchasesWithin30Days * PURCHASE_REVENUE_UNIT_YEN;
+      const rule = getRule(row.agency);
+      const revenue = row.purchasesWithin30Days * rule.revenueUnit;
       const payout =
-        mode === 'list'
-          ? row.qualifiedListRewards * LIST_REWARD_UNIT_YEN
-          : row.purchasesWithin30Days * performanceRewardUnit;
+        rule.mode === 'list'
+          ? row.qualifiedListRewards * rule.listRewardUnit
+          : row.purchasesWithin30Days * rule.performanceRewardUnit;
       const profit = revenue - payout;
       return {
         ...row,
-        mode,
-        performanceRewardUnit,
+        mode: rule.mode,
+        listRewardUnit: rule.listRewardUnit,
+        performanceRewardUnit: rule.performanceRewardUnit,
+        revenueUnit: rule.revenueUnit,
+        updatedAt: rule.updatedAt,
         revenue,
         payout,
         roas: payout > 0 ? revenue / payout : null,
@@ -148,8 +176,8 @@ export function AgencyRewardPanel({
     });
   };
 
-  const calculatedRows = useMemo<CalculatedRewardRow[]>(() => calculateRows(rows), [modes, performanceRewardUnits, rows]);
-  const previousCalculatedRows = useMemo<CalculatedRewardRow[]>(() => calculateRows(previousRows), [modes, performanceRewardUnits, previousRows]);
+  const calculatedRows = calculateRows(rows);
+  const previousCalculatedRows = calculateRows(previousRows);
 
   const summarize = (targetRows: CalculatedRewardRow[]) => targetRows.reduce(
     (sum, row) => ({
@@ -260,12 +288,14 @@ export function AgencyRewardPanel({
       {showTable ? <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold text-[color:var(--color-text-primary)]">代理店別ROAS</h2>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-sm">
+          <table className="w-full min-w-[1320px] text-sm">
             <thead>
               <tr className="border-b border-[color:var(--color-border)] text-left text-[color:var(--color-text-secondary)]">
                 <th className="px-4 py-3">流入元</th>
                 <th className="px-4 py-3">報酬形態</th>
+                <th className="px-4 py-3 text-right">リスト単価</th>
                 <th className="px-4 py-3 text-right">成果単価</th>
+                <th className="px-4 py-3 text-right">売上単価</th>
                 <th className="px-4 py-3 text-right">登録数</th>
                 <th className="px-4 py-3 text-right">対象リスト</th>
                 <th className="px-4 py-3 text-right">30日以内購入</th>
@@ -283,17 +313,30 @@ export function AgencyRewardPanel({
                   <td className="px-4 py-3">
                     <select
                       value={row.mode}
-                      onChange={(event) =>
-                        setModes((current) => ({
-                          ...current,
-                          [row.agency]: event.target.value as RewardMode,
-                        }))
-                      }
+                      onChange={(event) => {
+                        const nextRule = { ...getRule(row.agency), mode: event.target.value as RewardMode };
+                        updateRule(row.agency, nextRule);
+                        void saveRule(row.agency, nextRule);
+                      }}
                       className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                     >
                       <option value="performance">成果報酬</option>
                       <option value="list">リスト報酬</option>
                     </select>
+                    <div className="mt-1 min-h-4 text-[11px] text-[color:var(--color-text-muted)]">
+                      {savingAgencies[row.agency] ? '保存中' : saveErrors[row.agency] ? saveErrors[row.agency] : row.updatedAt ? '保存済み' : 'デフォルト'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={row.listRewardUnit}
+                      onChange={(event) => updateRule(row.agency, { listRewardUnit: Math.max(0, Number(event.target.value) || 0) })}
+                      onBlur={() => void saveRule(row.agency)}
+                      className="h-9 w-[110px] rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-right text-sm tabular-nums text-[color:var(--color-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                    />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <input
@@ -301,12 +344,19 @@ export function AgencyRewardPanel({
                       min={0}
                       step={1000}
                       value={row.performanceRewardUnit}
-                      onChange={(event) =>
-                        setPerformanceRewardUnits((current) => ({
-                          ...current,
-                          [row.agency]: Math.max(0, Number(event.target.value) || 0),
-                        }))
-                      }
+                      onChange={(event) => updateRule(row.agency, { performanceRewardUnit: Math.max(0, Number(event.target.value) || 0) })}
+                      onBlur={() => void saveRule(row.agency)}
+                      className="h-9 w-[120px] rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-right text-sm tabular-nums text-[color:var(--color-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      step={10000}
+                      value={row.revenueUnit}
+                      onChange={(event) => updateRule(row.agency, { revenueUnit: Math.max(0, Number(event.target.value) || 0) })}
+                      onBlur={() => void saveRule(row.agency)}
                       className="h-9 w-[120px] rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-right text-sm tabular-nums text-[color:var(--color-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
                     />
                   </td>
