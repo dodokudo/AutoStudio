@@ -130,56 +130,77 @@ export async function getAgencyStats(): Promise<AgencyStats> {
           AND t.tag_name IN UNNEST(@seminarApplicationTagNames)
           AND t.tag_flag = 1
       ),
-      purchases AS (
-        SELECT DISTINCT t.user_id
-        FROM ${table('user_tags')} t, tags_latest
-        WHERE t.snapshot_date = tags_latest.sd
-          AND t.tag_name IN UNNEST(@purchaseTagNames)
-          AND t.tag_flag = 1
-      ),
       first_purchases AS (
         SELECT
           t.user_id,
-          MIN(t.snapshot_date) AS first_purchase_date
+          MIN(DATE_SUB(t.snapshot_date, INTERVAL 1 DAY)) AS first_purchase_date
         FROM ${table('user_tags')} t
         WHERE t.tag_name IN UNNEST(@purchaseTagNames)
           AND t.tag_flag = 1
           AND t.snapshot_date >= DATE(@agencyStartDate)
         GROUP BY t.user_id
+      ),
+      registration_daily AS (
+        SELECT
+          a.agency,
+          c.reg_date AS date,
+          COUNT(*) AS registrations,
+          COUNTIF(
+            fb.first_blocked_date IS NOT NULL
+            AND fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY)
+          ) AS blocked_within_7_days,
+          COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
+          COUNTIF(sa.user_id IS NOT NULL) AS seminar_applications,
+          COUNTIF(
+            sr.user_id IS NOT NULL
+            AND NOT COALESCE(
+              fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY),
+              FALSE
+            )
+          ) AS qualified_list_rewards
+        FROM agency_users a
+        LEFT JOIN core c USING (user_id)
+        LEFT JOIN first_blocked fb USING (user_id)
+        LEFT JOIN survey_responses sr USING (user_id)
+        LEFT JOIN seminar_applications sa USING (user_id)
+        WHERE c.reg_date >= DATE(@agencyStartDate)
+        GROUP BY a.agency, c.reg_date
+      ),
+      purchase_daily AS (
+        SELECT
+          a.agency,
+          fp.first_purchase_date AS date,
+          COUNT(*) AS purchases,
+          COUNTIF(
+            c.reg_date IS NOT NULL
+            AND fp.first_purchase_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 30 DAY)
+          ) AS purchases_within_30_days
+        FROM agency_users a
+        JOIN first_purchases fp USING (user_id)
+        LEFT JOIN core c USING (user_id)
+        GROUP BY a.agency, fp.first_purchase_date
+      ),
+      daily_keys AS (
+        SELECT agency, date FROM registration_daily
+        UNION DISTINCT
+        SELECT agency, date FROM purchase_daily
       )
       SELECT
         (SELECT sd FROM info_latest) AS snapshot_date,
-        a.agency,
-        c.reg_date,
-        COUNT(*) AS registrations,
-        COUNTIF(
-          fb.first_blocked_date IS NOT NULL
-          AND fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY)
-        ) AS blocked_within_7_days,
-        COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
-        COUNTIF(sa.user_id IS NOT NULL) AS seminar_applications,
-        COUNTIF(p.user_id IS NOT NULL) AS purchases,
-        COUNTIF(
-          fp.first_purchase_date IS NOT NULL
-          AND fp.first_purchase_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 30 DAY)
-        ) AS purchases_within_30_days,
-        COUNTIF(
-          sr.user_id IS NOT NULL
-          AND NOT COALESCE(
-            fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY),
-            FALSE
-          )
-        ) AS qualified_list_rewards
-      FROM agency_users a
-      LEFT JOIN core c USING (user_id)
-      LEFT JOIN first_blocked fb USING (user_id)
-      LEFT JOIN survey_responses sr USING (user_id)
-      LEFT JOIN seminar_applications sa USING (user_id)
-      LEFT JOIN purchases p USING (user_id)
-      LEFT JOIN first_purchases fp USING (user_id)
-      WHERE c.reg_date >= DATE(@agencyStartDate)
-      GROUP BY a.agency, c.reg_date
-      ORDER BY c.reg_date DESC
+        d.agency,
+        d.date AS reg_date,
+        COALESCE(r.registrations, 0) AS registrations,
+        COALESCE(r.blocked_within_7_days, 0) AS blocked_within_7_days,
+        COALESCE(r.survey_responses, 0) AS survey_responses,
+        COALESCE(r.seminar_applications, 0) AS seminar_applications,
+        COALESCE(p.purchases, 0) AS purchases,
+        COALESCE(p.purchases_within_30_days, 0) AS purchases_within_30_days,
+        COALESCE(r.qualified_list_rewards, 0) AS qualified_list_rewards
+      FROM daily_keys d
+      LEFT JOIN registration_daily r USING (agency, date)
+      LEFT JOIN purchase_daily p USING (agency, date)
+      WHERE d.date >= DATE(@agencyStartDate)
+      ORDER BY d.date DESC
     `,
     params: {
       surveyResponseTagNames: SURVEY_RESPONSE_TAG_NAMES,
