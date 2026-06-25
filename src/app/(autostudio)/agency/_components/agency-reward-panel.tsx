@@ -154,11 +154,11 @@ export function AgencyRewardPanel({
   const calculateRows = (targetRows: AgencyRewardRow[]): CalculatedRewardRow[] => {
     return targetRows.map((row) => {
       const rule = getRule(row.agency);
-      const revenue = row.purchasesWithin30Days * rule.revenueUnit;
+      const revenue = row.purchases * rule.revenueUnit;
       const payout =
         rule.mode === 'list'
           ? row.qualifiedListRewards * rule.listRewardUnit
-          : row.purchasesWithin30Days * rule.performanceRewardUnit;
+          : row.purchases * rule.performanceRewardUnit;
       const profit = revenue - payout;
       return {
         ...row,
@@ -185,6 +185,7 @@ export function AgencyRewardPanel({
       payout: sum.payout + row.payout,
       profit: sum.profit + row.profit,
       qualifiedListRewards: sum.qualifiedListRewards + row.qualifiedListRewards,
+      purchases: sum.purchases + row.purchases,
       purchasesWithin30Days: sum.purchasesWithin30Days + row.purchasesWithin30Days,
       registrations: sum.registrations + row.registrations,
       blockedWithin7Days: sum.blockedWithin7Days + row.blockedWithin7Days,
@@ -195,6 +196,7 @@ export function AgencyRewardPanel({
       payout: 0,
       profit: 0,
       qualifiedListRewards: 0,
+      purchases: 0,
       purchasesWithin30Days: 0,
       registrations: 0,
       blockedWithin7Days: 0,
@@ -298,7 +300,7 @@ export function AgencyRewardPanel({
                 <th className="px-4 py-3 text-right">売上単価</th>
                 <th className="px-4 py-3 text-right">登録数</th>
                 <th className="px-4 py-3 text-right">対象リスト</th>
-                <th className="px-4 py-3 text-right">30日以内購入</th>
+                <th className="px-4 py-3 text-right">購入</th>
                 <th className="px-4 py-3 text-right">売上</th>
                 <th className="px-4 py-3 text-right">報酬</th>
                 <th className="px-4 py-3 text-right">ROAS</th>
@@ -362,7 +364,7 @@ export function AgencyRewardPanel({
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.registrations)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.qualifiedListRewards)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.purchasesWithin30Days)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.purchases)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatYen(row.revenue)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatYen(row.payout)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-[color:var(--color-text-secondary)]">{formatRoas(row.roas)}</td>

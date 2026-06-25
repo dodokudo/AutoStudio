@@ -200,13 +200,13 @@ export async function saveAgencyRewardSetting(input: AgencyRewardRuleInput): Pro
 }
 
 export function calculateAgencyReward(
-  row: { qualifiedListRewards: number; purchasesWithin30Days: number },
+  row: { qualifiedListRewards: number; purchases: number },
   rule: AgencyRewardRule,
 ) {
-  const revenue = row.purchasesWithin30Days * rule.revenueUnit;
+  const revenue = row.purchases * rule.revenueUnit;
   const payout =
     rule.mode === 'performance'
-      ? row.purchasesWithin30Days * rule.performanceRewardUnit
+      ? row.purchases * rule.performanceRewardUnit
       : row.qualifiedListRewards * rule.listRewardUnit;
   const profit = revenue - payout;
 
