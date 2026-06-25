@@ -236,6 +236,7 @@ export default async function ThreadsHome({
           <PostTab
             planSummaries={planSummaries}
             recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
+            accountKey={selectedAccountKey}
           />,
       );
     }

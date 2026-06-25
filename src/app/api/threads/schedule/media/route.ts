@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `メディアは最大${MAX_THREADS_MEDIA_ITEMS}件までです` }, { status: 400 });
       }
 
-      const accountKey = resolveThreadsAccountKey(body?.accountKey);
+      const resolvedAccountKey = resolveThreadsAccountKey(body?.accountKey);
+      const accountKey = resolvedAccountKey === 'all' ? 'main' : resolvedAccountKey;
       const group = typeof body?.uploadGroup === 'string' && body.uploadGroup.trim()
         ? body.uploadGroup.trim().replace(/[^a-zA-Z0-9._-]/g, '-')
         : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -84,7 +85,8 @@ export async function POST(request: NextRequest) {
     }
 
     const rawAccountKey = formData.get('accountKey');
-    const accountKey = resolveThreadsAccountKey(typeof rawAccountKey === 'string' ? rawAccountKey : undefined);
+    const resolvedAccountKey = resolveThreadsAccountKey(typeof rawAccountKey === 'string' ? rawAccountKey : undefined);
+    const accountKey = resolvedAccountKey === 'all' ? 'main' : resolvedAccountKey;
     const uploadGroup = formData.get('uploadGroup');
     const group = typeof uploadGroup === 'string' && uploadGroup.trim()
       ? uploadGroup.trim().replace(/[^a-zA-Z0-9._-]/g, '-')

@@ -94,6 +94,13 @@ export function ScheduleEditor({
   const [comment2MediaItems, setComment2MediaItems] = useState<ScheduledPostMediaItem[]>([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const selectedTargetAccountKey =
+    selectedItem?.targetAccountKey === 'main' || selectedItem?.targetAccountKey === 'sub'
+      ? selectedItem.targetAccountKey
+      : null;
+  const uploadAccountKey =
+    selectedTargetAccountKey || (accountKey === 'main' || accountKey === 'sub' ? accountKey : null);
+  const isEditorReadOnly = isReadOnly && !selectedTargetAccountKey;
 
   useEffect(() => {
     if (selectedItem) {
@@ -182,6 +189,10 @@ export function ScheduleEditor({
     uploadScope: string,
   ) => {
     if (!files || files.length === 0) return;
+    if (!uploadAccountKey) {
+      setError('合算表示では新規メディアを追加できません。本垢またはサブ垢を選んでください。');
+      return;
+    }
     const nextFiles = Array.from(files);
     if (currentItems.length + nextFiles.length > maxItems) {
       setError(`メディアは最大${maxItems}件までです。`);
@@ -196,7 +207,7 @@ export function ScheduleEditor({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          accountKey,
+          accountKey: uploadAccountKey,
           uploadGroup,
           files: nextFiles.map((file) => ({ name: file.name, type: file.type, size: file.size })),
         }),
@@ -250,7 +261,7 @@ export function ScheduleEditor({
       setError('未入力または文字数超過の項目があります。');
       return;
     }
-    if (isReadOnly) {
+    if (isEditorReadOnly) {
       setError('合算表示では予約を作成できません。本垢またはサブ垢を選んでください。');
       return;
     }
@@ -279,7 +290,7 @@ export function ScheduleEditor({
       setError('メイン投稿を入力してください。');
       return;
     }
-    if (isReadOnly) {
+    if (isEditorReadOnly) {
       setError('合算表示では即時投稿できません。本垢またはサブ垢を選んでください。');
       return;
     }
@@ -320,7 +331,7 @@ export function ScheduleEditor({
             type="file"
             accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
             multiple
-            disabled={uploadingMedia || items.length >= maxItems}
+            disabled={uploadingMedia || items.length >= maxItems || !uploadAccountKey}
             className="hidden"
             onChange={(event) => {
               void handleMediaUpload(event.target.files, items, setItems, maxItems, uploadScope);
@@ -387,7 +398,7 @@ export function ScheduleEditor({
             <button
               type="button"
               className="mt-2 h-[42px] rounded-[var(--radius-lg)] bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-              disabled={isPublishing || isSaving || isReadOnly || uploadingMedia}
+              disabled={isPublishing || isSaving || isEditorReadOnly || uploadingMedia}
               onClick={handlePublishNow}
             >
               {isPublishing ? '投稿中...' : '今すぐ投稿'}
@@ -472,7 +483,7 @@ export function ScheduleEditor({
           <button
             type="button"
             className="ui-button-secondary justify-center"
-            disabled={isSaving || isReadOnly || uploadingMedia}
+            disabled={isSaving || isEditorReadOnly || uploadingMedia}
             onClick={() => handleSubmit('draft')}
           >
             {isSaving ? '保存中...' : '下書き保存'}
@@ -480,7 +491,7 @@ export function ScheduleEditor({
           <button
             type="button"
             className="ui-button-primary justify-center"
-            disabled={isSaving || isReadOnly || uploadingMedia}
+            disabled={isSaving || isEditorReadOnly || uploadingMedia}
             onClick={() => handleSubmit('scheduled')}
           >
             {isSaving ? '登録中...' : '予約登録'}

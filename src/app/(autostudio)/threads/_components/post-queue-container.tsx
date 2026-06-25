@@ -4,9 +4,11 @@ import useSWR from 'swr';
 import { useEffect, useMemo, useState } from 'react';
 import { PostQueue } from './post-queue';
 import type { ThreadPlanSummary } from '@/types/threadPlan';
+import type { ThreadsAccountKey } from '@/lib/threadsAccounts';
 
 interface PostQueueContainerProps {
   initialPlans: ThreadPlanSummary[];
+  accountKey: ThreadsAccountKey;
   variant?: 'standalone' | 'embedded';
 }
 
@@ -47,8 +49,9 @@ function normalize(plan: ThreadPlanSummary) {
   };
 }
 
-export function PostQueueContainer({ initialPlans, variant = 'embedded' }: PostQueueContainerProps) {
+export function PostQueueContainer({ initialPlans, accountKey, variant = 'embedded' }: PostQueueContainerProps) {
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const targetAccountKey = accountKey === 'main' || accountKey === 'sub' ? accountKey : 'main';
   const { data, mutate, isValidating } = useSWR<PlansResponse>('/api/threads/plans', fetcher, {
     fallbackData: { items: initialPlans },
     revalidateOnFocus: false,
@@ -109,6 +112,9 @@ export function PostQueueContainer({ initialPlans, variant = 'embedded' }: PostQ
           planId: id,
           scheduledAt: payload.scheduledAt,
           status: 'scheduled',
+          accountKey: targetAccountKey,
+          sourceAccountKey: targetAccountKey,
+          targetAccountKey,
           ...toSchedulePayload(payload.mainText, payload.comments),
         }),
       });
@@ -142,7 +148,11 @@ export function PostQueueContainer({ initialPlans, variant = 'embedded' }: PostQ
       const res = await fetch('/api/threads/schedule/publish-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(toSchedulePayload(payload.mainText, payload.comments)),
+        body: JSON.stringify({
+          ...toSchedulePayload(payload.mainText, payload.comments),
+          accountKey: targetAccountKey,
+          targetAccountKey,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

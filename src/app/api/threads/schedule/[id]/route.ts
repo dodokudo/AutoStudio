@@ -27,11 +27,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const payload = await request.json();
     const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, status, planId } = payload ?? {};
-    const targetAccountKey = payload?.targetAccountKey || payload?.accountKey
+    const resolvedTargetAccountKey = payload?.targetAccountKey || payload?.accountKey
       ? resolveThreadsAccountKey(payload?.targetAccountKey ?? payload?.accountKey)
       : undefined;
-    const sourceAccountKey = payload?.sourceAccountKey
+    const targetAccountKey = resolvedTargetAccountKey && resolvedTargetAccountKey !== 'all'
+      ? resolvedTargetAccountKey
+      : undefined;
+    const resolvedSourceAccountKey = payload?.sourceAccountKey
       ? resolveThreadsAccountKey(payload.sourceAccountKey)
+      : undefined;
+    const sourceAccountKey = resolvedSourceAccountKey && resolvedSourceAccountKey !== 'all'
+      ? resolvedSourceAccountKey
       : undefined;
     const hasMediaItems = Array.isArray(payload?.mediaItems);
     const hasComment1MediaItems = Array.isArray(payload?.comment1MediaItems);

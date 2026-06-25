@@ -235,8 +235,17 @@ export function ScheduleTab({
   }) => {
     setSaving(true);
     try {
-      if (isReadOnly) {
+      const selectedTargetAccountKey =
+        selectedItem?.targetAccountKey === 'main' || selectedItem?.targetAccountKey === 'sub'
+          ? selectedItem.targetAccountKey
+          : null;
+      const targetAccountKey =
+        accountKey === 'main' || accountKey === 'sub' ? accountKey : selectedTargetAccountKey;
+      if (isReadOnly && !targetAccountKey) {
         throw new Error('合算表示では予約を作成できません。本垢またはサブ垢を選んでください。');
+      }
+      if (!targetAccountKey) {
+        throw new Error('投稿先アカウントが未指定です。本垢またはサブ垢を選んでください。');
       }
       const hasId = Boolean(payload.scheduleId);
       const res = await fetch(
@@ -259,8 +268,8 @@ export function ScheduleTab({
             comment7: payload.comment7,
             comment8: payload.comment8,
             status: payload.status,
-            sourceAccountKey: selectedItem?.sourceAccountKey ?? accountKey,
-            targetAccountKey: accountKey,
+            sourceAccountKey: selectedItem?.sourceAccountKey ?? targetAccountKey,
+            targetAccountKey,
           }),
         },
       );

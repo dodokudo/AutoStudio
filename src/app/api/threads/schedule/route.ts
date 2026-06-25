@@ -48,8 +48,10 @@ export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
     const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, status, planId } = payload ?? {};
-    const targetAccountKey = resolveThreadsAccountKey(payload?.targetAccountKey ?? payload?.accountKey);
-    const sourceAccountKey = resolveThreadsAccountKey(payload?.sourceAccountKey ?? targetAccountKey);
+    const resolvedTargetAccountKey = resolveThreadsAccountKey(payload?.targetAccountKey ?? payload?.accountKey);
+    const targetAccountKey = resolvedTargetAccountKey === 'all' ? 'main' : resolvedTargetAccountKey;
+    const resolvedSourceAccountKey = resolveThreadsAccountKey(payload?.sourceAccountKey ?? targetAccountKey);
+    const sourceAccountKey = resolvedSourceAccountKey === 'all' ? targetAccountKey : resolvedSourceAccountKey;
     if (Array.isArray(payload?.mediaItems) && payload.mediaItems.length > MAX_THREADS_MEDIA_ITEMS) {
       return NextResponse.json({ error: `メディアは最大${MAX_THREADS_MEDIA_ITEMS}件までです` }, { status: 400 });
     }
