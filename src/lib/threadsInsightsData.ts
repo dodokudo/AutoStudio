@@ -20,6 +20,7 @@ export interface PostComment {
 export interface PostInsight {
   planId: string;
   postedThreadId: string;
+  permalink: string | null;
   postedAt: string;
   accountKey: ThreadsAccountKey;
   templateId: string;
@@ -140,6 +141,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
     const query = `
       SELECT
         post_id,
+        permalink,
         COALESCE(account_key, 'main') AS account_key,
         posted_at,
         updated_at,
@@ -176,6 +178,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
         return {
           planId: postedThreadId,
           postedThreadId,
+          permalink: toPlain(row.permalink) || null,
           postedAt,
           accountKey: row.account_key === 'sub' ? 'sub' : 'main',
           templateId: 'unknown',

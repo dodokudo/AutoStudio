@@ -11,8 +11,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { PostInsight, PostComment } from '@/lib/threadsInsightsData';
-import { getThreadsAccount, type ThreadsAccountKey, type ThreadsConcreteAccountKey } from '@/lib/threadsAccounts';
+import type { PostInsight } from '@/lib/threadsInsightsData';
+import type { ThreadsAccountKey, ThreadsConcreteAccountKey } from '@/lib/threadsAccounts';
 import { Card } from '@/components/ui/card';
 import { InsightsCard } from './insights-card';
 import { TopContentCard } from './top-content-card';
@@ -202,6 +202,7 @@ export function InsightsTab({
       likes: post.insights.likes ?? 0,
       replies: post.insights.replies ?? 0,
       postedAt: post.postedAt,
+      permalink: post.permalink ?? null,
       accountKey: (post.accountKey === 'sub' ? 'sub' : 'main') as ThreadsConcreteAccountKey,
       commentData: post.commentData ?? [],
     }));

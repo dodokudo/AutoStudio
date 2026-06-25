@@ -28,6 +28,7 @@ type TopContentPost = {
   likes: number;
   replies: number;
   postedAt: string;
+  permalink?: string | null;
   accountKey?: ThreadsConcreteAccountKey;
   commentData?: PostCommentData[];
 };
@@ -161,6 +162,7 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
 }) {
   const isTop10 = rank !== undefined && rank <= 10;
   const sourceAccount = post.accountKey ? getThreadsAccount(post.accountKey) : null;
+  const sourceAccountUrl = sourceAccount ? `https://www.threads.com/@${sourceAccount.handle}` : null;
   const commentData = post.commentData ?? [];
   const hasComments = commentData.length > 0;
   const { transitions: transitionRates, overallRate } = calculateTransitionRates(post.views, commentData);
@@ -196,9 +198,15 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
             minute: '2-digit',
           })}</span>
           {sourceAccount && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+            <a
+              href={sourceAccountUrl ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800"
+            >
               {sourceAccount.label}
-            </span>
+            </a>
           )}
           {hasComments && (
             <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
@@ -209,6 +217,17 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
         <div className="flex items-center gap-3">
           <span>閲覧 {post.views.toLocaleString()}</span>
           <span>いいね {post.likes.toLocaleString()}</span>
+          {post.permalink ? (
+            <a
+              href={post.permalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--color-text-secondary)] transition-colors hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]"
+            >
+              投稿を開く
+            </a>
+          ) : null}
           <button
             type="button"
             disabled={!eligibility.eligible}
