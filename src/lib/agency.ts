@@ -177,7 +177,8 @@ export async function getAgencyStats(): Promise<AgencyStats> {
           ) AS purchases_within_30_days
         FROM agency_users a
         JOIN first_purchases fp USING (user_id)
-        LEFT JOIN core c USING (user_id)
+        JOIN core c USING (user_id)
+        WHERE c.reg_date >= DATE(@agencyStartDate)
         GROUP BY a.agency, fp.first_purchase_date
       ),
       daily_keys AS (
