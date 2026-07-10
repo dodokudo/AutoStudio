@@ -128,7 +128,58 @@ function parseCSVLine(line: string): string[] {
   return result.map((value) => value.replace(/\r$/, ''));
 }
 
+// 【2026.7】7月セミナーのパネル計測タグ。完全一致で英語カラム名に変換する
+const SEMINAR_2026_7_COLUMNS: Record<string, string> = {
+  '【2026.7】個別相談会申込済み': 's7_consult_applied',
+  '【2026.7】個別相談会タップ': 's7_consult_tap',
+  '【2026.7】個別相談会参加': 's7_consult_joined',
+  '【2026.7】セミナーアンケート回答': 's7_seminar_survey_answered',
+  '【2026.7】セミナーフォームタップ(2日後昼)': 's7_seminar_form_tap_d2_noon_hw',
+  '【2026.7】セミナーフォームタップ（2日後昼）': 's7_seminar_form_tap_d2_noon',
+  '【2026.7】セミナーフォームタップ（4日後23時）': 's7_seminar_form_tap_d4_23',
+  '【2026.7】セミナーフォームタップ（4日後19時）': 's7_seminar_form_tap_d4_19',
+  '【2026.7】セミナーフォームタップ（4日後朝）': 's7_seminar_form_tap_d4_morning',
+  '【2026.7】セミナーフォームタップ（3日後夜）': 's7_seminar_form_tap_d3_night',
+  '【2026.7】セミナーフォームタップ（2日後夜）': 's7_seminar_form_tap_d2_night',
+  '【2026.7】セミナーフォームタップ（2日後朝）': 's7_seminar_form_tap_d2_morning',
+  '【2026.7】セミナーフォームタップ（1日後夜）': 's7_seminar_form_tap_d1_night',
+  '【2026.7】セミナーフォームタップ（1日後朝）': 's7_seminar_form_tap_d1_morning',
+  '【2026.7】セミナーフォームタップ（1時間後）': 's7_seminar_form_tap_h1',
+  '【2026.7】動画LPタップ（1時間後）': 's7_video_lp_tap_h1',
+  '【2026.7】動画LPタップ（アンケート回答直後）': 's7_video_lp_tap_after_survey',
+  '【2026.7】アンケートスタートボタン（2日後夜）': 's7_survey_start_d2_night',
+  '【2026.7】アンケートスタートボタン（2日後朝）': 's7_survey_start_d2_morning',
+  '【2026.7】アンケートスタートボタン（1日後夜）': 's7_survey_start_d1_night',
+  '【2026.7】アンケートスタートボタン（1時間後）': 's7_survey_start_h1',
+  '【2026.7】アンケートスタートボタン（登録直後）': 's7_survey_start_immediate',
+  '【2026.7】動画視聴総数': 's7_video_watched_total',
+  '【2026.7】動画LPのCTAタップ': 's7_video_lp_cta_tap',
+  '【2026.7】教材のCTAタップ': 's7_material_cta_tap',
+  '【2026.7】登録特典タップ': 's7_gift_tap',
+  '【2026.7】登録特典：動画視聴': 's7_gift_video',
+  '【2026.7】登録特典：攻略ガイド': 's7_gift_guide',
+  '【2026.7】登録特典：セミナー申込': 's7_gift_seminar_apply',
+  '【2026.7】セミナー参加特典タップ': 's7_seminar_bonus_tap',
+  '【2026.7】セミナー参加総数': 's7_seminar_joined_total',
+  '【2026.7】セミナー申込総数': 's7_seminar_applied_total',
+  '【2026.7】商品LPタップ総数': 's7_product_lp_tap_total',
+  '【2026.7】商品LPタップ（セミナー直後）': 's7_product_lp_tap_after_seminar',
+  '【2026.7】商品LPタップ（1時間後）': 's7_product_lp_tap_h1',
+  '【2026.7】商品LPタップ（1日後朝）': 's7_product_lp_tap_d1_morning',
+  '【2026.7】商品LPタップ（1日後昼）': 's7_product_lp_tap_d1_noon',
+  '【2026.7】商品LPタップ（1日後19時）': 's7_product_lp_tap_d1_19',
+  '【2026.7】商品LPタップ（1日後23時）': 's7_product_lp_tap_d1_23',
+  '【2026.7】実績者送った': 's7_achiever_sent',
+  '【2026.7】購入ボタン': 's7_purchase_button',
+  '【2026.7】銀振希望者': 's7_bank_transfer',
+  '【2026.7】フロント購入者総数': 's7_front_purchased_total',
+};
+
 function normalizeColumnName(name: string): string {
+  // 完全一致マップを最優先（【2026.7】パネル計測タグ）
+  const exact = SEMINAR_2026_7_COLUMNS[name.trim()];
+  if (exact) return exact;
+
   // 日本語と特殊文字を英数字とアンダースコアに変換
   // 特殊なパターンを先に処理（長い→短い順）
   const normalized = name
