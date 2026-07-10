@@ -33,8 +33,7 @@ interface LineDashboardClientProps {
 
 const LINE_TABS = [
   { id: 'main', label: 'メイン' },
-  { id: 'panel', label: 'ファネル分析' },
-  { id: 'panel7', label: '7月ファネル' },
+  { id: 'panel7', label: 'ファネル分析' },
   { id: 'funnel', label: 'クロス分析' },
   { id: 'custom_funnel', label: 'カスタムファネル' },
 ] as const;
@@ -43,7 +42,6 @@ type LineTabKey = (typeof LINE_TABS)[number]['id'];
 
 const LINE_TAB_SKELETON_SECTIONS: Record<LineTabKey, number> = {
   main: 3,
-  panel: 1,
   panel7: 2,
   funnel: 1,
   custom_funnel: 1,
@@ -564,41 +562,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     ];
   }, [filteredAnalytics]);
 
-  const funnelCards = useMemo(() => {
-    const completionFromRegistration =
-      filteredAnalytics.funnel.lineRegistration > 0
-        ? (filteredAnalytics.funnel.surveyCompleted / filteredAnalytics.funnel.lineRegistration) * 100
-        : 0;
-
-    return [
-      {
-        label: 'LINE登録数',
-        value: `${formatNumber(filteredAnalytics.funnel.lineRegistration)}人`,
-        helper: dateRange === 'all' ? '全期間累計' : '期間内合計',
-      },
-      {
-        label: 'アンケート遷移数',
-        value: `${formatNumber(filteredAnalytics.funnel.surveyEntered)}人`,
-        helper:
-          filteredAnalytics.funnel.lineRegistration > 0
-            ? `移行率 ${formatPercent(filteredAnalytics.funnel.surveyEnteredCVR)}`
-            : '移行率 —',
-      },
-      {
-        label: 'アンケート完了数',
-        value: `${formatNumber(filteredAnalytics.funnel.surveyCompleted)}人`,
-        helper:
-          filteredAnalytics.funnel.surveyEntered > 0
-            ? `完了率 ${formatPercent(filteredAnalytics.funnel.surveyCompletedCVR)}`
-            : '完了率 —',
-      },
-      {
-        label: '登録→完了CVR',
-        value: formatPercent(completionFromRegistration),
-        helper: 'LINE登録からの完了率',
-      },
-    ];
-  }, [dateRange, filteredAnalytics.funnel]);
 
   const sourceEntries = useMemo(
     () => [
@@ -1306,26 +1269,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                 </div>
               </Card>
             </div>
-          ) : null}
-
-          {activeTab === 'panel' ? (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル分析</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {funnelCards.map((card) => (
-                  <div
-                    key={card.label}
-                    className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-soft)]"
-                  >
-                    <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">{card.label}</p>
-                    <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
-                    {card.helper ? (
-                      <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{card.helper}</p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </Card>
           ) : null}
 
           {activeTab === 'panel7' ? <PanelAnalysis /> : null}
