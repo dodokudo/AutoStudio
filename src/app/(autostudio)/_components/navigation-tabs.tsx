@@ -14,7 +14,7 @@ const navItems = [
   { id: 'sales', href: '/sales', label: 'Sales' },
   { id: 'ads', href: '/ads', label: 'Ads' },
   { id: 'youtube', href: '/youtube', label: 'YouTube' },
-  { id: 'links', href: '/links', label: 'Links' },
+  { id: 'links', href: '/links', label: 'リンク計測' },
   { id: 'launchkit', href: '/launchkit', label: 'LaunchKit' },
   { id: 'agency', href: '/agency', label: 'agency' },
 ];
@@ -23,7 +23,7 @@ export function NavigationTabs() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-2 overflow-x-auto text-sm scrollbar-hide md:flex-col md:items-stretch md:gap-1 md:overflow-visible">
+    <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-xs scrollbar-hide md:flex-none md:flex-col md:items-stretch md:gap-1 md:overflow-visible md:text-sm">
       {navItems.map((item) => {
         const isActive = pathname?.startsWith(item.href);
         return (
@@ -32,8 +32,8 @@ export function NavigationTabs() {
             href={item.href}
             prefetch={false}
             className={classNames(
-              'inline-flex h-10 items-center whitespace-nowrap rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white px-4 font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2] flex-shrink-0',
-              'md:h-10 md:w-full md:justify-start md:px-3 md:text-sm',
+              'inline-flex h-8 flex-shrink-0 items-center whitespace-nowrap rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2.5 font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2]',
+              'md:h-10 md:w-full md:justify-start md:rounded-[var(--radius-md)] md:px-3 md:text-sm',
               isActive &&
                 'border-[color:var(--color-accent)] max-md:bg-[color:var(--color-text-primary)] max-md:text-white max-md:hover:bg-[color:var(--color-text-primary)]',
               isActive && 'md:bg-[color:var(--color-accent-muted)] md:text-[color:var(--color-accent-dark)] md:shadow-[var(--shadow-soft)]'
