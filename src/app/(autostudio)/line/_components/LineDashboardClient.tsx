@@ -14,6 +14,7 @@ import type { FunnelDefinition, FunnelAnalysisResult } from '@/lib/lstep/funnel'
 import { DailyRegistrationsTable } from './DailyRegistrationsTable';
 import { LineFunnelsManager } from './LineFunnelsManager';
 import { CrossAnalysis, type CrossAnalysisData } from './CrossAnalysis';
+import { PanelAnalysis } from './PanelAnalysis';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, type UnifiedRangePreset, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 const fetcher = async (input: RequestInfo) => {
@@ -32,7 +33,9 @@ interface LineDashboardClientProps {
 
 const LINE_TABS = [
   { id: 'main', label: 'メイン' },
-  { id: 'funnel', label: 'ファネル分析' },
+  { id: 'panel', label: 'ファネル分析' },
+  { id: 'panel7', label: 'パネル分析' },
+  { id: 'funnel', label: 'クロス分析' },
   { id: 'custom_funnel', label: 'カスタムファネル' },
 ] as const;
 
@@ -40,7 +43,9 @@ type LineTabKey = (typeof LINE_TABS)[number]['id'];
 
 const LINE_TAB_SKELETON_SECTIONS: Record<LineTabKey, number> = {
   main: 3,
-  funnel: 2,
+  panel: 1,
+  panel7: 2,
+  funnel: 1,
   custom_funnel: 1,
 };
 
@@ -1303,36 +1308,34 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
             </div>
           ) : null}
 
-          {activeTab === 'funnel' ? (
-            <div className="space-y-6">
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル分析</h2>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {funnelCards.map((card) => (
-                    <div
-                      key={card.label}
-                      className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-soft)]"
-                    >
-                      <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">{card.label}</p>
-                      <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
-                      {card.helper ? (
-                        <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{card.helper}</p>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              {/* クロス分析セクション */}
-              <div className="pt-4">
-                <h2 className="text-xl font-bold text-[color:var(--color-text-primary)] mb-4">クロス分析</h2>
-                <CrossAnalysis
-                  data={crossAnalysisData}
-                  loading={crossAnalysisLoading}
-                  error={crossAnalysisError}
-                />
+          {activeTab === 'panel' ? (
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">ファネル分析</h2>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {funnelCards.map((card) => (
+                  <div
+                    key={card.label}
+                    className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-4 shadow-[var(--shadow-soft)]"
+                  >
+                    <p className="text-xs font-medium text-[color:var(--color-text-secondary)]">{card.label}</p>
+                    <p className="mt-3 text-2xl font-semibold text-[color:var(--color-text-primary)]">{card.value}</p>
+                    {card.helper ? (
+                      <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">{card.helper}</p>
+                    ) : null}
+                  </div>
+                ))}
               </div>
-            </div>
+            </Card>
+          ) : null}
+
+          {activeTab === 'panel7' ? <PanelAnalysis /> : null}
+
+          {activeTab === 'funnel' ? (
+            <CrossAnalysis
+              data={crossAnalysisData}
+              loading={crossAnalysisLoading}
+              error={crossAnalysisError}
+            />
           ) : null}
 
           {activeTab === 'custom_funnel' ? (
