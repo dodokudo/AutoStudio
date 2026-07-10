@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import useSWR from 'swr';
+import useSWR, { preload } from 'swr';
 
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
@@ -33,8 +33,8 @@ interface LineDashboardClientProps {
 
 const LINE_TABS = [
   { id: 'main', label: 'メイン' },
-  { id: 'panel7', label: 'ファネル分析' },
-  { id: 'funnel', label: 'クロス分析' },
+  { id: 'funnel', label: 'ファネル分析' },
+  { id: 'cross', label: 'クロス分析' },
   { id: 'custom_funnel', label: 'カスタムファネル' },
 ] as const;
 
@@ -42,8 +42,8 @@ type LineTabKey = (typeof LINE_TABS)[number]['id'];
 
 const LINE_TAB_SKELETON_SECTIONS: Record<LineTabKey, number> = {
   main: 3,
-  panel7: 2,
-  funnel: 1,
+  funnel: 2,
+  cross: 1,
   custom_funnel: 1,
 };
 
@@ -168,6 +168,34 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const [mainComparisonLoading, setMainComparisonLoading] = useState(false);
   const [mainComparisonError, setMainComparisonError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LineTabKey>('main');
+
+  // URLの ?tab= と同期（リロード・直リンクで同じタブを開けるようにする）
+  useEffect(() => {
+    const tabParam = new URLSearchParams(window.location.search).get('tab');
+    if (tabParam && LINE_TABS.some((tab) => tab.id === tabParam)) {
+      setActiveTab(tabParam as LineTabKey);
+    }
+  }, []);
+  // ファネル分析タブ用の期間（「全期間」はAPIデフォルト＝ローンチ開始日〜現在）
+  const panelRange = useMemo(() => {
+    if (dateRange === 'all') return null;
+    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
+    return { start: formatDateInput(adjusted.start), end: formatDateInput(adjusted.end) };
+  }, [dateRange, customStartDate, customEndDate, initialData.latestSnapshotDate]);
+
+  // ページを開いた時点でファネル分析のデータを先読みしておく（タブを開いた瞬間に表示される）
+  useEffect(() => {
+    const query = panelRange ? `?start=${panelRange.start}&end=${panelRange.end}` : '';
+    preload(`/api/line/panel-analysis${query}`, async (input: RequestInfo) => {
+      const res = await fetch(input.toString());
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'データの取得に失敗しました');
+      return json;
+    }).catch(() => undefined);
+  }, [panelRange]);
+
   const [pendingTab, setPendingTab] = useState<LineTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -625,6 +653,9 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
             const nextTab = next as LineTabKey;
             setPendingTab(nextTab);
             setIsTabLoading(true);
+            const params = new URLSearchParams(window.location.search);
+            params.set('tab', nextTab);
+            window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
             startTransition(() => {
               setActiveTab(nextTab);
             });
@@ -1271,9 +1302,11 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
             </div>
           ) : null}
 
-          {activeTab === 'panel7' ? <PanelAnalysis /> : null}
-
           {activeTab === 'funnel' ? (
+            <PanelAnalysis startDate={panelRange?.start} endDate={panelRange?.end} />
+          ) : null}
+
+          {activeTab === 'cross' ? (
             <CrossAnalysis
               data={crossAnalysisData}
               loading={crossAnalysisLoading}
