@@ -121,7 +121,11 @@ export function PanelAnalysis() {
                       {formatNumber(step.count)}
                     </td>
                     <td className={`px-4 py-2 text-right text-sm tabular-nums ${conversionColor}`}>
-                      {step.conversionRate === null ? '-' : `↓ ${formatPercent(step.conversionRate)}`}
+                      {step.conversionRate === null
+                        ? '-'
+                        : step.conversionRate > 100
+                          ? formatPercent(step.conversionRate)
+                          : `↓ ${formatPercent(step.conversionRate)}`}
                     </td>
                     <td className="px-4 py-2 text-right text-sm tabular-nums text-[color:var(--color-text-secondary)]">
                       {formatPercent(step.overallRate)}
