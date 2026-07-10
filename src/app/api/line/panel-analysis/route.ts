@@ -181,7 +181,8 @@ export async function GET() {
     let prev = base;
     const summary = SUMMARY_STEPS.map((step, index) => {
       const count = step.column === null ? base : getCount(step.column);
-      const conversionRate = index === 0 ? null : prev > 0 ? (count / prev) * 100 : 0;
+      // 前段が0人の場合は移行率を出さない（タグ運用開始直後は前段が0のことがある）
+      const conversionRate = index === 0 || prev <= 0 ? null : (count / prev) * 100;
       const overallRate = base > 0 ? (count / base) * 100 : 0;
       prev = count;
       return { label: step.label, count, conversionRate, overallRate };
