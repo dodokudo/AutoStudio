@@ -34,7 +34,7 @@ interface LineDashboardClientProps {
 const LINE_TABS = [
   { id: 'main', label: 'メイン' },
   { id: 'panel', label: 'ファネル分析' },
-  { id: 'panel7', label: 'パネル分析' },
+  { id: 'panel7', label: '7月ファネル' },
   { id: 'funnel', label: 'クロス分析' },
   { id: 'custom_funnel', label: 'カスタムファネル' },
 ] as const;

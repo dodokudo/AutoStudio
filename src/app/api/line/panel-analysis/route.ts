@@ -14,7 +14,7 @@ export const revalidate = 1800;
 // 【2026.7】7月セミナーのパネル計測タグ（rawCsvLoader.ts の SEMINAR_2026_7_COLUMNS に対応）
 const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; label: string }> }> = [
   {
-    title: '登録特典パネル',
+    title: '登録特典',
     items: [
       { column: 's7_gift_tap', label: '登録特典タップ' },
       { column: 's7_gift_video', label: '登録特典：動画視聴' },
@@ -23,7 +23,7 @@ const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; labe
     ],
   },
   {
-    title: 'アンケート誘導パネル',
+    title: 'アンケート誘導',
     items: [
       { column: 's7_survey_start_immediate', label: 'アンケートスタート（登録直後）' },
       { column: 's7_survey_start_h1', label: 'アンケートスタート（1時間後）' },
@@ -34,7 +34,7 @@ const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; labe
     ],
   },
   {
-    title: '動画LP誘導パネル',
+    title: '動画LP誘導',
     items: [
       { column: 's7_video_lp_tap_after_survey', label: '動画LPタップ（アンケート回答直後）' },
       { column: 's7_video_lp_tap_h1', label: '動画LPタップ（1時間後）' },
@@ -44,7 +44,7 @@ const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; labe
     ],
   },
   {
-    title: 'セミナーフォーム誘導パネル',
+    title: 'セミナーフォーム誘導',
     items: [
       { column: 's7_seminar_form_tap_h1', label: 'フォームタップ（1時間後）' },
       { column: 's7_seminar_form_tap_d1_morning', label: 'フォームタップ（1日後朝）' },
@@ -68,7 +68,7 @@ const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; labe
     ],
   },
   {
-    title: '商品LP・購入パネル',
+    title: '商品LP・購入',
     items: [
       { column: 's7_product_lp_tap_after_seminar', label: '商品LPタップ（セミナー直後）' },
       { column: 's7_product_lp_tap_h1', label: '商品LPタップ（1時間後）' },

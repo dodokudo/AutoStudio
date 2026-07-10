@@ -61,7 +61,7 @@ export function PanelAnalysis() {
   if (isLoading) {
     return (
       <Card className="p-6">
-        <p className="text-sm text-[color:var(--color-text-secondary)]">パネル分析データを読み込み中...</p>
+        <p className="text-sm text-[color:var(--color-text-secondary)]">ファネルデータを読み込み中...</p>
       </Card>
     );
   }
@@ -69,7 +69,7 @@ export function PanelAnalysis() {
   if (error || !data) {
     return (
       <Card className="p-6">
-        <p className="text-sm font-semibold text-red-600">パネル分析データの取得に失敗しました</p>
+        <p className="text-sm font-semibold text-red-600">ファネルデータの取得に失敗しました</p>
         <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
           {error instanceof Error ? error.message : '不明なエラー'}
         </p>
@@ -156,7 +156,7 @@ export function PanelAnalysis() {
               <table className="mt-3 w-full border-collapse">
                 <thead>
                   <tr className="border-b border-[color:var(--color-border)]">
-                    <th className="py-2 pr-2 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">パネル</th>
+                    <th className="py-2 pr-2 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">項目</th>
                     <th className="py-2 pr-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">タップ数</th>
                     <th className="py-2 pr-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">全体比</th>
                     <th className="py-2 text-left text-xs font-medium text-[color:var(--color-text-secondary)]" style={{ width: '30%' }} />
