@@ -173,6 +173,11 @@ const SEMINAR_2026_7_COLUMNS: Record<string, string> = {
   '【2026.7】購入ボタン': 's7_purchase_button',
   '【2026.7】銀振希望者': 's7_bank_transfer',
   '【2026.7】フロント購入者総数': 's7_front_purchased_total',
+  // 友だち情報（従来 unnamed_* に潰れていた列）
+  'アンケート回答日': 'survey_answered_date',
+  'フロント購入日': 'front_purchased_date',
+  'セミナー申込日': 'seminar_application_slot',
+  'セミナー申込計測': 'seminar_applied_at',
 };
 
 function normalizeColumnName(name: string): string {
