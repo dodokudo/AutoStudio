@@ -278,13 +278,4 @@ a:focus-visible {
     scrollbar-width: none;  /* Firefox */
   }
 
-  @media (max-device-width: 767px) {
-    .autostudio-mobile-topbar {
-      display: block !important;
-    }
-
-    .autostudio-sidebar {
-      display: none !important;
-    }
-  }
 }
