@@ -121,25 +121,46 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
             }`}
           >
             <div className={`flex h-full w-full flex-col gap-5 ${isSidebarCollapsed ? 'px-1.5 py-5' : 'px-6 py-8'}`}>
-              <div className={`flex ${isSidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center justify-between gap-2'}`}>
-                <Link
-                  href="/home"
-                  prefetch={false}
-                  className="flex items-center gap-2.5 text-lg font-semibold text-[color:var(--color-text-primary)]"
-                  title="AutoStudio"
-                >
-                  <img src="/icon.png" alt="AutoStudio" className="h-9 w-9 rounded-lg" />
-                  {!isSidebarCollapsed && <span>AutoStudio</span>}
-                </Link>
-                <button
-                  type="button"
-                  onClick={toggleSidebar}
-                  aria-label={isSidebarCollapsed ? 'メニューを開く' : 'メニューを閉じる'}
-                  title={isSidebarCollapsed ? 'メニューを開く' : 'メニューを閉じる'}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[color:var(--color-text-muted)] transition-colors hover:bg-black/5 hover:text-[color:var(--color-text-secondary)]"
-                >
-                  <SidebarToggleIcon collapsed={isSidebarCollapsed} />
-                </button>
+              <div className={isSidebarCollapsed ? 'flex flex-col items-center' : 'flex items-center justify-between gap-2'}>
+                {isSidebarCollapsed ? (
+                  <button
+                    type="button"
+                    onClick={toggleSidebar}
+                    aria-label="メニューを開く"
+                    title="メニューを開く"
+                    className="group relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] transition-colors hover:bg-black/5"
+                  >
+                    <img
+                      src="/icon.png"
+                      alt="AutoStudio"
+                      className="h-9 w-9 rounded-lg transition-opacity duration-150 group-hover:opacity-0"
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center text-[color:var(--color-text-secondary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                      <SidebarToggleIcon collapsed={true} />
+                    </span>
+                  </button>
+                ) : (
+                  <>
+                    <Link
+                      href="/home"
+                      prefetch={false}
+                      className="flex items-center gap-2.5 text-lg font-semibold text-[color:var(--color-text-primary)]"
+                      title="AutoStudio"
+                    >
+                      <img src="/icon.png" alt="AutoStudio" className="h-9 w-9 rounded-lg" />
+                      <span>AutoStudio</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={toggleSidebar}
+                      aria-label="メニューを閉じる"
+                      title="メニューを閉じる"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[color:var(--color-text-muted)] transition-colors hover:bg-black/5 hover:text-[color:var(--color-text-secondary)]"
+                    >
+                      <SidebarToggleIcon collapsed={false} />
+                    </button>
+                  </>
+                )}
               </div>
               {isSidebarCollapsed ? <NavigationIconRail /> : <NavigationTabs />}
             </div>
