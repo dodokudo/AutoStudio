@@ -5,19 +5,19 @@ import { usePathname } from 'next/navigation';
 import { classNames } from '@/lib/classNames';
 
 const navItems = [
-  { id: 'top', href: '/home', label: 'Top' },
-  { id: 'threads', href: '/threads', label: 'Threads' },
-  { id: 'instagram', href: '/instagram', label: 'Instagram' },
-  { id: 'line', href: '/line', label: 'LINE' },
-  { id: 'analyca', href: '/analyca', label: 'ANALYCA' },
-  { id: 'launch', href: '/launch', label: 'Launch' },
-  { id: 'sales', href: '/sales', label: 'Sales' },
-  { id: 'ads', href: '/ads', label: 'Ads' },
-  { id: 'youtube', href: '/youtube', label: 'YouTube' },
-  { id: 'links', href: '/links', label: 'リンク計測' },
-  { id: 'launchkit', href: '/launchkit', label: 'LaunchKit' },
-  { id: 'agency', href: '/agency', label: 'agency' },
-];
+  { id: 'top', href: '/home', label: 'Top', icon: '🏠' },
+  { id: 'threads', href: '/threads', label: 'Threads', icon: '🧵' },
+  { id: 'instagram', href: '/instagram', label: 'Instagram', icon: '📸' },
+  { id: 'line', href: '/line', label: 'LINE', icon: '💬' },
+  { id: 'analyca', href: '/analyca', label: 'ANALYCA', icon: '📊' },
+  { id: 'launch', href: '/launch', label: 'Launch', icon: '🚀' },
+  { id: 'sales', href: '/sales', label: 'Sales', icon: '¥' },
+  { id: 'ads', href: '/ads', label: 'Ads', icon: '📣' },
+  { id: 'youtube', href: '/youtube', label: 'YouTube', icon: '▶' },
+  { id: 'links', href: '/links', label: 'リンク計測', icon: '🔗' },
+  { id: 'launchkit', href: '/launchkit', label: 'LaunchKit', icon: '🧩' },
+  { id: 'agency', href: '/agency', label: 'agency', icon: '🤝' },
+];;
 
 export function NavigationTabs() {
   const pathname = usePathname();
@@ -40,6 +40,33 @@ export function NavigationTabs() {
             )}
           >
             {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function NavigationIconRail() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="flex flex-col items-center gap-2" aria-label="AutoStudio navigation">
+      {navItems.map((item) => {
+        const isActive = pathname?.startsWith(item.href);
+        return (
+          <Link
+            key={item.id}
+            href={item.href}
+            prefetch={false}
+            title={item.label}
+            aria-label={item.label}
+            className={classNames(
+              'inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white text-lg font-semibold text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2]',
+              isActive && 'border-[color:var(--color-accent)] bg-[color:var(--color-accent-muted)] text-[color:var(--color-accent-dark)] shadow-[var(--shadow-soft)]'
+            )}
+          >
+            <span aria-hidden="true">{item.icon}</span>
           </Link>
         );
       })}

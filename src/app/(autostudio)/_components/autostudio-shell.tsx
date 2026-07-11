@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { DateRangeProvider } from '@/lib/dateRangeStore';
-import { NavigationTabs } from './navigation-tabs';
+import { NavigationIconRail, NavigationTabs } from './navigation-tabs';
 
 const DESKTOP_CANVAS_WIDTH = 1120;
 
@@ -150,7 +150,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
                   {isSidebarCollapsed ? '>>' : '<<'}
                 </button>
               </div>
-              {!isSidebarCollapsed && <NavigationTabs />}
+              {isSidebarCollapsed ? <NavigationIconRail /> : <NavigationTabs />}
             </div>
           </aside>
 
