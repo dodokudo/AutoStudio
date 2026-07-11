@@ -6,12 +6,6 @@ import { ScheduleEditor } from './schedule-editor';
 import type { ScheduledPost, ScheduledPostMediaItem } from './schedule-types';
 import type { ThreadsAccountKey } from '@/lib/threadsAccounts';
 
-type GeneratedContent = {
-  mainText: string;
-  comment1: string;
-  comment2: string;
-};
-
 function formatDateKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -103,55 +97,6 @@ export function ScheduleTab({
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // AI生成関連の状態
-  const [hookInput, setHookInput] = useState('');
-  const [themeInput, setThemeInput] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
-  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
-
-  const handleGenerate = useCallback(async () => {
-    if (isGenerating) return;
-    setGenerateError(null);
-    setIsGenerating(true);
-
-    try {
-      const res = await fetch('/api/threads/schedule/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hook: hookInput.trim() ? hookInput : undefined,
-          theme: themeInput.trim() ? themeInput : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || '生成に失敗しました');
-      }
-
-      const data = await res.json();
-      if (!data?.mainPost || !data?.comment1 || !data?.comment2) {
-        throw new Error('生成結果の形式が正しくありません');
-      }
-
-      setGeneratedContent({
-        mainText: data.mainPost,
-        comment1: data.comment1,
-        comment2: data.comment2,
-      });
-    } catch (err) {
-      console.error('[schedule-tab] Generate failed', err);
-      setGenerateError(err instanceof Error ? err.message : '不明なエラーが発生しました');
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [hookInput, isGenerating, themeInput]);
-
-  const clearGeneratedContent = useCallback(() => {
-    setGeneratedContent(null);
-  }, []);
 
   const range = useMemo(() => ({
     start: formatMonthStart(currentMonth),
@@ -364,7 +309,7 @@ export function ScheduleTab({
         </div>
       ) : null}
 
-      <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(420px,0.95fr)_minmax(560px,1.05fr)]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(380px,0.95fr)_minmax(500px,1.05fr)]">
         <ScheduleCalendar
           currentMonth={currentMonth}
           selectedDate={selectedDate}
@@ -374,13 +319,6 @@ export function ScheduleTab({
           onSelectDate={handleSelectDate}
           onSelectItem={handleSelectItem}
           onDeleteItem={handleDeleteItem}
-          hookInput={hookInput}
-          themeInput={themeInput}
-          isGenerating={isGenerating}
-          generateError={generateError}
-          onHookInputChange={setHookInput}
-          onThemeInputChange={setThemeInput}
-          onGenerate={handleGenerate}
         />
         <ScheduleEditor
           selectedDate={selectedDate}
@@ -390,8 +328,6 @@ export function ScheduleTab({
           isPublishing={publishing}
           onSave={handleSave}
           onPublishNow={handlePublishNow}
-          generatedContent={generatedContent}
-          onGeneratedContentConsumed={clearGeneratedContent}
           accountLabel={accountLabel}
           isReadOnly={isReadOnly}
         />

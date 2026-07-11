@@ -45,14 +45,6 @@ type ScheduleCalendarProps = {
   onSelectDate: (dateKey: string) => void;
   onSelectItem: (item: ScheduledPost) => void;
   onDeleteItem: (item: ScheduledPost) => void;
-  // AI生成関連
-  hookInput: string;
-  themeInput: string;
-  isGenerating: boolean;
-  generateError: string | null;
-  onHookInputChange: (value: string) => void;
-  onThemeInputChange: (value: string) => void;
-  onGenerate: () => void;
 };
 
 export function ScheduleCalendar({
@@ -64,13 +56,6 @@ export function ScheduleCalendar({
   onSelectDate,
   onSelectItem,
   onDeleteItem,
-  hookInput,
-  themeInput,
-  isGenerating,
-  generateError,
-  onHookInputChange,
-  onThemeInputChange,
-  onGenerate,
 }: ScheduleCalendarProps) {
   const [detailItem, setDetailItem] = useState<ScheduledPost | null>(null);
   const [listFilter, setListFilter] = useState<'all' | 'scheduled' | 'posted'>('scheduled');
@@ -102,48 +87,6 @@ export function ScheduleCalendar({
 
   return (
     <div className="min-w-0 space-y-4">
-      {/* AI生成セクション */}
-      <section className="ui-card">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs font-semibold text-[color:var(--color-text-primary)]">AIで生成</p>
-          <button
-            type="button"
-            className="ui-button-secondary justify-center"
-            onClick={onGenerate}
-            disabled={isGenerating}
-          >
-            {isGenerating ? '生成中...' : 'AIで生成'}
-          </button>
-        </div>
-        <div className="mt-3 space-y-3">
-          <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
-            フック
-            <textarea
-              value={hookInput}
-              onChange={(event) => onHookInputChange(event.target.value)}
-              rows={2}
-              placeholder="フック（冒頭の一文）を入力。そのまま使用されます"
-              className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
-            />
-          </label>
-          <label className="block text-xs font-medium text-[color:var(--color-text-secondary)]">
-            テーマ
-            <textarea
-              value={themeInput}
-              onChange={(event) => onThemeInputChange(event.target.value)}
-              rows={2}
-              placeholder="テーマを入力（例：Threads運用のコツ）"
-              className="mt-2 w-full rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
-            />
-          </label>
-          {generateError ? (
-            <div className="rounded-[var(--radius-lg)] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-              {generateError}
-            </div>
-          ) : null}
-        </div>
-      </section>
-
       <section className="ui-card">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

@@ -17,12 +17,6 @@ function toDateTimeLocal(value: string) {
   return `${datePart}T${timePart.slice(0, 5)}`;
 }
 
-type GeneratedContent = {
-  mainText: string;
-  comment1: string;
-  comment2: string;
-};
-
 type ScheduleEditorProps = {
   selectedDate: string;
   selectedItem: ScheduledPost | null;
@@ -60,8 +54,6 @@ type ScheduleEditorProps = {
     comment1MediaItems: ScheduledPostMediaItem[];
     comment2MediaItems: ScheduledPostMediaItem[];
   }) => Promise<void>;
-  generatedContent: GeneratedContent | null;
-  onGeneratedContentConsumed: () => void;
   accountLabel: string;
   isReadOnly?: boolean;
 };
@@ -74,8 +66,6 @@ export function ScheduleEditor({
   isPublishing,
   onSave,
   onPublishNow,
-  generatedContent,
-  onGeneratedContentConsumed,
   accountLabel,
   isReadOnly = false,
 }: ScheduleEditorProps) {
@@ -137,16 +127,6 @@ export function ScheduleEditor({
     setComment2MediaItems([]);
     setError(null);
   }, [selectedDate, selectedItem]);
-
-  useEffect(() => {
-    if (generatedContent) {
-      setMainText(generatedContent.mainText);
-      setComment1(generatedContent.comment1);
-      setComment2(generatedContent.comment2);
-      setError(null);
-      onGeneratedContentConsumed();
-    }
-  }, [generatedContent, onGeneratedContentConsumed]);
 
   const mainLength = mainText.length;
   const comment1Length = comment1.length;
