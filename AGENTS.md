@@ -15,6 +15,13 @@
 - If a side branch already exists and is serving production, merge it back into `main`, push `main`, and return to the main-only flow. Do not leave production served from a non-`main` branch.
 - After pushing `main`, verify the production URL (https://asto.jp) once the auto-deploy is READY.
 
+## UI Layout & Spacing — keep every tab consistent
+
+- All tab content shares ONE width: the `.page-container` wrapper (`min(1680px, 100%)`) inside the shell `main`. Do NOT add per-tab `max-w-*` on the outermost content wrapper — let `.page-container` decide the width.
+- All tab content shares ONE vertical rhythm: **24px gaps between top-level cards/sections** (`.section-stack` or `space-y-6`). The LINE tab is the reference. Do NOT introduce 48px/`gap-12`/`space-y-12` rhythms at the section level.
+- The space above the top sub-tab bar equals the space below it (both 24px). This comes from the shell `main` `pt-6`; do not re-inflate it per tab.
+- When building a NEW tab, wrap its content in `<div className="section-stack">…</div>` (or `space-y-6`) and rely on `.page-container` for width, so it matches every existing tab without extra work.
+
 ## Instagram Dashboard And BigQuery
 
 - If `/instagram` or another dashboard is slow, first trace request-time work: server render queries, eager initialization, BigQuery calls, and cache boundaries.

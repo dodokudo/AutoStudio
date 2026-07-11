@@ -96,12 +96,12 @@ a:focus-visible {
 
   .section-stack {
     display: grid;
-    gap: 32px;
+    gap: 24px;
   }
 
   @media (min-width: 768px) {
     .section-stack {
-      gap: 48px;
+      gap: 24px;
     }
   }
 

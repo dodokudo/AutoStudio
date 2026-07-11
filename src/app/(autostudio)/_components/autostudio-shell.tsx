@@ -145,7 +145,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
             </div>
           </aside>
 
-          <main className="min-w-0 flex-1 overflow-visible pb-10 pt-12 [&_.page-container]:ml-0 [&_.page-container]:mr-auto">
+          <main className="min-w-0 flex-1 overflow-visible pb-10 pt-6 [&_.page-container]:ml-0 [&_.page-container]:mr-auto">
             <div className="page-container px-8">{children}</div>
           </main>
         </div>
