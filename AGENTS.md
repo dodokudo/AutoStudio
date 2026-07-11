@@ -7,6 +7,14 @@
 - For production-related work, verify the deployed/runtime state when tools are available; do not rely only on local code state.
 - When the user asks to push or deploy, carry the task through validation, commit/push when appropriate, deployment, and URL/runtime verification.
 
+## Deployment & Git — MANDATORY, DO NOT DEVIATE
+
+- Production (asto.jp) is deployed automatically by Vercel from the GitHub `main` branch. This project is connected to GitHub in Vercel: **pushing `main` to GitHub is what deploys production. That is the ONLY approved deploy path.**
+- **ALWAYS commit and push directly to `main`.** Do NOT create side branches (e.g. `codex/*`, feature branches) to ship work, and do NOT hand-deploy with local `vercel --prod`.
+- Never run `vercel --prod` (or any manual/CLI production deploy) as the normal flow. It desyncs `main` from what is actually live and is forbidden. Push `main` and let Vercel's GitHub integration deploy.
+- If a side branch already exists and is serving production, merge it back into `main`, push `main`, and return to the main-only flow. Do not leave production served from a non-`main` branch.
+- After pushing `main`, verify the production URL (https://asto.jp) once the auto-deploy is READY.
+
 ## Instagram Dashboard And BigQuery
 
 - If `/instagram` or another dashboard is slow, first trace request-time work: server render queries, eager initialization, BigQuery calls, and cache boundaries.
@@ -22,6 +30,9 @@
   - Local Whisper/ffmpeg paths may not be Cloud Run portable.
   - Gemini/API-based transcription is the cloud-friendly path when configured.
 - For Cloud Run/Scheduler work, verify the specific job, schedule, latest execution, image/generation, and required secrets.
+- Before proposing new Instagram Reel scripts or creative angles, include competitor review for the relevant accounts, especially `mon_guchi` and `sugisan_insta_`.
+- Do not stop at surface-level competitor conclusions such as "do/don't do this." Check the winning posts' opening seconds, visual proof, caption/framing, view count, comments, and whether the post is built around proof, demonstration, warning, or personal authority.
+- If competitor transcript or visual data is missing, say that clearly and collect it before making a confident creative recommendation.
 
 ## LaunchKit LP Tracking
 
