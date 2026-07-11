@@ -23,8 +23,7 @@ export default async function LaunchkitPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">LaunchKit LP管理</h1>
+      <header className="flex items-center justify-end">
         <Link
           href="/launchkit/new"
           className="rounded-md bg-[color:var(--color-text-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
