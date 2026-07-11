@@ -7,6 +7,8 @@ import { usePathname } from 'next/navigation';
 import { DateRangeProvider } from '@/lib/dateRangeStore';
 import { NavigationTabs } from './navigation-tabs';
 
+const DESKTOP_CANVAS_WIDTH = 1120;
+
 export function AutoStudioShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [shellState, setShellState] = useState({
@@ -14,6 +16,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
     isMobileViewport: false,
     isDesktopFrame: false,
     desktopFrameSrc: '',
+    mobileScale: 1,
   });
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
         isMobileViewport: mediaQuery.matches,
         isDesktopFrame,
         desktopFrameSrc: `${window.location.pathname}${query ? `?${query}` : ''}`,
+        mobileScale: Math.min(1, window.innerWidth / DESKTOP_CANVAS_WIDTH),
       });
     };
 
@@ -78,12 +82,18 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
             </div>
           </header>
 
-          <main className="overflow-x-auto overscroll-x-contain bg-transparent">
+          <main className="h-[calc(100dvh-48px)] overflow-hidden bg-transparent">
             <iframe
               key={shellState.desktopFrameSrc}
               title="AutoStudio desktop view"
               src={shellState.desktopFrameSrc}
-              className="block h-[calc(100dvh-48px)] w-[1120px] border-0 bg-transparent"
+              className="block border-0 bg-transparent"
+              style={{
+                width: DESKTOP_CANVAS_WIDTH,
+                height: `calc((100dvh - 48px) / ${shellState.mobileScale})`,
+                transform: `scale(${shellState.mobileScale})`,
+                transformOrigin: 'top left',
+              }}
             />
           </main>
         </div>
