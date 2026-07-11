@@ -84,7 +84,7 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
   const remainingDays = Math.max(0, totalDays - daysElapsed);
 
   // 実績データをAPIから取得
-  const { data: actualsResponse, error: actualsError, isLoading } = useSWR<MonthlyActualsResponse>(
+  const { data: actualsResponse, error: actualsError } = useSWR<MonthlyActualsResponse>(
     `/api/home/monthly-actuals?month=${currentMonth}`,
     fetcher,
     { refreshInterval: 60000 } // 1分ごとに更新
@@ -276,13 +276,6 @@ export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProp
   // KPI目標が設定されていない場合
   return (
     <div className="space-y-6">
-      {/* ローディング表示 */}
-      {isLoading && (
-        <Card className={`${dashboardCardClass} text-center py-4`}>
-          <p className="text-sm text-[color:var(--color-text-muted)]">実績データを読み込み中...</p>
-        </Card>
-      )}
-
       {/* エラー表示 */}
       {actualsError && (
         <Card className={`${dashboardCardClass} text-center py-4`}>
