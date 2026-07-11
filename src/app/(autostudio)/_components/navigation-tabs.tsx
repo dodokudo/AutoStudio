@@ -171,7 +171,7 @@ export function NavigationTabs() {
   return (
     <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-xs scrollbar-hide md:flex-none md:flex-col md:items-stretch md:gap-1 md:overflow-visible md:text-sm">
       {navItems.map((item) => {
-        const isActive = pathname?.startsWith(item.href);
+        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
         return (
           <Link
             key={item.id}
@@ -199,7 +199,7 @@ export function NavigationIconRail() {
   return (
     <nav className="flex w-full flex-col items-center gap-1" aria-label="AutoStudio navigation">
       {navItems.map((item) => {
-        const isActive = pathname?.startsWith(item.href);
+        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
         return (
           <Link
             key={item.id}
