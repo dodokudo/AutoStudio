@@ -136,7 +136,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
                       className="h-9 w-9 rounded-lg transition-opacity duration-150 group-hover:opacity-0"
                     />
                     <span className="absolute inset-0 flex items-center justify-center text-[color:var(--color-text-secondary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                      <SidebarToggleIcon collapsed={true} />
+                      <SidebarToggleIcon />
                     </span>
                   </button>
                 ) : (
@@ -157,7 +157,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
                       title="メニューを閉じる"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[color:var(--color-text-muted)] transition-colors hover:bg-black/5 hover:text-[color:var(--color-text-secondary)]"
                     >
-                      <SidebarToggleIcon collapsed={false} />
+                      <SidebarToggleIcon />
                     </button>
                   </>
                 )}

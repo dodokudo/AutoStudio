@@ -132,7 +132,7 @@ function NavIcon({ id, icon }: { id: string; icon: string }) {
   }
 }
 
-export function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
+export function SidebarToggleIcon() {
   return (
     <svg
       className="h-5 w-5"
@@ -146,7 +146,6 @@ export function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
     >
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M9 4v16" />
-      {collapsed ? <path d="m14 9 3 3-3 3" /> : <path d="m17 9-3 3 3 3" />}
     </svg>
   );
 }
