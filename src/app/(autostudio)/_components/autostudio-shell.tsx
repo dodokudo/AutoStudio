@@ -10,7 +10,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
     <DateRangeProvider>
       <div className="flex min-h-screen flex-col bg-gradient-to-r from-pink-50/70 via-blue-50/50 to-teal-50/30 text-[color:var(--color-text-primary)]">
         {/* Mobile header remains across small screens */}
-        <header className="sticky top-0 z-40 border-b border-[color:var(--color-border)] bg-white md:hidden">
+        <header className="autostudio-mobile-topbar sticky top-0 z-40 border-b border-[color:var(--color-border)] bg-white md:hidden">
           <div className="page-container flex h-11 items-center justify-between gap-2 px-2">
             <Link
               href="/home"
@@ -26,7 +26,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
 
         <div className="flex w-full flex-1 flex-col gap-0 px-0 md:flex-row md:gap-0 md:px-0">
           {/* Desktop sidebar navigation */}
-          <aside className="sticky top-0 hidden h-screen min-w-[220px] max-w-[240px] overflow-y-auto border-r border-[color:var(--color-border)] bg-white md:flex">
+          <aside className="autostudio-sidebar sticky top-0 hidden h-screen min-w-[220px] max-w-[240px] overflow-y-auto border-r border-[color:var(--color-border)] bg-white md:flex">
             <div className="flex h-full flex-col gap-6 px-6 py-8">
               <Link
                 href="/home"

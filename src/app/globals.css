@@ -277,4 +277,14 @@ a:focus-visible {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }
+
+  @media (max-device-width: 767px) and (pointer: coarse) {
+    .autostudio-mobile-topbar {
+      display: block !important;
+    }
+
+    .autostudio-sidebar {
+      display: none !important;
+    }
+  }
 }
