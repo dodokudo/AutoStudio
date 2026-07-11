@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { DateRangeProvider } from '@/lib/dateRangeStore';
-import { NavigationIconRail, NavigationTabs } from './navigation-tabs';
+import { NavigationIconRail, NavigationTabs, SidebarToggleIcon } from './navigation-tabs';
 
 const DESKTOP_CANVAS_WIDTH = 1120;
 
@@ -116,45 +116,36 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen flex-col bg-gradient-to-r from-pink-50/70 via-blue-50/50 to-teal-50/30 text-[color:var(--color-text-primary)]">
         <div className="flex w-full flex-1 flex-row gap-0 px-0">
           <aside
-            className={`sticky top-0 flex h-screen shrink-0 overflow-y-auto border-r border-[color:var(--color-border)] bg-white transition-[width] duration-200 ${
-              isSidebarCollapsed ? 'w-[72px]' : 'w-[240px]'
+            className={`sticky top-0 flex h-screen shrink-0 overflow-y-auto border-r border-[color:var(--color-border)] transition-[width] duration-200 ${
+              isSidebarCollapsed ? 'w-[88px] bg-white/60 backdrop-blur-md' : 'w-[240px] bg-white'
             }`}
           >
-            <div className={`flex h-full flex-col gap-6 ${isSidebarCollapsed ? 'items-center px-3 py-6' : 'px-6 py-8'}`}>
-              <div className={`flex items-center ${isSidebarCollapsed ? 'flex-col gap-3' : 'gap-3'}`}>
+            <div className={`flex h-full w-full flex-col gap-5 ${isSidebarCollapsed ? 'px-1.5 py-5' : 'px-6 py-8'}`}>
+              <div className={`flex ${isSidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center justify-between gap-2'}`}>
                 <Link
                   href="/home"
                   prefetch={false}
-                  className={`flex items-center text-lg font-semibold text-[color:var(--color-text-primary)] ${
-                    isSidebarCollapsed ? 'justify-center' : 'gap-3'
-                  }`}
+                  className="flex items-center gap-2.5 text-lg font-semibold text-[color:var(--color-text-primary)]"
                   title="AutoStudio"
                 >
-                  <img src="/icon.png" alt="AutoStudio" className="h-10 w-10 rounded-lg" />
-                  {!isSidebarCollapsed && (
-                    <div className="flex flex-col items-start gap-1">
-                      <span>AutoStudio</span>
-                      <span className="text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">
-                        Autopilot System
-                      </span>
-                    </div>
-                  )}
+                  <img src="/icon.png" alt="AutoStudio" className="h-9 w-9 rounded-lg" />
+                  {!isSidebarCollapsed && <span>AutoStudio</span>}
                 </Link>
                 <button
                   type="button"
                   onClick={toggleSidebar}
                   aria-label={isSidebarCollapsed ? 'メニューを開く' : 'メニューを閉じる'}
                   title={isSidebarCollapsed ? 'メニューを開く' : 'メニューを閉じる'}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white text-sm font-semibold text-[color:var(--color-text-secondary)] transition-colors hover:bg-[#f2f2f2]"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[color:var(--color-text-muted)] transition-colors hover:bg-black/5 hover:text-[color:var(--color-text-secondary)]"
                 >
-                  {isSidebarCollapsed ? '>>' : '<<'}
+                  <SidebarToggleIcon collapsed={isSidebarCollapsed} />
                 </button>
               </div>
               {isSidebarCollapsed ? <NavigationIconRail /> : <NavigationTabs />}
             </div>
           </aside>
 
-          <main className="min-w-0 flex-1 overflow-visible pb-10 pt-12">
+          <main className="min-w-0 flex-1 overflow-visible pb-10 pt-12 [&_.page-container]:ml-0 [&_.page-container]:mr-auto">
             <div className="page-container px-8">{children}</div>
           </main>
         </div>
