@@ -25,7 +25,7 @@ export function DashboardTabsInteractive({
 }: DashboardTabsInteractiveProps) {
   return (
     <div className={classNames('border-b border-[color:var(--color-border)]', className)}>
-      <nav aria-label={ariaLabel ?? 'ダッシュボードタブ'} className="flex flex-wrap items-end gap-1">
+      <nav aria-label={ariaLabel ?? 'ダッシュボードタブ'} className="flex items-end gap-1 overflow-x-auto scrollbar-hide">
         {items.map((item) => {
           const isActive = item.id === value;
           return (
@@ -39,7 +39,7 @@ export function DashboardTabsInteractive({
                 }
               }}
               className={classNames(
-                'relative whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)]',
+                'relative whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-accent)] md:px-4 md:py-3 md:text-sm',
                 isActive
                   ? 'text-[color:var(--color-accent)]'
                   : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]',

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createShortLink, checkShortCodeExists } from '@/lib/links/bigquery';
+import { syncShortLinksToEdgeConfig } from '@/lib/links/edgeConfigSync';
 import type { CreateShortLinkRequest } from '@/lib/links/types';
 
 export async function POST(request: NextRequest) {
@@ -22,8 +23,9 @@ export async function POST(request: NextRequest) {
 
     // 短縮URL作成
     const shortLink = await createShortLink(body);
+    const edgeSync = await syncShortLinksToEdgeConfig([shortLink]);
 
-    return NextResponse.json(shortLink, { status: 201 });
+    return NextResponse.json({ ...shortLink, edgeSynced: edgeSync.synced }, { status: 201 });
   } catch (error) {
     console.error('[links/create] failed', error);
     return NextResponse.json({ error: 'Failed to create short link' }, { status: 500 });

@@ -1,6 +1,7 @@
 import { postThread } from '@/lib/threadsApi';
 import { normalizeTokutenGuideComment } from '@/lib/threadsText';
 import { resolveThreadsAccountKey, type ThreadsAccountKey } from '@/lib/threadsAccounts';
+import { parseThreadsMediaColumns, type ThreadsMediaItem } from '@/lib/threadsMedia';
 import {
   listScheduledPosts,
   updateScheduledPost,
@@ -38,13 +39,13 @@ function isScheduledTimePassed(scheduledTimeIso: string): boolean {
  * postThread にリトライを追加（一時的なAPIエラー対策）
  */
 async function postThreadWithRetry(
-  text: string,
+  params: string | { text: string; mediaItems?: ThreadsMediaItem[]; replyToId?: string },
   replyToId?: string,
   accountKey?: ThreadsAccountKey,
 ): Promise<string> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await postThread(text, replyToId, undefined, accountKey);
+      return await postThread(params, replyToId, undefined, accountKey);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.warn(
@@ -133,13 +134,28 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
   const errors: string[] = [];
   const commentThreadIds: Record<number, string | undefined> = {};
   const accountKey = resolveThreadsAccountKey(post.target_account_key ?? 'main');
+  const mainMediaItems = parseThreadsMediaColumns(
+    post.main_media_urls,
+    post.main_media_types,
+    post.main_media_alt_texts,
+  );
+  const comment1MediaItems = parseThreadsMediaColumns(
+    post.comment1_media_urls,
+    post.comment1_media_types,
+    post.comment1_media_alt_texts,
+  );
+  const comment2MediaItems = parseThreadsMediaColumns(
+    post.comment2_media_urls,
+    post.comment2_media_types,
+    post.comment2_media_alt_texts,
+  );
 
   // 1. メイン投稿（既に投稿済みならスキップ）
   let mainThreadId = post.main_thread_id || undefined;
   if (!mainThreadId) {
     try {
       console.log('[scheduledPostsWorker] Posting main thread...', { accountKey });
-      mainThreadId = await postThreadWithRetry(post.main_text, undefined, accountKey);
+      mainThreadId = await postThreadWithRetry({ text: post.main_text, mediaItems: mainMediaItems }, undefined, accountKey);
       console.log(`[scheduledPostsWorker] Main thread posted: ${mainThreadId}`);
       // 進捗を即座にBigQueryへ保存
       await updateScheduledPostRow(post, { mainThreadId });
@@ -159,18 +175,19 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
   const comments: Array<{
     index: number;
     text: string;
+    mediaItems: ThreadsMediaItem[];
     existingThreadId?: string | null;
     valueKey: 'comment1' | 'comment2' | 'comment3' | 'comment4' | 'comment5' | 'comment6' | 'comment7' | 'comment8';
     updateKey: 'comment1ThreadId' | 'comment2ThreadId' | 'comment3ThreadId' | 'comment4ThreadId' | 'comment5ThreadId' | 'comment6ThreadId' | 'comment7ThreadId' | 'comment8ThreadId';
   }> = [
-    { index: 1, text: post.comment1, existingThreadId: post.comment1_thread_id, valueKey: 'comment1', updateKey: 'comment1ThreadId' },
-    { index: 2, text: post.comment2, existingThreadId: post.comment2_thread_id, valueKey: 'comment2', updateKey: 'comment2ThreadId' },
-    { index: 3, text: post.comment3, existingThreadId: post.comment3_thread_id, valueKey: 'comment3', updateKey: 'comment3ThreadId' },
-    { index: 4, text: post.comment4, existingThreadId: post.comment4_thread_id, valueKey: 'comment4', updateKey: 'comment4ThreadId' },
-    { index: 5, text: post.comment5, existingThreadId: post.comment5_thread_id, valueKey: 'comment5', updateKey: 'comment5ThreadId' },
-    { index: 6, text: post.comment6, existingThreadId: post.comment6_thread_id, valueKey: 'comment6', updateKey: 'comment6ThreadId' },
-    { index: 7, text: post.comment7, existingThreadId: post.comment7_thread_id, valueKey: 'comment7', updateKey: 'comment7ThreadId' },
-    { index: 8, text: post.comment8, existingThreadId: post.comment8_thread_id, valueKey: 'comment8', updateKey: 'comment8ThreadId' },
+    { index: 1, text: post.comment1, mediaItems: comment1MediaItems, existingThreadId: post.comment1_thread_id, valueKey: 'comment1', updateKey: 'comment1ThreadId' },
+    { index: 2, text: post.comment2, mediaItems: comment2MediaItems, existingThreadId: post.comment2_thread_id, valueKey: 'comment2', updateKey: 'comment2ThreadId' },
+    { index: 3, text: post.comment3, mediaItems: [], existingThreadId: post.comment3_thread_id, valueKey: 'comment3', updateKey: 'comment3ThreadId' },
+    { index: 4, text: post.comment4, mediaItems: [], existingThreadId: post.comment4_thread_id, valueKey: 'comment4', updateKey: 'comment4ThreadId' },
+    { index: 5, text: post.comment5, mediaItems: [], existingThreadId: post.comment5_thread_id, valueKey: 'comment5', updateKey: 'comment5ThreadId' },
+    { index: 6, text: post.comment6, mediaItems: [], existingThreadId: post.comment6_thread_id, valueKey: 'comment6', updateKey: 'comment6ThreadId' },
+    { index: 7, text: post.comment7, mediaItems: [], existingThreadId: post.comment7_thread_id, valueKey: 'comment7', updateKey: 'comment7ThreadId' },
+    { index: 8, text: post.comment8, mediaItems: [], existingThreadId: post.comment8_thread_id, valueKey: 'comment8', updateKey: 'comment8ThreadId' },
   ];
 
   let timedOut = false;
@@ -216,7 +233,11 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
       await new Promise((resolve) => setTimeout(resolve, delay));
 
       console.log(`[scheduledPostsWorker] Posting comment${comment.index}...`);
-      const threadId = await postThreadWithRetry(comment.text, replyToId, accountKey);
+      const threadId = await postThreadWithRetry(
+        { text: comment.text, mediaItems: comment.mediaItems, replyToId },
+        undefined,
+        accountKey,
+      );
       console.log(`[scheduledPostsWorker] Comment${comment.index} posted: ${threadId}`);
       await updateScheduledPostRow(post, { [comment.updateKey]: threadId });
       commentThreadIds[comment.index] = threadId;

@@ -20,6 +20,10 @@ export interface DailyRegistration {
   registrations: number;
   surveyCompleted: number;
   completionRate: number;
+  honmei: number;
+  honmeiRate: number;
+  weak: number;
+  weakRate: number;
 }
 
 // 流入経路分析のデータ型
@@ -34,10 +38,31 @@ export interface SourceAnalysis {
   otherPercent: number;
   organic: number;
   organicPercent: number;
+  quality: SourceQualityRow[];
+}
+
+export interface SourceQualityRow {
+  label: string;
+  registrations: number;
+  surveyCompleted: number;
+  honmei: number;
+  honmeiRate: number;
+  weak: number;
+  weakRate: number;
+}
+
+export interface AudienceSegment {
+  label: string;
+  count: number;
+  percent: number;
+  description: string;
+  tone: 'green' | 'amber' | 'red' | 'slate';
 }
 
 // 属性分析のデータ型
 export interface AttributeAnalysis {
+  audienceSegments: AudienceSegment[];
+  sourceSegments: SourceQualityRow[];
   gender: Array<{ label: string; count: number; percent: number }>;
   age: Array<{ label: string; count: number; percent: number }>;
   job: Array<{ label: string; count: number; percent: number }>;
@@ -45,12 +70,78 @@ export interface AttributeAnalysis {
   goalRevenue: Array<{ label: string; count: number; percent: number }>;
 }
 
+function emptyAttributeAnalysis(): AttributeAnalysis {
+  return {
+    audienceSegments: [],
+    sourceSegments: [],
+    gender: [
+      { label: '男性', count: 0, percent: 0 },
+      { label: '女性', count: 0, percent: 0 },
+    ],
+    age: ['20代', '30代', '40代', '50代', '60代'].map((label) => ({ label, count: 0, percent: 0 })),
+    job: ['会社員', 'フリーランス', '経営者', '主婦', '学生'].map((label) => ({ label, count: 0, percent: 0 })),
+    currentRevenue: ['0円', '1-10万', '10-50万', '50-100万', '100-500万', '500-1000万', '1000万over'].map(
+      (label) => ({ label, count: 0, percent: 0 }),
+    ),
+    goalRevenue: ['10万over', '50万over', '100万over', '300万over', '500万over', '1000万over'].map((label) => ({
+      label,
+      count: 0,
+      percent: 0,
+    })),
+  };
+}
+
+const ATTRIBUTE_COLUMNS = [
+  'gender_male',
+  'gender_female',
+  'survey_completed',
+  '20s',
+  '30s',
+  '40s',
+  '50s',
+  '60s',
+  'job_employee',
+  'job_freelance',
+  'job_business_owner',
+  'job_housewife',
+  'job_student',
+  'revenue_m0yen',
+  'revenue_m1to10man',
+  'revenue_m10to50man',
+  'revenue_m50to100man',
+  'revenue_m100to500man',
+  'revenue_m500to1000man',
+  'revenue_m1000manover',
+  'goal_m10manover',
+  'goal_m50manover',
+  'goal_m100manover',
+  'goal_m300manover',
+  'goal_m500manover',
+  'goal_m1000manover',
+];
+
 export interface LstepAnalyticsData {
   funnel: FunnelAnalysis;
   dailyRegistrations: DailyRegistration[];
-  sources: SourceAnalysis;
-  attributes: AttributeAnalysis;
-  latestSnapshotDate: string | null;
+    sources: SourceAnalysis;
+    attributes: AttributeAnalysis;
+    latestSnapshotDate: string | null;
+}
+
+function emptySourceAnalysis(): SourceAnalysis {
+  return {
+    threads: 0,
+    threadsPercent: 0,
+    instagram: 0,
+    instagramPercent: 0,
+    youtube: 0,
+    youtubePercent: 0,
+    other: 0,
+    otherPercent: 0,
+    organic: 0,
+    organicPercent: 0,
+    quality: [],
+  };
 }
 
 /**
@@ -323,25 +414,8 @@ export async function getLstepAnalyticsByDateRange(
         surveyEnteredCVR: 0,
         surveyCompletedCVR: 0,
       },
-      sources: {
-        threads: 0,
-        threadsPercent: 0,
-        instagram: 0,
-        instagramPercent: 0,
-        youtube: 0,
-        youtubePercent: 0,
-        other: 0,
-        otherPercent: 0,
-        organic: 0,
-        organicPercent: 0,
-      },
-      attributes: {
-        gender: [],
-        age: [],
-        job: [],
-        currentRevenue: [],
-        goalRevenue: [],
-      },
+      sources: emptySourceAnalysis(),
+      attributes: emptyAttributeAnalysis(),
       latestSnapshotDate: null,
     };
   }
@@ -391,25 +465,8 @@ export async function getLstepAnalytics(projectId: string): Promise<LstepAnalyti
         surveyCompletedCVR: 0,
       },
       dailyRegistrations: [],
-      sources: {
-        threads: 0,
-        threadsPercent: 0,
-        instagram: 0,
-        instagramPercent: 0,
-        youtube: 0,
-        youtubePercent: 0,
-        other: 0,
-        otherPercent: 0,
-        organic: 0,
-        organicPercent: 0,
-      },
-      attributes: {
-        gender: [],
-        age: [],
-        job: [],
-        currentRevenue: [],
-        goalRevenue: [],
-      },
+      sources: emptySourceAnalysis(),
+      attributes: emptyAttributeAnalysis(),
       latestSnapshotDate: null,
     };
   }
@@ -487,7 +544,7 @@ async function getFunnelAnalysis(
     surveyEntered,
     surveyCompleted,
     surveyEnteredCVR: totalUsers > 0 ? (surveyEntered / totalUsers) * 100 : 0,
-    surveyCompletedCVR: surveyEntered > 0 ? (surveyCompleted / surveyEntered) * 100 : 0,
+    surveyCompletedCVR: totalUsers > 0 ? (surveyCompleted / totalUsers) * 100 : 0,
   };
 }
 
@@ -561,7 +618,7 @@ async function getFunnelAnalysisByDateRange(
     surveyEntered,
     surveyCompleted,
     surveyEnteredCVR: totalUsers > 0 ? (surveyEntered / totalUsers) * 100 : 0,
-    surveyCompletedCVR: surveyEntered > 0 ? (surveyCompleted / surveyEntered) * 100 : 0,
+    surveyCompletedCVR: totalUsers > 0 ? (surveyCompleted / totalUsers) * 100 : 0,
   };
 }
 
@@ -591,11 +648,13 @@ async function getDailyRegistrations(
     registration_date: string;
     registrations: number;
     survey_completed: number;
+    honmei: number;
+    weak: number;
   }>(client, projectId, datasetId, {
     query: `
       WITH date_range AS (
         SELECT DATE_SUB(CURRENT_DATE("Asia/Tokyo"), INTERVAL n DAY) AS date
-        FROM UNNEST(GENERATE_ARRAY(0, 89)) AS n
+      FROM UNNEST(GENERATE_ARRAY(0, 89)) AS n
       ),
       daily_registrations AS (
         SELECT
@@ -619,14 +678,35 @@ async function getDailyRegistrations(
           AND surveys.question = '回答完了'
           AND surveys.answer_flag = 1
         GROUP BY registration_date
+      ),
+      daily_quality AS (
+        SELECT
+          CAST(DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") AS STRING) AS registration_date,
+          COUNT(DISTINCT CASE
+            WHEN survey_completed = 1
+              AND (COALESCE(revenue_m10to50man, 0) + COALESCE(revenue_m50to100man, 0) + COALESCE(revenue_m100to500man, 0) + COALESCE(revenue_m500to1000man, 0) + COALESCE(revenue_m1000manover, 0)) > 0
+              AND (COALESCE(goal_m100manover, 0) + COALESCE(goal_m300manover, 0) + COALESCE(goal_m500manover, 0) + COALESCE(goal_m1000manover, 0)) > 0
+            THEN id END) AS honmei,
+          COUNT(DISTINCT CASE
+            WHEN survey_completed = 1
+              AND (COALESCE(revenue_m0yen, 0) + COALESCE(revenue_m1to10man, 0)) > 0
+              AND (COALESCE(goal_m10manover, 0) + COALESCE(goal_m50manover, 0)) > 0
+            THEN id END) AS weak
+        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+        WHERE friend_added_at IS NOT NULL
+          AND snapshot_date = @latestSnapshotDate
+        GROUP BY registration_date
       )
       SELECT
         CAST(dr.date AS STRING) AS registration_date,
         COALESCE(dreg.registrations, 0) AS registrations,
-        COALESCE(ds.survey_completed, 0) AS survey_completed
+        COALESCE(ds.survey_completed, 0) AS survey_completed,
+        COALESCE(dq.honmei, 0) AS honmei,
+        COALESCE(dq.weak, 0) AS weak
       FROM date_range dr
       LEFT JOIN daily_registrations dreg ON CAST(dr.date AS STRING) = dreg.registration_date
       LEFT JOIN daily_survey ds ON CAST(dr.date AS STRING) = ds.registration_date
+      LEFT JOIN daily_quality dq ON CAST(dr.date AS STRING) = dq.registration_date
       ORDER BY dr.date DESC
     `,
     params: { latestSnapshotDate },
@@ -635,6 +715,8 @@ async function getDailyRegistrations(
   return rows.map((row) => {
     const registrations = Number(row.registrations);
     const surveyCompleted = Number(row.survey_completed);
+    const honmei = Number(row.honmei);
+    const weak = Number(row.weak);
     const completionRate = registrations > 0 ? (surveyCompleted / registrations) * 100 : 0;
 
     return {
@@ -642,6 +724,10 @@ async function getDailyRegistrations(
       registrations,
       surveyCompleted,
       completionRate,
+      honmei,
+      honmeiRate: surveyCompleted > 0 ? (honmei / surveyCompleted) * 100 : 0,
+      weak,
+      weakRate: surveyCompleted > 0 ? (weak / surveyCompleted) * 100 : 0,
     };
   });
 }
@@ -710,6 +796,7 @@ async function getSourceAnalysis(
     otherPercent: total > 0 ? (other / total) * 100 : 0,
     organic: organicTotal,
     organicPercent: total > 0 ? (organicTotal / total) * 100 : 0,
+    quality: await getSourceQualityRows(client, projectId, datasetId, snapshotDate),
   };
 }
 
@@ -774,7 +861,230 @@ async function getSourceAnalysisByDateRange(
     otherPercent: total > 0 ? (other / total) * 100 : 0,
     organic: organicTotal,
     organicPercent: total > 0 ? (organicTotal / total) * 100 : 0,
+    quality: await getSourceQualityRows(client, projectId, datasetId, snapshotDate, startDate, endDate),
   };
+}
+
+function mapSourceQualityRows(rows: SourceQualityRow[]): SourceQualityRow[] {
+  const order = ['代理店（山崎）', 'Threads', 'Instagram', 'YouTube', 'オーガニック', 'その他'];
+  const rowMap = new Map(rows.map((row) => [row.label, row]));
+
+  return order.map((label) => rowMap.get(label) ?? {
+    label,
+    registrations: 0,
+    surveyCompleted: 0,
+    honmei: 0,
+    honmeiRate: 0,
+    weak: 0,
+    weakRate: 0,
+  });
+}
+
+async function getSourceQualityRows(
+  client: BigQuery,
+  projectId: string,
+  datasetId: string,
+  snapshotDate: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<SourceQualityRow[]> {
+  const dateFilter = startDate && endDate
+    ? 'AND DATE(TIMESTAMP(r.friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate'
+    : '';
+
+  const params = startDate && endDate
+    ? { snapshotDate, startDate, endDate }
+    : { snapshotDate };
+
+  const rows = await runQuery<{
+    label: string;
+    registrations: number;
+    surveyCompleted: number;
+    honmei: number;
+    honmeiRate: number;
+    weak: number;
+    weakRate: number;
+  }>(client, projectId, datasetId, {
+    query: `
+      WITH latest_info AS (
+        SELECT MAX(snapshot_date) AS snapshot_date
+        FROM \`${projectId}.${datasetId}.user_info\`
+      ),
+      latest_tags AS (
+        SELECT MAX(snapshot_date) AS snapshot_date
+        FROM \`${projectId}.${datasetId}.user_tags\`
+      ),
+      yamazaki_info AS (
+        SELECT DISTINCT ui.user_id
+        FROM \`${projectId}.${datasetId}.user_info\` ui
+        CROSS JOIN latest_info li
+        WHERE ui.snapshot_date = li.snapshot_date
+          AND field_name = '流入元'
+          AND field_value = '山崎'
+      ),
+      yamazaki_tag AS (
+        SELECT DISTINCT ut.user_id
+        FROM \`${projectId}.${datasetId}.user_tags\` ut
+        CROSS JOIN latest_tags lt
+        WHERE ut.snapshot_date = lt.snapshot_date
+          AND tag_flag = 1
+          AND tag_name = '山崎'
+      ),
+      base AS (
+        SELECT
+          CASE
+            WHEN yi.user_id IS NOT NULL AND yt.user_id IS NULL THEN '山崎SNSパネル'
+            WHEN yi.user_id IS NOT NULL AND yt.user_id IS NOT NULL THEN '山崎既存LINE'
+            ELSE '自分側'
+          END AS label,
+          r.id,
+          r.survey_completed,
+          GREATEST(
+            COALESCE(r.source_threads, 0),
+            COALESCE(r.source_threads_post, 0),
+            COALESCE(r.source_threads_profile, 0),
+            COALESCE(r.source_threads_fixed, 0)
+          ) AS is_threads,
+          GREATEST(
+            COALESCE(r.source_instagram, 0),
+            COALESCE(r.source_instagram_profile, 0),
+            COALESCE(r.source_instagram_comment, 0)
+          ) AS is_instagram,
+          COALESCE(r.source_youtube, 0) AS is_youtube,
+          COALESCE(r.inflow_organic, 0) AS is_organic,
+          IF(
+            (COALESCE(r.revenue_m10to50man, 0) + COALESCE(r.revenue_m50to100man, 0) + COALESCE(r.revenue_m100to500man, 0) + COALESCE(r.revenue_m500to1000man, 0) + COALESCE(r.revenue_m1000manover, 0)) > 0
+            AND (COALESCE(r.goal_m100manover, 0) + COALESCE(r.goal_m300manover, 0) + COALESCE(r.goal_m500manover, 0) + COALESCE(r.goal_m1000manover, 0)) > 0,
+            1,
+            0
+          ) AS is_honmei,
+          IF(
+            (COALESCE(r.revenue_m0yen, 0) + COALESCE(r.revenue_m1to10man, 0)) > 0
+            AND (COALESCE(r.goal_m10manover, 0) + COALESCE(r.goal_m50manover, 0)) > 0,
+            1,
+            0
+          ) AS is_weak
+        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\` r
+        LEFT JOIN yamazaki_info yi ON CAST(r.id AS STRING) = yi.user_id
+        LEFT JOIN yamazaki_tag yt ON CAST(r.id AS STRING) = yt.user_id
+        WHERE r.snapshot_date = @snapshotDate
+          AND r.friend_added_at IS NOT NULL
+          ${dateFilter}
+      ),
+      categorized AS (
+        SELECT
+          CASE
+            WHEN label IN ('山崎SNSパネル', '山崎既存LINE') THEN '代理店（山崎）'
+            WHEN is_threads = 1 THEN 'Threads'
+            WHEN is_instagram = 1 THEN 'Instagram'
+            WHEN is_youtube = 1 THEN 'YouTube'
+            WHEN is_organic = 1 THEN 'オーガニック'
+            ELSE 'その他'
+          END AS label,
+          id,
+          survey_completed,
+          is_honmei,
+          is_weak
+        FROM base
+      )
+      SELECT
+        label,
+        COUNT(DISTINCT id) AS registrations,
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END) AS surveyCompleted,
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND is_honmei = 1 THEN id END) AS honmei,
+        ROUND(SAFE_DIVIDE(COUNT(DISTINCT CASE WHEN survey_completed = 1 AND is_honmei = 1 THEN id END), COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END)) * 100, 1) AS honmeiRate,
+        COUNT(DISTINCT CASE WHEN survey_completed = 1 AND is_weak = 1 THEN id END) AS weak,
+        ROUND(SAFE_DIVIDE(COUNT(DISTINCT CASE WHEN survey_completed = 1 AND is_weak = 1 THEN id END), COUNT(DISTINCT CASE WHEN survey_completed = 1 THEN id END)) * 100, 1) AS weakRate
+      FROM categorized
+      GROUP BY label
+    `,
+    params,
+  });
+
+  return mapSourceQualityRows(rows.map((row) => ({
+    label: String(row.label),
+    registrations: Number(row.registrations),
+    surveyCompleted: Number(row.surveyCompleted),
+    honmei: Number(row.honmei),
+    honmeiRate: Number(row.honmeiRate ?? 0),
+    weak: Number(row.weak),
+    weakRate: Number(row.weakRate ?? 0),
+  })));
+}
+
+async function getAudienceSegments(
+  client: BigQuery,
+  projectId: string,
+  datasetId: string,
+  snapshotDate: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<AudienceSegment[]> {
+  const dateFilter = startDate && endDate
+    ? 'AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate'
+    : '';
+
+  const params = startDate && endDate
+    ? { snapshotDate, startDate, endDate }
+    : { snapshotDate };
+
+  const rows = await runQuery<{ label: string; count: number }>(client, projectId, datasetId, {
+    query: `
+      WITH classified AS (
+        SELECT
+          CASE
+            WHEN
+              (COALESCE(revenue_m10to50man, 0) + COALESCE(revenue_m50to100man, 0) + COALESCE(revenue_m100to500man, 0) + COALESCE(revenue_m500to1000man, 0) + COALESCE(revenue_m1000manover, 0)) > 0
+              AND (COALESCE(goal_m100manover, 0) + COALESCE(goal_m300manover, 0) + COALESCE(goal_m500manover, 0) + COALESCE(goal_m1000manover, 0)) > 0
+            THEN '本命層'
+            WHEN
+              (COALESCE(revenue_m0yen, 0) + COALESCE(revenue_m1to10man, 0)) > 0
+              AND (COALESCE(goal_m10manover, 0) + COALESCE(goal_m50manover, 0)) > 0
+            THEN '弱い層'
+            WHEN
+              (COALESCE(revenue_m0yen, 0) + COALESCE(revenue_m1to10man, 0)) > 0
+              AND (COALESCE(goal_m100manover, 0) + COALESCE(goal_m300manover, 0) + COALESCE(goal_m500manover, 0) + COALESCE(goal_m1000manover, 0)) > 0
+            THEN '熱量型'
+            WHEN
+              (COALESCE(revenue_m10to50man, 0) + COALESCE(revenue_m50to100man, 0) + COALESCE(revenue_m100to500man, 0) + COALESCE(revenue_m500to1000man, 0) + COALESCE(revenue_m1000manover, 0)) > 0
+              AND (COALESCE(goal_m10manover, 0) + COALESCE(goal_m50manover, 0)) > 0
+            THEN '売上あり低目標'
+            ELSE '不明/その他'
+          END AS label
+        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+        WHERE snapshot_date = @snapshotDate
+          AND friend_added_at IS NOT NULL
+          AND survey_completed = 1
+          ${dateFilter}
+      )
+      SELECT label, COUNT(*) AS count
+      FROM classified
+      GROUP BY label
+    `,
+    params,
+  });
+
+  const metadata: Record<string, Pick<AudienceSegment, 'description' | 'tone'>> = {
+    '本命層': { description: '現状10万以上 + 目標100万以上', tone: 'green' },
+    '弱い層': { description: '現状0-10万 + 目標10万/50万', tone: 'red' },
+    '熱量型': { description: '現状0-10万 + 目標100万以上', tone: 'amber' },
+    '売上あり低目標': { description: '現状10万以上 + 目標10万/50万', tone: 'amber' },
+    '不明/その他': { description: '上記に分類されない回答', tone: 'slate' },
+  };
+  const order = Object.keys(metadata);
+  const total = rows.reduce((sum, row) => sum + Number(row.count), 0);
+  const rowMap = new Map(rows.map((row) => [String(row.label), Number(row.count)]));
+
+  return order.map((label) => {
+    const count = rowMap.get(label) ?? 0;
+    return {
+      label,
+      count,
+      percent: total > 0 ? (count / total) * 100 : 0,
+      description: metadata[label].description,
+      tone: metadata[label].tone,
+    };
+  });
 }
 
 /**
@@ -786,27 +1096,38 @@ async function getAttributeAnalysis(
   datasetId: string,
   snapshotDate: string,
 ): Promise<AttributeAnalysis> {
+  const hasAttributeColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, ATTRIBUTE_COLUMNS);
+  if (!hasAttributeColumns) {
+    return emptyAttributeAnalysis();
+  }
+
   const defaultGender = [
     { label: '男性', count: 0, percent: 0 },
     { label: '女性', count: 0, percent: 0 },
   ];
   // 年齢層（アンケート完了者のみ）
-  const genderRows = await runQuery<{ gender_male: number; gender_female: number; total: number }>(
-    client,
-    projectId,
-    datasetId,
-    {
-      query: `
-        SELECT
-          COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
-          COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
-          COUNT(DISTINCT id) AS total
-        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-        WHERE snapshot_date = @snapshotDate
-      `,
-      params: { snapshotDate },
-    },
-  );
+  const hasGenderColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, [
+    'gender_male',
+    'gender_female',
+  ]);
+  const genderRows = hasGenderColumns
+    ? await runQuery<{ gender_male: number; gender_female: number; total: number }>(
+        client,
+        projectId,
+        datasetId,
+        {
+          query: `
+            SELECT
+              COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
+              COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
+              COUNT(DISTINCT id) AS total
+            FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+            WHERE snapshot_date = @snapshotDate
+          `,
+          params: { snapshotDate },
+        },
+      )
+    : [{ gender_male: 0, gender_female: 0, total: 0 }];
 
   const male = Number(genderRows?.[0]?.gender_male ?? 0);
   const female = Number(genderRows?.[0]?.gender_female ?? 0);
@@ -1015,6 +1336,8 @@ async function getAttributeAnalysis(
   }));
 
   return {
+    audienceSegments: await getAudienceSegments(client, projectId, datasetId, snapshotDate),
+    sourceSegments: await getSourceQualityRows(client, projectId, datasetId, snapshotDate),
     gender,
     age,
     job,
@@ -1034,29 +1357,40 @@ async function getAttributeAnalysisByDateRange(
   startDate?: string,
   endDate?: string,
 ): Promise<AttributeAnalysis> {
+  const hasAttributeColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, ATTRIBUTE_COLUMNS);
+  if (!hasAttributeColumns) {
+    return emptyAttributeAnalysis();
+  }
+
   const dateFilter = startDate && endDate
     ? 'AND DATE(friend_added_at) BETWEEN @startDate AND @endDate'
     : '';
 
   // 性別（期間指定）
-  const genderRows = await runQuery<{ gender_male: number; gender_female: number; total: number }>(
-    client,
-    projectId,
-    datasetId,
-    {
-      query: `
-        SELECT
-          COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
-          COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
-          COUNT(DISTINCT id) AS total
-        FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
-        WHERE snapshot_date = @snapshotDate
-          AND friend_added_at IS NOT NULL
-          ${dateFilter}
-      `,
-      params: { snapshotDate, startDate, endDate },
-    },
-  );
+  const hasGenderColumns = await tableHasColumns(client, projectId, datasetId, TABLE_NAME, [
+    'gender_male',
+    'gender_female',
+  ]);
+  const genderRows = hasGenderColumns
+    ? await runQuery<{ gender_male: number; gender_female: number; total: number }>(
+        client,
+        projectId,
+        datasetId,
+        {
+          query: `
+            SELECT
+              COUNT(DISTINCT CASE WHEN gender_male = 1 THEN id END) AS gender_male,
+              COUNT(DISTINCT CASE WHEN gender_female = 1 THEN id END) AS gender_female,
+              COUNT(DISTINCT id) AS total
+            FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+            WHERE snapshot_date = @snapshotDate
+              AND friend_added_at IS NOT NULL
+              ${dateFilter}
+          `,
+          params: { snapshotDate, startDate, endDate },
+        },
+      )
+    : [{ gender_male: 0, gender_female: 0, total: 0 }];
 
   const male = Number(genderRows?.[0]?.gender_male ?? 0);
   const female = Number(genderRows?.[0]?.gender_female ?? 0);
@@ -1312,6 +1646,8 @@ async function getAttributeAnalysisByDateRange(
   }));
 
   return {
+    audienceSegments: await getAudienceSegments(client, projectId, datasetId, snapshotDate, startDate, endDate),
+    sourceSegments: await getSourceQualityRows(client, projectId, datasetId, snapshotDate, startDate, endDate),
     gender,
     age,
     job,
@@ -1323,6 +1659,26 @@ async function getAttributeAnalysisByDateRange(
 interface QueryOptions {
   query: string;
   params?: Record<string, unknown>;
+}
+
+async function tableHasColumns(
+  client: BigQuery,
+  projectId: string,
+  datasetId: string,
+  tableName: string,
+  columnNames: string[],
+): Promise<boolean> {
+  const rows = await runQuery<{ column_name: string }>(client, projectId, datasetId, {
+    query: `
+      SELECT column_name
+      FROM \`${projectId}.${datasetId}.INFORMATION_SCHEMA.COLUMNS\`
+      WHERE table_name = @tableName
+        AND column_name IN UNNEST(@columnNames)
+    `,
+    params: { tableName, columnNames },
+  });
+
+  return new Set(rows.map((row) => row.column_name)).size === columnNames.length;
 }
 
 async function runQuery<T extends Record<string, unknown>>(

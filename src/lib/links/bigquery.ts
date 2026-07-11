@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { revalidateTag, unstable_cache } from 'next/cache';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import type {
   ShortLink,
@@ -19,6 +20,7 @@ const projectId = resolveProjectId(process.env.NEXT_PUBLIC_GCP_PROJECT_ID);
 const dataset = 'autostudio_links';
 const FUNNEL_TABLE = 'link_funnels';
 const FUNNEL_STEP_TABLE = 'link_funnel_steps';
+const SHORT_LINKS_CACHE_TAG = 'short-links';
 
 const bigquery = createBigQueryClient(projectId);
 const lstepDataset = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
@@ -112,9 +114,14 @@ export async function getShortLinkByCode(shortCode: string): Promise<ShortLink |
 export function invalidateShortLinkCache(): void {
   shortLinkCache = null;
   shortLinkCacheFetchedAt = 0;
+  try {
+    revalidateTag(SHORT_LINKS_CACHE_TAG, { expire: 0 });
+  } catch {
+    // revalidateTag is only available inside Next.js runtime contexts.
+  }
 }
 
-export async function getAllShortLinks(): Promise<ShortLink[]> {
+export async function getAllShortLinksFromBigQuery(): Promise<ShortLink[]> {
   const query = `
     WITH ranked_links AS (
       SELECT
@@ -143,6 +150,12 @@ export async function getAllShortLinks(): Promise<ShortLink[]> {
   const [rows] = await bigquery.query({ query });
   return rows as ShortLink[];
 }
+
+export const getAllShortLinks = unstable_cache(
+  getAllShortLinksFromBigQuery,
+  ['autostudio-short-links'],
+  { revalidate: 300, tags: [SHORT_LINKS_CACHE_TAG] },
+);
 
 async function ensureLinkFunnelTables() {
   const datasetRef = bigquery.dataset(dataset);
@@ -786,7 +799,7 @@ export async function checkShortCodeExists(shortCode: string): Promise<boolean> 
   return parseInt(rows[0]?.count || '0') > 0;
 }
 
-export async function updateShortLink(id: string, req: UpdateShortLinkRequest): Promise<void> {
+export async function updateShortLink(id: string, req: UpdateShortLinkRequest): Promise<ShortLink> {
   // streaming buffer問題を回避: UPDATE不要で新レコード挿入のみ
   // 最新のcreated_atを持つレコードが常に有効なバージョンとなる
 
@@ -812,23 +825,38 @@ export async function updateShortLink(id: string, req: UpdateShortLinkRequest): 
 
   // 2. 更新された新レコードを挿入（created_atを現在時刻で更新）
   // 古いレコードはそのまま残るが、クエリ時に最新のもののみ取得される
+  const updatedLink: ShortLink = {
+    id: String(existing.id),
+    shortCode: String(existing.short_code),
+    destinationUrl: req.destinationUrl,
+    title: req.title,
+    description: req.description,
+    ogpImageUrl: req.ogpImageUrl,
+    managementName: req.managementName,
+    category: req.category,
+    createdAt: now,
+    createdBy: existing.created_by ? String(existing.created_by) : undefined,
+    isActive: true,
+  };
+
   await bigquery.dataset(dataset).table('short_links').insert([
     {
       id: existing.id,
       short_code: existing.short_code,
-      destination_url: req.destinationUrl,
-      title: req.title || null,
-      description: req.description || null,
-      ogp_image_url: req.ogpImageUrl || null,
-      management_name: req.managementName || null,
-      category: req.category || null,
-      created_at: now, // 新しいタイムスタンプ
+      destination_url: updatedLink.destinationUrl,
+      title: updatedLink.title || null,
+      description: updatedLink.description || null,
+      ogp_image_url: updatedLink.ogpImageUrl || null,
+      management_name: updatedLink.managementName || null,
+      category: updatedLink.category || null,
+      created_at: updatedLink.createdAt, // 新しいタイムスタンプ
       created_by: existing.created_by,
       is_active: true,
     },
   ]);
 
   invalidateShortLinkCache();
+  return updatedLink;
 }
 
 export async function getLinkDailyClicks(

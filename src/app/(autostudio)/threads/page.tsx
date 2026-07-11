@@ -21,6 +21,7 @@ import {
   getThreadsAccount,
   resolveThreadsAccountKey,
   type ThreadsAccountKey,
+  type ThreadsConcreteAccountKey,
 } from "@/lib/threadsAccounts";
 import { ThreadsTabShell } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
@@ -113,6 +114,7 @@ const getCachedThreadsLpLineClicksByRange = unstable_cache(
 const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const CONCRETE_THREAD_ACCOUNTS: ThreadsConcreteAccountKey[] = ['main', 'sub'];
 
 type ThreadsTabKey = 'post' | 'schedule' | 'insights' | 'competitor' | 'report';
 
@@ -234,6 +236,7 @@ export default async function ThreadsHome({
           <PostTab
             planSummaries={planSummaries}
             recentLogs={dashboard.recentLogs as Array<Record<string, unknown>>}
+            accountKey={selectedAccountKey}
           />,
       );
     }
@@ -534,6 +537,176 @@ export default async function ThreadsHome({
       },
     ];
 
+    const buildOverviewStatsForAccount = async (accountKey: ThreadsConcreteAccountKey) => {
+      const accountLineSourceNames = getLineSourceNamesForAccount(accountKey);
+      const [
+        accountActivity,
+        accountDailyPostStats,
+        accountPreviousDailyPostStats,
+        accountCurrentLpLineSeries,
+        accountPreviousLpLineSeries,
+        accountCurrentLinkSeries,
+        accountPreviousLinkSeries,
+        accountLineRegistrationCount,
+        accountPreviousLineRegistrationCount,
+      ] = await Promise.all([
+        getCachedThreadsInsightsData(
+          postsQueryStartKey,
+          postsQueryEndKey,
+          null,
+          accountKey,
+        ),
+        getCachedDailyPostStats(
+          formatDateInput(rangeStartDate),
+          formatDateInput(rangeEndDate),
+          accountKey,
+        ),
+        getCachedDailyPostStats(
+          formatDateInput(previousRangeStart),
+          formatDateInput(previousRangeEnd),
+          accountKey,
+        ),
+        getCachedThreadsLpLineClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString(), accountKey),
+        getCachedThreadsLpLineClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString(), accountKey),
+        getCachedThreadsLinkClicksByRange(rangeStartDate.toISOString(), rangeEndDate.toISOString(), accountKey),
+        getCachedThreadsLinkClicksByRange(previousRangeStart.toISOString(), previousRangeEnd.toISOString(), accountKey),
+        getCachedCountLineSourceRegistrations(
+          PROJECT_ID,
+          formatDateInput(rangeStartDate),
+          formatDateInput(rangeEndDate),
+          accountLineSourceNames,
+        ),
+        getCachedCountLineSourceRegistrations(
+          PROJECT_ID,
+          formatDateInput(previousRangeStart),
+          formatDateInput(previousRangeEnd),
+          accountLineSourceNames,
+        ),
+      ]);
+
+      const accountPostsCount = accountDailyPostStats.reduce((sum, d) => sum + d.postCount, 0);
+      const accountPreviousPostsCount = accountPreviousDailyPostStats.reduce((sum, d) => sum + d.postCount, 0);
+      const accountPostsDelta = accountPostsCount - accountPreviousPostsCount;
+      const accountPostsPerDay = rangeDurationDays ? accountPostsCount / rangeDurationDays : null;
+      const accountPostsDeltaParts = [
+        `${accountPostsDelta > 0 ? '+' : ''}${formatNumber(accountPostsDelta)}投稿`,
+        accountPostsPerDay !== null ? `${accountPostsPerDay.toFixed(1)}件` : null,
+      ].filter((part): part is string => Boolean(part));
+
+      const accountImpressions = accountDailyPostStats.reduce((sum, d) => sum + d.impressions, 0);
+      const accountPreviousImpressions = accountPreviousDailyPostStats.reduce((sum, d) => sum + d.impressions, 0);
+      const accountImpressionsDelta = accountImpressions - accountPreviousImpressions;
+
+      const accountLpClicks = accountCurrentLpLineSeries.reduce((sum, entry) => sum + entry.clicks, 0);
+      const accountPreviousLpClicks = accountPreviousLpLineSeries.reduce((sum, entry) => sum + entry.clicks, 0);
+      const accountLpClicksDelta = accountLpClicks - accountPreviousLpClicks;
+
+      const accountLinkClicks = accountCurrentLinkSeries.reduce((sum, entry) => sum + entry.clicks, 0);
+      const accountPreviousLinkClicks = accountPreviousLinkSeries.reduce((sum, entry) => sum + entry.clicks, 0);
+      const accountLinkClicksDelta = accountLinkClicks - accountPreviousLinkClicks;
+
+      const accountSortedDailyMetrics = [...accountActivity.dailyMetrics].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      );
+      const accountFirstPoint = accountSortedDailyMetrics.find((metric) => {
+        const date = new Date(`${metric.date}T00:00:00Z`);
+        return date >= rangeStartDate && date <= rangeEndDate;
+      });
+      const accountLastPoint = [...accountSortedDailyMetrics].reverse().find((metric) => {
+        const date = new Date(`${metric.date}T00:00:00Z`);
+        return date >= rangeStartDate && date <= rangeEndDate;
+      });
+      const accountFollowersStart = accountFirstPoint?.followers ?? accountSortedDailyMetrics.at(0)?.followers ?? null;
+      const accountFollowersEnd = accountLastPoint?.followers ?? accountSortedDailyMetrics.at(-1)?.followers ?? null;
+      const accountFollowerDelta =
+        accountFollowersStart !== null && accountFollowersEnd !== null ? accountFollowersEnd - accountFollowersStart : 0;
+      const accountFollowersCurrent = accountFollowersEnd ?? 0;
+
+      const accountCtr = safeDivide(accountLinkClicks, accountImpressions);
+      const accountLpClickConversionRate = safeDivide(accountLpClicks, accountLinkClicks);
+      const accountLineRegistrationConversionRate = safeDivide(accountLineRegistrationCount, accountLpClicks);
+      const accountLineRegistrationCvr = safeDivide(accountLineRegistrationCount, accountLinkClicks);
+      const accountLineRegistrationDelta = accountLineRegistrationCount - accountPreviousLineRegistrationCount;
+
+      const accountLinkClicksDeltaParts = [
+        accountCtr !== null ? `CTR: ${formatPercent(accountCtr, 2)}` : null,
+        accountLinkClicksDelta !== 0
+          ? `${accountLinkClicksDelta > 0 ? '+' : ''}${formatNumber(accountLinkClicksDelta)}`
+          : null,
+      ].filter((part): part is string => Boolean(part));
+
+      const accountLpClicksDeltaParts = [
+        accountLpClickConversionRate !== null ? `LP遷移率: ${formatPercent(accountLpClickConversionRate, 2)}` : null,
+        accountLpClicksDelta !== 0
+          ? `${accountLpClicksDelta > 0 ? '+' : ''}${formatNumber(accountLpClicksDelta)}`
+          : null,
+      ].filter((part): part is string => Boolean(part));
+
+      const accountLineRegistrationDeltaParts = [
+        accountLineRegistrationConversionRate !== null ? `登録率: ${formatPercent(accountLineRegistrationConversionRate, 2)}` : null,
+        accountLineRegistrationCvr !== null ? `CVR: ${formatPercent(accountLineRegistrationCvr, 2)}` : null,
+        accountLineRegistrationDelta !== 0
+          ? `${accountLineRegistrationDelta > 0 ? '+' : ''}${formatNumber(accountLineRegistrationDelta)}`
+          : null,
+      ].filter((part): part is string => Boolean(part));
+
+      return {
+        title: accountKey === 'main' ? 'メインアカウント' : 'サブアカウント',
+        note: noteText,
+        stats: [
+          {
+            label: '現在のフォロワー数',
+            value: formatNumber(accountFollowersCurrent),
+            delta:
+              accountFollowerDelta === 0
+                ? undefined
+                : `${accountFollowerDelta > 0 ? '+' : ''}${formatNumber(accountFollowerDelta)}`,
+            deltaTone: resolveDeltaTone(accountFollowerDelta),
+          },
+          {
+            label: '投稿数',
+            value: formatNumber(accountPostsCount),
+            delta: accountPostsDeltaParts.length ? accountPostsDeltaParts.join(' / ') : undefined,
+            deltaTone: resolveDeltaTone(accountPostsDelta) ?? 'neutral',
+          },
+          {
+            label: '閲覧数',
+            value: formatNumber(accountImpressions),
+            delta:
+              accountImpressionsDelta === 0
+                ? undefined
+                : `${accountImpressionsDelta > 0 ? '+' : ''}${formatNumber(accountImpressionsDelta)}`,
+            deltaTone: resolveDeltaTone(accountImpressionsDelta),
+          },
+          {
+            label: 'リンククリック数',
+            value: formatNumber(accountLinkClicks),
+            delta: accountLinkClicksDeltaParts.length ? accountLinkClicksDeltaParts.join(' / ') : undefined,
+            deltaTone: resolveDeltaTone(accountLinkClicksDelta),
+          },
+          {
+            label: 'LPクリック',
+            value: formatNumber(accountLpClicks),
+            delta: accountLpClicksDeltaParts.length ? accountLpClicksDeltaParts.join(' / ') : undefined,
+            deltaTone: resolveDeltaTone(accountLpClicksDelta),
+          },
+          {
+            label: 'LINE登録数',
+            value: formatNumber(accountLineRegistrationCount),
+            delta: accountLineRegistrationDeltaParts.length ? accountLineRegistrationDeltaParts.join(' / ') : undefined,
+            deltaTone: resolveDeltaTone(accountLineRegistrationDelta),
+          },
+        ],
+      };
+    };
+
+    const accountStatGroups = selectedAccountKey === 'all'
+      ? [
+          { title: '合算', note: noteText, stats },
+          ...(await Promise.all(CONCRETE_THREAD_ACCOUNTS.map((accountKey) => buildOverviewStatsForAccount(accountKey)))),
+        ]
+      : undefined;
+
     const chartWindowStart = rangeStartDate;
     const chartWindowEnd = rangeEndDate;
 
@@ -629,6 +802,101 @@ export default async function ThreadsHome({
       }));
     }
 
+    if (selectedAccountKey === 'all') {
+      const accountBreakdownResults = await Promise.all(
+        CONCRETE_THREAD_ACCOUNTS.map(async (accountKey) => {
+          const accountLineSourceNames = getLineSourceNamesForAccount(accountKey);
+          const [
+            accountActivity,
+            accountDailyPostStats,
+            accountLinkSeries,
+            accountLpLineSeries,
+            accountLineRegistrationSeries,
+          ] = await Promise.all([
+            getCachedThreadsInsightsData(
+              formatDateInput(chartWindowStart),
+              formatDateInput(chartWindowEnd),
+              null,
+              accountKey,
+            ),
+            getCachedDailyPostStats(
+              formatDateInput(chartWindowStart),
+              formatDateInput(chartWindowEnd),
+              accountKey,
+            ),
+            getCachedThreadsLinkClicksByRange(chartWindowStart.toISOString(), chartWindowEnd.toISOString(), accountKey),
+            getCachedThreadsLpLineClicksByRange(chartWindowStart.toISOString(), chartWindowEnd.toISOString(), accountKey),
+            getCachedListLineSourceRegistrations(
+              PROJECT_ID,
+              formatDateInput(chartWindowStart),
+              formatDateInput(chartWindowEnd),
+              accountLineSourceNames,
+            ),
+          ]);
+
+          const sortedAccountMetrics = [...accountActivity.dailyMetrics].sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+          );
+          const followersByDate = sortedAccountMetrics.reduce<Record<string, number>>((acc, metric) => {
+            acc[metric.date] = metric.followers;
+            return acc;
+          }, {});
+          const followerDeltaByDate = sortedAccountMetrics.reduce<Record<string, number>>((acc, metric, index) => {
+            const previousFollowers = index > 0 ? sortedAccountMetrics[index - 1].followers : metric.followers;
+            acc[metric.date] = Math.max(0, metric.followers - previousFollowers);
+            return acc;
+          }, {});
+          const impressionsByAccountDate = accountDailyPostStats.reduce<Record<string, number>>((acc, stat) => {
+            acc[stat.date] = stat.impressions;
+            return acc;
+          }, {});
+          const postCountByAccountDate = accountDailyPostStats.reduce<Record<string, number>>((acc, stat) => {
+            acc[stat.date] = stat.postCount;
+            return acc;
+          }, {});
+          const linkClicksByAccountDate = accountLinkSeries.reduce<Record<string, number>>((acc, point) => {
+            acc[point.date] = point.clicks;
+            return acc;
+          }, {});
+          const lpClicksByAccountDate = accountLpLineSeries.reduce<Record<string, number>>((acc, point) => {
+            acc[point.date] = point.clicks;
+            return acc;
+          }, {});
+          const lineRegistrationsByAccountDate = accountLineRegistrationSeries.reduce<Record<string, number>>((acc, point) => {
+            acc[point.date] = point.count;
+            return acc;
+          }, {});
+
+          return {
+            accountKey,
+            accountLabel: getThreadsAccount(accountKey).label,
+            followersByDate,
+            followerDeltaByDate,
+            impressionsByAccountDate,
+            postCountByAccountDate,
+            linkClicksByAccountDate,
+            lpClicksByAccountDate,
+            lineRegistrationsByAccountDate,
+          };
+        }),
+      );
+
+      performanceSeries = performanceSeries.map((item) => ({
+        ...item,
+        accountBreakdown: accountBreakdownResults.map((account) => ({
+          accountKey: account.accountKey,
+          accountLabel: account.accountLabel,
+          followers: account.followersByDate[item.date] ?? 0,
+          impressions: account.impressionsByAccountDate[item.date] ?? 0,
+          followerDelta: account.followerDeltaByDate[item.date] ?? 0,
+          linkClicks: account.linkClicksByAccountDate[item.date] ?? 0,
+          lpClicks: account.lpClicksByAccountDate[item.date] ?? 0,
+          lineRegistrations: account.lineRegistrationsByAccountDate[item.date] ?? 0,
+          postCount: account.postCountByAccountDate[item.date] ?? 0,
+        })),
+      }));
+    }
+
     const displayedPerformanceSeries = performanceSeries;
     const maxImpressionsValue = displayedPerformanceSeries.reduce(
       (max, item) => Math.max(max, item.impressions),
@@ -647,6 +915,7 @@ export default async function ThreadsHome({
             customEnd={customEnd}
             noteText={noteText}
             stats={stats}
+            accountStatGroups={accountStatGroups}
             performanceSeries={displayedPerformanceSeries}
             maxImpressions={maxImpressionsValue}
             maxFollowerDelta={maxFollowerDeltaValue}

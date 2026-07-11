@@ -1,9 +1,12 @@
 import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
+import { getAgencyRewardSettings, type AgencyRewardRule } from '@/lib/agencyRewards';
 
 const DATASET_ID = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 
 // 通常アンケートの回答完了タグ。現行取込では user_surveys.question = '回答完了' にも入る。
 const SURVEY_RESPONSE_TAG_NAMES = ['アンケート：回答完了'];
+const SEMINAR_APPLICATION_TAG_NAMES = ['【2026.5】セミナー申込総数'];
+const PURCHASE_TAG_NAMES = ['Threads教材'];
 const SURVEY_RESPONSE_TAG_IDS = ['8087272', 'タグ_8087272'];
 const SURVEY_COMPLETED_QUESTION = '回答完了';
 const AGENCY_START_DATE = '2026-06-14';
@@ -12,23 +15,30 @@ export interface AgencyDailyRow {
   date: string | null;
   agency: string;
   registrations: number;
+  blockedWithin7Days: number;
   surveyResponses: number;
   seminarApplications: number;
   purchases: number;
+  purchasesWithin30Days: number;
+  qualifiedListRewards: number;
 }
 
 export interface AgencySummary {
   agency: string;
   registrations: number;
+  blockedWithin7Days: number;
   surveyResponses: number;
   seminarApplications: number;
   purchases: number;
+  purchasesWithin30Days: number;
+  qualifiedListRewards: number;
 }
 
 export interface AgencyStats {
   updatedAt: string | null;
   summary: AgencySummary[];
   daily: AgencyDailyRow[];
+  rewardSettings: Record<string, AgencyRewardRule>;
 }
 
 interface RawRow {
@@ -36,9 +46,12 @@ interface RawRow {
   reg_date: { value: string } | string | null;
   agency: string;
   registrations: number;
+  blocked_within_7_days: number;
   survey_responses: number;
   seminar_applications: number;
   purchases: number;
+  purchases_within_30_days: number;
+  qualified_list_rewards: number;
 }
 
 function toDateString(value: RawRow['reg_date']): string | null {
@@ -55,16 +68,19 @@ export async function getAgencyStats(): Promise<AgencyStats> {
   const [rows] = await client.query({
     query: `
       WITH info_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_info')}
+        SELECT MAX(snapshot_date) AS sd
+        FROM ${table('user_info')}
+        WHERE field_name = '流入元'
+          AND NULLIF(TRIM(field_value), '') IS NOT NULL
       ),
       core_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_core')}
+        SELECT sd FROM info_latest
       ),
       tags_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_tags')}
+        SELECT sd FROM info_latest
       ),
       surveys_latest AS (
-        SELECT MAX(snapshot_date) AS sd FROM ${table('user_surveys')}
+        SELECT sd FROM info_latest
       ),
       agency_users AS (
         SELECT DISTINCT i.user_id, i.field_value AS agency
@@ -80,6 +96,14 @@ export async function getAgencyStats(): Promise<AgencyStats> {
         FROM ${table('user_core')} c, core_latest
         WHERE c.snapshot_date = core_latest.sd
         GROUP BY c.user_id
+      ),
+      first_blocked AS (
+        SELECT
+          user_id,
+          MIN(snapshot_date) AS first_blocked_date
+        FROM ${table('user_core')}
+        WHERE blocked = TRUE
+        GROUP BY user_id
       ),
       survey_responses AS (
         SELECT DISTINCT user_id
@@ -98,26 +122,93 @@ export async function getAgencyStats(): Promise<AgencyStats> {
             AND s.question = @surveyCompletedQuestion
             AND s.answer_flag = 1
         )
+      ),
+      seminar_applications AS (
+        SELECT DISTINCT t.user_id
+        FROM ${table('user_tags')} t, tags_latest
+        WHERE t.snapshot_date = tags_latest.sd
+          AND t.tag_name IN UNNEST(@seminarApplicationTagNames)
+          AND t.tag_flag = 1
+      ),
+      first_purchases AS (
+        SELECT
+          t.user_id,
+          MIN(DATE_SUB(t.snapshot_date, INTERVAL 1 DAY)) AS first_purchase_date
+        FROM ${table('user_tags')} t
+        WHERE t.tag_name IN UNNEST(@purchaseTagNames)
+          AND t.tag_flag = 1
+          AND t.snapshot_date >= DATE(@agencyStartDate)
+        GROUP BY t.user_id
+      ),
+      registration_daily AS (
+        SELECT
+          a.agency,
+          c.reg_date AS date,
+          COUNT(*) AS registrations,
+          COUNTIF(
+            fb.first_blocked_date IS NOT NULL
+            AND fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY)
+          ) AS blocked_within_7_days,
+          COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
+          COUNTIF(sa.user_id IS NOT NULL) AS seminar_applications,
+          COUNTIF(
+            sr.user_id IS NOT NULL
+            AND NOT COALESCE(
+              fb.first_blocked_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 7 DAY),
+              FALSE
+            )
+          ) AS qualified_list_rewards
+        FROM agency_users a
+        LEFT JOIN core c USING (user_id)
+        LEFT JOIN first_blocked fb USING (user_id)
+        LEFT JOIN survey_responses sr USING (user_id)
+        LEFT JOIN seminar_applications sa USING (user_id)
+        WHERE c.reg_date >= DATE(@agencyStartDate)
+        GROUP BY a.agency, c.reg_date
+      ),
+      purchase_daily AS (
+        SELECT
+          a.agency,
+          fp.first_purchase_date AS date,
+          COUNT(*) AS purchases,
+          COUNTIF(
+            c.reg_date IS NOT NULL
+            AND fp.first_purchase_date BETWEEN c.reg_date AND DATE_ADD(c.reg_date, INTERVAL 30 DAY)
+          ) AS purchases_within_30_days
+        FROM agency_users a
+        JOIN first_purchases fp USING (user_id)
+        JOIN core c USING (user_id)
+        WHERE c.reg_date >= DATE(@agencyStartDate)
+        GROUP BY a.agency, fp.first_purchase_date
+      ),
+      daily_keys AS (
+        SELECT agency, date FROM registration_daily
+        UNION DISTINCT
+        SELECT agency, date FROM purchase_daily
       )
       SELECT
         (SELECT sd FROM info_latest) AS snapshot_date,
-        a.agency,
-        c.reg_date,
-        COUNT(*) AS registrations,
-        COUNTIF(sr.user_id IS NOT NULL) AS survey_responses,
-        0 AS seminar_applications,
-        0 AS purchases
-      FROM agency_users a
-      LEFT JOIN core c USING (user_id)
-      LEFT JOIN survey_responses sr USING (user_id)
-      WHERE c.reg_date >= DATE(@agencyStartDate)
-      GROUP BY a.agency, c.reg_date
-      ORDER BY c.reg_date DESC
+        d.agency,
+        d.date AS reg_date,
+        COALESCE(r.registrations, 0) AS registrations,
+        COALESCE(r.blocked_within_7_days, 0) AS blocked_within_7_days,
+        COALESCE(r.survey_responses, 0) AS survey_responses,
+        COALESCE(r.seminar_applications, 0) AS seminar_applications,
+        COALESCE(p.purchases, 0) AS purchases,
+        COALESCE(p.purchases_within_30_days, 0) AS purchases_within_30_days,
+        COALESCE(r.qualified_list_rewards, 0) AS qualified_list_rewards
+      FROM daily_keys d
+      LEFT JOIN registration_daily r USING (agency, date)
+      LEFT JOIN purchase_daily p USING (agency, date)
+      WHERE d.date >= DATE(@agencyStartDate)
+      ORDER BY d.date DESC
     `,
     params: {
       surveyResponseTagNames: SURVEY_RESPONSE_TAG_NAMES,
       surveyResponseTagIds: SURVEY_RESPONSE_TAG_IDS,
       surveyCompletedQuestion: SURVEY_COMPLETED_QUESTION,
+      seminarApplicationTagNames: SEMINAR_APPLICATION_TAG_NAMES,
+      purchaseTagNames: PURCHASE_TAG_NAMES,
       agencyStartDate: AGENCY_START_DATE,
     },
   });
@@ -128,9 +219,12 @@ export async function getAgencyStats(): Promise<AgencyStats> {
     date: toDateString(row.reg_date),
     agency: row.agency,
     registrations: Number(row.registrations ?? 0),
+    blockedWithin7Days: Number(row.blocked_within_7_days ?? 0),
     surveyResponses: Number(row.survey_responses ?? 0),
     seminarApplications: Number(row.seminar_applications ?? 0),
     purchases: Number(row.purchases ?? 0),
+    purchasesWithin30Days: Number(row.purchases_within_30_days ?? 0),
+    qualifiedListRewards: Number(row.qualified_list_rewards ?? 0),
   }));
 
   const summaryMap = new Map<string, AgencySummary>();
@@ -138,22 +232,29 @@ export async function getAgencyStats(): Promise<AgencyStats> {
     const entry = summaryMap.get(row.agency) ?? {
       agency: row.agency,
       registrations: 0,
+      blockedWithin7Days: 0,
       surveyResponses: 0,
       seminarApplications: 0,
       purchases: 0,
+      purchasesWithin30Days: 0,
+      qualifiedListRewards: 0,
     };
     entry.registrations += row.registrations;
+    entry.blockedWithin7Days += row.blockedWithin7Days;
     entry.surveyResponses += row.surveyResponses;
     entry.seminarApplications += row.seminarApplications;
     entry.purchases += row.purchases;
+    entry.purchasesWithin30Days += row.purchasesWithin30Days;
+    entry.qualifiedListRewards += row.qualifiedListRewards;
     summaryMap.set(row.agency, entry);
   }
 
   const summary = Array.from(summaryMap.values()).sort(
     (a, b) => b.registrations - a.registrations || b.surveyResponses - a.surveyResponses,
   );
+  const rewardSettings = await getAgencyRewardSettings(summary.map((row) => row.agency));
 
   const updatedAt = rawRows.length > 0 ? toDateString(rawRows[0].snapshot_date) : null;
 
-  return { updatedAt, summary, daily };
+  return { updatedAt, summary, daily, rewardSettings };
 }

@@ -18,13 +18,13 @@ interface DashboardTabsProps {
 export function DashboardTabs({ items, value, className, 'aria-label': ariaLabel }: DashboardTabsProps) {
   return (
     <div className={classNames('border-b border-[color:var(--color-border)]', className)}>
-      <nav aria-label={ariaLabel ?? 'ダッシュボードタブ'} className="flex flex-wrap items-end gap-1">
+      <nav aria-label={ariaLabel ?? 'ダッシュボードタブ'} className="flex items-end gap-1 overflow-x-auto scrollbar-hide">
         {items.map((item) => {
           const isActive = item.id === value;
           const content = (
             <span
               className={classNames(
-                'relative inline-flex whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors',
+                'relative inline-flex whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors md:px-4 md:py-3 md:text-sm',
                 isActive
                   ? 'text-[color:var(--color-accent)]'
                   : 'text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]',

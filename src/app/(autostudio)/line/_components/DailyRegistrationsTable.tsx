@@ -116,6 +116,18 @@ export function DailyRegistrationsTable({ data, hideFilter = false }: DailyRegis
               <th className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
                 回答率
               </th>
+              <th className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                本命
+              </th>
+              <th className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                本命率
+              </th>
+              <th className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                弱い層
+              </th>
+              <th className="px-4 py-3 text-right font-semibold text-[color:var(--color-text-secondary)] border-b border-[color:var(--color-border)]">
+                弱い層率
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -144,11 +156,23 @@ export function DailyRegistrationsTable({ data, hideFilter = false }: DailyRegis
                       {formatPercent(row.completionRate)}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-right text-emerald-700 border-b border-[color:var(--color-border)] last:border-b-0">
+                    {formatNumber(row.honmei)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-emerald-700 border-b border-[color:var(--color-border)] last:border-b-0">
+                    {formatPercent(row.honmeiRate)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-red-600 border-b border-[color:var(--color-border)] last:border-b-0">
+                    {formatNumber(row.weak)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-red-600 border-b border-[color:var(--color-border)] last:border-b-0">
+                    {formatPercent(row.weakRate)}
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                <td colSpan={8} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
                   データがありません
                 </td>
               </tr>

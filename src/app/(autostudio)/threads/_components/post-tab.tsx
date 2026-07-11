@@ -5,16 +5,19 @@ import { RegenerateButton } from './regenerate-button';
 import { PostQueueContainer } from './post-queue-container';
 import { PostedContent } from './posted-content';
 import type { ThreadPlanSummary } from '@/types/threadPlan';
+import type { ThreadsAccountKey } from '@/lib/threadsAccounts';
 import { Card } from '@/components/ui/card';
 
 type PostTabProps = {
   planSummaries: ThreadPlanSummary[];
   recentLogs?: Array<Record<string, unknown>>;
+  accountKey: ThreadsAccountKey;
 };
 
 export function PostTab({
   planSummaries,
   recentLogs,
+  accountKey,
 }: PostTabProps) {
   return (
     <div className="section-stack">
@@ -34,6 +37,7 @@ export function PostTab({
         </header>
         <PostQueueContainer
           initialPlans={JSON.parse(JSON.stringify(planSummaries))}
+          accountKey={accountKey}
           variant="embedded"
         />
       </Card>

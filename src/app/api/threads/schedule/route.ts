@@ -4,6 +4,12 @@ import { insertScheduledPost, listScheduledPosts, toJstIsoString } from '@/lib/b
 import { updateLatestPlanContent } from '@/lib/bigqueryPlans';
 import { normalizeTokutenGuideComment } from '@/lib/threadsText';
 import { resolveThreadsAccountKey } from '@/lib/threadsAccounts';
+import {
+  MAX_COMMENT_MEDIA_ITEMS,
+  MAX_THREADS_MEDIA_ITEMS,
+  normalizeThreadsMediaItems,
+  serializeThreadsMediaItems,
+} from '@/lib/threadsMedia';
 
 function validateTextLength(label: string, value?: string) {
   if (!value || value.trim().length === 0) {
@@ -42,8 +48,22 @@ export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
     const { scheduledAt, mainText, comment1, comment2, comment3, comment4, comment5, comment6, comment7, comment8, status, planId } = payload ?? {};
-    const targetAccountKey = resolveThreadsAccountKey(payload?.targetAccountKey ?? payload?.accountKey);
-    const sourceAccountKey = resolveThreadsAccountKey(payload?.sourceAccountKey ?? targetAccountKey);
+    const resolvedTargetAccountKey = resolveThreadsAccountKey(payload?.targetAccountKey ?? payload?.accountKey);
+    const targetAccountKey = resolvedTargetAccountKey === 'all' ? 'main' : resolvedTargetAccountKey;
+    const resolvedSourceAccountKey = resolveThreadsAccountKey(payload?.sourceAccountKey ?? targetAccountKey);
+    const sourceAccountKey = resolvedSourceAccountKey === 'all' ? targetAccountKey : resolvedSourceAccountKey;
+    if (Array.isArray(payload?.mediaItems) && payload.mediaItems.length > MAX_THREADS_MEDIA_ITEMS) {
+      return NextResponse.json({ error: `メディアは最大${MAX_THREADS_MEDIA_ITEMS}件までです` }, { status: 400 });
+    }
+    if (Array.isArray(payload?.comment1MediaItems) && payload.comment1MediaItems.length > MAX_COMMENT_MEDIA_ITEMS) {
+      return NextResponse.json({ error: `コメント1のメディアは最大${MAX_COMMENT_MEDIA_ITEMS}件までです` }, { status: 400 });
+    }
+    if (Array.isArray(payload?.comment2MediaItems) && payload.comment2MediaItems.length > MAX_COMMENT_MEDIA_ITEMS) {
+      return NextResponse.json({ error: `コメント2のメディアは最大${MAX_COMMENT_MEDIA_ITEMS}件までです` }, { status: 400 });
+    }
+    const serializedMedia = serializeThreadsMediaItems(normalizeThreadsMediaItems(payload?.mediaItems));
+    const serializedComment1Media = serializeThreadsMediaItems(normalizeThreadsMediaItems(payload?.comment1MediaItems));
+    const serializedComment2Media = serializeThreadsMediaItems(normalizeThreadsMediaItems(payload?.comment2MediaItems));
 
     if (!scheduledAt || typeof scheduledAt !== 'string') {
       return NextResponse.json({ error: 'scheduledAt is required' }, { status: 400 });
@@ -54,12 +74,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: mainError }, { status: 400 });
     }
 
-    const comment1Error = validateTextLength('コメント1', comment1);
+    const comment1Error = validateOptionalTextLength('コメント1', typeof comment1 === 'string' ? comment1 : undefined);
     if (comment1Error) {
       return NextResponse.json({ error: comment1Error }, { status: 400 });
     }
 
-    const comment2Error = validateTextLength('コメント2', comment2);
+    const comment2Error = validateOptionalTextLength('コメント2', typeof comment2 === 'string' ? comment2 : undefined);
     if (comment2Error) {
       return NextResponse.json({ error: comment2Error }, { status: 400 });
     }
@@ -90,8 +110,17 @@ export async function POST(request: NextRequest) {
       sourceAccountKey,
       targetAccountKey,
       mainText: String(mainText),
-      comment1: String(comment1),
-      comment2: String(comment2),
+      mainMediaUrls: serializedMedia.urls,
+      mainMediaTypes: serializedMedia.types,
+      mainMediaAltTexts: serializedMedia.altTexts,
+      comment1: typeof comment1 === 'string' ? comment1 : '',
+      comment1MediaUrls: serializedComment1Media.urls,
+      comment1MediaTypes: serializedComment1Media.types,
+      comment1MediaAltTexts: serializedComment1Media.altTexts,
+      comment2: typeof comment2 === 'string' ? comment2 : '',
+      comment2MediaUrls: serializedComment2Media.urls,
+      comment2MediaTypes: serializedComment2Media.types,
+      comment2MediaAltTexts: serializedComment2Media.altTexts,
       comment3: normalizeTokutenGuideComment(typeof comment3 === 'string' ? comment3 : ''),
       comment4: typeof comment4 === 'string' ? comment4 : '',
       comment5: typeof comment5 === 'string' ? comment5 : '',

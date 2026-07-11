@@ -7,6 +7,7 @@ import {
   THREADS_ACCOUNTS,
   getThreadsAccount,
   type ThreadsAccountKey,
+  type ThreadsConcreteAccountKey,
 } from '@/lib/threadsAccounts';
 
 type SortOption = 'postedAt' | 'views' | 'likes';
@@ -27,6 +28,8 @@ type TopContentPost = {
   likes: number;
   replies: number;
   postedAt: string;
+  permalink?: string | null;
+  accountKey?: ThreadsConcreteAccountKey;
   commentData?: PostCommentData[];
 };
 
@@ -158,6 +161,8 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
   onReserve: (post: TopContentPost) => void;
 }) {
   const isTop10 = rank !== undefined && rank <= 10;
+  const sourceAccount = post.accountKey ? getThreadsAccount(post.accountKey) : null;
+  const sourceAccountUrl = sourceAccount ? `https://www.threads.com/@${sourceAccount.handle}` : null;
   const commentData = post.commentData ?? [];
   const hasComments = commentData.length > 0;
   const { transitions: transitionRates, overallRate } = calculateTransitionRates(post.views, commentData);
@@ -192,6 +197,17 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
             hour: '2-digit',
             minute: '2-digit',
           })}</span>
+          {sourceAccount && (
+            <a
+              href={sourceAccountUrl ?? undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800"
+            >
+              {sourceAccount.label}
+            </a>
+          )}
           {hasComments && (
             <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
               コメント欄{commentData.length}つ
@@ -201,6 +217,17 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
         <div className="flex items-center gap-3">
           <span>閲覧 {post.views.toLocaleString()}</span>
           <span>いいね {post.likes.toLocaleString()}</span>
+          {post.permalink ? (
+            <a
+              href={post.permalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--color-text-secondary)] transition-colors hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]"
+            >
+              投稿を開く
+            </a>
+          ) : null}
           <button
             type="button"
             disabled={!eligibility.eligible}
@@ -326,7 +353,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: 
   const openReserveModal = (post: TopContentPost) => {
     setReserveTarget(post);
     setScheduledAt(getDefaultScheduledAt());
-    setTargetAccountKey(accountKey === 'all' ? 'main' : accountKey);
+    setTargetAccountKey(post.accountKey ?? (accountKey === 'all' ? 'main' : accountKey));
     setDraftMainText(cleanContent(post.content ?? ''));
     setDraftComments((post.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c) => cleanContent(c.text ?? '')));
     setSubmitError(null);
@@ -357,7 +384,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: 
         comment7: comments[6] ?? '',
         comment8: '',
         status: 'scheduled',
-        sourceAccountKey: accountKey,
+        sourceAccountKey: reserveTarget.accountKey ?? (accountKey === 'all' ? targetAccountKey : accountKey),
         targetAccountKey,
       };
       const res = await fetch('/api/threads/schedule', {
@@ -490,7 +517,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: 
               <div className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-2">
                 <p className="text-[10px] font-medium text-[color:var(--color-text-muted)]">投稿元</p>
                 <p className="mt-1 text-sm font-medium text-[color:var(--color-text-primary)]">
-                  {accountKey === 'all' ? '合算表示' : getThreadsAccount(accountKey).label}
+                  {reserveTarget.accountKey ? getThreadsAccount(reserveTarget.accountKey).label : accountKey === 'all' ? '合算表示' : getThreadsAccount(accountKey).label}
                 </p>
               </div>
               <label className="block rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2">

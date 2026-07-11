@@ -28,11 +28,24 @@ export async function GET(request: NextRequest) {
 
   try {
     const stats = await getAgencyStats();
-    return NextResponse.json(stats, {
+    const agency = request.nextUrl.searchParams.get('agency')?.trim();
+    const partner = agency ? stats.summary.find((row) => row.agency === agency) ?? null : null;
+    const payload = agency
+      ? {
+          updatedAt: stats.updatedAt,
+          partner,
+          rewardRule: agency ? stats.rewardSettings[agency] ?? null : null,
+          rewardSettings: agency ? { [agency]: stats.rewardSettings[agency] } : stats.rewardSettings,
+          summary: stats.summary.filter((row) => row.agency === agency),
+          daily: stats.daily.filter((row) => row.agency === agency),
+          ranking: stats.summary,
+        }
+      : stats;
+
+    return NextResponse.json(payload, {
       headers: {
         ...CORS_HEADERS,
-        // データ更新は1日1回（Lstep取り込み）なので10分キャッシュで十分
-        'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=3600',
+        'Cache-Control': 'no-store, no-cache, max-age=0, must-revalidate',
       },
     });
   } catch (error) {

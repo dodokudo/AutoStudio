@@ -65,6 +65,31 @@ function formatDateLabel(value: string): string {
   return dateFormatter.format(new Date(value));
 }
 
+const audienceToneClasses = {
+  green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  amber: 'border-amber-200 bg-amber-50 text-amber-700',
+  red: 'border-red-200 bg-red-50 text-red-700',
+  slate: 'border-slate-200 bg-slate-50 text-slate-700',
+} as const;
+
+const kpiStatusClasses = {
+  good: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  caution: 'border-amber-200 bg-amber-50 text-amber-700',
+  bad: 'border-red-200 bg-red-50 text-red-700',
+} as const;
+
+function getHigherIsBetterStatus(value: number, goodThreshold: number, cautionThreshold: number) {
+  if (value >= goodThreshold) return { label: '良い', tone: 'good' as const };
+  if (value >= cautionThreshold) return { label: '注意', tone: 'caution' as const };
+  return { label: '悪い', tone: 'bad' as const };
+}
+
+function getLowerIsBetterStatus(value: number, goodThreshold: number, cautionThreshold: number) {
+  if (value <= goodThreshold) return { label: '良い', tone: 'good' as const };
+  if (value <= cautionThreshold) return { label: '注意', tone: 'caution' as const };
+  return { label: '悪い', tone: 'bad' as const };
+}
+
 // 期間比較用ユーティリティ
 function getDateNDaysAgo(days: number): string {
   const date = new Date();
@@ -252,6 +277,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
           otherPercent: toPercent(other),
           organic,
           organicPercent: toPercent(organic),
+          quality: [],
         });
       })
       .catch((error) => {
@@ -547,7 +573,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       surveyEntered: surveyEnteredEstimate,
       surveyCompleted: surveyCompletedValue,
       surveyEnteredCVR: totalRegistrations > 0 ? (surveyEnteredEstimate / totalRegistrations) * 100 : 0,
-      surveyCompletedCVR: surveyEnteredEstimate > 0 ? (surveyCompletedValue / surveyEnteredEstimate) * 100 : 0,
+      surveyCompletedCVR: totalRegistrations > 0 ? (surveyCompletedValue / totalRegistrations) * 100 : 0,
     };
 
     return {
@@ -565,42 +591,64 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     const days = filteredAnalytics.dailyRegistrations.length;
     const registrations = filteredAnalytics.funnel.lineRegistration;
     const surveyCompleted = filteredAnalytics.funnel.surveyCompleted;
-    const latestDate = filteredAnalytics.dailyRegistrations[0]?.date ?? null;
     const averagePerDay = days > 0 ? registrations / days : 0;
     const surveyResponseRate = registrations > 0 ? (surveyCompleted / registrations) * 100 : 0;
+    const honmeiCount = filteredAnalytics.dailyRegistrations.reduce((sum, day) => sum + day.honmei, 0);
+    const weakCount = filteredAnalytics.dailyRegistrations.reduce((sum, day) => sum + day.weak, 0);
+    const honmeiRate = surveyCompleted > 0 ? (honmeiCount / surveyCompleted) * 100 : 0;
+    const weakRate = surveyCompleted > 0 ? (weakCount / surveyCompleted) * 100 : 0;
 
     return [
       {
         label: '登録者数 (期間計)',
         primary: `${formatNumber(registrations)}人`,
         secondary: days > 0 ? `平均 ${formatNumber(averagePerDay)}人/日` : null,
+        status: null,
       },
       {
         label: 'アンケート完了数',
         primary: `${formatNumber(surveyCompleted)}人`,
         secondary: registrations > 0 ? `完了率 ${formatPercent(filteredAnalytics.funnel.surveyCompletedCVR)}` : null,
+        status: null,
       },
       {
         label: 'アンケート回答率',
         primary: formatPercent(surveyResponseRate),
-        secondary: filteredAnalytics.rangeStart && filteredAnalytics.rangeEnd
-          ? `期間：${dateFormatter.format(filteredAnalytics.rangeStart)} 〜 ${dateFormatter.format(filteredAnalytics.rangeEnd)}`
-          : null,
+        secondary: null,
+        status: getHigherIsBetterStatus(surveyResponseRate, 85, 80),
+      },
+      {
+        label: '本命率',
+        primary: formatPercent(honmeiRate),
+        secondary: `本命 ${formatNumber(honmeiCount)}人 / 回答 ${formatNumber(surveyCompleted)}人`,
+        status: getHigherIsBetterStatus(honmeiRate, 45, 35),
+      },
+      {
+        label: '弱い率',
+        primary: formatPercent(weakRate),
+        secondary: `弱い層 ${formatNumber(weakCount)}人 / 回答 ${formatNumber(surveyCompleted)}人`,
+        status: getLowerIsBetterStatus(weakRate, 35, 44),
       },
     ];
   }, [filteredAnalytics]);
 
 
-  const sourceEntries = useMemo(
-    () => [
-      { key: 'threads', label: 'Threads', count: filteredAnalytics.sources.threads, percent: filteredAnalytics.sources.threadsPercent },
-      { key: 'instagram', label: 'Instagram', count: filteredAnalytics.sources.instagram, percent: filteredAnalytics.sources.instagramPercent },
-      { key: 'youtube', label: 'YouTube', count: filteredAnalytics.sources.youtube, percent: filteredAnalytics.sources.youtubePercent },
-      { key: 'other', label: 'その他', count: filteredAnalytics.sources.other, percent: filteredAnalytics.sources.otherPercent },
-      { key: 'organic', label: 'オーガニック', count: filteredAnalytics.sources.organic, percent: filteredAnalytics.sources.organicPercent },
-    ],
-    [filteredAnalytics.sources],
-  );
+  const sourceQualityEntries = filteredAnalytics.attributes.sourceSegments ?? [];
+  const audienceSegments = filteredAnalytics.attributes.audienceSegments ?? [];
+
+  const sourceDistributionData = useMemo(() => {
+    const colors = ['#0f766e', '#2563eb', '#db2777', '#f59e0b', '#65a30d', '#64748b'];
+    const total = sourceQualityEntries.reduce((sum, row) => sum + row.registrations, 0);
+
+    return sourceQualityEntries
+      .map((row, index) => ({
+        name: row.label,
+        value: row.registrations,
+        percent: total > 0 ? (row.registrations / total) * 100 : 0,
+        color: colors[index % colors.length],
+      }))
+      .filter((row) => row.value > 0);
+  }, [sourceQualityEntries]);
 
   // 性別データ（円グラフ用）
   const genderData = useMemo(() => {
@@ -680,10 +728,17 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
         <>
           {activeTab === 'main' ? (
             <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 {summaryCards.map((card) => (
                   <Card key={card.label} className={dashboardCardClass}>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-muted)]">{card.label}</p>
+                      {card.status ? (
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${kpiStatusClasses[card.status.tone]}`}>
+                          {card.status.label}
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="mt-3 text-xl font-semibold text-[color:var(--color-text-primary)]">{card.primary}</p>
                     {card.secondary ? (
                       <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">{card.secondary}</p>
@@ -692,53 +747,249 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                 ))}
               </div>
 
-              {/* 日別登録数と流入経路を左右レイアウト */}
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日別登録数</h2>
-                    <span className="text-xs text-[color:var(--color-text-muted)]">
-                      直近 {filteredAnalytics.dailyRegistrations.length} 日
-                    </span>
-                  </div>
-                  <div className="mt-4">
-                    <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
-                  </div>
-                </Card>
+              <Card className="p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日別登録数</h2>
+                  <span className="text-xs text-[color:var(--color-text-muted)]">
+                    直近 {filteredAnalytics.dailyRegistrations.length} 日
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
+                </div>
+              </Card>
 
-                <Card className="p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">流入経路</h2>
-                    {sourcesLoading ? (
-                      <span className="text-xs text-[color:var(--color-text-muted)]">取得中…</span>
-                    ) : null}
-                  </div>
-                  {sourcesError ? (
-                    <p className="mt-3 text-xs text-[color:var(--color-danger)]">{sourcesError}</p>
+              <Card className="p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">属性分析</h2>
+                  {attributesLoading ? (
+                    <span className="text-xs text-[color:var(--color-text-muted)]">取得中…</span>
                   ) : null}
-                  <div className="mt-4 space-y-3">
-                    {sourceEntries.map((source) => (
-                      <div key={source.key} className="flex items-center gap-3">
-                        <div className="w-24 text-sm font-medium text-[color:var(--color-text-secondary)]">
-                          {source.label}
-                        </div>
-                        <div className="flex-1 h-6 bg-[color:var(--color-surface-muted)] rounded-[var(--radius-sm)] overflow-hidden">
-                          <div
-                            className="h-full bg-[color:var(--color-accent)] transition-all duration-300"
-                            style={{ width: `${Math.min(100, Math.max(0, source.percent))}%` }}
-                          />
-                        </div>
-                        <div className="w-16 text-right text-sm font-semibold text-[color:var(--color-text-primary)]">
-                          {formatNumber(source.count)}
-                        </div>
-                        <div className="w-14 text-right text-xs text-[color:var(--color-text-muted)]">
-                          {formatPercent(source.percent)}
-                        </div>
+                </div>
+                {attributesError ? (
+                  <p className="mt-3 text-xs text-[color:var(--color-danger)]">{attributesError}</p>
+                ) : null}
+
+                <div className="mt-6">
+                  <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">流入経路別の質</h3>
+                  <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                    <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[color:var(--color-border)]">
+                      <table className="w-full min-w-[720px] text-sm">
+                        <thead className="bg-[color:var(--color-surface-muted)] text-left text-xs text-[color:var(--color-text-secondary)]">
+                          <tr>
+                            <th className="px-4 py-3 font-semibold">流入経路</th>
+                            <th className="px-4 py-3 text-right font-semibold">登録</th>
+                            <th className="px-4 py-3 text-right font-semibold">回答</th>
+                            <th className="px-4 py-3 text-right font-semibold">本命</th>
+                            <th className="px-4 py-3 text-right font-semibold">本命率</th>
+                            <th className="px-4 py-3 text-right font-semibold">弱い層</th>
+                            <th className="px-4 py-3 text-right font-semibold">弱い層率</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[color:var(--color-border)]">
+                          {sourceQualityEntries.map((row) => (
+                            <tr key={row.label}>
+                              <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">{row.label}</td>
+                              <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.registrations)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.surveyCompleted)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{formatNumber(row.honmei)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{formatPercent(row.honmeiRate)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums text-red-600">{formatNumber(row.weak)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums text-red-600">{formatPercent(row.weakRate)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-4">
+                      <div className="text-sm font-semibold text-[color:var(--color-text-primary)]">流入構成</div>
+                      {sourceDistributionData.length === 0 ? (
+                        <p className="mt-6 text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
+                      ) : (
+                        <>
+                          <div className="relative mx-auto mt-3 h-[210px] w-full max-w-[260px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={sourceDistributionData}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={58}
+                                  outerRadius={88}
+                                  paddingAngle={2}
+                                  dataKey="value"
+                                >
+                                  {sourceDistributionData.map((entry) => (
+                                    <Cell key={entry.name} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip
+                                  formatter={(value: number, name: string) => [
+                                    `${formatNumber(value)}人`,
+                                    name,
+                                  ]}
+                                  contentStyle={{
+                                    backgroundColor: 'var(--color-surface)',
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: 'var(--radius-md)',
+                                    fontSize: '12px',
+                                  }}
+                                />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+                              <span className="text-xs text-[color:var(--color-text-muted)]">登録</span>
+                              <span className="text-lg font-bold text-[color:var(--color-text-primary)]">
+                                {formatNumber(sourceDistributionData.reduce((sum, row) => sum + row.value, 0))}人
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {sourceDistributionData.map((row) => (
+                              <div key={row.name} className="flex items-center gap-2 text-xs">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
+                                <span className="min-w-0 flex-1 truncate text-[color:var(--color-text-secondary)]">{row.name}</span>
+                                <span className="font-semibold tabular-nums text-[color:var(--color-text-primary)]">
+                                  {formatPercent(row.percent)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">層の内訳</h3>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    {audienceSegments.map((segment) => (
+                      <div
+                        key={segment.label}
+                        className={`rounded-[var(--radius-md)] border p-4 ${audienceToneClasses[segment.tone]}`}
+                      >
+                        <div className="text-sm font-semibold">{segment.label}</div>
+                        <div className="mt-3 text-2xl font-bold">{formatPercent(segment.percent)}</div>
+                        <div className="mt-1 text-xs">{formatNumber(segment.count)}人</div>
+                        <div className="mt-3 text-[11px] leading-relaxed opacity-80">{segment.description}</div>
                       </div>
                     ))}
                   </div>
-                </Card>
-              </div>
+                </div>
+
+                <div className="mt-8">
+                  <h3 className="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">性別</h3>
+                  {genderData.length === 0 ? (
+                    <p className="text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
+                  ) : (
+                    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] items-center">
+                      <div className="space-y-3 w-full">
+                        {genderData.map((item) => (
+                          <div key={item.name} className="flex items-center gap-3">
+                            <div className="w-12 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.name}</div>
+                            <div className="flex-1 h-7 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] overflow-hidden">
+                              <div
+                                className="h-full rounded-[var(--radius-sm)] transition-all duration-300"
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, item.percent))}%`,
+                                  backgroundColor: item.name === '男性' ? '#0a7aff' : '#ff6b9d',
+                                }}
+                              />
+                            </div>
+                            <div className="w-16 text-right text-sm font-semibold text-[color:var(--color-text-primary)]">
+                              {formatNumber(item.value)}人
+                            </div>
+                          </div>
+                        ))}
+                        <div className="text-xs text-[color:var(--color-text-muted)] pl-12">
+                          合計: {formatNumber(genderData.reduce((sum, item) => sum + item.value, 0))}人
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 justify-center lg:justify-start">
+                        <div className="w-[150px] h-[150px] relative flex-shrink-0">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={genderData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={38}
+                                outerRadius={68}
+                                paddingAngle={2}
+                                dataKey="value"
+                              >
+                                {genderData.map((entry, index) => (
+                                  <Cell
+                                    key={`cell-${index}`}
+                                    fill={entry.name === '男性' ? '#0a7aff' : '#ff6b9d'}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(value: number, name: string) => [
+                                  `${formatNumber(value)}人`,
+                                  name,
+                                ]}
+                                contentStyle={{
+                                  backgroundColor: 'var(--color-surface)',
+                                  border: '1px solid var(--color-border)',
+                                  borderRadius: 'var(--radius-md)',
+                                  fontSize: '12px',
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-xs text-[color:var(--color-text-muted)]">男女比</span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {genderData.map((item) => (
+                            <div key={item.name} className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: item.name === '男性' ? '#0a7aff' : '#ff6b9d' }}
+                              />
+                              <span className="text-sm text-[color:var(--color-text-secondary)] whitespace-nowrap">
+                                {item.name}: {formatPercent(item.percent)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                  {attributeGroups.map((group) => (
+                    <div key={group.title} className="space-y-3">
+                      <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{group.title}</h3>
+                      {group.items.length === 0 ? (
+                        <p className="text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
+                      ) : (
+                        group.items.map((item) => (
+                          <div key={item.label} className="flex items-center gap-3">
+                            <div className="w-28 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
+                            <div className="flex-1 h-6 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)]">
+                              <div
+                                className="h-full rounded-[var(--radius-sm)] bg-[color:var(--color-accent)] transition-all duration-300"
+                                style={{ width: `${Math.min(100, Math.max(0, item.percent))}%` }}
+                              />
+                            </div>
+                            <div className="min-w-[110px] text-right text-xs text-[color:var(--color-text-secondary)]">
+                              {formatNumber(item.count)}人 ({formatPercent(item.percent)})
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
 
               {/* ファネル進捗（メインタブ用） */}
               {mainFunnelList.length > 0 && (
@@ -1179,126 +1430,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                   )}
                 </Card>
               )}
-
-              {/* 属性分析（一番下に移動） */}
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">属性分析</h2>
-
-                {/* 性別セクション - 2カラムレイアウト */}
-                <div className="mt-6">
-                  <h3 className="text-base font-semibold text-[color:var(--color-text-primary)] mb-4">性別</h3>
-                  {genderData.length === 0 ? (
-                    <p className="text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
-                  ) : (
-                    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] items-center">
-                      {/* 左: 人数表示 */}
-                      <div className="space-y-3 w-full">
-                        {genderData.map((item) => (
-                          <div key={item.name} className="flex items-center gap-3">
-                            <div className="w-12 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.name}</div>
-                            <div className="flex-1 h-7 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] overflow-hidden">
-                              <div
-                                className="h-full rounded-[var(--radius-sm)] transition-all duration-300"
-                                style={{
-                                  width: `${Math.min(100, Math.max(0, item.percent))}%`,
-                                  backgroundColor: item.name === '男性' ? '#0a7aff' : '#ff6b9d',
-                                }}
-                              />
-                            </div>
-                            <div className="w-16 text-right text-sm font-semibold text-[color:var(--color-text-primary)]">
-                              {formatNumber(item.value)}人
-                            </div>
-                          </div>
-                        ))}
-                        <div className="text-xs text-[color:var(--color-text-muted)] pl-12">
-                          合計: {formatNumber(genderData.reduce((sum, item) => sum + item.value, 0))}人
-                        </div>
-                      </div>
-
-                      {/* 右: 円グラフ + 凡例 */}
-                      <div className="flex items-center gap-4 justify-center lg:justify-start">
-                        <div className="w-[150px] h-[150px] relative flex-shrink-0">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={genderData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={38}
-                                outerRadius={68}
-                                paddingAngle={2}
-                                dataKey="value"
-                              >
-                                {genderData.map((entry, index) => (
-                                  <Cell
-                                    key={`cell-${index}`}
-                                    fill={entry.name === '男性' ? '#0a7aff' : '#ff6b9d'}
-                                  />
-                                ))}
-                              </Pie>
-                              <Tooltip
-                                formatter={(value: number, name: string) => [
-                                  `${formatNumber(value)}人`,
-                                  name,
-                                ]}
-                                contentStyle={{
-                                  backgroundColor: 'var(--color-surface)',
-                                  border: '1px solid var(--color-border)',
-                                  borderRadius: 'var(--radius-md)',
-                                  fontSize: '12px',
-                                }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-xs text-[color:var(--color-text-muted)]">男女比</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {genderData.map((item) => (
-                            <div key={item.name} className="flex items-center gap-2">
-                              <div
-                                className="w-3 h-3 rounded-full flex-shrink-0"
-                                style={{ backgroundColor: item.name === '男性' ? '#0a7aff' : '#ff6b9d' }}
-                              />
-                              <span className="text-sm text-[color:var(--color-text-secondary)] whitespace-nowrap">
-                                {item.name}: {formatPercent(item.percent)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 他の属性 */}
-                <div className="mt-8 grid gap-6 lg:grid-cols-2">
-                  {attributeGroups.map((group) => (
-                    <div key={group.title} className="space-y-3">
-                      <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">{group.title}</h3>
-                      {group.items.length === 0 ? (
-                        <p className="text-sm text-[color:var(--color-text-muted)]">データがありません。</p>
-                      ) : (
-                        group.items.map((item) => (
-                          <div key={item.label} className="flex items-center gap-3">
-                            <div className="w-28 text-sm text-[color:var(--color-text-secondary)] font-medium">{item.label}</div>
-                            <div className="flex-1 h-6 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)]">
-                              <div
-                                className="h-full rounded-[var(--radius-sm)] bg-[color:var(--color-accent)] transition-all duration-300"
-                                style={{ width: `${Math.min(100, Math.max(0, item.percent))}%` }}
-                              />
-                            </div>
-                            <div className="min-w-[110px] text-right text-xs text-[color:var(--color-text-secondary)]">
-                              {formatNumber(item.count)}人 ({formatPercent(item.percent)})
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </Card>
             </div>
           ) : null}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { Fragment, useMemo, useState, useEffect } from 'react';
 import {
   Bar,
   CartesianGrid,
@@ -11,8 +11,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { PostInsight, PostComment } from '@/lib/threadsInsightsData';
-import type { ThreadsAccountKey } from '@/lib/threadsAccounts';
+import type { PostInsight } from '@/lib/threadsInsightsData';
+import type { ThreadsAccountKey, ThreadsConcreteAccountKey } from '@/lib/threadsAccounts';
 import { Card } from '@/components/ui/card';
 import { InsightsCard } from './insights-card';
 import { TopContentCard } from './top-content-card';
@@ -34,6 +34,17 @@ interface InsightsTabProps {
     deltaTone?: 'up' | 'down' | 'neutral';
     deltaHighlight?: boolean;
   }>;
+  accountStatGroups?: Array<{
+    title: string;
+    note: string;
+    stats: Array<{
+      label: string;
+      value: string;
+      delta?: string;
+      deltaTone?: 'up' | 'down' | 'neutral';
+      deltaHighlight?: boolean;
+    }>;
+  }>;
   performanceSeries?: Array<{
     date: string;
     followers: number;
@@ -43,6 +54,17 @@ interface InsightsTabProps {
     lpClicks?: number;
     lineRegistrations?: number;
     postCount?: number;
+    accountBreakdown?: Array<{
+      accountKey: ThreadsAccountKey;
+      accountLabel: string;
+      followers: number;
+      impressions: number;
+      followerDelta: number;
+      linkClicks?: number;
+      lpClicks?: number;
+      lineRegistrations?: number;
+      postCount?: number;
+    }>;
   }>;
   maxImpressions?: number;
   maxFollowerDelta?: number;
@@ -60,6 +82,7 @@ export function InsightsTab({
   customEnd,
   noteText,
   stats,
+  accountStatGroups,
   performanceSeries,
   maxImpressions,
   maxFollowerDelta,
@@ -179,6 +202,8 @@ export function InsightsTab({
       likes: post.insights.likes ?? 0,
       replies: post.insights.replies ?? 0,
       postedAt: post.postedAt,
+      permalink: post.permalink ?? null,
+      accountKey: (post.accountKey === 'sub' ? 'sub' : 'main') as ThreadsConcreteAccountKey,
       commentData: post.commentData ?? [],
     }));
 
@@ -199,11 +224,67 @@ export function InsightsTab({
 
   return (
     <div className="section-stack">
-      <InsightsCard
-        title="アカウントの概要"
-        stats={stats}
-        note={noteText}
-      />
+      {accountStatGroups && accountStatGroups.length > 0 ? (
+        <Card className="p-6">
+          <header>
+            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">アカウントの概要</h2>
+            <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{noteText}</p>
+          </header>
+          <div className="mt-6 space-y-8">
+            {accountStatGroups.map((group) => (
+              <section key={group.title}>
+                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">{group.title}</h3>
+                <dl className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+                  {group.stats.map((stat) => (
+                    <div key={`${group.title}-${stat.label}`} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5">
+                      <dt className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
+                        {stat.label}
+                      </dt>
+                      <dd className="mt-4 text-[2rem] font-semibold leading-none text-[color:var(--color-text-primary)]">
+                        {stat.value}
+                      </dd>
+                      {stat.delta ? (
+                        <p
+                          className={[
+                            'mt-3 text-xs font-medium',
+                            stat.deltaTone === 'up'
+                              ? 'text-emerald-700'
+                              : stat.deltaTone === 'down'
+                                ? 'text-rose-600'
+                                : 'text-[color:var(--color-text-muted)]',
+                          ].join(' ')}
+                        >
+                          {stat.delta}
+                        </p>
+                      ) : null}
+                      {stat.deltaTone ? (
+                        <span
+                          className={[
+                            'mt-3 inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium',
+                            stat.deltaTone === 'up'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : stat.deltaTone === 'down'
+                                ? 'bg-rose-50 text-rose-600'
+                                : 'bg-slate-100 text-slate-500',
+                          ].join(' ')}
+                        >
+                          {stat.deltaTone === 'up' ? '増加傾向' : stat.deltaTone === 'down' ? '減少傾向' : '横ばい'}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <InsightsCard
+          title="アカウントの概要"
+          stats={stats}
+          note={noteText}
+        />
+      )}
 
       <Card className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -251,8 +332,10 @@ export function InsightsTab({
                   const lineRegs = item.lineRegistrations ?? 0;
                   const registrationRate = lpClicks > 0 ? (lineRegs / lpClicks) * 100 : 0;
                   const cvr = linkClicks > 0 ? (lineRegs / linkClicks) * 100 : 0;
+                  const breakdownRows = item.accountBreakdown ?? [];
                   return (
-                    <tr key={item.date} className="hover:bg-[color:var(--color-surface-muted)]">
+                    <Fragment key={item.date}>
+                    <tr className="hover:bg-[color:var(--color-surface-muted)]">
                       <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">
                         {displayFullDate}
                       </td>
@@ -291,6 +374,51 @@ export function InsightsTab({
                         {linkClicks > 0 ? `${cvr.toFixed(1)}%` : '-'}
                       </td>
                     </tr>
+                    {breakdownRows.map((breakdown) => {
+                      const breakdownLinkClicks = breakdown.linkClicks ?? 0;
+                      const breakdownLpClicks = breakdown.lpClicks ?? 0;
+                      const breakdownLineRegs = breakdown.lineRegistrations ?? 0;
+                      const breakdownRegistrationRate = breakdownLpClicks > 0 ? (breakdownLineRegs / breakdownLpClicks) * 100 : 0;
+                      const breakdownCvr = breakdownLinkClicks > 0 ? (breakdownLineRegs / breakdownLinkClicks) * 100 : 0;
+                      return (
+                        <tr key={`${item.date}-${breakdown.accountKey}`} className="bg-[color:var(--color-surface-muted)]/60 text-xs">
+                          <td className="px-3 py-1.5 pl-6 font-medium text-[color:var(--color-text-secondary)]">
+                            {breakdown.accountLabel}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {numberFormatter.format(breakdown.followers ?? 0)}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {breakdown.followerDelta > 0 ? `+${numberFormatter.format(breakdown.followerDelta)}` : '0'}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {breakdown.postCount ?? 0}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {numberFormatter.format(breakdown.impressions)}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {numberFormatter.format(breakdownLinkClicks)}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {breakdown.impressions > 0 ? `${((breakdownLinkClicks / breakdown.impressions) * 100).toFixed(2)}%` : '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {numberFormatter.format(breakdownLpClicks)}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {breakdownLineRegs > 0 ? `+${numberFormatter.format(breakdownLineRegs)}` : '0'}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {breakdownLpClicks > 0 ? `${breakdownRegistrationRate.toFixed(1)}%` : '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-right text-[color:var(--color-text-secondary)]">
+                            {breakdownLinkClicks > 0 ? `${breakdownCvr.toFixed(1)}%` : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -382,15 +510,19 @@ export function InsightsTab({
         </div>
       ) : null}
 
-      <ThreadsFunnelComparison
-        currentStartDate={formatDateInput(currentRange.start)}
-        currentEndDate={formatDateInput(currentRange.end)}
-      />
+      {accountKey !== 'all' ? (
+        <>
+          <ThreadsFunnelComparison
+            currentStartDate={formatDateInput(currentRange.start)}
+            currentEndDate={formatDateInput(currentRange.end)}
+          />
 
-      <PostAnalysisCard
-        startDate={formatDateInput(currentRange.start)}
-        endDate={formatDateInput(currentRange.end)}
-      />
+          <PostAnalysisCard
+            startDate={formatDateInput(currentRange.start)}
+            endDate={formatDateInput(currentRange.end)}
+          />
+        </>
+      ) : null}
 
       {postsLoading ? (
         <Card className="p-6">
@@ -403,13 +535,15 @@ export function InsightsTab({
         </Card>
       ) : (
         <>
-          <TimePerformanceCard
-            posts={effectiveInsights.map((post) => ({
-              postedAt: post.postedAt,
-              impressions: post.insights.impressions ?? 0,
-              likes: post.insights.likes ?? 0,
-            }))}
-          />
+          {accountKey !== 'all' ? (
+            <TimePerformanceCard
+              posts={effectiveInsights.map((post) => ({
+                postedAt: post.postedAt,
+                impressions: post.insights.impressions ?? 0,
+                likes: post.insights.likes ?? 0,
+              }))}
+            />
+          ) : null}
 
           <TopContentCard
             posts={topContentData}

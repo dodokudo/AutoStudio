@@ -13,6 +13,11 @@ const CORE_FIELD_LABELS: Record<string, keyof UserCoreRow> = {
   シナリオ日数: 'scenario_days',
 };
 
+const CANONICAL_TAG_NAMES: Record<string, string> = {
+  'タグ_10093142': 'YAMAZAKI',
+  山崎: 'YAMAZAKI',
+};
+
 export function transformLstepCsv(buffer: Buffer, snapshotDate: string): NormalizedLstepData {
   const csvText = iconv.decode(buffer, 'Shift_JIS');
   const records: string[][] = parse(csvText, {
@@ -68,7 +73,7 @@ export function transformLstepCsv(buffer: Buffer, snapshotDate: string): Normali
             snapshot_date: snapshotDate,
             user_id: coreRow.user_id,
             tag_id: descriptor.internalId ?? buildFallbackTagId(descriptor, index),
-            tag_name: descriptor.label ?? descriptor.internalId ?? `タグ${index}`,
+            tag_name: normalizeTagName(descriptor, index),
             tag_flag: parseFlag(value),
           });
           break;
@@ -121,6 +126,20 @@ export function transformLstepCsv(buffer: Buffer, snapshotDate: string): Normali
   }
 
   return normalized;
+}
+
+function normalizeTagName(descriptor: ColumnDescriptor, index: number): string {
+  const internalTagName = descriptor.internalId ? CANONICAL_TAG_NAMES[descriptor.internalId] : undefined;
+  if (internalTagName) {
+    return internalTagName;
+  }
+
+  const labelTagName = descriptor.label ? CANONICAL_TAG_NAMES[descriptor.label] : undefined;
+  if (labelTagName) {
+    return labelTagName;
+  }
+
+  return descriptor.label ?? descriptor.internalId ?? `タグ${index}`;
 }
 
 function buildColumnDescriptors(internalRow: string[], labelRow: string[]): ColumnDescriptor[] {

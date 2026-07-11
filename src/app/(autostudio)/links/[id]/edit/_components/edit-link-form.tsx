@@ -21,7 +21,7 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
     description: '',
     ogpImageUrl: '',
     managementName: '',
-    category: '' as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' | 'note',
+    category: '' as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' | 'note' | 'agency',
   });
 
   const [shortCode, setShortCode] = useState('');
@@ -68,11 +68,12 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
         body: JSON.stringify(formData),
       });
 
-      if (response.ok) {
+      const data = await response.json();
+
+      if (response.ok && data.edgeSynced !== false) {
         router.push('/links');
         router.refresh();
       } else {
-        const data = await response.json();
         setError(data.error || 'リンクの更新に失敗しました');
       }
     } catch (err) {
@@ -159,7 +160,7 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  category: e.target.value as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' | 'note',
+                  category: e.target.value as '' | 'threads' | 'instagram' | 'youtube' | 'ad' | 'line' | 'note' | 'agency',
                 })
               }
               className="w-full px-3 py-2 border border-[color:var(--color-border)] rounded-[var(--radius-sm)] focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -171,6 +172,7 @@ export function EditLinkForm({ linkId }: EditLinkFormProps) {
               <option value="line">LINE</option>
               <option value="ad">広告</option>
               <option value="note">note</option>
+              <option value="agency">代理店</option>
             </select>
           </div>
 
