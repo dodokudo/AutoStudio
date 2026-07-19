@@ -146,28 +146,16 @@ export async function getHomeDashboardData(options: {
   const rangeDays = options.rangeDays ?? DEFAULT_RANGE_DAYS;
   const selectedRangeValue = options.rangeValue ?? `${rangeDays}d`;
   // resolveDateRangeで計算された日付をそのまま使用（タイムゾーン維持）
-  let periodEnd = options.endDate ?? new Date();
-  let periodStart = options.startDate ?? (() => {
+  const periodEnd = options.endDate ?? new Date();
+  const periodStart = options.startDate ?? (() => {
     const start = new Date(periodEnd.getTime());
     start.setDate(start.getDate() - rangeDays + 1);
     return start;
   })();
 
-  // LINEタブと同様に、最新スナップショット日付に基づいて期間を調整
-  // 今日のJST日付を使用（LステップCSVは今日分まで取得済みのため）
-  // 日付比較のために時間を正規化（startOfDayで比較）
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const periodEndDate = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate(), 0, 0, 0, 0);
-
-  if (periodEndDate.getTime() < todayStart.getTime()) {
-    // 期間を今日まで延長（LINEタブのadjustRangeWithSnapshotと同じロジック）
-    // durationDaysは元の期間と同じ日数を維持（resolveDateRangeで「昨日」が終了日なので+1して今日を終了日に）
-    periodEnd = new Date(todayStart.getFullYear(), todayStart.getMonth(), todayStart.getDate(), 23, 59, 59, 999);
-    // startDateも1日ずらす（終了日を1日延長したので開始日も1日延長）
-    periodStart = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000);
-    periodStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate(), 0, 0, 0, 0);
-  }
+  // 選ばれた期間はずらさない。過去を指す期間（先週・先月など）を今日側へ延長すると
+  // 表示ラベルと実際の集計期間が食い違うため、resolveDateRange の結果をそのまま使う。
+  // 当日分を含めたい場合は呼び出し側で includeToday を指定する。
 
   const [
     threadsInsights,

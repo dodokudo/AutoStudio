@@ -1,5 +1,5 @@
 import { AdsDashboardShell } from './_components/AdsDashboardShell';
-import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, type UnifiedRangePreset } from '@/lib/dateRangePresets';
+import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 import { getAdsDashboardData } from '@/lib/ads/bigquery';
 import { getReelAdInsights } from '@/lib/ads/reelInsights';
 import { unstable_cache } from 'next/cache';
@@ -28,9 +28,10 @@ export default async function AdsPage({
   const selectedRange: UnifiedRangePreset = isUnifiedRangePreset(rangeParam) ? rangeParam : 'all';
 
   const range = resolveDateRange(selectedRange);
+  // toISOString() はUTC変換で日本時間の0時が前日に丸まるため、ローカル日付のまま文字列化する
   const period = {
-    start: range.start.toISOString().slice(0, 10),
-    end: range.end.toISOString().slice(0, 10),
+    start: formatDateInput(range.start),
+    end: formatDateInput(range.end),
   };
   const [data, reelAdRows] = await Promise.all([
     getCachedAdsDashboardData(period.start, period.end),

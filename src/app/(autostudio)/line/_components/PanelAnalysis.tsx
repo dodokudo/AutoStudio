@@ -1,6 +1,7 @@
 'use client';
 
 import useSWR from 'swr';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Card } from '@/components/ui/card';
 
@@ -300,7 +301,51 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
     },
   ];
 
+  // グラフは古い日付が左に来るように昇順へ（テーブルは新しい順のまま）
+  const dailyRegistrationChart = [...dailyMovements]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((day) => ({
+      label: day.date.slice(5).replace('-', '/'),
+      registered: day.registered,
+      blocked: day.blocked,
+    }));
+
   const slotDates = [...new Set(seminarSlots.map((slot) => slot.date))];
+  // 開催時刻は固定せず、期間内の実データに出てくる時刻をそのまま列にする
+  const slotTimes = [...new Set(seminarSlots.map((slot) => slot.time))].sort(
+    (a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10),
+  );
+
+  type SlotCounts = { applications: number; joined: number; purchased: number };
+  const sumCounts = (slots: Array<SeminarSlot | undefined>): SlotCounts =>
+    slots.reduce<SlotCounts>(
+      (acc, slot) => ({
+        applications: acc.applications + (slot?.applications ?? 0),
+        joined: acc.joined + (slot?.joined ?? 0),
+        purchased: acc.purchased + (slot?.purchased ?? 0),
+      }),
+      { applications: 0, joined: 0, purchased: 0 },
+    );
+
+  // 数字（申込・参加・購入）を先に並べ、率はその右にまとめる。
+  // 数字と率が交互に並ぶと読みにくいため、間には挟まない。
+  const renderCounts = (counts: SlotCounts | undefined) => {
+    if (!counts || counts.applications === 0) {
+      return <span className="text-xs text-[color:var(--color-text-muted)]">-</span>;
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm tabular-nums">
+        <span className="rounded bg-sky-100 px-2 py-0.5 font-semibold text-sky-800">申 {counts.applications}</span>
+        <span className={`rounded px-2 py-0.5 font-semibold ${counts.joined > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>参 {counts.joined}</span>
+        <span className={`rounded px-2 py-0.5 font-semibold ${counts.purchased > 0 ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>購 {counts.purchased}</span>
+        <span className="ml-1 text-xs font-medium text-[color:var(--color-text-secondary)]">
+          {formatPercent((counts.joined / counts.applications) * 100)}
+          <span className="mx-0.5 text-slate-300">/</span>
+          {counts.joined > 0 ? formatPercent((counts.purchased / counts.joined) * 100) : '-'}
+        </span>
+      </span>
+    );
+  };
 
   // デモグラのピボット: 属性ごとに 申込 / 参加 / 購入 を横持ちにする
   const segItems = (segKey: string, groupKey: string) =>
@@ -412,6 +457,19 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
                         <div className="mt-1 font-semibold text-red-600">⚠ {stage.drop.alertLabel} {formatNumber(stage.drop.alert)}人</div>
                       ) : null}
                     </div>
+                  ) : stage.label === '購入' ? (
+                    // 購入の下は空くので、リスト全体（LINE登録）に対する購入率を置く
+                    <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs">
+                      <div className="flex items-baseline justify-between gap-1">
+                        <span className="font-semibold text-emerald-900">リスト全体の購入率</span>
+                        <span className="text-base font-bold tabular-nums text-emerald-900">
+                          {report.base > 0 ? formatPercent((stage.count / report.base) * 100) : '-'}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-emerald-800">
+                        LINE登録 {formatNumber(report.base)}人 → 購入 {formatNumber(stage.count)}人
+                      </div>
+                    </div>
                   ) : (
                     <div />
                   )}
@@ -425,6 +483,37 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
             <span>→ 申込 <b className="tabular-nums">{formatNumber(report.consultApplied)}</b>人</span>
             <span>→ 参加 <b className="tabular-nums">{formatNumber(report.consultJoined)}</b>人</span>
           </div>
+        </div>
+
+        <div className="mt-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">日別の友だち登録</h3>
+            <span className="text-xs text-[color:var(--color-text-muted)]">登録数とブロック数の推移</span>
+          </div>
+          {dailyRegistrationChart.length === 0 ? (
+            <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">この期間の登録はありません。</p>
+          ) : (
+            <div className="mt-3 h-[220px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyRegistrationChart} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [`${formatNumber(value)}人`, name]}
+                    contentStyle={{
+                      backgroundColor: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar dataKey="registered" name="登録" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="blocked" name="ブロック" fill="#dc2626" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
@@ -599,51 +688,45 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
       <Card className="p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">セミナー枠別の申込状況</h3>
-          <span className="text-xs text-[color:var(--color-text-muted)]">各枠: 申込 → 参加 → 購入</span>
+          <span className="text-xs text-[color:var(--color-text-muted)]">各枠: 申込・参加・購入 ／ 右の2値 = 参加率・購入率</span>
         </div>
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse">
+          <table className="w-full min-w-[1080px] border-collapse">
             <thead>
               <tr className="border-b border-[color:var(--color-border)]">
                 <th className="py-2 pr-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">日付</th>
-                <th className="py-2 pr-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]">13時の枠</th>
-                <th className="py-2 pr-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]">21時の枠</th>
-                <th className="py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">日合計（申込）</th>
+                {slotTimes.map((time) => (
+                  <th key={time} className="py-2 pr-3 text-center text-xs font-medium text-[color:var(--color-text-secondary)]">
+                    {time}の枠
+                  </th>
+                ))}
+                <th className="py-2 text-center text-xs font-medium text-[color:var(--color-text-secondary)]">日合計</th>
               </tr>
             </thead>
             <tbody>
               {slotDates.map((date) => {
-                const day13 = seminarSlots.find((slot) => slot.date === date && slot.time === '13時');
-                const day21 = seminarSlots.find((slot) => slot.date === date && slot.time === '21時');
-                const renderSlot = (slot: SeminarSlot | undefined) => {
-                  if (!slot || slot.applications === 0) {
-                    return <span className="text-xs text-[color:var(--color-text-muted)]">-</span>;
-                  }
-                  return (
-                    <span className="inline-flex items-center gap-1.5 text-sm tabular-nums">
-                      <span className="rounded bg-sky-100 px-2 py-0.5 font-semibold text-sky-800">申 {slot.applications}</span>
-                      <span className="text-slate-300">→</span>
-                      <span className={`rounded px-2 py-0.5 font-semibold ${slot.joined > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>参 {slot.joined}</span>
-                      <span className="text-slate-300">→</span>
-                      <span className={`rounded px-2 py-0.5 font-semibold ${slot.purchased > 0 ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>購 {slot.purchased}</span>
-                    </span>
-                  );
-                };
-                const dayTotal = (day13?.applications ?? 0) + (day21?.applications ?? 0);
+                const slotsOfDay = slotTimes.map((time) =>
+                  seminarSlots.find((slot) => slot.date === date && slot.time === time),
+                );
+                const dayTotal = sumCounts(slotsOfDay);
                 return (
                   <tr key={date} className="border-b border-[color:var(--color-border)] last:border-0">
                     <td className="py-2.5 pr-3 text-sm font-medium text-[color:var(--color-text-primary)]">{date}</td>
-                    <td className="py-2.5 pr-3 text-center">{renderSlot(day13)}</td>
-                    <td className="py-2.5 pr-3 text-center">{renderSlot(day21)}</td>
-                    <td className="py-2.5 text-right text-sm font-semibold tabular-nums text-[color:var(--color-text-primary)]">{dayTotal > 0 ? dayTotal : '-'}</td>
+                    {slotsOfDay.map((slot, index) => (
+                      <td key={slotTimes[index]} className="py-2.5 pr-3 text-center">{renderCounts(slot)}</td>
+                    ))}
+                    <td className="py-2.5 text-center">{renderCounts(dayTotal)}</td>
                   </tr>
                 );
               })}
               <tr className="border-t-2 border-[color:var(--color-border)] bg-[color:var(--color-bg-hover)] font-semibold">
                 <td className="py-2 pr-3 text-sm text-[color:var(--color-text-primary)]">合計</td>
-                <td className="py-2 pr-3 text-center text-sm tabular-nums">申 {seminarSlots.filter((slot) => slot.time === '13時').reduce((sum, slot) => sum + slot.applications, 0)} / 参 {seminarSlots.filter((slot) => slot.time === '13時').reduce((sum, slot) => sum + slot.joined, 0)} / 購 {seminarSlots.filter((slot) => slot.time === '13時').reduce((sum, slot) => sum + slot.purchased, 0)}</td>
-                <td className="py-2 pr-3 text-center text-sm tabular-nums">申 {seminarSlots.filter((slot) => slot.time === '21時').reduce((sum, slot) => sum + slot.applications, 0)} / 参 {seminarSlots.filter((slot) => slot.time === '21時').reduce((sum, slot) => sum + slot.joined, 0)} / 購 {seminarSlots.filter((slot) => slot.time === '21時').reduce((sum, slot) => sum + slot.purchased, 0)}</td>
-                <td className="py-2 text-right text-sm tabular-nums">{seminarSlots.reduce((sum, slot) => sum + slot.applications, 0)}</td>
+                {slotTimes.map((time) => (
+                  <td key={time} className="py-2 pr-3 text-center">
+                    {renderCounts(sumCounts(seminarSlots.filter((slot) => slot.time === time)))}
+                  </td>
+                ))}
+                <td className="py-2 text-center">{renderCounts(sumCounts(seminarSlots))}</td>
               </tr>
             </tbody>
           </table>

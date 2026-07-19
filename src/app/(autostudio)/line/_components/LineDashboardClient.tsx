@@ -141,14 +141,11 @@ function adjustRangeWithSnapshot(rangeStart: Date, rangeEnd: Date, latestSnapsho
   if (!latestSnapshotDate) return { start: rangeStart, end: rangeEnd };
   const snapshotDate = toStartOfDay(new Date(latestSnapshotDate));
   if (Number.isNaN(snapshotDate.getTime())) return { start: rangeStart, end: rangeEnd };
-  const currentEnd = rangeEnd;
-  if (snapshotDate <= currentEnd) return { start: rangeStart, end: rangeEnd };
-
-  // Extend end to snapshot date, keep duration
-  const durationDays = Math.max(1, Math.round((rangeEnd.getTime() - rangeStart.getTime()) / (24 * 60 * 60 * 1000)) + 1);
-  const newEnd = toEndOfDay(snapshotDate);
-  const newStart = toStartOfDay(new Date(newEnd.getTime() - (durationDays - 1) * 24 * 60 * 60 * 1000));
-  return { start: newStart, end: newEnd };
+  // 選んだ期間はずらさない。データが存在しない未来側だけをスナップショット日で打ち止める。
+  // （期間ごとスライドさせると「先週」「先月」が直近の期間にすり替わってしまうため）
+  const snapshotEnd = toEndOfDay(snapshotDate);
+  if (rangeEnd <= snapshotEnd) return { start: rangeStart, end: rangeEnd };
+  return { start: rangeStart, end: snapshotEnd };
 }
 
 export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
@@ -205,7 +202,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   const panelRange = useMemo(() => {
     if (dateRange === 'all') return null;
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
     const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
     return { start: formatDateInput(adjusted.start), end: formatDateInput(adjusted.end) };
   }, [dateRange, customStartDate, customEndDate, initialData.latestSnapshotDate]);
@@ -229,7 +226,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     let aborted = false;
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
     const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
     const startKey = formatDateInput(adjusted.start);
     const endKey = formatDateInput(adjusted.end);
@@ -300,7 +297,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     let aborted = false;
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
     const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
     const startKey = formatDateInput(adjusted.start);
     const endKey = formatDateInput(adjusted.end);
@@ -352,7 +349,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     let aborted = false;
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
     const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
     const startKey = formatDateInput(adjusted.start);
     const endKey = formatDateInput(adjusted.end);
@@ -436,7 +433,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
     }
 
     const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
     const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
     const startKey = formatDateInput(adjusted.start);
     const endKey = formatDateInput(adjusted.end);
@@ -544,7 +541,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
   }, [isPending, isTabLoading]);
 
   const filteredAnalytics = useMemo(() => {
-    const resolved = resolveDateRange(dateRange, customStartDate, customEndDate);
+    const resolved = resolveDateRange(dateRange, customStartDate, customEndDate, { includeToday: true });
     const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
     const rangeStart = adjusted.start;
     const rangeEnd = adjusted.end;
@@ -774,12 +771,13 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                   <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">流入経路別の質</h3>
                   <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                     <div className="overflow-x-auto rounded-[var(--radius-md)] border border-[color:var(--color-border)]">
-                      <table className="w-full min-w-[720px] text-sm">
+                      <table className="w-full min-w-[820px] text-sm">
                         <thead className="bg-[color:var(--color-surface-muted)] text-left text-xs text-[color:var(--color-text-secondary)]">
                           <tr>
                             <th className="px-4 py-3 font-semibold">流入経路</th>
                             <th className="px-4 py-3 text-right font-semibold">登録</th>
                             <th className="px-4 py-3 text-right font-semibold">回答</th>
+                            <th className="px-4 py-3 text-right font-semibold">回答率</th>
                             <th className="px-4 py-3 text-right font-semibold">本命</th>
                             <th className="px-4 py-3 text-right font-semibold">本命率</th>
                             <th className="px-4 py-3 text-right font-semibold">弱い層</th>
@@ -792,6 +790,11 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
                               <td className="px-4 py-3 font-medium text-[color:var(--color-text-primary)]">{row.label}</td>
                               <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.registrations)}</td>
                               <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.surveyCompleted)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums">
+                                {row.registrations > 0
+                                  ? formatPercent((row.surveyCompleted / row.registrations) * 100)
+                                  : '—'}
+                              </td>
                               <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{formatNumber(row.honmei)}</td>
                               <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{formatPercent(row.honmeiRate)}</td>
                               <td className="px-4 py-3 text-right tabular-nums text-red-600">{formatNumber(row.weak)}</td>
@@ -1449,13 +1452,13 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
             <LineFunnelsManager
               startDate={(() => {
                 const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-                const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+                const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
                 const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
                 return formatDateInput(adjusted.start);
               })()}
               endDate={(() => {
                 const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-                const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate);
+                const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
                 const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
                 return formatDateInput(adjusted.end);
               })()}

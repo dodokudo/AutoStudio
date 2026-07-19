@@ -111,20 +111,11 @@ const SEMINAR_SLOT_COLUMN = 'seminar_application_slot';
 // 申込判定は友だち情報「セミナー申込日」を正とする（タグではなく友だち情報で確定させる運用ルール）
 const APPLIED_SQL = `TRIM(COALESCE(seminar_application_slot, '')) != ''`;
 
-const SEMINAR_SLOT_TEMPLATE = [
-  { key: '7-7-13', date: '7/7', time: '13時' },
-  { key: '7-7-21', date: '7/7', time: '21時' },
-  { key: '7-8-13', date: '7/8', time: '13時' },
-  { key: '7-8-21', date: '7/8', time: '21時' },
-  { key: '7-9-13', date: '7/9', time: '13時' },
-  { key: '7-9-21', date: '7/9', time: '21時' },
-  { key: '7-10-13', date: '7/10', time: '13時' },
-  { key: '7-10-21', date: '7/10', time: '21時' },
-  { key: '7-11-13', date: '7/11', time: '13時' },
-  { key: '7-11-21', date: '7/11', time: '21時' },
-  { key: '7-12-13', date: '7/12', time: '13時' },
-  { key: '7-12-21', date: '7/12', time: '21時' },
-];
+// セミナー枠は固定テンプレートを持たず、選択期間の実データに存在する枠から組み立てる
+// （枠を増減しても、期間を切り替えても、表示が実態に追従する）
+// ただし今回のローンチは 7/8 開催分から。6月の枠は前ローンチなので混ぜない。
+const SEMINAR_SLOT_FIRST_MONTH = 7;
+const SEMINAR_SLOT_FIRST_DAY = 8;
 
 const DEMOGRAPHIC_GROUPS = [
   {
@@ -206,16 +197,20 @@ const getRate = (count: number, base: number) => (base > 0 ? (count / base) * 10
 
 const parseSeminarSlot = (slot: string) => {
   const monthDay = slot.match(/(\d{1,2})月(\d{1,2})日/) ?? slot.match(/(\d{1,2})\/(\d{1,2})/);
-  const hour = slot.match(/(13|21)(?::00|時)/);
+  // 時刻は13時/21時に限定しない（20時開催などの枠を取りこぼさないため）
+  const hour = slot.match(/(\d{1,2})(?::00|時)/);
   if (!monthDay || !hour) return null;
 
   const month = Number(monthDay[1]);
   const day = Number(monthDay[2]);
-  const hourLabel = `${Number(hour[1])}時`;
+  const hourValue = Number(hour[1]);
   return {
-    key: `${month}-${day}-${Number(hour[1])}`,
+    key: `${month}-${day}-${hourValue}`,
     date: `${month}/${day}`,
-    time: hourLabel,
+    time: `${hourValue}時`,
+    month,
+    day,
+    hour: hourValue,
   };
 };
 
@@ -456,12 +451,35 @@ async function computePanelAnalysis(targetStartDate: string, targetEndDate: stri
       }).then(([result]) => result as Array<Record<string, unknown>>)
       : [];
 
-    const slotMap = new Map<string, { applications: number; joined: number; purchased: number; rawSlots: string[] }>();
+    type SlotAccumulator = {
+      key: string;
+      date: string;
+      time: string;
+      month: number;
+      day: number;
+      hour: number;
+      applications: number;
+      joined: number;
+      purchased: number;
+      rawSlots: string[];
+    };
+    const slotMap = new Map<string, SlotAccumulator>();
     for (const slotRow of slotRows) {
       const rawSlot = String(slotRow.seminar_slot ?? '');
       const parsed = parseSeminarSlot(rawSlot);
       if (!parsed) continue;
-      const current = slotMap.get(parsed.key) ?? { applications: 0, joined: 0, purchased: 0, rawSlots: [] };
+      const current = slotMap.get(parsed.key) ?? {
+        key: parsed.key,
+        date: parsed.date,
+        time: parsed.time,
+        month: parsed.month,
+        day: parsed.day,
+        hour: parsed.hour,
+        applications: 0,
+        joined: 0,
+        purchased: 0,
+        rawSlots: [] as string[],
+      };
       current.applications += toNumber(slotRow.applications);
       current.joined += toNumber(slotRow.joined);
       current.purchased += toNumber(slotRow.purchased);
@@ -469,18 +487,24 @@ async function computePanelAnalysis(targetStartDate: string, targetEndDate: stri
       slotMap.set(parsed.key, current);
     }
 
-    const seminarSlots = SEMINAR_SLOT_TEMPLATE.map((slot) => {
-      const counts = slotMap.get(slot.key) ?? { applications: 0, joined: 0, purchased: 0, rawSlots: [] };
-      return {
-        ...slot,
-        applications: counts.applications,
-        joined: counts.joined,
-        purchased: counts.purchased,
-        joinRate: getRate(counts.joined, counts.applications),
-        purchaseRate: getRate(counts.purchased, counts.joined),
-        rawSlots: counts.rawSlots,
-      };
-    });
+    const seminarSlots = [...slotMap.values()]
+      .filter(
+        (slot) =>
+          slot.month > SEMINAR_SLOT_FIRST_MONTH ||
+          (slot.month === SEMINAR_SLOT_FIRST_MONTH && slot.day >= SEMINAR_SLOT_FIRST_DAY),
+      )
+      .sort((a, b) => a.month - b.month || a.day - b.day || a.hour - b.hour)
+      .map((slot) => ({
+        key: slot.key,
+        date: slot.date,
+        time: slot.time,
+        applications: slot.applications,
+        joined: slot.joined,
+        purchased: slot.purchased,
+        joinRate: getRate(slot.joined, slot.applications),
+        purchaseRate: getRate(slot.purchased, slot.joined),
+        rawSlots: slot.rawSlots,
+      }));
 
     // 状態マップ: 全員を必ず1つの状態に割り当てる（ブロック以外の各状態＝リマーケ在庫）
     const nowMs = Date.now();
@@ -816,7 +840,10 @@ export async function GET(request: Request) {
   const isDateParam = (v: string | null): v is string => Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
   const startParam = url.searchParams.get('start');
   const endParam = url.searchParams.get('end');
-  const targetStartDate = isDateParam(startParam) ? startParam : TARGET_START_DATE;
+  // このファネルの計測開始は TARGET_START_DATE。「今月」「過去30日」など
+  // それより前に遡る期間を選ばれても、前ローンチのデータが混ざらないよう開始日で打ち止める。
+  const requestedStartDate = isDateParam(startParam) ? startParam : TARGET_START_DATE;
+  const targetStartDate = requestedStartDate < TARGET_START_DATE ? TARGET_START_DATE : requestedStartDate;
   const targetEndDate = isDateParam(endParam) ? endParam : '2099-12-31';
 
   try {
