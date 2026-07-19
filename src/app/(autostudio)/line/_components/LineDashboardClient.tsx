@@ -745,15 +745,20 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
               </div>
 
               <Card className="p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">日別登録数</h2>
-                  <span className="text-xs text-[color:var(--color-text-muted)]">
-                    直近 {filteredAnalytics.dailyRegistrations.length} 日
-                  </span>
-                </div>
-                <div className="mt-4">
-                  <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
-                </div>
+                <details className="group" open>
+                  <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                    <h2 className="flex items-center gap-1.5 text-lg font-semibold text-[color:var(--color-text-primary)]">
+                      <span className="text-sm text-[color:var(--color-text-muted)] transition-transform group-open:rotate-90">▶</span>
+                      日別登録数
+                    </h2>
+                    <span className="text-xs text-[color:var(--color-text-muted)]">
+                      直近 {filteredAnalytics.dailyRegistrations.length} 日
+                    </span>
+                  </summary>
+                  <div className="mt-4">
+                    <DailyRegistrationsTable data={filteredAnalytics.dailyRegistrations} hideFilter />
+                  </div>
+                </details>
               </Card>
 
               <Card className="p-6">

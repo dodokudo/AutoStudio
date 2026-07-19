@@ -516,8 +516,14 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
           )}
         </div>
 
-        <div className="mt-6">
-          <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">登録日別の進捗</h3>
+        <details className="mt-6 group" open>
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-[color:var(--color-text-primary)] [&::-webkit-details-marker]:hidden">
+            <span className="text-[color:var(--color-text-muted)] transition-transform group-open:rotate-90">▶</span>
+            登録日別の進捗
+            <span className="ml-1 text-xs font-normal text-[color:var(--color-text-muted)]">
+              （{dailyMovements.length}日分）
+            </span>
+          </summary>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full min-w-[860px] border-collapse">
               <thead>
@@ -559,7 +565,7 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
               </tbody>
             </table>
           </div>
-        </div>
+        </details>
       </Card>
 
       <Card className="p-5">
