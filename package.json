@@ -38,6 +38,7 @@
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
     "lstep:init-metrics": "tsx src/scripts/initMessageMetricsBQ.ts",
     "lstep:check": "tsx src/scripts/checkLstepSetup.ts",
+    "lstep:seminar": "tsx src/scripts/runLstepSeminarSchedule.ts",
     "youtube:sync": "tsx src/scripts/runYoutubeSync.ts",
     "notion:test": "tsx src/scripts/testNotionSync.ts",
     "links:init": "tsx src/scripts/initLinkManagement.ts",
