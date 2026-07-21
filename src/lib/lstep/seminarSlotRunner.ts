@@ -726,7 +726,7 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
       steps.push({
         step: '全画面再読込検証',
         status: 'ok',
-        detail: `フォーム${after.form.length}件・ワンタップ${Object.values(after.flex).reduce((sum, cards) => sum + cards.length, 0)}件・日程選択${after.dateTemplate.length}件・リマインド${after.reminder.length}件`,
+        detail: `フォーム${after.form.length}件・ワンタップ${Object.values(after.flex).reduce((sum, cards) => sum + cards.length, 0)}件・日程選択${after.dateTemplate.length}件・最終リマインド本文の日程${after.reminder.length}枠`,
       });
     }
   } catch (error) {

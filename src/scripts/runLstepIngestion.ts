@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     await ensureDatasetAndTables(bigquery, config.dataset, config.location);
 
     console.log('BigQueryにロード中...');
-    await loadIntoBigQuery(bigquery, config, processedObjects);
+    await loadIntoBigQuery(bigquery, config, processedObjects, snapshotDate);
 
     // Raw CSVもそのままBigQueryにロード
     console.log('Raw CSVをBigQueryにロード中...');
@@ -201,8 +201,10 @@ async function loadIntoBigQuery(
   bigquery: BigQuery,
   config: LstepConfig,
   objects: ProcessedObjectPaths,
+  snapshotDate: string,
 ): Promise<void> {
   const dataset = bigquery.dataset(config.dataset);
+  const partitionSuffix = snapshotDate.replace(/-/g, '');
 
   const jobs = [
     { table: 'user_core', objectName: objects.userCore },
@@ -214,6 +216,7 @@ async function loadIntoBigQuery(
 
   for (const jobDef of jobs) {
     const uri = `gs://${config.gcsBucket}/${jobDef.objectName}`;
+    const destinationTableId = `${jobDef.table}$${partitionSuffix}`;
     console.log(`  - ${jobDef.table} をロード中... (${uri})`);
     try {
       console.log('    BigQuery ロードジョブを作成中...');
@@ -224,10 +227,10 @@ async function loadIntoBigQuery(
             destinationTable: {
               projectId: config.projectId,
               datasetId: config.dataset,
-              tableId: jobDef.table,
+              tableId: destinationTableId,
             },
             sourceFormat: 'NEWLINE_DELIMITED_JSON',
-            writeDisposition: 'WRITE_APPEND',
+            writeDisposition: 'WRITE_TRUNCATE',
             autodetect: false,
           },
         },
