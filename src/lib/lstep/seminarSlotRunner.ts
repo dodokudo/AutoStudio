@@ -1,10 +1,10 @@
-import { chromium, type Browser, type Locator, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright';
 import { Storage } from '@google-cloud/storage';
 import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadLstepConfig } from './config';
-import { downloadObjectToFile } from './gcs';
+import { downloadObjectToFile, uploadFileToGcs } from './gcs';
 import {
   choiceLabelWithCapacity,
   upcomingSlots,
@@ -62,15 +62,94 @@ export interface RunResult {
 
 const wait = (page: Page, milliseconds = 1_500) => page.waitForTimeout(milliseconds);
 
-async function openBrowser(): Promise<{ browser: Browser; page: Page }> {
+async function waitForDialogToClose(page: Page, previousCount: number): Promise<void> {
+  await page.waitForFunction((count) => {
+    const visible = [...document.querySelectorAll('[role="dialog"],.modal')]
+      .filter((element) => {
+        const style = window.getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+    return visible.length < count;
+  }, previousCount, { timeout: 10_000 });
+}
+
+interface OpenBrowserResult {
+  browser: Browser;
+  context: BrowserContext;
+  page: Page;
+  statePath: string;
+  storage: Storage;
+  bucketName: string;
+  objectName: string;
+}
+
+async function openBrowser(): Promise<OpenBrowserResult> {
   const config = loadLstepConfig();
+  const storage = new Storage();
   const dir = await mkdtemp(join(tmpdir(), 'lstep-seminar-'));
   const statePath = join(dir, 'storage-state.json');
-  const downloaded = await downloadObjectToFile(new Storage(), config.gcsBucket, config.storageStateObject, statePath);
-  if (!downloaded) throw new Error('保存済みLステップセッションをGCSから取得できませんでした');
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ storageState: statePath, viewport: { width: 1600, height: 1400 } });
-  return { browser, page: await context.newPage() };
+  const downloaded = await downloadObjectToFile(storage, config.gcsBucket, config.storageStateObject, statePath);
+  const channel = process.env.LSTEP_BROWSER_CHANNEL;
+  const browser = await chromium.launch({
+    headless: process.env.LSTEP_HEADLESS !== 'false',
+    ...(channel ? { channel } : {}),
+  });
+  const context = await browser.newContext({
+    ...(downloaded ? { storageState: statePath } : {}),
+    viewport: { width: 1600, height: 1400 },
+  });
+  const page = await context.newPage();
+
+  try {
+    await page.goto(TAG_LIST_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await wait(page, 1_500);
+    if (/login/i.test(page.url())) {
+      const username = process.env.LSTEP_USERNAME;
+      const password = process.env.LSTEP_PASSWORD;
+      if (!username || !password) throw new Error('Lステップのログインセッションが切れており、再ログイン用認証情報がありません');
+
+      const usernameInput = page.locator('input[type="email"]:visible,input[type="text"]:visible').first();
+      const passwordInput = page.locator('input[type="password"]:visible').first();
+      if (!await usernameInput.count() || !await passwordInput.count()) throw new Error('Lステップのログイン入力欄が見つかりません');
+      await usernameInput.fill(username);
+      await passwordInput.fill(password);
+      const submit = page.locator('button[type="submit"]:visible,input[type="submit"]:visible').first();
+      if (!await submit.count()) throw new Error('Lステップのログインボタンが見つかりません');
+      const recaptcha = page.frameLocator('iframe[title="reCAPTCHA"]').getByRole('checkbox', { name: '私はロボットではありません' });
+      if (await recaptcha.count()) {
+        await recaptcha.click();
+        await page.waitForFunction(() => {
+          const button = document.querySelector('button[type="submit"],input[type="submit"]') as HTMLButtonElement | HTMLInputElement | null;
+          return button !== null && !button.disabled;
+        }, undefined, { timeout: 30_000 }).catch(() => undefined);
+      }
+      await submit.waitFor({ state: 'attached', timeout: 30_000 });
+      if (!await submit.isEnabled()) throw new Error('reCAPTCHAの確認が必要なため、Lステップへ自動再ログインできませんでした');
+      await submit.click();
+      await page.waitForURL((url) => !url.pathname.includes('/account/login'), { timeout: 60_000 });
+      await wait(page, 2_000);
+    }
+
+    if (/login/i.test(page.url())) throw new Error('Lステップへの再ログインに失敗しました');
+    return {
+      browser,
+      context,
+      page,
+      statePath,
+      storage,
+      bucketName: config.gcsBucket,
+      objectName: config.storageStateObject,
+    };
+  } catch (error) {
+    await browser.close();
+    throw error;
+  }
+}
+
+async function hasAuthenticatedSession(page: Page): Promise<boolean> {
+  const response = await page.request.get(TAG_LIST_URL, { maxRedirects: 0 }).catch(() => null);
+  if (!response || response.status() !== 200) return false;
+  return !/login/i.test(response.headers().location ?? '');
 }
 
 async function goto(page: Page, url: string, delay = 2_500): Promise<void> {
@@ -272,6 +351,11 @@ type FlexResource = {
   name: string;
   group: number;
   alt_text?: string;
+  sender_id?: number | null;
+  do_override_sender?: number;
+  answer_type?: number;
+  twice_do_reply?: number;
+  twice_action_id?: number;
   editor_json: { panels: Array<{ blocks?: Array<Record<string, unknown>> }> } | string;
 };
 
@@ -280,8 +364,19 @@ async function parseFlexResponse(response: Awaited<ReturnType<Page['request']['g
   try {
     return JSON.parse(body) as FlexResource;
   } catch {
-    throw new Error(`${context}: JSONではない応答 (${response.status()} ${body.slice(0, 120)})`);
+    throw new Error(`${context}: JSONではない応答 (${response.status()} ${response.url()} ${body.slice(0, 120)})`);
   }
+}
+
+async function flexApiHeaders(page: Page): Promise<Record<string, string>> {
+  const cookies = await page.context().cookies(BASE);
+  const xsrf = cookies.find((cookie) => cookie.name === 'XSRF-TOKEN');
+  if (!xsrf) throw new Error('Flex保存用のXSRFトークンが見つかりません');
+  return {
+    Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'X-XSRF-TOKEN': decodeURIComponent(xsrf.value),
+  };
 }
 
 function textFromDoc(value: unknown): string {
@@ -314,7 +409,8 @@ function replaceDocText(value: unknown, next: string): void {
 
 async function patchFlexLabels(page: Page, id: string, labels: string[]): Promise<void> {
   const endpoint = `${BASE}/api/template/lflexes/${id}`;
-  const response = await page.request.get(endpoint);
+  const headers = await flexApiHeaders(page);
+  const response = await page.request.get(endpoint, { headers });
   if (!response.ok()) throw new Error(`Flex ${id} の取得に失敗しました (${response.status()})`);
   const resource = await parseFlexResponse(response, `Flex ${id} 取得`);
   const editor: Exclude<FlexResource['editor_json'], string> = typeof resource.editor_json === 'string' ? JSON.parse(resource.editor_json) : resource.editor_json;
@@ -323,16 +419,22 @@ async function patchFlexLabels(page: Page, id: string, labels: string[]): Promis
   if (dateBlocks.length !== labels.length) throw new Error(`Flex ${id} の日程ブロックが${dateBlocks.length}件（期待${labels.length}件）`);
   dateBlocks.forEach((block, index) => replaceDocText(block.text, labels[index]));
   const saved = await page.request.post(endpoint, {
+    headers,
     data: {
       _method: 'patch',
       name: resource.name,
       group: resource.group,
       alt_text: resource.alt_text,
+      sender_id: resource.sender_id ?? 0,
+      do_override_sender: resource.do_override_sender ?? 0,
+      answer_type: resource.answer_type ?? 2,
+      twice_do_reply: resource.twice_do_reply ?? 0,
+      twice_action_id: resource.twice_action_id ?? 0,
       editor_json: JSON.stringify(editor),
     },
   });
   if (!saved.ok()) throw new Error(`Flex ${id} の保存に失敗しました (${saved.status()} ${await saved.text()})`);
-  const verify = await page.request.get(endpoint);
+  const verify = await page.request.get(endpoint, { headers: await flexApiHeaders(page) });
   const verifiedResource = await parseFlexResponse(verify, `Flex ${id} 保存後取得`);
   const verifiedEditor: Exclude<FlexResource['editor_json'], string> = typeof verifiedResource.editor_json === 'string' ? JSON.parse(verifiedResource.editor_json) : verifiedResource.editor_json;
   const verifiedLabels = verifiedEditor.panels.flatMap((panel) => panel.blocks ?? []).map((block) => textFromDoc(block.text)).filter((text) => DATE_LABEL_RE.test(text));
@@ -380,9 +482,13 @@ async function updateFlex(page: Page, id: string, desired: SeminarSlot[], tags: 
       await wait(page, 1_200);
       const inner = page.locator('[role="dialog"],.modal').last();
       await chooseTag(inner, page, currentTag, nextTag.name);
-      await inner.getByText('この条件で決定する', { exact: false }).click();
+      const beforeInnerClose = await page.locator('[role="dialog"]:visible,.modal:visible').count();
+      await inner.getByText('この条件で決定する', { exact: false }).evaluate((element) => (element as HTMLElement).click());
+      await waitForDialogToClose(page, beforeInnerClose);
       await wait(page, 700);
-      await outer.getByRole('button', { name: '保存する', exact: true }).click();
+      const beforeOuterClose = await page.locator('[role="dialog"]:visible,.modal:visible').count();
+      await outer.getByRole('button', { name: '保存する', exact: true }).evaluate((element) => (element as HTMLElement).click());
+      await waitForDialogToClose(page, beforeOuterClose);
       await wait(page, 700);
       actionChanged = true;
     }
@@ -447,10 +553,37 @@ async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean
   if (!apply) return `${currentDates.join(' / ')} -> ${nextDates.join(' / ')}`;
   const block = /(?:・\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~\s*)+/;
   if (!block.test(currentValue)) throw new Error('最終リマインドの日程ブロックを安全に置換できません');
-  await editor.fill(currentValue.replace(block, `${nextDates.join('\n')}\n`));
-  const save = page.getByRole('button', { name: /保存|更新/, exact: true });
-  if (await save.count()) await save.last().click();
-  else await page.getByText(/保存|更新/, { exact: true }).last().click();
+  const nextText = currentValue.replace(block, `${nextDates.join('\n')}\n`);
+  const endpoint = `${BASE}/api/templates/268822941`;
+  const headers = await flexApiHeaders(page);
+  const resourceResponse = await page.request.get(endpoint, { headers });
+  if (!resourceResponse.ok()) throw new Error(`最終リマインドの取得に失敗しました (${resourceResponse.status()})`);
+  const resource = await resourceResponse.json() as {
+    id: number;
+    is_template: number;
+    name: string;
+    group_id: number;
+    disable_cv: number;
+    sender_id: number;
+    do_override_sender: number;
+    eggtype: number;
+  };
+  const saved = await page.request.post(endpoint, {
+    headers,
+    data: {
+      _method: 'patch',
+      is_template: resource.is_template,
+      egg_id: resource.id,
+      template_name: resource.name,
+      template_group: resource.group_id,
+      disable_cv: resource.disable_cv,
+      sender_id: resource.sender_id,
+      do_override_sender: resource.do_override_sender,
+      eggtype: resource.eggtype,
+      text_text: nextText,
+    },
+  });
+  if (!saved.ok()) throw new Error(`最終リマインドの保存に失敗しました (${saved.status()} ${await saved.text()})`);
   await wait(page, 3_000);
   const verified = await readReminderDates(page);
   if (JSON.stringify(verified) !== JSON.stringify(nextDates)) throw new Error('最終リマインドの保存後検証に失敗しました');
@@ -478,7 +611,15 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
   const apply = options.apply ?? false;
   const steps: StepResult[] = [];
   const issues: string[] = [];
-  const { browser, page } = await openBrowser();
+  const {
+    browser,
+    context,
+    page,
+    statePath,
+    storage,
+    bucketName,
+    objectName,
+  } = await openBrowser();
   try {
     let tags = await readDateTags(page);
     steps.push({ step: 'Lステップログイン・日程タグ', status: 'ok', detail: `${tags.length}件を取得` });
@@ -519,6 +660,10 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
     steps.push({ step: '処理中断', status: 'failed', detail: message });
     issues.push(message);
   } finally {
+    if (await hasAuthenticatedSession(page)) {
+      await context.storageState({ path: statePath });
+      await uploadFileToGcs(storage, bucketName, statePath, objectName, 'application/json');
+    }
     await browser.close();
   }
   return { ranAt: now.toISOString(), mode: apply ? 'apply' : 'dry-run', steps, issues };
