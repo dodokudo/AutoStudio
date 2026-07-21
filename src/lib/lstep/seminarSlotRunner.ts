@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { loadLstepConfig } from './config';
 import { downloadObjectToFile, uploadFileToGcs } from './gcs';
 import {
-  choiceLabelWithCapacity,
   upcomingSlots,
   type SeminarSlot,
 } from './seminarSchedule';
@@ -45,6 +44,8 @@ interface SurfaceSnapshot {
 export interface RunOptions {
   now?: Date;
   apply?: boolean;
+  /** 本番動作確認用。各表示面の末尾へ追加で保持する枠数。通常運用は0。 */
+  extraSlots?: number;
 }
 
 export interface StepResult {
@@ -223,38 +224,56 @@ async function chooseTag(dialog: Locator, page: Page, currentName: string, nextN
 }
 
 async function createTag(page: Page, slot: SeminarSlot, tags: DateTag[]): Promise<DateTag> {
+  const sortKey = (tag: DateTag): number => {
+    const match = tag.name.match(/^(\d+)月(\d+)日/);
+    return match ? Number(match[1]) * 100 + Number(match[2]) : 0;
+  };
   const source = tags
     .filter((tag) => tag.name.endsWith(`${slot.hour}時`) || tag.name.endsWith(`${slot.hour}`))
-    .sort((a, b) => b.name.localeCompare(a.name, 'ja'))[0];
+    .sort((a, b) => sortKey(b) - sortKey(a))[0];
   if (!source) throw new Error(`${slot.hour}時タグのコピー元がありません`);
 
   await openTagGroup(page);
   const row = page.locator('tr').filter({ has: page.locator(`a[href="${source.href}"]`) }).first();
   await row.getByText('more_vert', { exact: true }).click();
-  await (await visibleExact(page, 'コピーを作成')).click();
+  await page.locator('button:visible').filter({ hasText: 'コピーを作成' }).last().click();
   const copyDialog = page.locator('[role="dialog"],.modal').filter({ hasText: 'コピー' }).last();
   const nameInput = await inputMatching(copyDialog, /./);
   await nameInput.fill(slot.tagName);
   await copyDialog.getByRole('button', { name: 'コピー', exact: true }).click();
   await wait(page, 2_500);
 
-  let refreshed = await readDateTags(page);
+  const refreshed = await readDateTags(page);
   const created = tagForSlot(refreshed, slot);
   if (!created) throw new Error(`${slot.tagName} のコピー作成を確認できませんでした`);
-  await goto(page, `${BASE}${created.href}`);
+  return configureTag(page, slot, created);
+}
+
+async function configureTag(page: Page, slot: SeminarSlot, tag: DateTag): Promise<DateTag> {
+  await goto(page, `${BASE}${tag.href}`);
   await page.getByText('アクション設定', { exact: false }).first().click();
   await wait(page, 1_500);
   const dialog = page.locator('[role="dialog"],.modal').last();
   const friendInput = await inputMatching(dialog, /^\d{1,2}\/\d{1,2}\(.\)\s*\d{1,2}:00~$/);
   await friendInput.fill(slot.applicationValue.replace(') ', ')'));
-  await dialog.getByPlaceholder('日付選択').fill(`${slot.year}/${String(slot.month).padStart(2, '0')}/${String(slot.day).padStart(2, '0')}`);
-  const timeInput = await inputMatching(dialog, /^\d{2}:\d{2}$/);
-  await timeInput.fill('22:00');
-  await dialog.getByText('この条件で決定する', { exact: false }).click();
+  const dateInput = page.getByPlaceholder('日付選択').last();
+  const previousDate = await dateInput.inputValue();
+  const previousMonth = Number(previousDate.match(/^\d{4}\/(\d{2})\//)?.[1] ?? 0);
+  await dateInput.click();
+  await wait(page, 400);
+  const dayPattern = new RegExp(`^${slot.day}$`);
+  const dateCell = previousMonth === slot.month
+    ? page.locator('.dp__cell_inner.dp__pointer:not(.dp__cell_offset)').filter({ hasText: dayPattern }).last()
+    : page.locator('.dp__cell_inner.dp__pointer.dp__cell_offset').filter({ hasText: dayPattern }).last();
+  await dateCell.click();
+  const expectedDate = `${slot.year}/${String(slot.month).padStart(2, '0')}/${String(slot.day).padStart(2, '0')}`;
+  if (await dateInput.inputValue() !== expectedDate) throw new Error(`${slot.tagName}: ゴール日付を${expectedDate}へ変更できませんでした`);
+  await page.locator('input[type="time"]:visible').last().fill(slot.reminderGoal.time);
+  await page.getByText('この条件で決定する', { exact: false }).first().click();
   await wait(page, 1_000);
   await page.getByRole('button', { name: '更新', exact: true }).click();
   await wait(page, 2_500);
-  refreshed = await readDateTags(page);
+  const refreshed = await readDateTags(page);
   const verified = tagForSlot(refreshed, slot);
   if (!verified) throw new Error(`${slot.tagName} の保存後検証に失敗しました`);
   const issues = assertTagSummary(slot, verified);
@@ -343,8 +362,10 @@ async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], a
   return `${currentLabels.length}件を${desiredLabels.length}件へ更新・検証済み`;
 }
 
-function capacityLabel(slot: SeminarSlot, tags: DateTag[]): string {
-  return choiceLabelWithCapacity(slot, tagForSlot(tags, slot)?.memberCount ?? 0);
+function flexLabel(slot: SeminarSlot, current: Array<{ label: string }>, index: number): string {
+  const source = current[Math.min(index, Math.max(0, current.length - 1))]?.label ?? '';
+  const suffix = source.match(/\(残り\d+名\)$/)?.[0] ?? '(残り20名)';
+  return `${slot.choiceLabel}${suffix}`;
 }
 
 type FlexResource = {
@@ -455,23 +476,75 @@ async function readFlexState(page: Page, id: string): Promise<Array<{ label: str
   return cards.filter((card) => DATE_LABEL_RE.test(card.label));
 }
 
+function actionTagName(action: string): string | undefined {
+  return action.match(/タグ\[([^\]]+)\]\s*\[【2026\.7】セミナー申/)?.[1];
+}
+
+async function clickBlockToolbar(page: Page, card: Locator, action: '複製' | '削除'): Promise<void> {
+  await card.click();
+  await wait(page, 400);
+  const toolbar = page.locator('.block_toolbar_component:visible').last();
+  await toolbar.getByText(action, { exact: true }).click();
+  await wait(page, 700);
+  if (action === '削除') {
+    const confirm = page.getByRole('button', { name: /削除|OK|はい/, exact: true }).last();
+    if (await confirm.isVisible().catch(() => false) && await confirm.isEnabled().catch(() => false)) {
+      await confirm.click();
+      await wait(page, 500);
+    }
+  }
+}
+
+async function reconcileFlexBlocks(page: Page, current: Array<{ label: string; action: string }>, desired: SeminarSlot[]): Promise<boolean> {
+  const desiredTagNames = new Set(desired.map((slot) => slot.tagName));
+  const obsoleteIndexes = current
+    .map((card, index) => ({ index, tagName: actionTagName(card.action) }))
+    .filter(({ tagName }) => !tagName || !desiredTagNames.has(tagName))
+    .map(({ index }) => index)
+    .sort((a, b) => b - a);
+  let changed = false;
+
+  for (const index of obsoleteIndexes) {
+    const cards = await flexCards(page);
+    if (index >= await cards.count()) throw new Error(`削除対象の日程ボタン${index + 1}が見つかりません`);
+    await clickBlockToolbar(page, cards.nth(index), '削除');
+    changed = true;
+  }
+
+  const existingTags = new Set(current.map((card) => actionTagName(card.action)).filter((name): name is string => !!name));
+  const missing = desired.filter((slot) => !existingTags.has(slot.tagName));
+  for (const slot of missing) {
+    const cards = await flexCards(page);
+    const count = await cards.count();
+    if (!count) throw new Error(`${slot.tagName}: コピー元の日程ボタンがありません`);
+    // 最終の日程ボタンを複製すると、「それ以降の日程はこちら」の直前に入る。
+    await clickBlockToolbar(page, cards.last(), '複製');
+    changed = true;
+  }
+
+  const finalCount = await (await flexCards(page)).count();
+  if (finalCount !== desired.length) throw new Error(`日程ボタンの増減後が${finalCount}件（期待${desired.length}件）`);
+  return changed;
+}
+
 async function updateFlex(page: Page, id: string, desired: SeminarSlot[], tags: DateTag[], apply: boolean): Promise<string> {
   const current = await readFlexState(page, id);
-  const labels = desired.map((slot) => capacityLabel(slot, tags));
+  // 「残りN名」はテンプレートごとに意図した並びがあるため、日時だけを差し替えて保持する。
+  const labels = desired.map((slot, index) => flexLabel(slot, current, index));
   const correct = current.length === desired.length && current.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
     return card.label === labels[index] && !!tag && card.action.includes(`タグ[${tag.name}]`);
   });
   if (correct) return '変更なし';
   if (!apply) return `${current.map((card) => card.label).join(' / ')} -> ${labels.join(' / ')}`;
-  if (current.length !== desired.length) throw new Error(`テンプレート${id}: 日程ボタンが${current.length}件（期待${desired.length}件）`);
 
-  const cards = await flexCards(page);
-  let actionChanged = false;
+  const structureChanged = await reconcileFlexBlocks(page, current, desired);
+  let actionChanged = structureChanged;
   for (let index = 0; index < desired.length; index += 1) {
+    const cards = await flexCards(page);
     const card = cards.filter({ has: page.locator('[contenteditable="true"]') }).nth(index);
     const currentAction = (await card.innerText()).replace(/\s+/g, ' ');
-    const currentTag = currentAction.match(/タグ\[([^\]]+)\]\s*\[【2026\.7】セミナー申/)?.[1];
+    const currentTag = actionTagName(currentAction);
     const nextTag = tagForSlot(tags, desired[index]);
     if (!currentTag || !nextTag) throw new Error(`テンプレート${id} ${index + 1}枚目: 日付タグを特定できません (${currentAction.slice(0, 420)})`);
     if (currentTag !== nextTag.name) {
@@ -513,14 +586,7 @@ async function readDateTemplate(page: Page): Promise<string[]> {
 }
 
 async function updateDateTemplate(page: Page, desired: SeminarSlot[], tags: DateTag[], apply: boolean): Promise<string> {
-  const current = await readDateTemplate(page);
-  const labels = desired.map((slot) => capacityLabel(slot, tags));
-  if (JSON.stringify(current) === JSON.stringify(labels)) return '変更なし';
-  if (!apply) return `${current.join(' / ')} -> ${labels.join(' / ')}`;
-  await patchFlexLabels(page, '268609107', labels);
-  const verified = await readDateTemplate(page);
-  if (JSON.stringify(verified) !== JSON.stringify(labels)) throw new Error('日程選択テンプレートの保存後検証に失敗しました');
-  return `${labels.length}枠を更新・検証済み`;
+  return updateFlex(page, '268609107', desired, tags, apply);
 }
 
 function compactReminderLabel(slot: SeminarSlot): string {
@@ -609,6 +675,7 @@ export async function inspect(options: RunOptions = {}): Promise<RunResult> {
 export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunResult> {
   const now = options.now ?? new Date();
   const apply = options.apply ?? false;
+  const extraSlots = options.extraSlots ?? 0;
   const steps: StepResult[] = [];
   const issues: string[] = [];
   const {
@@ -623,7 +690,7 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
   try {
     let tags = await readDateTags(page);
     steps.push({ step: 'Lステップログイン・日程タグ', status: 'ok', detail: `${tags.length}件を取得` });
-    const desiredForm = upcomingSlots(now, FORM_COUNT);
+    const desiredForm = upcomingSlots(now, FORM_COUNT + extraSlots);
     for (const slot of desiredForm) {
       let tag = tagForSlot(tags, slot);
       if (!tag) {
@@ -635,17 +702,24 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
         tags = [...tags, tag];
         steps.push({ step: `タグ ${slot.tagName}`, status: 'ok', detail: '作成・アクション検証済み' });
       }
-      issues.push(...assertTagSummary(slot, tag));
+      let tagIssues = assertTagSummary(slot, tag);
+      if (tagIssues.length && apply) {
+        tag = await configureTag(page, slot, tag);
+        tags = tags.map((current) => current.href === tag?.href ? tag : current);
+        tagIssues = assertTagSummary(slot, tag);
+        steps.push({ step: `タグ ${slot.tagName}`, status: 'ok', detail: '既存設定を修正・検証済み' });
+      }
+      issues.push(...tagIssues);
     }
     if (issues.length) throw new Error(`タグ設定に異常があります: ${issues.join(' / ')}`);
 
     steps.push({ step: 'セミナー申込フォーム', status: 'ok', detail: await updateForm(page, desiredForm, tags, apply) });
-    const desiredFlex = upcomingSlots(now, FLEX_COUNT);
+    const desiredFlex = upcomingSlots(now, FLEX_COUNT + extraSlots);
     for (const template of FLEX_TEMPLATES) {
       steps.push({ step: `ワンタップ ${template.label}`, status: 'ok', detail: await updateFlex(page, template.id, desiredFlex, tags, apply) });
     }
-    steps.push({ step: 'セミナー日程選択テンプレート', status: 'ok', detail: await updateDateTemplate(page, upcomingSlots(now, DATE_TEMPLATE_COUNT), tags, apply) });
-    steps.push({ step: '最終リマインド', status: 'ok', detail: await updateReminder(page, upcomingSlots(now, REMINDER_COUNT), apply) });
+    steps.push({ step: 'セミナー日程選択テンプレート', status: 'ok', detail: await updateDateTemplate(page, upcomingSlots(now, DATE_TEMPLATE_COUNT + extraSlots), tags, apply) });
+    steps.push({ step: '最終リマインド', status: 'ok', detail: await updateReminder(page, upcomingSlots(now, REMINDER_COUNT + extraSlots), apply) });
 
     if (apply) {
       const after = await snapshot(page);
