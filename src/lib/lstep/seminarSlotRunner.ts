@@ -160,7 +160,7 @@ async function goto(page: Page, url: string, delay = 2_500): Promise<void> {
 
 async function openTagGroup(page: Page): Promise<void> {
   await goto(page, TAG_LIST_URL);
-  await page.locator('text=/回答フォーム\s*用日程/').first().click();
+  await page.getByText(/回答フォーム\s*用日程/).first().click();
   await wait(page, 2_500);
 }
 
