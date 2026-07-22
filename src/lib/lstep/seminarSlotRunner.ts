@@ -315,6 +315,68 @@ async function configureFormPanel(page: Page, panel: Locator, slot: SeminarSlot,
   await wait(page, 800);
 }
 
+async function formPanelLabels(page: Page): Promise<string[]> {
+  return page.locator('#radio_3 [data-testid^="choice_"]:visible input[data-testid="labelInput"]')
+    .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
+}
+
+async function waitForFormPanelCount(page: Page, expected: number, operation: string): Promise<void> {
+  try {
+    await page.waitForFunction((count) => [...document.querySelectorAll('#radio_3 [data-testid^="choice_"]')]
+      .filter((element) => (element as HTMLElement).getClientRects().length > 0).length === count, expected, { timeout: 8_000 });
+  } catch {
+    const labels = await formPanelLabels(page).catch(() => []);
+    const dialogs = await page.locator('[role="dialog"]:visible,.modal:visible').evaluateAll((elements) => elements
+      .map((element) => (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim().slice(0, 300)));
+    throw new Error(`フォーム${operation}失敗: 期待${expected}件・実際${labels.length}件 [${labels.join(' / ')}] ダイアログ=[${dialogs.join(' | ') || 'なし'}] URL=${page.url()}`);
+  }
+}
+
+async function copyLastFormPanel(page: Page): Promise<void> {
+  const panels = page.locator('#radio_3 [data-testid^="choice_"]:visible');
+  const before = await panels.count();
+  if (!before) throw new Error(`フォーム複製失敗: コピー元がありません URL=${page.url()}`);
+  const sourceLabel = await panels.last().locator('input[data-testid="labelInput"]').inputValue().catch(() => '不明');
+  await panels.last().locator('.lvitem-copy').click({ force: true });
+  await waitForFormPanelCount(page, before + 1, `複製（コピー元=${sourceLabel}）`);
+}
+
+async function removeLastFormPanel(page: Page): Promise<void> {
+  const panels = page.locator('#radio_3 [data-testid^="choice_"]:visible');
+  const before = await panels.count();
+  if (!before) throw new Error(`フォーム削除失敗: 削除対象がありません URL=${page.url()}`);
+  const target = panels.last();
+  const targetLabel = await target.locator('input[data-testid="labelInput"]').inputValue().catch(() => '不明');
+  await target.locator('.lvitem-remove').click({ force: true });
+  await wait(page, 400);
+
+  const dialog = page.locator('[role="dialog"]:visible,.modal:visible').last();
+  if (await dialog.isVisible().catch(() => false)) {
+    const confirm = dialog.getByRole('button', { name: /^(削除|削除する|はい|OK)$/ }).last();
+    if (!await confirm.isVisible().catch(() => false) || !await confirm.isEnabled().catch(() => false)) {
+      const dialogText = (await dialog.innerText()).replace(/\s+/g, ' ').trim().slice(0, 500);
+      throw new Error(`フォーム削除確認失敗: 対象=${targetLabel} 確認ボタンが見つかりません ダイアログ=[${dialogText}] URL=${page.url()}`);
+    }
+    await confirm.click();
+  }
+  await waitForFormPanelCount(page, before - 1, `削除（対象=${targetLabel}）`);
+}
+
+function formVerificationError(actual: string[], expected: string[], url: string): Error {
+  const missing = expected.filter((label) => !actual.includes(label));
+  const extra = actual.filter((label) => !expected.includes(label));
+  const sameItems = missing.length === 0 && extra.length === 0 && actual.length === expected.length;
+  return new Error([
+    `フォーム保存後検証失敗: 期待${expected.length}件・実際${actual.length}件`,
+    `期待=[${expected.join(' / ')}]`,
+    `実際=[${actual.join(' / ')}]`,
+    `不足=[${missing.join(' / ') || 'なし'}]`,
+    `余分=[${extra.join(' / ') || 'なし'}]`,
+    `並び順不一致=${sameItems ? 'あり' : '判定対象外'}`,
+    `URL=${url}`,
+  ].join(' '));
+}
+
 async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], apply: boolean): Promise<string> {
   const current = await readFormState(page);
   const currentLabels = current.map((choice) => choice.label);
@@ -322,36 +384,31 @@ async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], a
   if (JSON.stringify(currentLabels) === JSON.stringify(desiredLabels)) return '変更なし';
   if (!apply) return `${currentLabels.join(' / ')} -> ${desiredLabels.join(' / ')}`;
 
-  const radio = page.locator('#radio_3');
-  let panels = radio.locator('[data-testid^="choice_"]:visible');
-  const missing = desired.filter((slot) => !currentLabels.includes(slot.choiceLabel));
-  for (const slot of missing) {
-    const last = panels.last();
-    // 操作ボタンはhover時のみ表示されるため force でクリックする
-    await last.locator('.lvitem-copy').click({ force: true });
-    await wait(page, 1_500);
-    panels = radio.locator('[data-testid^="choice_"]:visible');
-    const target = panels.last();
-    const tag = tagForSlot(tags, slot);
-    if (!tag) throw new Error(`${slot.tagName} がないためフォームへ追加できません`);
-    await configureFormPanel(page, target, slot, tag);
+  // Lステップの「コピー」は複製先が末尾になるとは限らず、差分更新だけでは
+  // 古い日時が末尾へ回ることがある。件数を合わせた後、全パネルを上から
+  // 正しい日時へ再設定して、順序・タグ・友だち情報を同時に保証する。
+  let panelCount = (await formPanelLabels(page)).length;
+  while (panelCount > desired.length) {
+    await removeLastFormPanel(page);
+    panelCount -= 1;
   }
-  panels = radio.locator('[data-testid^="choice_"]:visible');
-  for (let index = (await panels.count()) - 1; index >= 0; index -= 1) {
-    const panel = panels.nth(index);
-    const label = await panel.locator('input[data-testid="labelInput"]').inputValue();
-    if (DATE_LABEL_RE.test(label) && !desiredLabels.includes(label)) {
-      await panel.locator('.lvitem-remove').click({ force: true });
-      await wait(page, 500);
-      const confirm = page.getByRole('button', { name: /削除|OK|はい/, exact: true });
-      if (await confirm.last().isVisible().catch(() => false) && await confirm.last().isEnabled().catch(() => false)) await confirm.last().click();
-    }
+  while (panelCount < desired.length) {
+    await copyLastFormPanel(page);
+    panelCount += 1;
+  }
+
+  for (let index = 0; index < desired.length; index += 1) {
+    const slot = desired[index];
+    const tag = tagForSlot(tags, slot);
+    if (!tag) throw new Error(`${slot.tagName} がないためフォーム${index + 1}件目を設定できません URL=${page.url()}`);
+    const panels = page.locator('#radio_3 [data-testid^="choice_"]:visible');
+    await configureFormPanel(page, panels.nth(index), slot, tag);
   }
   await page.locator('#lvbuildsave').click();
   await wait(page, 3_000);
   const verified = await readFormState(page);
   const labels = verified.map((choice) => choice.label);
-  if (JSON.stringify(labels) !== JSON.stringify(desiredLabels)) throw new Error(`フォーム検証失敗: ${labels.join(' / ')}`);
+  if (JSON.stringify(labels) !== JSON.stringify(desiredLabels)) throw formVerificationError(labels, desiredLabels, page.url());
   for (let index = 0; index < desired.length; index += 1) {
     const tag = tagForSlot(tags, desired[index]);
     const action = verified[index]?.action ?? '';
@@ -687,6 +744,7 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
     bucketName,
     objectName,
   } = await openBrowser();
+  let activeStep = 'Lステップログイン・日程タグ';
   try {
     let tags = await readDateTags(page);
     steps.push({ step: 'Lステップログイン・日程タグ', status: 'ok', detail: `${tags.length}件を取得` });
@@ -713,15 +771,20 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
     }
     if (issues.length) throw new Error(`タグ設定に異常があります: ${issues.join(' / ')}`);
 
-    steps.push({ step: 'セミナー申込フォーム', status: 'ok', detail: await updateForm(page, desiredForm, tags, apply) });
+    activeStep = 'セミナー申込フォーム';
+    steps.push({ step: activeStep, status: 'ok', detail: await updateForm(page, desiredForm, tags, apply) });
     const desiredFlex = upcomingSlots(now, FLEX_COUNT + extraSlots);
     for (const template of FLEX_TEMPLATES) {
-      steps.push({ step: `ワンタップ ${template.label}`, status: 'ok', detail: await updateFlex(page, template.id, desiredFlex, tags, apply) });
+      activeStep = `ワンタップ ${template.label}`;
+      steps.push({ step: activeStep, status: 'ok', detail: await updateFlex(page, template.id, desiredFlex, tags, apply) });
     }
-    steps.push({ step: 'セミナー日程選択テンプレート', status: 'ok', detail: await updateDateTemplate(page, upcomingSlots(now, DATE_TEMPLATE_COUNT + extraSlots), tags, apply) });
-    steps.push({ step: '最終リマインド', status: 'ok', detail: await updateReminder(page, upcomingSlots(now, REMINDER_COUNT + extraSlots), apply) });
+    activeStep = 'セミナー日程選択テンプレート';
+    steps.push({ step: activeStep, status: 'ok', detail: await updateDateTemplate(page, upcomingSlots(now, DATE_TEMPLATE_COUNT + extraSlots), tags, apply) });
+    activeStep = '最終リマインド';
+    steps.push({ step: activeStep, status: 'ok', detail: await updateReminder(page, upcomingSlots(now, REMINDER_COUNT + extraSlots), apply) });
 
     if (apply) {
+      activeStep = '全画面再読込検証';
       const after = await snapshot(page);
       steps.push({
         step: '全画面再読込検証',
@@ -730,7 +793,8 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
       });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const cause = error instanceof Error ? error.message : String(error);
+    const message = `${activeStep}: ${cause}`;
     steps.push({ step: '処理中断', status: 'failed', detail: message });
     issues.push(message);
   } finally {

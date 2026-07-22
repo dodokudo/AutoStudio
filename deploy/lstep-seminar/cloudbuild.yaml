@@ -22,7 +22,7 @@ steps:
       - '--env-vars-file=deploy/lstep-seminar/env.yaml'
       - '--set-secrets=LSTEP_SMTP_PASS=LSTEP_SMTP_PASS:latest,LSTEP_USERNAME=LSTEP_USERNAME:latest,LSTEP_PASSWORD=LSTEP_PASSWORD:latest,LINE_CHANNEL_ACCESS_TOKEN=line-channel-access-token:latest'
       - '--task-timeout=30m'
-      - '--max-retries=1'
+      - '--max-retries=0'
       - '--memory=2Gi'
       - '--cpu=2'
       - '--command=npm'

@@ -45,5 +45,10 @@ export async function notifySeminarSchedule(result: RunResult): Promise<void> {
       messages: [{ type: 'text', text: notificationText(result) }],
     }),
   });
-  if (!response.ok) throw new Error(`LINE完了通知に失敗しました (${response.status} ${await response.text()})`);
+  if (response.ok) return;
+  const responseBody = await response.text();
+  // Cloud Run側の再実行などで同一枠の通知が再送された場合、LINEは409を返すが
+  // 最初の通知は送信済みなのでエラー扱いにしない。
+  if (response.status === 409 && responseBody.includes('retry key is already accepted')) return;
+  throw new Error(`LINE完了通知に失敗しました (${response.status} ${responseBody})`);
 }
