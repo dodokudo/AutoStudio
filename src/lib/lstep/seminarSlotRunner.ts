@@ -650,6 +650,16 @@ function compactReminderLabel(slot: SeminarSlot): string {
   return `・${slot.month}/${slot.day}(${slot.weekday})${slot.hour}:00~`;
 }
 
+const REMINDER_DATE_LINE = '[ \\t]*・\\d{1,2}\\/\\d{1,2}\\([日月火水木金土]\\)[ \\t]*\\d{1,2}:00~[ \\t]*';
+const REMINDER_DATE_BLOCK = new RegExp(`${REMINDER_DATE_LINE}(?:\\r?\\n${REMINDER_DATE_LINE})*`, 'm');
+
+export function replaceReminderDateBlock(source: string, nextDates: string[]): string {
+  const match = REMINDER_DATE_BLOCK.exec(source);
+  if (!match || match.index === undefined) throw new Error('最終リマインドの日程ブロックを安全に置換できません');
+  const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
+  return `${source.slice(0, match.index)}${nextDates.join(newline)}${source.slice(match.index + match[0].length)}`;
+}
+
 async function reminderEditor(page: Page): Promise<Locator> {
   await goto(page, REMINDER_TEMPLATE_URL, 3_000);
   const editors = page.locator('textarea,[contenteditable="true"]');
@@ -668,15 +678,7 @@ async function readReminderDates(page: Page): Promise<string[]> {
 }
 
 async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean): Promise<string> {
-  const editor = await reminderEditor(page);
-  const currentValue = await editor.evaluate((element) => (element as HTMLTextAreaElement).value || element.textContent || '');
   const nextDates = desired.map(compactReminderLabel);
-  const currentDates = currentValue.match(/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~/g) ?? [];
-  if (JSON.stringify(currentDates) === JSON.stringify(nextDates)) return '変更なし';
-  if (!apply) return `${currentDates.join(' / ')} -> ${nextDates.join(' / ')}`;
-  const block = /(?:・\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~\s*)+/;
-  if (!block.test(currentValue)) throw new Error('最終リマインドの日程ブロックを安全に置換できません');
-  const nextText = currentValue.replace(block, `${nextDates.join('\n')}\n`);
   const endpoint = `${BASE}/api/templates/268822941`;
   const headers = await flexApiHeaders(page);
   const resourceResponse = await page.request.get(endpoint, { headers });
@@ -690,7 +692,13 @@ async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean
     sender_id: number;
     do_override_sender: number;
     eggtype: number;
+    text_text?: string;
   };
+  if (typeof resource.text_text !== 'string') throw new Error('最終リマインドの原文を取得できませんでした');
+  const currentDates = resource.text_text.match(/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)[ \t]*\d{1,2}:00~/g) ?? [];
+  if (JSON.stringify(currentDates) === JSON.stringify(nextDates)) return '変更なし';
+  if (!apply) return `${currentDates.join(' / ')} -> ${nextDates.join(' / ')}`;
+  const nextText = replaceReminderDateBlock(resource.text_text, nextDates);
   const saved = await page.request.post(endpoint, {
     headers,
     data: {
