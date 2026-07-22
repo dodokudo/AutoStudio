@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { Browser, chromium, Download, Page } from 'playwright';
 import { Storage } from '@google-cloud/storage';
 import { LstepConfig } from './config';
-import { downloadObjectToFile } from './gcs';
-import { CookieExpiredError, DownloadFailedError, MissingStorageStateError } from './errors';
+import { downloadObjectToFile, uploadFileToGcs } from './gcs';
+import { CookieExpiredError, DownloadFailedError } from './errors';
 
 interface DownloadOutcome {
   csvPath: string;
@@ -26,10 +26,6 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     storageStatePath,
   );
 
-  if (!storageStateExists) {
-    throw new MissingStorageStateError('GCSに保存されたCookie情報が見つかりませんでした');
-  }
-
   try {
     browser = await chromium.launch({
       headless: true,
@@ -37,7 +33,7 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     });
 
     const context = await browser.newContext({
-      storageState: storageStatePath,
+      ...(storageStateExists ? { storageState: storageStatePath } : {}),
       acceptDownloads: true,
     });
 
@@ -48,7 +44,16 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     await page.goto('https://manager.linestep.net/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     if (await isSessionExpired(page)) {
-      throw new CookieExpiredError('Lstepのセッションが切れています（ログインが必要）');
+      await loginWithCredentials(page);
+      await context.storageState({ path: storageStatePath });
+      await uploadFileToGcs(
+        storage,
+        config.gcsBucket,
+        storageStatePath,
+        config.storageStateObject,
+        'application/json',
+      );
+      console.log('Lstepへ自動再ログインし、セッションをGCSへ保存しました');
     }
 
     // サイドバーから友だちリストに移動
@@ -84,7 +89,7 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
       workspaceDir,
     };
   } catch (error) {
-    if (error instanceof CookieExpiredError || error instanceof MissingStorageStateError) {
+    if (error instanceof CookieExpiredError) {
       throw error;
     }
     throw new DownloadFailedError('CSVダウンロード処理が失敗しました', { cause: error });
@@ -93,6 +98,44 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
       await browser.close();
     }
   }
+}
+
+async function loginWithCredentials(page: Page): Promise<void> {
+  const username = process.env.LSTEP_USERNAME;
+  const password = process.env.LSTEP_PASSWORD;
+  if (!username || !password) {
+    throw new CookieExpiredError('Lstepのセッションが切れており、自動再ログイン用の認証情報がありません');
+  }
+
+  const usernameInput = page.locator('input[type="email"]:visible,input[type="text"]:visible').first();
+  const passwordInput = page.locator('input[type="password"]:visible').first();
+  if (!await usernameInput.count() || !await passwordInput.count()) {
+    throw new CookieExpiredError('Lstepのログイン入力欄が見つかりません');
+  }
+
+  await usernameInput.fill(username);
+  await passwordInput.fill(password);
+
+  const submit = page.locator('button[type="submit"]:visible,input[type="submit"]:visible').first();
+  if (!await submit.count()) throw new CookieExpiredError('Lstepのログインボタンが見つかりません');
+
+  const recaptcha = page.frameLocator('iframe[title="reCAPTCHA"]').getByRole('checkbox', { name: '私はロボットではありません' });
+  if (await recaptcha.count()) {
+    await recaptcha.click();
+    await page.waitForFunction(() => {
+      const button = document.querySelector('button[type="submit"],input[type="submit"]') as HTMLButtonElement | HTMLInputElement | null;
+      return button !== null && !button.disabled;
+    }, undefined, { timeout: 30_000 }).catch(() => undefined);
+  }
+
+  if (!await submit.isEnabled()) {
+    throw new CookieExpiredError('reCAPTCHAの確認が必要なため、Lstepへ自動再ログインできませんでした');
+  }
+
+  await submit.click();
+  await page.waitForURL((url) => !url.pathname.includes('/account/login'), { timeout: 60_000 });
+  await page.waitForTimeout(2_000);
+  if (await isSessionExpired(page)) throw new CookieExpiredError('Lstepへの自動再ログインに失敗しました');
 }
 
 function isLoginPage(page: Page): boolean {
@@ -193,6 +236,9 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
     }
   }
 
+  const existingDownloadHrefs = await collectDownloadHrefs(page);
+  console.log(`既存のダウンロードリンク数: ${existingDownloadHrefs.length}`);
+
   // 6. お気に入りの1番上（「表示項目をコピーして利用」リンク or ボタン）をクリック
   console.log('お気に入りの1番上（表示項目をコピーして利用）をクリック...');
   const copyClicked = await tryClickByRoles(page, '表示項目をコピーして利用', ['link', 'button']);
@@ -203,10 +249,9 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
   await page.waitForTimeout(2000);
   console.log('CSVエクスポート設定ページに戻りました:', page.url());
 
-  // 7. エクスポート前のダウンロードリンク数を取得
-  const initialDownloadLinks = page.getByRole('link', { name: 'ダウンロード' });
-  const initialCount = await initialDownloadLinks.count();
-  console.log(`エクスポート前のダウンロードリンク数: ${initialCount}`);
+  // 7. 「この条件でダウンロード」をクリックする前の履歴リンクを基準にする
+  const initialDownloadLinkCount = existingDownloadHrefs.length;
+  const newDownloadHrefs: string[] = [];
 
   // 8. 「この条件でダウンロード」をクリック
   console.log('この条件でダウンロードをクリック...');
@@ -222,12 +267,15 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
-    // ダウンロードリンク数が増えたか確認
-    const downloadLinks = page.getByRole('link', { name: 'ダウンロード' });
-    const count = await downloadLinks.count();
-    console.log(`ポーリング ${i + 1}/18: ダウンロードリンク ${count}個 (初期: ${initialCount})`);
+    const currentDownloadHrefs = await collectDownloadHrefs(page);
+    const currentHrefSet = new Set(currentDownloadHrefs);
+    const newHrefs = currentDownloadHrefs.filter((href) => !existingDownloadHrefs.includes(href));
+    console.log(
+      `ポーリング ${i + 1}/18: ダウンロードリンク ${currentHrefSet.size}個 (既存: ${initialDownloadLinkCount}, 新規: ${newHrefs.length})`,
+    );
 
-    if (count > initialCount) {
+    if (newHrefs.length > 0) {
+      newDownloadHrefs.push(...newHrefs);
       exportReady = true;
       console.log('新しいエクスポート完了を確認');
       break;
@@ -242,63 +290,48 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
   console.log('ダウンロードボタンをクリック...');
   const downloadPromise = page.waitForEvent('download', { timeout: config.downloadTimeoutMs });
 
-  // エクスポート履歴テーブルの中から最初のダウンロードボタンを探す
-  // 複数のセレクターを試す
-  let clicked = false;
-
-  // 方法1: エクスポート履歴セクション内のダウンロードリンク
-  try {
-    const historyTable = page.locator('h3:has-text("エクスポート履歴")').locator('..').locator('table');
-    const downloadLink = historyTable.getByRole('link', { name: 'ダウンロード' }).first();
-    await downloadLink.waitFor({ state: 'visible', timeout: 5000 });
-    await downloadLink.click();
-    clicked = true;
-    console.log('方法1成功: エクスポート履歴テーブルからダウンロードボタンをクリック');
-  } catch (error) {
-    console.warn('方法1失敗:', error);
-  }
-
-  // 方法2: テーブルの最初の行のダウンロードボタン
+  // エクスポート履歴テーブルの中から今回作成されたダウンロードボタンだけを押す
+  const clicked = await clickDownloadByHrefs(page, newDownloadHrefs);
   if (!clicked) {
-    try {
-      const downloadLink = page.locator('table tbody tr').first().getByRole('link', { name: 'ダウンロード' });
-      await downloadLink.waitFor({ state: 'visible', timeout: 5000 });
-      await downloadLink.click();
-      clicked = true;
-      console.log('方法2成功: テーブルの最初の行からダウンロードボタンをクリック');
-    } catch (error) {
-      console.warn('方法2失敗:', error);
-    }
+    throw new Error('新規エクスポートのダウンロードボタンが見つかりませんでした');
   }
-
-  // 方法3: フォールバック（元の方法）
-  if (!clicked) {
-    const allDownloadLinks = page.getByRole('link', { name: 'ダウンロード' });
-    const count = await allDownloadLinks.count();
-    console.log(`ダウンロードリンクが${count}個見つかりました`);
-
-    // お気に入りセクションのリンクをスキップして、エクスポート履歴のリンクを探す
-    for (let i = 0; i < count; i++) {
-      const link = allDownloadLinks.nth(i);
-      const text = await link.textContent();
-      const isVisible = await link.isVisible();
-      console.log(`リンク${i}: text="${text}", visible=${isVisible}`);
-
-      if (isVisible && text?.includes('ダウンロード')) {
-        await link.click();
-        clicked = true;
-        console.log(`方法3成功: ${i}番目のダウンロードリンクをクリック`);
-        break;
-      }
-    }
-  }
-
-  if (!clicked) {
-    throw new Error('ダウンロードボタンが見つかりませんでした');
-  }
+  console.log('新規エクスポートのダウンロードリンクをクリックしました');
 
   console.log('ダウンロード開始...');
   return downloadPromise;
+}
+
+async function collectDownloadHrefs(page: Page): Promise<string[]> {
+  const hrefs = await page.evaluate(() => {
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a'));
+    return links
+      .filter((link) => link.textContent?.includes('ダウンロード'))
+      .map((link) => link.getAttribute('href'))
+      .filter((href): href is string => Boolean(href));
+  });
+
+  return Array.from(new Set(hrefs));
+}
+
+async function clickDownloadByHrefs(page: Page, hrefs: string[]): Promise<boolean> {
+  for (const href of hrefs) {
+    const clicked = await page.evaluate((targetHref) => {
+      const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a'));
+      const link = links.find((candidate) => {
+        const candidateHref = candidate.getAttribute('href');
+        return candidateHref === targetHref && candidate.textContent?.includes('ダウンロード');
+      });
+      if (!link) return false;
+      link.click();
+      return true;
+    }, href);
+
+    if (clicked) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 async function tryClickByRoles(
