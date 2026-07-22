@@ -21,7 +21,7 @@ const FLEX_TEMPLATES = [
   { id: '268607893', label: '4日後06:58' },
   { id: '268608033', label: '4日後23:00' },
 ] as const;
-const FORM_COUNT = 10;
+const FORM_COUNT = 14;
 const FLEX_COUNT = 4;
 const DATE_TEMPLATE_COUNT = 4;
 const REMINDER_COUNT = 8;
