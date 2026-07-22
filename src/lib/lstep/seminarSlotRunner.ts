@@ -21,9 +21,11 @@ const FLEX_TEMPLATES = [
   { id: '268607893', label: '4日後06:58' },
   { id: '268608033', label: '4日後23:00' },
 ] as const;
+const ONE_TAP_TAG_NAME = '【2026.7】ワンタップセミナー申込';
+const ONE_TAP_TAG_ID = 10242626;
 const FORM_COUNT = 14;
-const FLEX_COUNT = 4;
-const DATE_TEMPLATE_COUNT = 4;
+const FLEX_COUNT = 6;
+const DATE_TEMPLATE_COUNT = 6;
 const REMINDER_COUNT = 8;
 const DATE_LABEL_RE = /^\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~/;
 
@@ -36,9 +38,15 @@ interface DateTag {
 
 interface SurfaceSnapshot {
   form: string[];
-  flex: Record<string, Array<{ label: string; action: string }>>;
+  flex: Record<string, FlexCardState[]>;
   dateTemplate: string[];
   reminder: string[];
+}
+
+interface FlexCardState {
+  label: string;
+  action: string;
+  tagIds: number[];
 }
 
 export interface RunOptions {
@@ -221,6 +229,19 @@ async function chooseTag(dialog: Locator, page: Page, currentName: string, nextN
   await (await visibleExact(page, nextName)).click();
   await wait(page, 500);
   if (!(await dialog.innerText()).includes(nextName)) throw new Error(`タグ ${nextName} を選択できませんでした`);
+}
+
+async function ensureTagAdded(dialog: Locator, page: Page, tagName: string): Promise<void> {
+  if ((await dialog.innerText()).includes(tagName)) return;
+  const selector = dialog.getByText('タグ選択', { exact: true }).last();
+  if (!await selector.isVisible().catch(() => false)) throw new Error(`タグ追加欄が見つかりません (${tagName})`);
+  await selector.click();
+  const search = dialog.getByPlaceholder('タグ名を入力').last();
+  await search.fill(tagName);
+  await wait(page, 900);
+  await (await visibleExact(page, tagName)).click();
+  await wait(page, 500);
+  if (!(await dialog.innerText()).includes(tagName)) throw new Error(`タグ ${tagName} を追加できませんでした`);
 }
 
 async function createTag(page: Page, slot: SeminarSlot, tags: DateTag[]): Promise<DateTag> {
@@ -524,17 +545,36 @@ async function flexCards(page: Page): Promise<Locator> {
   return page.locator('.list_item_component').filter({ has: dateEditor });
 }
 
-async function readFlexState(page: Page, id: string): Promise<Array<{ label: string; action: string }>> {
+async function readFlexState(page: Page, id: string): Promise<FlexCardState[]> {
   await goto(page, `${BASE}/line/template/edit_v3/${id}?editMessage=1`, 3_000);
   const cards = await (await flexCards(page)).evaluateAll((elements) => elements.map((element) => ({
     label: (element.querySelector('[contenteditable="true"]')?.textContent ?? '').trim(),
     action: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
-  })));
-  return cards.filter((card) => DATE_LABEL_RE.test(card.label));
+  }))).then((values) => values.filter((card) => DATE_LABEL_RE.test(card.label)));
+
+  const response = await page.request.get(`${BASE}/api/template/lflexes/${id}`, { headers: await flexApiHeaders(page) });
+  if (!response.ok()) throw new Error(`Flex ${id} のアクション取得に失敗しました (${response.status()})`);
+  const resource = await parseFlexResponse(response, `Flex ${id} アクション取得`);
+  const editor: Exclude<FlexResource['editor_json'], string> = typeof resource.editor_json === 'string' ? JSON.parse(resource.editor_json) : resource.editor_json;
+  const dateBlocks = editor.panels.flatMap((panel) => panel.blocks ?? []).filter((block) => DATE_LABEL_RE.test(textFromDoc(block.text)));
+  if (dateBlocks.length !== cards.length) throw new Error(`Flex ${id} の表示とアクション件数が一致しません (${cards.length}/${dateBlocks.length})`);
+
+  const tagIds = await Promise.all(dateBlocks.map(async (block) => {
+    const actionId = Number(((block.action as Record<string, any> | undefined)?.data?.act?.aid) ?? 0);
+    if (!actionId) return [];
+    const actionResponse = await page.request.get(`${BASE}/api/actions/${actionId}`, { headers: await flexApiHeaders(page) });
+    if (!actionResponse.ok()) throw new Error(`Flex ${id} のアクション${actionId}取得に失敗しました (${actionResponse.status()})`);
+    const action = await actionResponse.json() as { inputs?: Array<{ type?: number; tag_ids?: number[] }> };
+    return (action.inputs ?? []).filter((input) => input.type === 13).flatMap((input) => input.tag_ids ?? []);
+  }));
+
+  return cards.map((card, index) => ({ ...card, tagIds: tagIds[index] }));
 }
 
 function actionTagName(action: string): string | undefined {
-  return action.match(/タグ\[([^\]]+)\]\s*\[【2026\.7】セミナー申/)?.[1];
+  return [...action.matchAll(/\[([^\]]+)\]/g)]
+    .map((match) => match[1])
+    .find((name) => /^\d+月\d+日(?:13|21)(?:時)?$/.test(name));
 }
 
 async function clickBlockToolbar(page: Page, card: Locator, action: '複製' | '削除'): Promise<void> {
@@ -552,7 +592,7 @@ async function clickBlockToolbar(page: Page, card: Locator, action: '複製' | '
   }
 }
 
-async function reconcileFlexBlocks(page: Page, current: Array<{ label: string; action: string }>, desired: SeminarSlot[]): Promise<boolean> {
+async function reconcileFlexBlocks(page: Page, current: FlexCardState[], desired: SeminarSlot[]): Promise<boolean> {
   const desiredTagNames = new Set(desired.map((slot) => slot.tagName));
   const obsoleteIndexes = current
     .map((card, index) => ({ index, tagName: actionTagName(card.action) }))
@@ -590,13 +630,17 @@ async function updateFlex(page: Page, id: string, desired: SeminarSlot[], tags: 
   const labels = desired.map((slot, index) => flexLabel(slot, current, index));
   const correct = current.length === desired.length && current.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
-    return card.label === labels[index] && !!tag && card.action.includes(`タグ[${tag.name}]`);
+    return card.label === labels[index]
+      && !!tag
+      && actionTagName(card.action) === tag.name
+      && card.tagIds.includes(ONE_TAP_TAG_ID);
   });
   if (correct) return '変更なし';
   if (!apply) return `${current.map((card) => card.label).join(' / ')} -> ${labels.join(' / ')}`;
 
   const structureChanged = await reconcileFlexBlocks(page, current, desired);
   let actionChanged = structureChanged;
+  const commonTagByDateTag = new Map(current.map((card) => [actionTagName(card.action), card.tagIds.includes(ONE_TAP_TAG_ID)]));
   for (let index = 0; index < desired.length; index += 1) {
     const cards = await flexCards(page);
     const card = cards.filter({ has: page.locator('[contenteditable="true"]') }).nth(index);
@@ -604,7 +648,8 @@ async function updateFlex(page: Page, id: string, desired: SeminarSlot[], tags: 
     const currentTag = actionTagName(currentAction);
     const nextTag = tagForSlot(tags, desired[index]);
     if (!currentTag || !nextTag) throw new Error(`テンプレート${id} ${index + 1}枚目: 日付タグを特定できません (${currentAction.slice(0, 420)})`);
-    if (currentTag !== nextTag.name) {
+    const hasOneTapTag = commonTagByDateTag.get(currentTag) ?? false;
+    if (currentTag !== nextTag.name || !hasOneTapTag) {
       await card.getByText('アクション設定', { exact: true }).click();
       await wait(page, 700);
       const outer = page.locator('[role="dialog"],.modal').filter({ hasText: '選択肢アクションに有効期限' }).last();
@@ -612,6 +657,7 @@ async function updateFlex(page: Page, id: string, desired: SeminarSlot[], tags: 
       await wait(page, 1_200);
       const inner = page.locator('[role="dialog"],.modal').last();
       await chooseTag(inner, page, currentTag, nextTag.name);
+      await ensureTagAdded(inner, page, ONE_TAP_TAG_NAME);
       const beforeInnerClose = await page.locator('[role="dialog"]:visible,.modal:visible').count();
       await inner.getByText('この条件で決定する', { exact: false }).evaluate((element) => (element as HTMLElement).click());
       await waitForDialogToClose(page, beforeInnerClose);
@@ -631,7 +677,10 @@ async function updateFlex(page: Page, id: string, desired: SeminarSlot[], tags: 
   const verified = await readFlexState(page, id);
   if (verified.length !== desired.length || !verified.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
-    return card.label === labels[index] && !!tag && card.action.includes(`タグ[${tag.name}]`);
+    return card.label === labels[index]
+      && !!tag
+      && actionTagName(card.action) === tag.name
+      && card.tagIds.includes(ONE_TAP_TAG_ID);
   })) throw new Error(`テンプレート${id}: 保存後検証に失敗しました`);
   return `${desired.length}枠を更新・アクション検証済み`;
 }
