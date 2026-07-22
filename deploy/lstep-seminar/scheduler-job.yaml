@@ -1,5 +1,11 @@
 schedule: '0 12,20 * * *'
 timeZone: 'Asia/Tokyo'
+retryConfig:
+  retryCount: 5
+  maxRetryDuration: 900s
+  minBackoffDuration: 30s
+  maxBackoffDuration: 300s
+  maxDoublings: 3
 httpTarget:
   uri: https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/mark-454114/jobs/autostudio-lstep-seminar:run
   httpMethod: POST
