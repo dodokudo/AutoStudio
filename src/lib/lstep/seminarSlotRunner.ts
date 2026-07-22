@@ -651,13 +651,23 @@ function compactReminderLabel(slot: SeminarSlot): string {
 }
 
 const REMINDER_DATE_LINE = '[ \\t]*・\\d{1,2}\\/\\d{1,2}\\([日月火水木金土]\\)[ \\t]*\\d{1,2}:00~[ \\t]*';
-const REMINDER_DATE_BLOCK = new RegExp(`${REMINDER_DATE_LINE}(?:\\r?\\n${REMINDER_DATE_LINE})*`, 'm');
+const REMINDER_DATE_BLOCK = new RegExp(`${REMINDER_DATE_LINE}(?:(?:\\r?\\n)+${REMINDER_DATE_LINE})*`, 'm');
+const REMINDER_DATE_ONLY = /^・\d{1,2}\/\d{1,2}\([日月火水木金土]\)[ \t]*\d{1,2}:00~$/;
 
 export function replaceReminderDateBlock(source: string, nextDates: string[]): string {
   const match = REMINDER_DATE_BLOCK.exec(source);
   if (!match || match.index === undefined) throw new Error('最終リマインドの日程ブロックを安全に置換できません');
-  const newline = match[0].includes('\r\n') ? '\r\n' : '\n';
-  return `${source.slice(0, match.index)}${nextDates.join(newline)}${source.slice(match.index + match[0].length)}`;
+  const separator = match[0].match(/~((?:\r?\n)+)[ \t]*・/)?.[1] ?? (match[0].includes('\r\n') ? '\r\n' : '\n');
+  return `${source.slice(0, match.index)}${nextDates.join(separator)}${source.slice(match.index + match[0].length)}`;
+}
+
+async function reminderEditorText(editor: Locator): Promise<string> {
+  return editor.evaluate((element) => (
+    (element as HTMLTextAreaElement).value
+    || (element as HTMLElement).innerText
+    || element.textContent
+    || ''
+  ));
 }
 
 async function reminderEditor(page: Page): Promise<Locator> {
@@ -665,7 +675,7 @@ async function reminderEditor(page: Page): Promise<Locator> {
   const editors = page.locator('textarea,[contenteditable="true"]');
   for (let index = 0; index < await editors.count(); index += 1) {
     const editor = editors.nth(index);
-    const value = await editor.evaluate((element) => (element as HTMLTextAreaElement).value || element.textContent || '');
+    const value = await reminderEditorText(editor);
     if (/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)/.test(value)) return editor;
   }
   throw new Error('最終リマインドの日程本文が見つかりません');
@@ -673,51 +683,40 @@ async function reminderEditor(page: Page): Promise<Locator> {
 
 async function readReminderDates(page: Page): Promise<string[]> {
   const editor = await reminderEditor(page);
-  const value = await editor.evaluate((element) => (element as HTMLTextAreaElement).value || element.textContent || '');
+  const value = await reminderEditorText(editor);
   return value.match(/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~/g) ?? [];
 }
 
 async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean): Promise<string> {
+  const editor = await reminderEditor(page);
+  const currentText = await reminderEditorText(editor);
   const nextDates = desired.map(compactReminderLabel);
-  const endpoint = `${BASE}/api/templates/268822941`;
-  const headers = await flexApiHeaders(page);
-  const resourceResponse = await page.request.get(endpoint, { headers });
-  if (!resourceResponse.ok()) throw new Error(`最終リマインドの取得に失敗しました (${resourceResponse.status()})`);
-  const resource = await resourceResponse.json() as {
-    id: number;
-    is_template: number;
-    name: string;
-    group_id: number;
-    disable_cv: number;
-    sender_id: number;
-    do_override_sender: number;
-    eggtype: number;
-    text_text?: string;
-  };
-  if (typeof resource.text_text !== 'string') throw new Error('最終リマインドの原文を取得できませんでした');
-  const currentDates = resource.text_text.match(/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)[ \t]*\d{1,2}:00~/g) ?? [];
+  const currentDates = currentText.match(/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)[ \t]*\d{1,2}:00~/g) ?? [];
   if (JSON.stringify(currentDates) === JSON.stringify(nextDates)) return '変更なし';
   if (!apply) return `${currentDates.join(' / ')} -> ${nextDates.join(' / ')}`;
-  const nextText = replaceReminderDateBlock(resource.text_text, nextDates);
-  const saved = await page.request.post(endpoint, {
-    headers,
-    data: {
-      _method: 'patch',
-      is_template: resource.is_template,
-      egg_id: resource.id,
-      template_name: resource.name,
-      template_group: resource.group_id,
-      disable_cv: resource.disable_cv,
-      sender_id: resource.sender_id,
-      do_override_sender: resource.do_override_sender,
-      eggtype: resource.eggtype,
-      text_text: nextText,
-    },
-  });
-  if (!saved.ok()) throw new Error(`最終リマインドの保存に失敗しました (${saved.status()} ${await saved.text()})`);
+  const expectedText = replaceReminderDateBlock(currentText, nextDates);
+  const dateParagraphs = editor.locator('p').filter({ hasText: REMINDER_DATE_ONLY });
+  if (await dateParagraphs.count() !== nextDates.length) {
+    throw new Error(`最終リマインドの日程行数が一致しません (現在${await dateParagraphs.count()}件 / 期待${nextDates.length}件)`);
+  }
+  for (let index = 0; index < nextDates.length; index += 1) {
+    const paragraph = dateParagraphs.nth(index);
+    await paragraph.evaluate((element) => {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+    await page.keyboard.insertText(nextDates[index]);
+  }
+  if (await reminderEditorText(editor) !== expectedText) throw new Error('日程以外の本文または改行が変化したため保存を中断しました');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
   await wait(page, 3_000);
   const verified = await readReminderDates(page);
   if (JSON.stringify(verified) !== JSON.stringify(nextDates)) throw new Error('最終リマインドの保存後検証に失敗しました');
+  const persistedText = await reminderEditorText(await reminderEditor(page));
+  if (persistedText !== expectedText) throw new Error('最終リマインドの本文または改行が保存後に変化しました');
   return `${nextDates.length}枠を更新・検証済み`;
 }
 
