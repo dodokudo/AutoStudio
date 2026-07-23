@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { upcomingSlots } from './seminarSchedule';
+import { slotsFromTomorrow, upcomingSlots } from './seminarSchedule';
 
 test('16時時点では当日21時枠を残し、日時を6枠返す', () => {
   const slots = upcomingSlots(new Date(2026, 6, 22, 16, 0), 6);
@@ -28,5 +28,32 @@ test('20時実行では当日21時枠を削除して次の6枠へ進める', () 
     '7/24(金) 21:00~',
     '7/25(土) 13:00~',
     '7/25(土) 21:00~',
+  ]);
+});
+
+test('追加シナリオ用は実行時刻に関係なく明日から6枠を返す', () => {
+  const expected = [
+    '7/24(金) 13:00~',
+    '7/24(金) 21:00~',
+    '7/25(土) 13:00~',
+    '7/25(土) 21:00~',
+    '7/26(日) 13:00~',
+    '7/26(日) 21:00~',
+  ];
+  assert.deepEqual(slotsFromTomorrow(new Date(2026, 6, 23, 12, 0), 6).map((slot) => slot.choiceLabel), expected);
+  assert.deepEqual(slotsFromTomorrow(new Date(2026, 6, 23, 20, 0), 6).map((slot) => slot.choiceLabel), expected);
+});
+
+test('7日後は4枠、8日後は2枠に絞る', () => {
+  const now = new Date(2026, 6, 23, 20, 0);
+  assert.deepEqual(slotsFromTomorrow(now, 4).map((slot) => slot.choiceLabel), [
+    '7/24(金) 13:00~',
+    '7/24(金) 21:00~',
+    '7/25(土) 13:00~',
+    '7/25(土) 21:00~',
+  ]);
+  assert.deepEqual(slotsFromTomorrow(now, 2).map((slot) => slot.choiceLabel), [
+    '7/24(金) 13:00~',
+    '7/24(金) 21:00~',
   ]);
 });

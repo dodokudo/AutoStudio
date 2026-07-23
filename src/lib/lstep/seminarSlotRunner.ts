@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { loadLstepConfig } from './config';
 import { downloadObjectToFile, uploadFileToGcs } from './gcs';
 import {
+  slotsFromTomorrow,
   upcomingSlots,
   type SeminarSlot,
 } from './seminarSchedule';
@@ -16,15 +17,17 @@ const APPLY_FORM_URL = `${BASE}/lvf/edit/1084212?group=216354`;
 const DATE_TEMPLATE_URL = `${BASE}/line/template/edit_v3/268609107?editMessage=1`;
 const REMINDER_TEMPLATE_URL = `${BASE}/line/template/edit/268822941?group=1020108`;
 const FLEX_TEMPLATES = [
-  { id: '268607623', label: '2日後07:08' },
-  { id: '268607783', label: '2日後20:58' },
-  { id: '268607893', label: '4日後06:58' },
-  { id: '268608033', label: '4日後23:00' },
+  { id: '268607623', label: '2日後07:08', count: 6 },
+  { id: '268607783', label: '2日後20:58', count: 6 },
+  { id: '268607893', label: '4日後06:58', count: 6 },
+  { id: '268608033', label: '4日後23:00', count: 6 },
+  { id: '268608572', label: '6日後20:03', count: 6, startsTomorrow: true },
+  { id: '268608322', label: '7日後20:03', count: 4, startsTomorrow: true },
+  { id: '268608656', label: '8日後20:03', count: 2, startsTomorrow: true },
 ] as const;
 const ONE_TAP_TAG_NAME = '【2026.7】ワンタップセミナー申込';
 const ONE_TAP_TAG_ID = 10242626;
 const FORM_COUNT = 14;
-const FLEX_COUNT = 6;
 const DATE_TEMPLATE_COUNT = 6;
 const REMINDER_COUNT = 8;
 const DATE_LABEL_RE = /^\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~/;
@@ -593,27 +596,19 @@ async function clickBlockToolbar(page: Page, card: Locator, action: '複製' | '
 }
 
 async function reconcileFlexBlocks(page: Page, current: FlexCardState[], desired: SeminarSlot[]): Promise<boolean> {
-  const desiredTagNames = new Set(desired.map((slot) => slot.tagName));
-  const obsoleteIndexes = current
-    .map((card, index) => ({ index, tagName: actionTagName(card.action) }))
-    .filter(({ tagName }) => !tagName || !desiredTagNames.has(tagName))
-    .map(({ index }) => index)
-    .sort((a, b) => b - a);
   let changed = false;
 
-  for (const index of obsoleteIndexes) {
+  for (let index = current.length - 1; index >= desired.length; index -= 1) {
     const cards = await flexCards(page);
     if (index >= await cards.count()) throw new Error(`削除対象の日程ボタン${index + 1}が見つかりません`);
     await clickBlockToolbar(page, cards.nth(index), '削除');
     changed = true;
   }
 
-  const existingTags = new Set(current.map((card) => actionTagName(card.action)).filter((name): name is string => !!name));
-  const missing = desired.filter((slot) => !existingTags.has(slot.tagName));
-  for (const slot of missing) {
+  for (let index = Math.min(current.length, desired.length); index < desired.length; index += 1) {
     const cards = await flexCards(page);
     const count = await cards.count();
-    if (!count) throw new Error(`${slot.tagName}: コピー元の日程ボタンがありません`);
+    if (!count) throw new Error(`${desired[index].tagName}: コピー元の日程ボタンがありません`);
     // 最終の日程ボタンを複製すると、「それ以降の日程はこちら」の直前に入る。
     await clickBlockToolbar(page, cards.last(), '複製');
     changed = true;
@@ -829,9 +824,11 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
 
     activeStep = 'セミナー申込フォーム';
     steps.push({ step: activeStep, status: 'ok', detail: await updateForm(page, desiredForm, tags, apply) });
-    const desiredFlex = upcomingSlots(now, FLEX_COUNT + extraSlots);
     for (const template of FLEX_TEMPLATES) {
       activeStep = `ワンタップ ${template.label}`;
+      const desiredFlex = 'startsTomorrow' in template
+        ? slotsFromTomorrow(now, template.count + extraSlots)
+        : upcomingSlots(now, template.count + extraSlots);
       steps.push({ step: activeStep, status: 'ok', detail: await updateFlex(page, template.id, desiredFlex, tags, apply) });
     }
     activeStep = 'セミナー日程選択テンプレート';

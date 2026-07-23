@@ -56,6 +56,18 @@ export function upcomingSlots(now: Date, count: number, options: BuildSlotOption
   return slots;
 }
 
+/** 明日を起点に13時・21時の順で、指定数の枠を返す。 */
+export function slotsFromTomorrow(now: Date, count: number, options: BuildSlotOptions = {}): SeminarSlot[] {
+  const slots: SeminarSlot[] = [];
+  const base = jstDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  let offset = 1;
+  while (slots.length < count) {
+    slots.push(...buildSlotsForDate(addDays(base, offset), options));
+    offset += 1;
+  }
+  return slots.slice(0, count);
+}
+
 /** 表示用の残席。タグ人数を申込数として、虚偽の希少性を作らない。 */
 export function remainingCapacity(memberCount: number, capacity = 20): number {
   return Math.max(0, capacity - memberCount);
