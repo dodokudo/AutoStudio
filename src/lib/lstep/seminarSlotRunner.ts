@@ -23,7 +23,7 @@ const FLEX_TEMPLATES = [
   { id: '268608033', label: '4日後23:00', count: 6 },
   { id: '268608572', label: '6日後20:03', count: 6, startsTomorrow: true },
   { id: '268608322', label: '7日後20:03', count: 4, startsTomorrow: true },
-  { id: '268608656', label: '8日後20:03', count: 3, minimumLeadMinutes: 0 },
+  { id: '268608656', label: '8日後20:03', count: 2, startsTomorrow: true },
 ] as const;
 const ONE_TAP_TAG_ID = 10242626;
 const IMMUTABLE_ACTION_PREFIX = 'AUTO_セミナー申込_';
@@ -1141,13 +1141,7 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
       activeStep = `ワンタップ ${template.label}`;
       const desiredFlex = 'startsTomorrow' in template
         ? slotsFromTomorrow(now, template.count + extraSlots)
-        : upcomingSlots(
-          now,
-          template.count + extraSlots,
-          'minimumLeadMinutes' in template
-            ? { minimumLeadMinutes: template.minimumLeadMinutes }
-            : undefined,
-        );
+        : upcomingSlots(now, template.count + extraSlots);
       steps.push({
         step: activeStep,
         status: 'ok',
