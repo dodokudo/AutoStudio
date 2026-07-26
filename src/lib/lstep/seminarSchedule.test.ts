@@ -44,15 +44,16 @@ test('追加シナリオ用は実行時刻に関係なく明日から6枠を返�
   assert.deepEqual(slotsFromTomorrow(new Date(2026, 6, 23, 20, 0), 6).map((slot) => slot.choiceLabel), expected);
 });
 
-test('7日後は4枠、8日後は2枠に絞る', () => {
-  const now = new Date(2026, 6, 23, 20, 0);
+test('7日後は4枠、8日後は当日21時を含む3枠に絞る', () => {
+  const now = new Date(2026, 6, 23, 20, 3);
   assert.deepEqual(slotsFromTomorrow(now, 4).map((slot) => slot.choiceLabel), [
     '7/24(金) 13:00~',
     '7/24(金) 21:00~',
     '7/25(土) 13:00~',
     '7/25(土) 21:00~',
   ]);
-  assert.deepEqual(slotsFromTomorrow(now, 2).map((slot) => slot.choiceLabel), [
+  assert.deepEqual(upcomingSlots(now, 3, { minimumLeadMinutes: 0 }).map((slot) => slot.choiceLabel), [
+    '7/23(木) 21:00~',
     '7/24(金) 13:00~',
     '7/24(金) 21:00~',
   ]);

@@ -39,11 +39,12 @@ export interface SeminarSlot {
 
 /**
  * 実行時点で申込可能な枠を時系列で返す。
- * 開始1時間前になった枠は含めない（12:00に13時枠、20:00に21時枠を締切）。
+ * 通常は開始1時間前になった枠を含めない
+ * （12:00に13時枠、20:00に21時枠を締切）。
  */
-export function upcomingSlots(now: Date, count: number, options: BuildSlotOptions = {}): SeminarSlot[] {
+export function upcomingSlots(now: Date, count: number, options: UpcomingSlotOptions = {}): SeminarSlot[] {
   const slots: SeminarSlot[] = [];
-  const cutoff = now.getTime() + 60 * 60 * 1000;
+  const cutoff = now.getTime() + (options.minimumLeadMinutes ?? 60) * 60 * 1000;
   let day = jstDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
   while (slots.length < count) {
     for (const hour of SLOT_HOURS) {
@@ -82,6 +83,11 @@ export interface BuildSlotOptions {
   reminderPrefix?: string;
   /** リマインダのゴール時刻（HH:mm）。現行運用は 22:00。 */
   reminderGoalTime?: string;
+}
+
+export interface UpcomingSlotOptions extends BuildSlotOptions {
+  /** 枠を候補に残すために必要な開始までの時間。通常は60分。 */
+  minimumLeadMinutes?: number;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
