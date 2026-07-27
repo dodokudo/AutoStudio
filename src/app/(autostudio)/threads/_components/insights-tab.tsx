@@ -90,6 +90,7 @@ export function InsightsTab({
 }: InsightsTabProps) {
   const [topContentSort, setTopContentSort] = useState<TopContentSort>('views');
   const [showDailyTable, setShowDailyTable] = useState(true);
+  const [showAccountOverview, setShowAccountOverview] = useState(true);
   const [posts, setPosts] = useState<PostInsight[]>(initialPosts ?? []);
   const [postsLoading, setPostsLoading] = useState(!initialPosts || initialPosts.length === 0);
   const numberFormatter = new Intl.NumberFormat('ja-JP');
@@ -226,10 +227,19 @@ export function InsightsTab({
     <div className="section-stack">
       {accountStatGroups && accountStatGroups.length > 0 ? (
         <Card className="p-6">
-          <header>
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">アカウントの概要</h2>
-            <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{noteText}</p>
+          <header className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">アカウントの概要</h2>
+              <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{noteText}</p>
+            </div>
+            <button
+              onClick={() => setShowAccountOverview(!showAccountOverview)}
+              className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
+            >
+              {showAccountOverview ? '概要を閉じる' : '概要を表示'}
+            </button>
           </header>
+          {showAccountOverview && (
           <div className="mt-6 space-y-8">
             {accountStatGroups.map((group) => (
               <section key={group.title}>
@@ -277,6 +287,7 @@ export function InsightsTab({
               </section>
             ))}
           </div>
+          )}
         </Card>
       ) : (
         <InsightsCard
