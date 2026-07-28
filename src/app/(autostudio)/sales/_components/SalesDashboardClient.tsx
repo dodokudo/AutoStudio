@@ -123,7 +123,7 @@ const CUSTOMER_STATUS_OPTIONS: Array<{ id: CustomerStatus; label: string }> = [
   { id: 'needs_review', label: '要確認' },
 ];
 
-const BACKEND_STATUS_STYLES: Record<CustomerStatus, string> = {
+const CUSTOMER_STATUS_STYLES: Record<CustomerStatus, string> = {
   contracting: 'border-blue-300 bg-blue-50 text-blue-700',
   active: 'border-emerald-300 bg-emerald-50 text-emerald-700',
   paused: 'border-amber-300 bg-amber-50 text-amber-700',
@@ -2117,8 +2117,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                           }
                           disabled={savingCustomerKey === buyer.customerKey}
                           className={`rounded-[var(--radius-sm)] border px-2 py-1 text-sm font-medium disabled:opacity-50 ${
-                            view === 'backend'
-                              ? BACKEND_STATUS_STYLES[buyer.status]
+                            view === 'backend' || view === 'courses'
+                              ? CUSTOMER_STATUS_STYLES[buyer.status]
                               : 'border-[color:var(--color-border)] bg-white text-[color:var(--color-text-primary)]'
                           }`}
                         >
