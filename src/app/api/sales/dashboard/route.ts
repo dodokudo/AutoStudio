@@ -2,14 +2,19 @@ import { NextResponse } from 'next/server';
 import { getSalesSummary } from '@/lib/univapay/client';
 import { getChargeCategories, getManualSales } from '@/lib/sales/categories';
 import { getAllGroups } from '@/lib/sales/groups';
-import { getLstepAnalytics } from '@/lib/lstep/analytics';
+import { getCustomerProfiles } from '@/lib/sales/customerProfiles';
+import { getLineRegistrationsDailyByDateRange } from '@/lib/lstep/analytics';
 import { resolveProjectId } from '@/lib/bigquery';
 import { formatDateInput } from '@/lib/dateRangePresets';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const LSTEP_PROJECT_ID = (() => {
   const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
   return preferred ? resolveProjectId(preferred) : undefined;
 })();
+const CUSTOMER_DATA_START = '2020-01-01';
 
 function isValidDate(value: string | null): value is string {
   if (!value) return false;
@@ -44,16 +49,28 @@ async function getDashboard(startParam: string, endParam: string) {
     monthlySummary,
     manualSales,
     monthlyManualSales,
+    customerSummary,
+    customerManualSales,
     groupsMap,
-    lstepAnalytics,
+    customerProfiles,
+    lineDailyRegistrations,
   ] = await Promise.all([
     getSalesSummary(startDate.toISOString(), endDate.toISOString()),
     getSalesSummary(cashflowStartDate, endDate.toISOString()),
     getSalesSummary(monthlyStartDate, monthlyEndDate),
     getManualSales(startDateStr, endDateStr),
     getManualSales(monthlyStartDateStr, monthlyEndDateStr),
+    getSalesSummary(`${CUSTOMER_DATA_START}T00:00:00+09:00`, endDate.toISOString()),
+    getManualSales(CUSTOMER_DATA_START, endDateStr),
     getAllGroups().catch(() => new Map()),
-    LSTEP_PROJECT_ID ? getLstepAnalytics(LSTEP_PROJECT_ID).catch(() => null) : Promise.resolve(null),
+    getCustomerProfiles().catch(() => []),
+    LSTEP_PROJECT_ID
+      ? getLineRegistrationsDailyByDateRange(
+          LSTEP_PROJECT_ID,
+          CUSTOMER_DATA_START,
+          endDateStr,
+        ).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   const chargeIds = summary.charges.map(c => c.id);
@@ -68,6 +85,13 @@ async function getDashboard(startParam: string, endParam: string) {
   const monthlyCategories: Record<string, string> = {};
   for (const [id, cat] of monthlyCategoriesMap) {
     monthlyCategories[id] = cat;
+  }
+
+  const customerChargeIds = customerSummary.charges.map(c => c.id);
+  const customerCategoriesMap = await getChargeCategories(customerChargeIds);
+  const customerCategories: Record<string, string> = {};
+  for (const [id, cat] of customerCategoriesMap) {
+    customerCategories[id] = cat;
   }
 
   const groups = Array.from(groupsMap.values()).map(({ group, items }) => ({
@@ -95,7 +119,8 @@ async function getDashboard(startParam: string, endParam: string) {
     categories,
     manualSales,
     groups,
-    lineDailyRegistrations: lstepAnalytics?.dailyRegistrations ?? [],
+    customerProfiles,
+    lineDailyRegistrations,
     monthlyData: {
       charges: monthlySummary.charges,
       categories: monthlyCategories,
@@ -103,6 +128,12 @@ async function getDashboard(startParam: string, endParam: string) {
       groups,
       rangeStart: monthlyStartDateStr,
       rangeEnd: monthlyEndDateStr,
+    },
+    customerData: {
+      charges: customerSummary.charges,
+      categories: customerCategories,
+      manualSales: customerManualSales,
+      groups,
     },
   };
 }
@@ -119,10 +150,17 @@ export async function GET(request: Request) {
   try {
     const data = await getDashboard(startParam, endParam);
 
-    return NextResponse.json({
-      success: true,
-      data,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store, max-age=0',
+        },
+      },
+    );
   } catch (error) {
     console.error('[api/sales/dashboard] Error:', error);
     return NextResponse.json({ error: 'Failed to load sales dashboard' }, { status: 500 });

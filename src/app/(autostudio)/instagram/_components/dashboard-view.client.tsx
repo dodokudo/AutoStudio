@@ -52,6 +52,8 @@ const presetLabels: Record<DatePreset, string> = {
   '30d': '過去30日',
   'last-month': '先月',
   '90d': '過去90日',
+  'last-year': '去年',
+  'this-year': '今年',
   all: '全期間',
   custom: 'カスタム',
 };

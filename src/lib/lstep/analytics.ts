@@ -180,6 +180,44 @@ export async function countLineRegistrationsByDateRange(
   return Number(row?.total ?? 0);
 }
 
+export async function getLineRegistrationsDailyByDateRange(
+  projectId: string,
+  startDate: string,
+  endDate: string,
+): Promise<Array<{ date: string; registrations: number }>> {
+  const datasetId = DEFAULT_DATASET;
+  const client = createBigQueryClient(projectId, process.env.LSTEP_BQ_LOCATION);
+
+  const [latestSnapshot] = await runQuery<{ snapshot_date: string | null }>(client, projectId, datasetId, {
+    query: `SELECT CAST(MAX(snapshot_date) AS STRING) AS snapshot_date FROM \`${projectId}.${datasetId}.${TABLE_NAME}\``,
+  });
+
+  const snapshotDate = latestSnapshot?.snapshot_date;
+  if (!snapshotDate) {
+    return [];
+  }
+
+  const rows = await runQuery<{ date: string; registrations: number }>(client, projectId, datasetId, {
+    query: `
+      SELECT
+        CAST(DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") AS STRING) AS date,
+        COUNT(DISTINCT id) AS registrations
+      FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
+      WHERE snapshot_date = @snapshotDate
+        AND friend_added_at IS NOT NULL
+        AND DATE(TIMESTAMP(friend_added_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+      GROUP BY date
+      ORDER BY date
+    `,
+    params: { snapshotDate, startDate, endDate },
+  });
+
+  return rows.map((row) => ({
+    date: row.date,
+    registrations: Number(row.registrations ?? 0),
+  }));
+}
+
 /**
  * 期間内の「流入経路：広告」フラグが立っているLINE登録者数を取得
  * adsタブの広告経由LINE登録数KPI用。Lstep CSV の「流入経路：広告」列を `source` カラムに正規化したものを参照。

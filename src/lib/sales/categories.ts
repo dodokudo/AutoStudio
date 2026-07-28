@@ -5,10 +5,12 @@ import { createBigQueryClient, resolveProjectId } from '../bigquery';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_sales';
+const MANUAL_SPLITS_TABLE = 'manual_sale_splits';
 
 export const SALES_CATEGORIES = [
   { id: 'frontend', label: 'フロントエンド' },
   { id: 'backend', label: 'バックエンド' },
+  { id: 'backend_performance', label: 'バックエンド成果報酬' },
   { id: 'backend_renewal', label: 'バックエンド継続' },
   { id: 'analyca', label: 'ANALYCA' },
   { id: 'corporate', label: '法人案件' },
@@ -74,6 +76,7 @@ export async function setChargeCategory(chargeId: string, category: SalesCategor
  */
 export interface ManualSale {
   id: string;
+  parentSaleId?: string | null;
   amount: number;
   category: SalesCategoryId;
   customerName: string;
@@ -89,18 +92,59 @@ export async function getManualSales(startDate: string, endDate: string): Promis
 
   const [rows] = await client.query({
     query: `
+      WITH base_sales AS (
+        SELECT
+          id,
+          CAST(NULL AS STRING) AS parent_sale_id,
+          amount,
+          category,
+          customer_name,
+          payment_method,
+          note,
+          transaction_date,
+          payment_date,
+          created_at
+        FROM \`${PROJECT_ID}.${DATASET}.manual_sales\` sale
+        WHERE transaction_date BETWEEN @startDate AND @endDate
+          AND NOT EXISTS (
+            SELECT 1
+            FROM \`${PROJECT_ID}.${DATASET}.${MANUAL_SPLITS_TABLE}\` split
+            WHERE split.parent_sale_id = sale.id
+          )
+      ),
+      split_sales AS (
+        SELECT
+          split.split_id AS id,
+          split.parent_sale_id,
+          split.amount,
+          split.category,
+          COALESCE(NULLIF(split.customer_name, ''), parent.customer_name) AS customer_name,
+          parent.payment_method,
+          split.note,
+          parent.transaction_date,
+          parent.payment_date,
+          split.created_at
+        FROM \`${PROJECT_ID}.${DATASET}.${MANUAL_SPLITS_TABLE}\` split
+        JOIN \`${PROJECT_ID}.${DATASET}.manual_sales\` parent
+          ON parent.id = split.parent_sale_id
+        WHERE parent.transaction_date BETWEEN @startDate AND @endDate
+      )
       SELECT
         id,
+        parent_sale_id,
         amount,
         category,
         customer_name,
         payment_method,
         note,
-        CAST(transaction_date AS STRING) as transaction_date,
-        CAST(payment_date AS STRING) as payment_date,
-        CAST(created_at AS STRING) as created_at
-      FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
-      WHERE transaction_date BETWEEN @startDate AND @endDate
+        CAST(transaction_date AS STRING) AS transaction_date,
+        CAST(payment_date AS STRING) AS payment_date,
+        CAST(created_at AS STRING) AS created_at
+      FROM (
+        SELECT * FROM base_sales
+        UNION ALL
+        SELECT * FROM split_sales
+      )
       ORDER BY transaction_date DESC
     `,
     params: { startDate, endDate },
@@ -108,6 +152,7 @@ export async function getManualSales(startDate: string, endDate: string): Promis
 
   return (rows as Array<Record<string, unknown>>).map(row => ({
     id: String(row.id),
+    parentSaleId: row.parent_sale_id ? String(row.parent_sale_id) : null,
     amount: Number(row.amount),
     category: String(row.category) as SalesCategoryId,
     customerName: String(row.customer_name ?? ''),
@@ -117,6 +162,85 @@ export async function getManualSales(startDate: string, endDate: string): Promis
     paymentDate: row.payment_date ? String(row.payment_date) : null,
     createdAt: String(row.created_at),
   }));
+}
+
+export async function initManualSaleSplitsTable(): Promise<void> {
+  const client = createBigQueryClient(PROJECT_ID);
+  const table = client.dataset(DATASET).table(MANUAL_SPLITS_TABLE);
+  const [exists] = await table.exists();
+  if (exists) return;
+
+  await table.create({
+    schema: {
+      fields: [
+        { name: 'parent_sale_id', type: 'STRING', mode: 'REQUIRED' },
+        { name: 'split_id', type: 'STRING', mode: 'REQUIRED' },
+        { name: 'amount', type: 'INTEGER', mode: 'REQUIRED' },
+        { name: 'category', type: 'STRING', mode: 'REQUIRED' },
+        { name: 'customer_name', type: 'STRING' },
+        { name: 'note', type: 'STRING' },
+        { name: 'created_at', type: 'TIMESTAMP' },
+        { name: 'updated_at', type: 'TIMESTAMP' },
+      ],
+    },
+  });
+}
+
+export async function splitManualSale(
+  parentSaleId: string,
+  splits: Array<{
+    amount: number;
+    category: SalesCategoryId;
+    customerName?: string;
+    note?: string;
+  }>,
+): Promise<void> {
+  if (splits.length < 2) {
+    throw new Error('At least 2 split rows are required');
+  }
+  await initManualSaleSplitsTable();
+  const client = createBigQueryClient(PROJECT_ID);
+
+  const [parentRows] = await client.query({
+    query: `
+      SELECT amount
+      FROM \`${PROJECT_ID}.${DATASET}.manual_sales\`
+      WHERE id = @parentSaleId
+    `,
+    params: { parentSaleId },
+  });
+  const parentAmount = Number((parentRows as Array<{ amount: number }>)[0]?.amount ?? 0);
+  const splitTotal = splits.reduce((sum, split) => sum + split.amount, 0);
+  if (!parentAmount || parentAmount !== splitTotal) {
+    throw new Error(`Split total (${splitTotal}) must match parent amount (${parentAmount})`);
+  }
+
+  const values = splits
+    .map((_, index) =>
+      `(@parentSaleId, @splitId${index}, @amount${index}, @category${index}, @customerName${index}, @note${index}, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())`
+    )
+    .join(', ');
+  const params: Record<string, string | number> = { parentSaleId };
+  splits.forEach((split, index) => {
+    params[`splitId${index}`] = `split_${parentSaleId}_${index + 1}`;
+    params[`amount${index}`] = split.amount;
+    params[`category${index}`] = split.category;
+    params[`customerName${index}`] = split.customerName ?? '';
+    params[`note${index}`] = split.note ?? '';
+  });
+
+  await client.query({
+    query: `
+      BEGIN TRANSACTION;
+      DELETE FROM \`${PROJECT_ID}.${DATASET}.${MANUAL_SPLITS_TABLE}\`
+      WHERE parent_sale_id = @parentSaleId;
+      INSERT INTO \`${PROJECT_ID}.${DATASET}.${MANUAL_SPLITS_TABLE}\`
+        (parent_sale_id, split_id, amount, category, customer_name, note, created_at, updated_at)
+      VALUES ${values};
+      COMMIT TRANSACTION;
+    `,
+    params,
+  });
 }
 
 /**
@@ -153,6 +277,14 @@ export async function addManualSale(sale: Omit<ManualSale, 'id' | 'createdAt'>):
 export async function deleteManualSale(id: string): Promise<void> {
   const client = createBigQueryClient(PROJECT_ID);
 
+  if (id.startsWith('split_')) {
+    await client.query({
+      query: `DELETE FROM \`${PROJECT_ID}.${DATASET}.${MANUAL_SPLITS_TABLE}\` WHERE split_id = @id`,
+      params: { id },
+    });
+    return;
+  }
+
   await client.query({
     query: `DELETE FROM \`${PROJECT_ID}.${DATASET}.manual_sales\` WHERE id = @id`,
     params: { id },
@@ -168,6 +300,73 @@ export interface MfBankSale {
   customerName: string;
   note: string;
   transactionDate: string; // YYYY-MM-DD
+}
+
+const normalizeBankCustomerName = (value: string) =>
+  value.normalize('NFKC').toUpperCase().replace(/[\s　]+/g, '');
+
+const isBeConfidentCustomer = (value: string) =>
+  normalizeBankCustomerName(value).includes('BECONFIDENT');
+
+function getExplicitBankCategory(
+  customerName: string,
+  amount: number,
+): SalesCategoryId | null {
+  if (!isBeConfidentCustomer(customerName)) return null;
+  if (amount === 100000) return 'backend_performance';
+  if (amount === 33000) return 'backend_renewal';
+  return null;
+}
+
+/**
+ * 株式会社BE CONFIDENT（伊藤沙織さん）の133,000円入金は、
+ * 成果報酬100,000円＋継続33,000円として自動分割する。
+ * 既に分割済みの親売上は再作成しない。
+ */
+export async function applyRecurringManualSaleSplits(
+  sales: MfBankSale[],
+): Promise<number> {
+  const targets = sales.filter(
+    (sale) => sale.amount === 133000 && isBeConfidentCustomer(sale.customerName),
+  );
+  if (targets.length === 0) return 0;
+
+  await initManualSaleSplitsTable();
+  const client = createBigQueryClient(PROJECT_ID);
+  const parentSaleIds = targets.map((sale) => sale.id);
+  const [existingRows] = await client.query({
+    query: `
+      SELECT DISTINCT parent_sale_id
+      FROM \`${PROJECT_ID}.${DATASET}.${MANUAL_SPLITS_TABLE}\`
+      WHERE parent_sale_id IN UNNEST(@parentSaleIds)
+    `,
+    params: { parentSaleIds },
+  });
+  const existingIds = new Set(
+    (existingRows as Array<{ parent_sale_id: string }>).map((row) => row.parent_sale_id),
+  );
+
+  let splitCount = 0;
+  for (const sale of targets) {
+    if (existingIds.has(sale.id)) continue;
+    await splitManualSale(sale.id, [
+      {
+        amount: 100000,
+        category: 'backend_performance',
+        customerName: '伊藤沙織',
+        note: '株式会社BE CONFIDENT 成果報酬',
+      },
+      {
+        amount: 33000,
+        category: 'backend_renewal',
+        customerName: '伊藤沙織',
+        note: '株式会社BE CONFIDENT 継続',
+      },
+    ]);
+    splitCount += 1;
+  }
+
+  return splitCount;
 }
 
 export async function upsertMfBankSales(sales: MfBankSale[]): Promise<number> {
@@ -252,13 +451,16 @@ export async function autoCategorizeCharges(): Promise<number> {
 
   const sourceCTE = `
     WITH categorized_patterns AS (
-      SELECT DISTINCT
+      SELECT
         JSON_VALUE(c.metadata, '$."univapay-name"') as customer_name,
         c.charged_amount,
-        cc.category
+        ARRAY_AGG(DISTINCT cc.category LIMIT 1)[OFFSET(0)] AS category
       FROM \`${PROJECT_ID}.${DATASET}.charges\` c
       JOIN \`${PROJECT_ID}.${DATASET}.charge_categories\` cc ON c.id = cc.charge_id
       WHERE c.mode = 'live' AND c.status = 'successful'
+        AND JSON_VALUE(c.metadata, '$."univapay-name"') IS NOT NULL
+      GROUP BY customer_name, c.charged_amount
+      HAVING COUNT(DISTINCT cc.category) = 1
     )
     SELECT c.id as charge_id, cp.category
     FROM \`${PROJECT_ID}.${DATASET}.charges\` c
@@ -313,10 +515,20 @@ export async function autoCategorizeManualSales(): Promise<number> {
   const patterns = patternRows as Array<{ customer_name: string; amount: number; category: string }>;
   if (patterns.length === 0) return 0;
 
-  // 顧客名+金額の完全一致ルール
-  const exactRules = new Map<string, string>();
+  // 顧客名+金額の完全一致ルール。同じ組み合わせに複数カテゴリーがある場合は自動判定しない。
+  const exactCategories = new Map<string, Set<string>>();
   for (const p of patterns) {
-    exactRules.set(`${p.customer_name}|${p.amount}`, p.category);
+    const key = `${p.customer_name}|${p.amount}`;
+    if (!exactCategories.has(key)) {
+      exactCategories.set(key, new Set());
+    }
+    exactCategories.get(key)!.add(p.category);
+  }
+  const exactRules = new Map<string, string>();
+  for (const [key, categories] of exactCategories) {
+    if (categories.size === 1) {
+      exactRules.set(key, [...categories][0]);
+    }
   }
 
   // 顧客名のみルール（カテゴリが1種類だけの顧客）
@@ -349,7 +561,10 @@ export async function autoCategorizeManualSales(): Promise<number> {
   const updates: Array<{ id: string; category: string }> = [];
   for (const row of uncategorized) {
     const exactKey = `${row.customer_name}|${row.amount}`;
-    const category = exactRules.get(exactKey) ?? nameOnlyRules.get(row.customer_name);
+    const category =
+      getExplicitBankCategory(row.customer_name, row.amount) ??
+      exactRules.get(exactKey) ??
+      nameOnlyRules.get(row.customer_name);
     if (category) {
       updates.push({ id: row.id, category });
     }
@@ -391,6 +606,37 @@ export async function updateManualSale(
     }>
 ): Promise<void> {
   const client = createBigQueryClient(PROJECT_ID);
+
+  if (id.startsWith('split_')) {
+    const splitSetClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
+    const splitParams: Record<string, unknown> = { id };
+    if (updates.customerName !== undefined) {
+      splitSetClauses.push('customer_name = @customerName');
+      splitParams.customerName = updates.customerName;
+    }
+    if (updates.amount !== undefined) {
+      splitSetClauses.push('amount = @amount');
+      splitParams.amount = updates.amount;
+    }
+    if (updates.category !== undefined) {
+      splitSetClauses.push('category = @category');
+      splitParams.category = updates.category;
+    }
+    if (updates.note !== undefined) {
+      splitSetClauses.push('note = @note');
+      splitParams.note = updates.note;
+    }
+
+    await client.query({
+      query: `
+        UPDATE \`${PROJECT_ID}.${DATASET}.${MANUAL_SPLITS_TABLE}\`
+        SET ${splitSetClauses.join(', ')}
+        WHERE split_id = @id
+      `,
+      params: splitParams,
+    });
+    return;
+  }
 
   const setClauses: string[] = ['updated_at = CURRENT_TIMESTAMP()'];
   const params: Record<string, unknown> = { id };

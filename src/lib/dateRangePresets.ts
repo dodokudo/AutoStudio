@@ -12,19 +12,21 @@ export type UnifiedRangePreset =
   | '30d'
   | 'last-month'
   | '90d'
+  | 'last-year'
+  | 'this-year'
   | 'all'
   | 'custom';
 
 export const UNIFIED_RANGE_OPTIONS: Array<{ value: UnifiedRangePreset; label: string }> = [
   { value: '1d', label: '昨日' },
-  { value: '3d', label: '過去3日' },
   { value: 'this-week', label: '今週' },
   { value: '7d', label: '過去7日' },
   { value: 'last-week', label: '先週' },
   { value: 'this-month', label: '今月' },
   { value: '30d', label: '過去30日' },
   { value: 'last-month', label: '先月' },
-  { value: '90d', label: '過去90日' },
+  { value: 'last-year', label: '去年' },
+  { value: 'this-year', label: '今年' },
   { value: 'all', label: '全期間' },
   { value: 'custom', label: 'カスタム' },
 ];
@@ -152,6 +154,17 @@ export function resolveDateRange(
     case '90d': {
       const start = toStartOfDay(addDays(anchor, -89));
       return { start, end: endOfAnchor, preset };
+    }
+    case 'last-year': {
+      const year = today.getFullYear() - 1;
+      const start = toStartOfDay(new Date(year, 0, 1));
+      const end = toEndOfDay(new Date(year, 11, 31));
+      return { start, end, preset };
+    }
+    case 'this-year': {
+      const start = toStartOfDay(new Date(today.getFullYear(), 0, 1));
+      const end = endOfAnchor < start ? toEndOfDay(today) : endOfAnchor;
+      return { start, end, preset };
     }
     case 'all': {
       const start = new Date('2000-01-01T00:00:00');

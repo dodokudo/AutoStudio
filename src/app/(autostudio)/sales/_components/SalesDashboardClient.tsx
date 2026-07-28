@@ -23,6 +23,7 @@ import {
 const SALES_CATEGORIES = [
   { id: 'frontend', label: 'フロントエンド', color: '#3b82f6' },
   { id: 'backend', label: 'バックエンド', color: '#10b981' },
+  { id: 'backend_performance', label: 'バックエンド成果報酬', color: '#06b6d4' },
   { id: 'backend_renewal', label: 'バックエンド継続', color: '#8b5cf6' },
   { id: 'analyca', label: 'ANALYCA', color: '#f59e0b' },
   { id: 'corporate', label: '法人案件', color: '#ec4899' },
@@ -61,9 +62,30 @@ const toLocalDateKey = (date: Date) => {
   return `${y}-${m}-${d}`;
 };
 
+const toLocalMonthKey = (date: Date) => toLocalDateKey(date).slice(0, 7);
+
+const formatJapanDate = (date: Date) =>
+  date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
+
+const addMonthsClamped = (date: Date, months: number) => {
+  const result = new Date(date);
+  const originalDay = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + months);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(originalDay, lastDay));
+  return result;
+};
+
+const getSixMonthContractEnd = (lastRenewalDate: Date) =>
+  addMonthsClamped(lastRenewalDate, 6);
+
 const isJapaneseHoliday = (date: Date) => JP_HOLIDAYS.has(toLocalDateKey(date));
 
 type SalesCategoryId = typeof SALES_CATEGORIES[number]['id'];
+type SalesDashboardView = 'main' | 'courses' | 'frontend' | 'backend';
+type BuyerSort = 'purchase_recent' | 'purchase_oldest' | 'ltv_desc';
+type MonthlyMetric = 'amount' | 'count';
 
 interface Charge {
   id: string;
@@ -91,12 +113,142 @@ interface TransactionGroup {
   items: Array<{ itemType: 'charge' | 'manual'; itemId: string }>;
 }
 
+type CustomerStatus = 'contracting' | 'active' | 'paused' | 'cancelled' | 'needs_review';
+
+const CUSTOMER_STATUS_OPTIONS: Array<{ id: CustomerStatus; label: string }> = [
+  { id: 'contracting', label: '初回契約中' },
+  { id: 'active', label: '継続中' },
+  { id: 'paused', label: '休止' },
+  { id: 'cancelled', label: '解約' },
+  { id: 'needs_review', label: '要確認' },
+];
+
+interface CustomerProfile {
+  customerKey: string;
+  displayName: string;
+  status: CustomerStatus;
+  courseName: string;
+  lineDisplayName: string;
+  aliases: string[];
+  updatedAt: string;
+}
+
+interface GroupedPurchase {
+  id: string;
+  date: Date;
+  amount: number;
+  category: SalesCategoryId;
+  customerName: string;
+  source: string;
+  paymentMethod: string;
+  itemCount: number;
+}
+
+const normalizeCustomerKey = (value: string) =>
+  value
+    .normalize('NFKC')
+    .toLocaleLowerCase('ja-JP')
+    .replace(/[\s　]+/g, '')
+    .trim();
+
+function buildGroupedPurchases(
+  charges: Charge[],
+  categories: Record<string, string>,
+  manualSales: ManualSale[],
+  groups: TransactionGroup[],
+): GroupedPurchase[] {
+  const rows: Array<GroupedPurchase & { itemType: 'charge' | 'manual' }> = [];
+
+  for (const charge of charges) {
+    if (charge.status !== 'successful') continue;
+    rows.push({
+      id: charge.id,
+      date: new Date(charge.created_on),
+      amount: charge.charged_amount,
+      category: (categories[charge.id] ?? 'other') as SalesCategoryId,
+      customerName: charge.metadata?.['univapay-name'] ?? '-',
+      source: 'UnivaPay',
+      paymentMethod: 'クレジットカード',
+      itemCount: 1,
+      itemType: 'charge',
+    });
+  }
+
+  for (const sale of manualSales) {
+    rows.push({
+      id: sale.id,
+      date: new Date(`${sale.transactionDate}T00:00:00`),
+      amount: sale.amount,
+      category: sale.category ?? 'other',
+      customerName: sale.customerName || '-',
+      source: '手動入力',
+      paymentMethod: sale.paymentMethod,
+      itemCount: 1,
+      itemType: 'manual',
+    });
+  }
+
+  const rowByKey = new Map(rows.map((row) => [`${row.itemType}:${row.id}`, row]));
+  const groupByItemKey = new Map<string, TransactionGroup>();
+  for (const group of groups) {
+    for (const item of group.items) {
+      groupByItemKey.set(`${item.itemType}:${item.itemId}`, group);
+    }
+  }
+
+  const processed = new Set<string>();
+  const result: GroupedPurchase[] = [];
+
+  for (const row of rows) {
+    const rowKey = `${row.itemType}:${row.id}`;
+    if (processed.has(rowKey)) continue;
+    const group = groupByItemKey.get(rowKey);
+
+    if (!group) {
+      processed.add(rowKey);
+      result.push(row);
+      continue;
+    }
+
+    const groupRows = group.items
+      .map((item) => rowByKey.get(`${item.itemType}:${item.itemId}`))
+      .filter((item): item is GroupedPurchase & { itemType: 'charge' | 'manual' } => Boolean(item));
+
+    if (groupRows.length === 0) continue;
+    for (const item of groupRows) {
+      processed.add(`${item.itemType}:${item.id}`);
+    }
+
+    const customerName =
+      group.name.trim() ||
+      groupRows.find((item) => item.customerName !== '-')?.customerName ||
+      '-';
+    const category =
+      groupRows.find((item) => item.category !== 'other')?.category ??
+      groupRows[0].category;
+
+    result.push({
+      id: group.id,
+      date: new Date(Math.min(...groupRows.map((item) => item.date.getTime()))),
+      amount: groupRows.reduce((sum, item) => sum + item.amount, 0),
+      category,
+      customerName,
+      source: 'グループ',
+      paymentMethod: [...new Set(groupRows.map((item) => item.paymentMethod))].join(' + '),
+      itemCount: groupRows.length,
+    });
+  }
+
+  return result.sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
 interface LineDailyRegistration {
   date: string;
   registrations: number;
 }
 
 interface SalesDashboardClientProps {
+  view?: SalesDashboardView;
   initialData: {
     summary: {
       totalAmount: number;
@@ -113,6 +265,7 @@ interface SalesDashboardClientProps {
     categories: Record<string, string>;
     manualSales: ManualSale[];
     groups?: TransactionGroup[];
+    customerProfiles?: CustomerProfile[];
     lineDailyRegistrations?: LineDailyRegistration[];
     monthlyData?: {
       charges: Charge[];
@@ -122,11 +275,17 @@ interface SalesDashboardClientProps {
       rangeStart: string;
       rangeEnd: string;
     };
+    customerData?: {
+      charges: Charge[];
+      categories: Record<string, string>;
+      manualSales: ManualSale[];
+      groups?: TransactionGroup[];
+    };
     deferred?: boolean;
   };
 }
 
-export function SalesDashboardClient({ initialData }: SalesDashboardClientProps) {
+export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashboardClientProps) {
   const [fullData, setFullData] = useState<typeof initialData | null>(initialData.deferred ? null : initialData);
   const [summaryState, setSummaryState] = useState(initialData.summary);
   const { dateRange } = initialData;
@@ -169,6 +328,10 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
   const [groups, setGroups] = useState<TransactionGroup[]>(initialData.groups ?? []);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isGrouping, setIsGrouping] = useState(false);
+  const [customerProfiles, setCustomerProfiles] = useState<CustomerProfile[]>(
+    initialData.customerProfiles ?? []
+  );
+  const [savingCustomerKey, setSavingCustomerKey] = useState<string | null>(null);
 
   // 顧客名編集機能
   const [editingCustomerName, setEditingCustomerName] = useState<string | null>(null);
@@ -176,6 +339,8 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
   // 月別売上推移の期間フィルタ
   const [monthlyRangeMonths, setMonthlyRangeMonths] = useState<3 | 6 | 12>(12);
+  const [monthlyMetric, setMonthlyMetric] = useState<MonthlyMetric>('amount');
+  const [buyerSort, setBuyerSort] = useState<BuyerSort>('purchase_recent');
 
   // 期間変更時に初期データを同期
   useEffect(() => {
@@ -183,6 +348,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     setCategories(source.categories as Record<string, SalesCategoryId>);
     setManualSales(source.manualSales);
     setGroups(source.groups ?? []);
+    setCustomerProfiles(source.customerProfiles ?? []);
     setSelectedItems(new Set());
     setEditingCustomerName(null);
   }, [fullData, initialData]);
@@ -193,7 +359,10 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
     const loadSummary = async () => {
       try {
-        const res = await fetch(`/api/sales/summary?start=${dateRange.from}&end=${dateRange.to}`);
+        const res = await fetch(
+          `/api/sales/summary?start=${dateRange.from}&end=${dateRange.to}`,
+          { cache: 'no-store' },
+        );
         if (!res.ok) return;
         const payload = await res.json();
         if (!canceled && payload?.data) {
@@ -206,7 +375,10 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
 
     const loadFull = async () => {
       try {
-        const res = await fetch(`/api/sales/dashboard?start=${dateRange.from}&end=${dateRange.to}`);
+        const res = await fetch(
+          `/api/sales/dashboard?start=${dateRange.from}&end=${dateRange.to}`,
+          { cache: 'no-store' },
+        );
         if (!res.ok) return;
         const payload = await res.json();
         if (!canceled && payload?.data) {
@@ -334,6 +506,31 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       setEditingCustomerName(null);
     } catch (error) {
       console.error('Failed to update customer name:', error);
+    }
+  }, []);
+
+  const handleCustomerProfileUpdate = useCallback(async (profile: CustomerProfile) => {
+    setSavingCustomerKey(profile.customerKey);
+    setCustomerProfiles((current) => {
+      const exists = current.some((item) => item.customerKey === profile.customerKey);
+      return exists
+        ? current.map((item) => item.customerKey === profile.customerKey ? profile : item)
+        : [...current, profile];
+    });
+
+    try {
+      const response = await fetch('/api/sales/customers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update customer profile');
+      }
+    } catch (error) {
+      console.error('Failed to update customer profile:', error);
+    } finally {
+      setSavingCustomerKey(null);
     }
   }, []);
 
@@ -641,6 +838,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
       frontend: { amount: 0, count: 0 },
       backend: { amount: 0, count: 0 },
+      backend_performance: { amount: 0, count: 0 },
       backend_renewal: { amount: 0, count: 0 },
       analyca: { amount: 0, count: 0 },
       corporate: { amount: 0, count: 0 },
@@ -799,6 +997,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       month: string;
       frontend: number;
       backend: number;
+      backend_performance: number;
       backend_renewal: number;
       analyca: number;
       corporate: number;
@@ -813,6 +1012,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
         month: key,
         frontend: 0,
         backend: 0,
+        backend_performance: 0,
         backend_renewal: 0,
         analyca: 0,
         corporate: 0,
@@ -853,10 +1053,451 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     return monthlySales.slice(-monthlyRangeMonths);
   }, [monthlySales, monthlyRangeMonths]);
 
+  const segmentCategories = useMemo(() => {
+    if (view === 'frontend') {
+      return SALES_CATEGORIES.filter((category) => category.id === 'frontend');
+    }
+    if (view === 'backend') {
+      return SALES_CATEGORIES.filter((category) =>
+        ['backend', 'backend_performance', 'backend_renewal'].includes(category.id)
+      );
+    }
+    if (view === 'courses') {
+      return SALES_CATEGORIES.filter((category) =>
+        ['frontend', 'backend', 'backend_performance', 'backend_renewal'].includes(category.id)
+      );
+    }
+    return [];
+  }, [view]);
+
+  const segmentMonthlySales = useMemo(() => {
+    if (view === 'main') return [];
+    return monthlySalesFiltered.map((row) => ({
+      ...row,
+      total: segmentCategories.reduce((sum, category) => sum + row[category.id], 0),
+    }));
+  }, [monthlySalesFiltered, segmentCategories, view]);
+
+  const monthlyGroupedPurchases = useMemo(() => {
+    const monthlyData = fullData?.monthlyData ?? initialData.monthlyData;
+    if (!monthlyData) return [];
+    return buildGroupedPurchases(
+      monthlyData.charges,
+      {
+        ...(fullData?.categories ?? initialData.categories),
+        ...monthlyData.categories,
+      },
+      monthlyData.manualSales,
+      monthlyData.groups ?? fullData?.groups ?? initialData.groups ?? [],
+    );
+  }, [fullData, initialData]);
+
+  const segmentPurchases = useMemo(() => {
+    if (view === 'main') return [];
+    const targetCategoryIds = new Set(segmentCategories.map((category) => category.id));
+    const visibleMonths = new Set(segmentMonthlySales.map((row) => row.month));
+    const toMonthKey = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+    return monthlyGroupedPurchases.filter(
+      (purchase) =>
+        targetCategoryIds.has(purchase.category) &&
+        visibleMonths.has(toMonthKey(purchase.date))
+    );
+  }, [monthlyGroupedPurchases, segmentCategories, segmentMonthlySales, view]);
+
+  const segmentMonthlyCounts = useMemo(() => {
+    const rows = segmentMonthlySales.map((row) => {
+      const counts = Object.fromEntries(
+        segmentCategories.map((category) => [category.id, 0])
+      ) as Record<SalesCategoryId, number>;
+      return { month: row.month, ...counts, total: 0 };
+    });
+    const rowByMonth = new Map(rows.map((row) => [row.month, row]));
+
+    for (const purchase of segmentPurchases) {
+      const month = toLocalMonthKey(purchase.date);
+      const row = rowByMonth.get(month);
+      if (!row) continue;
+      row[purchase.category] += 1;
+      row.total += 1;
+    }
+
+    return rows;
+  }, [segmentCategories, segmentMonthlySales, segmentPurchases]);
+
+  const monthlyLineRegistrations = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const row of fullData?.lineDailyRegistrations ?? initialData.lineDailyRegistrations ?? []) {
+      const month = row.date.slice(0, 7);
+      totals.set(month, (totals.get(month) ?? 0) + row.registrations);
+    }
+    return totals;
+  }, [fullData, initialData.lineDailyRegistrations]);
+
+  const segmentMonthlyChartDataBase = useMemo(() => {
+    const baseRows = monthlyMetric === 'count' ? segmentMonthlyCounts : segmentMonthlySales;
+    if (view !== 'frontend') return baseRows;
+
+    const countsByMonth = new Map(
+      segmentMonthlyCounts.map((row) => [row.month, row.frontend])
+    );
+    return baseRows.map((row) => {
+      const purchaseCount = countsByMonth.get(row.month) ?? 0;
+      const lineRegistrations = monthlyLineRegistrations.get(row.month) ?? 0;
+      return {
+        ...row,
+        purchaseCount,
+        lineRegistrations,
+      };
+    });
+  }, [
+    monthlyLineRegistrations,
+    monthlyMetric,
+    segmentMonthlyCounts,
+    segmentMonthlySales,
+    view,
+  ]);
+
+  const segmentTotalAmount = useMemo(
+    () => segmentMonthlySales.reduce((sum, row) => sum + row.total, 0),
+    [segmentMonthlySales]
+  );
+
+  const courseSalesBreakdown = useMemo(
+    () =>
+      segmentMonthlySales.reduce(
+        (totals, row) => ({
+          frontend: totals.frontend + row.frontend,
+          backend: totals.backend + row.backend + row.backend_performance,
+          renewal: totals.renewal + row.backend_renewal,
+        }),
+        { frontend: 0, backend: 0, renewal: 0 }
+      ),
+    [segmentMonthlySales]
+  );
+
+  const allTimeCoursePurchases = useMemo(() => {
+    const customerData = fullData?.customerData ?? initialData.customerData;
+    const rows = customerData
+      ? buildGroupedPurchases(
+          customerData.charges,
+          customerData.categories,
+          customerData.manualSales,
+          customerData.groups ?? fullData?.groups ?? initialData.groups ?? [],
+        )
+      : monthlyGroupedPurchases;
+    return rows.filter((purchase) =>
+      ['frontend', 'backend', 'backend_performance', 'backend_renewal'].includes(purchase.category)
+    );
+  }, [fullData, initialData, monthlyGroupedPurchases]);
+
+  const buyerSummaries = useMemo(() => {
+    const aliasToProfile = new Map<string, CustomerProfile>();
+    for (const profile of customerProfiles) {
+      aliasToProfile.set(normalizeCustomerKey(profile.customerKey), profile);
+      aliasToProfile.set(normalizeCustomerKey(profile.displayName), profile);
+      for (const alias of profile.aliases) {
+        aliasToProfile.set(normalizeCustomerKey(alias), profile);
+      }
+    }
+
+    type SummaryAccumulator = {
+      customerKey: string;
+      displayName: string;
+      profile: CustomerProfile | null;
+      ltv: number;
+      purchaseCount: number;
+      frontendAmount: number;
+      frontendPurchaseCount: number;
+      backendAmount: number;
+      backendPurchaseCount: number;
+      lastPurchaseDate: Date;
+      firstFrontendDate: Date | null;
+      lastRenewalDate: Date | null;
+      renewalStartDate: Date | null;
+      renewalMonthKeys: Set<string>;
+      firstBackendDate: Date | null;
+      categories: Set<SalesCategoryId>;
+    };
+    const map = new Map<string, SummaryAccumulator>();
+
+    for (const purchase of allTimeCoursePurchases) {
+      if (!purchase.customerName || purchase.customerName === '-') continue;
+      const normalizedName = normalizeCustomerKey(purchase.customerName);
+      const matchedProfile = aliasToProfile.get(normalizedName) ?? null;
+      const customerKey = matchedProfile?.customerKey ?? normalizedName;
+      const existing = map.get(customerKey);
+      const isFrontendPurchase = purchase.category === 'frontend';
+      const isInitialBackendPurchase = ['backend', 'backend_performance'].includes(purchase.category);
+      const isBackendPurchase = isInitialBackendPurchase || purchase.category === 'backend_renewal';
+
+      if (existing) {
+        existing.ltv += purchase.amount;
+        existing.purchaseCount += 1;
+        if (isFrontendPurchase) {
+          existing.frontendAmount += purchase.amount;
+          existing.frontendPurchaseCount += 1;
+        }
+        if (isBackendPurchase) {
+          existing.backendAmount += purchase.amount;
+          existing.backendPurchaseCount += 1;
+        }
+        existing.categories.add(purchase.category);
+        if (purchase.date > existing.lastPurchaseDate) {
+          existing.lastPurchaseDate = purchase.date;
+        }
+        if (
+          isFrontendPurchase &&
+          (!existing.firstFrontendDate || purchase.date < existing.firstFrontendDate)
+        ) {
+          existing.firstFrontendDate = purchase.date;
+        }
+        if (
+          purchase.category === 'backend_renewal' &&
+          (!existing.lastRenewalDate || purchase.date > existing.lastRenewalDate)
+        ) {
+          existing.lastRenewalDate = purchase.date;
+        }
+        if (
+          purchase.category === 'backend_renewal' &&
+          (!existing.renewalStartDate || purchase.date < existing.renewalStartDate)
+        ) {
+          existing.renewalStartDate = purchase.date;
+        }
+        if (purchase.category === 'backend_renewal') {
+          existing.renewalMonthKeys.add(toLocalMonthKey(purchase.date));
+        }
+        if (
+          isInitialBackendPurchase &&
+          (!existing.firstBackendDate || purchase.date < existing.firstBackendDate)
+        ) {
+          existing.firstBackendDate = purchase.date;
+        }
+        continue;
+      }
+
+      map.set(customerKey, {
+        customerKey,
+        displayName: matchedProfile?.displayName || purchase.customerName,
+        profile: matchedProfile,
+        ltv: purchase.amount,
+        purchaseCount: 1,
+        frontendAmount: isFrontendPurchase ? purchase.amount : 0,
+        frontendPurchaseCount: isFrontendPurchase ? 1 : 0,
+        backendAmount: isBackendPurchase ? purchase.amount : 0,
+        backendPurchaseCount: isBackendPurchase ? 1 : 0,
+        lastPurchaseDate: purchase.date,
+        firstFrontendDate: isFrontendPurchase ? purchase.date : null,
+        lastRenewalDate: purchase.category === 'backend_renewal' ? purchase.date : null,
+        renewalStartDate: purchase.category === 'backend_renewal' ? purchase.date : null,
+        renewalMonthKeys: new Set(
+          purchase.category === 'backend_renewal' ? [toLocalMonthKey(purchase.date)] : []
+        ),
+        firstBackendDate: isInitialBackendPurchase ? purchase.date : null,
+        categories: new Set([purchase.category]),
+      });
+    }
+
+    const now = new Date();
+
+    return Array.from(map.values()).map((summary) => {
+      const hasFrontend = summary.categories.has('frontend');
+      const hasInitialBackend =
+        summary.categories.has('backend') ||
+        summary.categories.has('backend_performance');
+      const hasBackend = hasInitialBackend || summary.categories.has('backend_renewal');
+      const initialContractEndDate = summary.firstBackendDate
+        ? addMonthsClamped(summary.firstBackendDate, 6)
+        : null;
+      const renewalContractEndDate = summary.lastRenewalDate
+        ? getSixMonthContractEnd(summary.lastRenewalDate)
+        : null;
+      const inferredStatus: CustomerStatus =
+        renewalContractEndDate && renewalContractEndDate >= now
+          ? 'active'
+          : !summary.lastRenewalDate && initialContractEndDate && initialContractEndDate >= now
+            ? 'contracting'
+            : hasBackend
+              ? 'cancelled'
+              : 'needs_review';
+      const status = summary.profile?.status ?? inferredStatus;
+      const nextContractEndDate = renewalContractEndDate ?? initialContractEndDate;
+
+      return {
+        ...summary,
+        categories: Array.from(summary.categories),
+        renewalMonths: summary.renewalMonthKeys.size,
+        nextContractEndDate,
+        hasFrontend,
+        hasInitialBackend,
+        hasBackend,
+        status,
+        courseName: summary.profile?.courseName ?? '',
+        lineDisplayName: summary.profile?.lineDisplayName ?? '',
+        aliases: summary.profile?.aliases ?? [],
+      };
+    });
+  }, [allTimeCoursePurchases, customerProfiles]);
+
+  const frontendFirstBuyerCountsByMonth = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const buyer of buyerSummaries) {
+      if (!buyer.firstFrontendDate) continue;
+      const month = toLocalMonthKey(buyer.firstFrontendDate);
+      counts.set(month, (counts.get(month) ?? 0) + 1);
+    }
+    return counts;
+  }, [buyerSummaries]);
+
+  const segmentMonthlyChartData = useMemo(() => {
+    if (view !== 'frontend') return segmentMonthlyChartDataBase;
+    return segmentMonthlyChartDataBase.map((row) => {
+      const lineRegistrations = Number(
+        'lineRegistrations' in row ? row.lineRegistrations : 0
+      );
+      const firstBuyerCount = frontendFirstBuyerCountsByMonth.get(row.month) ?? 0;
+      return {
+        ...row,
+        firstBuyerCount,
+        frontendCvr:
+          lineRegistrations > 0 ? (firstBuyerCount / lineRegistrations) * 100 : null,
+      };
+    });
+  }, [frontendFirstBuyerCountsByMonth, segmentMonthlyChartDataBase, view]);
+
+  const backendBuyerCount = useMemo(
+    () => buyerSummaries.filter((buyer) => buyer.hasInitialBackend).length,
+    [buyerSummaries]
+  );
+
+  const frontendBuyerCount = useMemo(
+    () => buyerSummaries.filter((buyer) => buyer.hasFrontend).length,
+    [buyerSummaries]
+  );
+
+  const frontendAllTimeAmount = useMemo(
+    () =>
+      allTimeCoursePurchases
+        .filter((purchase) => purchase.category === 'frontend')
+        .reduce((sum, purchase) => sum + purchase.amount, 0),
+    [allTimeCoursePurchases]
+  );
+
+  const allTimeLineRegistrations = useMemo(
+    () =>
+      (fullData?.lineDailyRegistrations ?? initialData.lineDailyRegistrations ?? [])
+        .reduce((sum, row) => sum + row.registrations, 0),
+    [fullData, initialData.lineDailyRegistrations]
+  );
+
+  const lineRegistrationCoverage = useMemo(() => {
+    const rows = fullData?.lineDailyRegistrations ?? initialData.lineDailyRegistrations ?? [];
+    if (rows.length === 0) return null;
+    const dates = rows.map((row) => row.date).sort();
+    return { start: dates[0], end: dates[dates.length - 1] };
+  }, [fullData, initialData.lineDailyRegistrations]);
+
+  const measuredFrontendBuyerCount = useMemo(() => {
+    if (!lineRegistrationCoverage) return 0;
+    return buyerSummaries.filter((buyer) => {
+      if (!buyer.firstFrontendDate) return false;
+      const date = toLocalDateKey(buyer.firstFrontendDate);
+      return date >= lineRegistrationCoverage.start && date <= lineRegistrationCoverage.end;
+    }).length;
+  }, [buyerSummaries, lineRegistrationCoverage]);
+
+  const frontendCvr = allTimeLineRegistrations > 0
+    ? (measuredFrontendBuyerCount / allTimeLineRegistrations) * 100
+    : null;
+
+  const visibleBuyerSummaries = useMemo(() => {
+    return buyerSummaries
+      .filter((buyer) => {
+        if (view === 'frontend') return buyer.hasFrontend;
+        if (view === 'backend') return buyer.hasBackend;
+        return true;
+      })
+      .sort((a, b) => {
+        if (buyerSort === 'ltv_desc') {
+          return b.ltv - a.ltv;
+        }
+
+        const aDate = view === 'frontend'
+          ? a.firstFrontendDate
+          : view === 'backend'
+            ? a.firstBackendDate
+            : a.lastPurchaseDate;
+        const bDate = view === 'frontend'
+          ? b.firstFrontendDate
+          : view === 'backend'
+            ? b.firstBackendDate
+            : b.lastPurchaseDate;
+        const missingDate = buyerSort === 'purchase_recent'
+          ? Number.MIN_SAFE_INTEGER
+          : Number.MAX_SAFE_INTEGER;
+        const aTime = aDate?.getTime() ?? missingDate;
+        const bTime = bDate?.getTime() ?? missingDate;
+        return buyerSort === 'purchase_recent' ? bTime - aTime : aTime - bTime;
+      });
+  }, [buyerSort, buyerSummaries, view]);
+
+  const unmatchedCoursePurchases = useMemo(() => {
+    return allTimeCoursePurchases
+      .filter((purchase) => {
+        if (purchase.customerName !== '-') return false;
+        if (view === 'frontend') return purchase.category === 'frontend';
+        if (view === 'backend') {
+          return ['backend', 'backend_performance', 'backend_renewal'].includes(purchase.category);
+        }
+        return true;
+      })
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [allTimeCoursePurchases, view]);
+
+  const activeRenewalCount = useMemo(
+    () => buyerSummaries.filter((buyer) => buyer.hasBackend && buyer.status === 'active').length,
+    [buyerSummaries]
+  );
+
+  const courseMetrics = useMemo(() => {
+    const conversionCutoff = new Date('2025-11-01T00:00:00+09:00');
+    const allFrontendBuyers = buyerSummaries.filter((buyer) => buyer.hasFrontend);
+    const conversionFrontendBuyers = buyerSummaries.filter(
+      (buyer) =>
+        buyer.hasFrontend &&
+        buyer.firstFrontendDate !== null &&
+        buyer.firstFrontendDate >= conversionCutoff
+    );
+    const backendBuyers = buyerSummaries.filter((buyer) => buyer.hasInitialBackend);
+    const convertedBuyers = buyerSummaries.filter(
+      (buyer) =>
+        buyer.hasFrontend &&
+        buyer.hasInitialBackend &&
+        buyer.firstFrontendDate !== null &&
+        buyer.firstFrontendDate >= conversionCutoff &&
+        buyer.firstBackendDate !== null &&
+        buyer.firstBackendDate >= conversionCutoff
+    );
+    const averageLtv = buyerSummaries.length > 0
+      ? Math.round(buyerSummaries.reduce((sum, buyer) => sum + buyer.ltv, 0) / buyerSummaries.length)
+      : 0;
+
+    return {
+      frontendBuyerCount: allFrontendBuyers.length,
+      backendBuyerCount: backendBuyers.length,
+      frontendToBackendRate: conversionFrontendBuyers.length > 0
+        ? (convertedBuyers.length / conversionFrontendBuyers.length) * 100
+        : null,
+      averageLtv,
+    };
+  }, [buyerSummaries]);
+
   const monthlySalesTotals = useMemo(() => {
     const totals = {
       frontend: 0,
       backend: 0,
+      backend_performance: 0,
       backend_renewal: 0,
       analyca: 0,
       corporate: 0,
@@ -866,6 +1507,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     for (const row of monthlySalesFiltered) {
       totals.frontend += row.frontend;
       totals.backend += row.backend;
+      totals.backend_performance += row.backend_performance;
       totals.backend_renewal += row.backend_renewal;
       totals.analyca += row.analyca;
       totals.corporate += row.corporate;
@@ -927,6 +1569,7 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
     const stats: Record<SalesCategoryId, { amount: number; count: number }> = {
       frontend: { amount: 0, count: 0 },
       backend: { amount: 0, count: 0 },
+      backend_performance: { amount: 0, count: 0 },
       backend_renewal: { amount: 0, count: 0 },
       analyca: { amount: 0, count: 0 },
       corporate: { amount: 0, count: 0 },
@@ -1086,6 +1729,598 @@ export function SalesDashboardClient({ initialData }: SalesDashboardClientProps)
       currentMonthKey,
     };
   }, [displayTransactions, manualSales, dateRange.from, dateRange.to, fullData, initialData.cashflowCharges, charges]);
+
+  if (view !== 'main') {
+    const viewLabel =
+      view === 'frontend' ? 'フロントエンド' : view === 'backend' ? 'バックエンド' : '講座';
+    return (
+      <>
+        <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+          'xl:grid-cols-4'
+        }`}>
+          <Card className="p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+              {viewLabel}売上
+            </p>
+            <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+              ¥{numberFormatter.format(view === 'frontend' ? frontendAllTimeAmount : segmentTotalAmount)}
+            </p>
+          </Card>
+          {view === 'courses' ? (
+            <>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  フロント売上
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  ¥{numberFormatter.format(courseSalesBreakdown.frontend)}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  バックエンド売上
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  ¥{numberFormatter.format(courseSalesBreakdown.backend)}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  バックエンド継続売上
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  ¥{numberFormatter.format(courseSalesBreakdown.renewal)}
+                </p>
+              </Card>
+            </>
+          ) : null}
+          {view === 'frontend' ? (
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                フロント購入者
+              </p>
+              <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                {numberFormatter.format(frontendBuyerCount)}人
+              </p>
+            </Card>
+          ) : null}
+          {view === 'backend' ? (
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                バックエンド購入者数
+              </p>
+              <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                {numberFormatter.format(backendBuyerCount)}人
+              </p>
+            </Card>
+          ) : null}
+          {view === 'frontend' ? (
+            <>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  LINE新規登録
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  {numberFormatter.format(allTimeLineRegistrations)}人
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  期間対応フロントCVR
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  {frontendCvr === null ? '—' : `${frontendCvr.toFixed(1)}%`}
+                </p>
+              </Card>
+            </>
+          ) : null}
+          {view === 'backend' ? (
+            <Card className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                現在の継続人数
+              </p>
+              <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                {numberFormatter.format(activeRenewalCount)}人
+              </p>
+            </Card>
+          ) : null}
+          {view === 'courses' ? (
+            <>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  フロント購入者
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  {numberFormatter.format(courseMetrics.frontendBuyerCount)}人
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  バックエンド購入者
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  {numberFormatter.format(courseMetrics.backendBuyerCount)}人
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  フロント→バック転換率
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  {courseMetrics.frontendToBackendRate === null
+                    ? '—'
+                    : `${courseMetrics.frontendToBackendRate.toFixed(1)}%`}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  平均LTV
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  ¥{numberFormatter.format(courseMetrics.averageLtv)}
+                </p>
+              </Card>
+            </>
+          ) : null}
+        </div>
+
+        <Card className="p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+                月別 売上推移
+              </h2>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex gap-1 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-1 text-xs">
+                {([
+                  ['amount', '売上金額'],
+                  ['count', '購入件数'],
+                ] as const).map(([metric, label]) => (
+                  <button
+                    key={metric}
+                    type="button"
+                    onClick={() => setMonthlyMetric(metric)}
+                    className={
+                      monthlyMetric === metric
+                        ? 'rounded-[var(--radius-sm)] bg-white px-3 py-1.5 font-semibold text-[color:var(--color-text-primary)] shadow-sm'
+                        : 'rounded-[var(--radius-sm)] px-3 py-1.5 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1 rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-1 text-xs">
+                {[3, 6, 12].map((months) => (
+                  <button
+                    key={months}
+                    type="button"
+                    onClick={() => setMonthlyRangeMonths(months as 3 | 6 | 12)}
+                    className={
+                      monthlyRangeMonths === months
+                        ? 'rounded-[var(--radius-sm)] bg-white px-3 py-1.5 font-semibold text-[color:var(--color-text-primary)] shadow-sm'
+                        : 'rounded-[var(--radius-sm)] px-3 py-1.5 text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+                    }
+                  >
+                    直近{months}ヶ月
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 h-80">
+            {segmentMonthlyChartData.length > 0 ? (
+              <ResponsiveContainer>
+                <ComposedChart data={segmentMonthlyChartData} margin={{ top: 10, right: 40, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 12, fill: '#475569' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    yAxisId="primary"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#475569' }}
+                    tickFormatter={(value) =>
+                      monthlyMetric === 'count'
+                        ? `${numberFormatter.format(value)}件`
+                        : `¥${(value / 10000).toFixed(0)}万`
+                    }
+                  />
+                  {view === 'frontend' ? (
+                    <YAxis
+                      yAxisId="counts"
+                      orientation="right"
+                      hide
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 12, fill: '#475569' }}
+                      tickFormatter={(value) => `${numberFormatter.format(value)}人`}
+                    />
+                  ) : null}
+                  {view === 'frontend' ? (
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const row = payload[0].payload as {
+                          total?: number;
+                          purchaseCount?: number;
+                          firstBuyerCount?: number;
+                          lineRegistrations?: number;
+                          frontendCvr?: number | null;
+                        };
+                        return (
+                          <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-white p-3 text-xs shadow-lg">
+                            <p className="font-semibold text-[color:var(--color-text-primary)]">{label}</p>
+                            <div className="mt-2 space-y-1 text-[color:var(--color-text-secondary)]">
+                              <p>売上：¥{numberFormatter.format(Number(row.total ?? 0))}</p>
+                              <p>購入件数：{numberFormatter.format(Number(row.purchaseCount ?? 0))}件</p>
+                              <p>初回購入者：{numberFormatter.format(Number(row.firstBuyerCount ?? 0))}人</p>
+                              <p>新規LINE登録：{numberFormatter.format(Number(row.lineRegistrations ?? 0))}人</p>
+                              <p>月別CVR：{row.frontendCvr == null ? '—' : `${row.frontendCvr.toFixed(1)}%`}</p>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <Tooltip
+                      formatter={(value, name) => [
+                        monthlyMetric === 'count'
+                          ? `${numberFormatter.format(Number(value ?? 0))}件`
+                          : `¥${numberFormatter.format(Number(value ?? 0))}`,
+                        String(name),
+                      ]}
+                    />
+                  )}
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {segmentCategories.map((category) => (
+                    <Bar
+                      key={category.id}
+                      dataKey={category.id}
+                      name={category.label}
+                      stackId="sales"
+                      yAxisId="primary"
+                      fill={category.color}
+                      opacity={0.9}
+                    />
+                  ))}
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    name="合計"
+                    yAxisId="primary"
+                    stroke="#0f172a"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                  {view === 'frontend' ? (
+                    <Line
+                      type="monotone"
+                      dataKey="lineRegistrations"
+                      name="新規LINE登録者"
+                      yAxisId="counts"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                  ) : null}
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
+                <p className="text-sm text-[color:var(--color-text-muted)]">
+                  月別売上データがありません
+                </p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+                {view === 'courses' ? '受講生一覧' : '購入者一覧'}
+              </h2>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[color:var(--color-text-secondary)]">
+              並び替え
+              <select
+                aria-label="購入者一覧の並び替え"
+                value={buyerSort}
+                onChange={(event) => setBuyerSort(event.target.value as BuyerSort)}
+                className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-[color:var(--color-text-primary)]"
+              >
+                <option value="purchase_recent">
+                  {view === 'backend' ? 'バックエンド購入日が新しい順' : '購入日が新しい順'}
+                </option>
+                <option value="purchase_oldest">
+                  {view === 'backend' ? 'バックエンド購入日が古い順' : '購入日が古い順'}
+                </option>
+                <option value="ltv_desc">全期間LTVが高い順</option>
+              </select>
+            </label>
+          </div>
+          {visibleBuyerSummaries.length > 0 ? (
+            <div className="mt-4 overflow-x-auto">
+              <Table>
+                <thead className="bg-[color:var(--color-surface-muted)] text-xs uppercase text-[color:var(--color-text-muted)]">
+                  <tr>
+                    <th className="px-3 py-2 text-left">購入者</th>
+                    <th className="px-3 py-2 text-left">ステータス</th>
+                    <th className="px-3 py-2 text-right">全期間LTV</th>
+                    {view === 'frontend' ? (
+                      <>
+                        <th className="px-3 py-2 text-left">フロント初回購入日</th>
+                        <th className="px-3 py-2 text-left">バック初回購入日</th>
+                        <th className="px-3 py-2 text-right">フロント売上</th>
+                        <th className="px-3 py-2 text-right">フロント購入件数</th>
+                      </>
+                    ) : view === 'backend' ? (
+                      <>
+                        <th className="px-3 py-2 text-left">フロント初回購入日</th>
+                        <th className="px-3 py-2 text-left">バック初回購入日</th>
+                        <th className="px-3 py-2 text-right">バック売上</th>
+                        <th className="px-3 py-2 text-left">継続開始日</th>
+                        <th className="px-3 py-2 text-right">継続入金月数</th>
+                        <th className="px-3 py-2 text-left">最終継続入金日</th>
+                        <th className="px-3 py-2 text-left">6ヶ月契約満了目安</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="px-3 py-2 text-left">購入区分</th>
+                        <th className="px-3 py-2 text-right">購入件数</th>
+                        <th className="px-3 py-2 text-left">最終購入日</th>
+                      </>
+                    )}
+                    <th className="px-3 py-2 text-left">購入紐付け</th>
+                    {view === 'courses' ? (
+                      <th className="px-3 py-2 text-left">講座名</th>
+                    ) : null}
+                    <th className="px-3 py-2 text-left">LINE名</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleBuyerSummaries.map((buyer) => {
+                    const profile: CustomerProfile = {
+                      customerKey: buyer.customerKey,
+                      displayName: buyer.displayName,
+                      status: buyer.status,
+                      courseName: buyer.courseName,
+                      lineDisplayName: buyer.lineDisplayName,
+                      aliases: buyer.aliases,
+                      updatedAt: buyer.profile?.updatedAt ?? '',
+                    };
+                    return (
+                    <tr key={buyer.customerKey} className="border-t border-[color:var(--color-border)]">
+                      <td className="px-3 py-2 whitespace-nowrap font-medium text-[color:var(--color-text-primary)]">
+                        {buyer.displayName}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <select
+                          value={buyer.status}
+                          onChange={(event) =>
+                            handleCustomerProfileUpdate({
+                              ...profile,
+                              status: event.target.value as CustomerStatus,
+                            })
+                          }
+                          disabled={savingCustomerKey === buyer.customerKey}
+                          className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm disabled:opacity-50"
+                        >
+                          {CUSTOMER_STATUS_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>{option.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
+                        ¥{numberFormatter.format(buyer.ltv)}
+                      </td>
+                      {view === 'frontend' ? (
+                        <>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.firstFrontendDate ? formatJapanDate(buyer.firstFrontendDate) : '-'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.firstBackendDate ? formatJapanDate(buyer.firstBackendDate) : '-'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
+                            ¥{numberFormatter.format(buyer.frontendAmount)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">
+                            {numberFormatter.format(buyer.frontendPurchaseCount)}件
+                          </td>
+                        </>
+                      ) : view === 'backend' ? (
+                        <>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.firstFrontendDate ? formatJapanDate(buyer.firstFrontendDate) : '-'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.firstBackendDate ? formatJapanDate(buyer.firstBackendDate) : '未確認'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
+                            ¥{numberFormatter.format(buyer.backendAmount)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.renewalStartDate ? formatJapanDate(buyer.renewalStartDate) : '-'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">
+                            {numberFormatter.format(buyer.renewalMonths)}ヶ月
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.lastRenewalDate ? formatJapanDate(buyer.lastRenewalDate) : '-'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.nextContractEndDate ? formatJapanDate(buyer.nextContractEndDate) : '-'}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {buyer.hasBackend ? 'バックエンド' : 'フロントのみ'}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">
+                            {numberFormatter.format(buyer.purchaseCount)}件
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {formatJapanDate(buyer.lastPurchaseDate)}
+                          </td>
+                        </>
+                      )}
+                      <td className="px-3 py-2 min-w-48">
+                        <div className="flex flex-wrap gap-1">
+                          {buyer.categories.map((categoryId) => (
+                            <span
+                              key={categoryId}
+                              className="rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-xs"
+                            >
+                              {SALES_CATEGORIES.find((category) => category.id === categoryId)?.label ?? categoryId}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      {view === 'courses' ? (
+                        <td className="px-3 py-2 min-w-40">
+                          <input
+                            key={`${buyer.customerKey}:course:${buyer.courseName}`}
+                            defaultValue={buyer.courseName}
+                            placeholder="未設定"
+                            onBlur={(event) => {
+                              const courseName = event.target.value.trim();
+                              if (courseName !== buyer.courseName) {
+                                handleCustomerProfileUpdate({ ...profile, courseName });
+                              }
+                            }}
+                            className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm"
+                          />
+                        </td>
+                      ) : null}
+                      <td className="px-3 py-2 min-w-36">
+                        <input
+                          key={`${buyer.customerKey}:line:${buyer.lineDisplayName}`}
+                          defaultValue={buyer.lineDisplayName}
+                          placeholder="未紐付け"
+                          onBlur={(event) => {
+                            const lineDisplayName = event.target.value.trim();
+                            if (lineDisplayName !== buyer.lineDisplayName) {
+                              handleCustomerProfileUpdate({ ...profile, lineDisplayName });
+                            }
+                          }}
+                          className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm"
+                        />
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] p-8 text-center text-sm text-[color:var(--color-text-muted)]">
+              対象の購入データがありません
+            </div>
+          )}
+          {unmatchedCoursePurchases.length > 0 ? (
+            <div className="mt-6 border-t border-[color:var(--color-border)] pt-5">
+              <h3 className="font-semibold text-amber-700">
+                購入者名 要確認（{unmatchedCoursePurchases.length}件）
+              </h3>
+              <div className="mt-3 overflow-x-auto">
+                <Table>
+                  <thead className="bg-amber-50 text-xs text-amber-800">
+                    <tr>
+                      <th className="px-3 py-2 text-left">購入日</th>
+                      <th className="px-3 py-2 text-right">金額</th>
+                      <th className="px-3 py-2 text-left">カテゴリー</th>
+                      <th className="px-3 py-2 text-left">データ元</th>
+                      <th className="px-3 py-2 text-left">明細ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unmatchedCoursePurchases.map((purchase) => (
+                      <tr key={purchase.id} className="border-t border-[color:var(--color-border)]">
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {formatJapanDate(purchase.date)}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
+                          ¥{numberFormatter.format(purchase.amount)}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {SALES_CATEGORIES.find((category) => category.id === purchase.category)?.label
+                            ?? purchase.category}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">{purchase.source}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-xs">
+                          {purchase.id}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
+            購入明細
+          </h2>
+          {segmentPurchases.length > 0 ? (
+            <div className="mt-4 overflow-x-auto">
+              <Table>
+                <thead className="bg-[color:var(--color-surface-muted)] text-xs uppercase text-[color:var(--color-text-muted)]">
+                  <tr>
+                    <th className="px-3 py-2 text-left">日付</th>
+                    <th className="px-3 py-2 text-left">購入者</th>
+                    <th className="px-3 py-2 text-right">金額</th>
+                    <th className="px-3 py-2 text-left">カテゴリー</th>
+                    <th className="px-3 py-2 text-left">データ元</th>
+                    <th className="px-3 py-2 text-left">支払方法</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {segmentPurchases.map((purchase) => (
+                    <tr key={`${purchase.source}:${purchase.id}`} className="border-t border-[color:var(--color-border)]">
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {formatJapanDate(purchase.date)}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap font-medium text-[color:var(--color-text-primary)]">
+                        {purchase.customerName}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">
+                        ¥{numberFormatter.format(purchase.amount)}
+                        {purchase.itemCount > 1 ? (
+                          <span className="ml-1 text-xs text-[color:var(--color-text-muted)]">
+                            ({purchase.itemCount}明細)
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {SALES_CATEGORIES.find((category) => category.id === purchase.category)?.label ?? '-'}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">{purchase.source}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{purchase.paymentMethod}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] p-8 text-center text-sm text-[color:var(--color-text-muted)]">
+              対象の購入データがありません
+            </div>
+          )}
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>

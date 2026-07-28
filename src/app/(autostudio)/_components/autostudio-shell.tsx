@@ -68,7 +68,7 @@ export function AutoStudioShell({ children }: { children: ReactNode }) {
     return (
       <DateRangeProvider>
         <main className="min-h-screen bg-gradient-to-r from-pink-50/70 via-blue-50/50 to-teal-50/30 pb-10 pt-8 text-[color:var(--color-text-primary)]">
-          <div className="page-container w-[1120px] px-8">{children}</div>
+          <div className="page-container px-8">{children}</div>
         </main>
       </DateRangeProvider>
     );
