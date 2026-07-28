@@ -2079,9 +2079,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                       </>
                     )}
                     <th className="px-3 py-2 text-left">購入紐付け</th>
-                    {view === 'courses' ? (
-                      <th className="px-3 py-2 text-left">講座名</th>
-                    ) : null}
                     <th className="px-3 py-2 text-left">LINE名</th>
                   </tr>
                 </thead>
@@ -2185,22 +2182,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                           ))}
                         </div>
                       </td>
-                      {view === 'courses' ? (
-                        <td className="px-3 py-2 min-w-40">
-                          <input
-                            key={`${buyer.customerKey}:course:${buyer.courseName}`}
-                            defaultValue={buyer.courseName}
-                            placeholder="未設定"
-                            onBlur={(event) => {
-                              const courseName = event.target.value.trim();
-                              if (courseName !== buyer.courseName) {
-                                handleCustomerProfileUpdate({ ...profile, courseName });
-                              }
-                            }}
-                            className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm"
-                          />
-                        </td>
-                      ) : null}
                       <td className="px-3 py-2 min-w-36">
                         <input
                           key={`${buyer.customerKey}:line:${buyer.lineDisplayName}`}
