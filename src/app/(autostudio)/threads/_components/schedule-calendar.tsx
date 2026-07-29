@@ -220,6 +220,9 @@ export function ScheduleCalendar({
                       {item.status === 'posted' && '投稿完了'}
                       {item.status === 'failed' && '失敗'}
                     </span>
+                    <span className="ml-1 rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--color-text-secondary)]">
+                      {item.targetAccountKey === 'sub' ? 'サブ' : 'メイン'}
+                    </span>
                   </div>
                   {(item.status === 'draft' || item.status === 'scheduled' || item.status === 'failed') && (
                     <div className="flex items-center gap-2">

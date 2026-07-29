@@ -1167,24 +1167,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     view,
   ]);
 
-  const segmentTotalAmount = useMemo(
-    () => segmentMonthlySales.reduce((sum, row) => sum + row.total, 0),
-    [segmentMonthlySales]
-  );
-
-  const courseSalesBreakdown = useMemo(
-    () =>
-      segmentMonthlySales.reduce(
-        (totals, row) => ({
-          frontend: totals.frontend + row.frontend,
-          backend: totals.backend + row.backend + row.backend_performance,
-          renewal: totals.renewal + row.backend_renewal,
-        }),
-        { frontend: 0, backend: 0, renewal: 0 }
-      ),
-    [segmentMonthlySales]
-  );
-
   const allTimeCoursePurchases = useMemo(() => {
     const customerData = fullData?.customerData ?? initialData.customerData;
     const rows = customerData
@@ -1374,50 +1356,78 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     });
   }, [frontendFirstBuyerCountsByMonth, segmentMonthlyChartDataBase, view]);
 
-  const backendBuyerCount = useMemo(
-    () => buyerSummaries.filter((buyer) => buyer.hasInitialBackend).length,
-    [buyerSummaries]
-  );
-
-  const frontendBuyerCount = useMemo(
-    () => buyerSummaries.filter((buyer) => buyer.hasFrontend).length,
-    [buyerSummaries]
-  );
-
-  const frontendAllTimeAmount = useMemo(
+  const selectedRangeCoursePurchases = useMemo(
     () =>
-      allTimeCoursePurchases
-        .filter((purchase) => purchase.category === 'frontend')
-        .reduce((sum, purchase) => sum + purchase.amount, 0),
-    [allTimeCoursePurchases]
+      allTimeCoursePurchases.filter((purchase) => {
+        const purchaseDate = toLocalDateKey(purchase.date);
+        return purchaseDate >= dateRange.from && purchaseDate <= dateRange.to;
+      }),
+    [allTimeCoursePurchases, dateRange.from, dateRange.to]
   );
 
-  const allTimeLineRegistrations = useMemo(
+  const selectedRangeCourseSalesBreakdown = useMemo(
     () =>
-      (fullData?.lineDailyRegistrations ?? initialData.lineDailyRegistrations ?? [])
-        .reduce((sum, row) => sum + row.registrations, 0),
-    [fullData, initialData.lineDailyRegistrations]
+      selectedRangeCoursePurchases.reduce(
+        (totals, purchase) => {
+          if (purchase.category === 'frontend') totals.frontend += purchase.amount;
+          if (['backend', 'backend_performance'].includes(purchase.category)) {
+            totals.backend += purchase.amount;
+          }
+          if (purchase.category === 'backend_renewal') totals.renewal += purchase.amount;
+          return totals;
+        },
+        { frontend: 0, backend: 0, renewal: 0 }
+      ),
+    [selectedRangeCoursePurchases]
   );
 
-  const lineRegistrationCoverage = useMemo(() => {
-    const rows = fullData?.lineDailyRegistrations ?? initialData.lineDailyRegistrations ?? [];
-    if (rows.length === 0) return null;
-    const dates = rows.map((row) => row.date).sort();
-    return { start: dates[0], end: dates[dates.length - 1] };
-  }, [fullData, initialData.lineDailyRegistrations]);
+  const courseMetrics = useMemo(() => {
+    const isDateInRange = (date: Date) => {
+      const dateKey = toLocalDateKey(date);
+      return dateKey >= dateRange.from && dateKey <= dateRange.to;
+    };
+    const frontendBuyers = buyerSummaries.filter(
+      (buyer) => buyer.firstFrontendDate && isDateInRange(buyer.firstFrontendDate)
+    );
+    const backendBuyers = buyerSummaries.filter(
+      (buyer) => buyer.firstBackendDate && isDateInRange(buyer.firstBackendDate)
+    );
+    const convertedBuyers = frontendBuyers.filter(
+      (buyer) =>
+        buyer.firstFrontendDate &&
+        buyer.firstBackendDate &&
+        isDateInRange(buyer.firstBackendDate) &&
+        buyer.firstBackendDate >= buyer.firstFrontendDate
+    );
+    const frontendBuyerRevenue = frontendBuyers.reduce(
+      (sum, buyer) => sum + buyer.ltv,
+      0
+    );
+    const averageLtv = frontendBuyers.length > 0
+      ? Math.round(frontendBuyerRevenue / frontendBuyers.length)
+      : null;
+    const listUnitValue = lineRegistrationsInRange && lineRegistrationsInRange > 0
+      ? Math.round(frontendBuyerRevenue / lineRegistrationsInRange)
+      : null;
 
-  const measuredFrontendBuyerCount = useMemo(() => {
-    if (!lineRegistrationCoverage) return 0;
-    return buyerSummaries.filter((buyer) => {
-      if (!buyer.firstFrontendDate) return false;
-      const date = toLocalDateKey(buyer.firstFrontendDate);
-      return date >= lineRegistrationCoverage.start && date <= lineRegistrationCoverage.end;
-    }).length;
-  }, [buyerSummaries, lineRegistrationCoverage]);
-
-  const frontendCvr = allTimeLineRegistrations > 0
-    ? (measuredFrontendBuyerCount / allTimeLineRegistrations) * 100
-    : null;
+    return {
+      frontendBuyerCount: frontendBuyers.length,
+      backendBuyerCount: backendBuyers.length,
+      frontendCvr: lineRegistrationsInRange && lineRegistrationsInRange > 0
+        ? (frontendBuyers.length / lineRegistrationsInRange) * 100
+        : null,
+      frontendToBackendRate: frontendBuyers.length > 0
+        ? (convertedBuyers.length / frontendBuyers.length) * 100
+        : null,
+      averageLtv,
+      listUnitValue,
+    };
+  }, [
+    buyerSummaries,
+    dateRange.from,
+    dateRange.to,
+    lineRegistrationsInRange,
+  ]);
 
   const visibleBuyerSummaries = useMemo(() => {
     return buyerSummaries
@@ -1467,39 +1477,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     () => buyerSummaries.filter((buyer) => buyer.hasBackend && buyer.status === 'active').length,
     [buyerSummaries]
   );
-
-  const courseMetrics = useMemo(() => {
-    const conversionCutoff = new Date('2025-11-01T00:00:00+09:00');
-    const allFrontendBuyers = buyerSummaries.filter((buyer) => buyer.hasFrontend);
-    const conversionFrontendBuyers = buyerSummaries.filter(
-      (buyer) =>
-        buyer.hasFrontend &&
-        buyer.firstFrontendDate !== null &&
-        buyer.firstFrontendDate >= conversionCutoff
-    );
-    const backendBuyers = buyerSummaries.filter((buyer) => buyer.hasInitialBackend);
-    const convertedBuyers = buyerSummaries.filter(
-      (buyer) =>
-        buyer.hasFrontend &&
-        buyer.hasInitialBackend &&
-        buyer.firstFrontendDate !== null &&
-        buyer.firstFrontendDate >= conversionCutoff &&
-        buyer.firstBackendDate !== null &&
-        buyer.firstBackendDate >= conversionCutoff
-    );
-    const averageLtv = buyerSummaries.length > 0
-      ? Math.round(buyerSummaries.reduce((sum, buyer) => sum + buyer.ltv, 0) / buyerSummaries.length)
-      : 0;
-
-    return {
-      frontendBuyerCount: allFrontendBuyers.length,
-      backendBuyerCount: backendBuyers.length,
-      frontendToBackendRate: conversionFrontendBuyers.length > 0
-        ? (convertedBuyers.length / conversionFrontendBuyers.length) * 100
-        : null,
-      averageLtv,
-    };
-  }, [buyerSummaries]);
 
   const monthlySalesTotals = useMemo(() => {
     const totals = {
@@ -1744,15 +1721,29 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     return (
       <>
         <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
-          'xl:grid-cols-4'
+          view === 'frontend' ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
         }`}>
           <Card className="p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-              {viewLabel}売上
+              {view === 'courses' ? 'LINEリスト単価' : `${viewLabel}売上`}
             </p>
             <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-              ¥{numberFormatter.format(view === 'frontend' ? frontendAllTimeAmount : segmentTotalAmount)}
+              {view === 'courses'
+                ? courseMetrics.listUnitValue === null
+                  ? '—'
+                  : `¥${numberFormatter.format(courseMetrics.listUnitValue)}`
+                : `¥${numberFormatter.format(
+                    view === 'frontend'
+                      ? selectedRangeCourseSalesBreakdown.frontend
+                      : selectedRangeCourseSalesBreakdown.backend +
+                        selectedRangeCourseSalesBreakdown.renewal
+                  )}`}
             </p>
+            {view === 'courses' ? (
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                平均LTV × 期間内フロントCVR
+              </p>
+            ) : null}
           </Card>
           {view === 'courses' ? (
             <>
@@ -1761,7 +1752,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                   フロント売上
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  ¥{numberFormatter.format(courseSalesBreakdown.frontend)}
+                  ¥{numberFormatter.format(selectedRangeCourseSalesBreakdown.frontend)}
                 </p>
               </Card>
               <Card className="p-4">
@@ -1769,7 +1760,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                   バックエンド売上
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  ¥{numberFormatter.format(courseSalesBreakdown.backend)}
+                  ¥{numberFormatter.format(selectedRangeCourseSalesBreakdown.backend)}
                 </p>
               </Card>
               <Card className="p-4">
@@ -1777,7 +1768,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                   バックエンド継続売上
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  ¥{numberFormatter.format(courseSalesBreakdown.renewal)}
+                  ¥{numberFormatter.format(selectedRangeCourseSalesBreakdown.renewal)}
                 </p>
               </Card>
             </>
@@ -1785,20 +1776,20 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           {view === 'frontend' ? (
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                フロント購入者
+                期間内フロント購入者
               </p>
               <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                {numberFormatter.format(frontendBuyerCount)}人
+                {numberFormatter.format(courseMetrics.frontendBuyerCount)}人
               </p>
             </Card>
           ) : null}
           {view === 'backend' ? (
             <Card className="p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                バックエンド購入者数
+                期間内初回バック購入者
               </p>
               <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                {numberFormatter.format(backendBuyerCount)}人
+                {numberFormatter.format(courseMetrics.backendBuyerCount)}人
               </p>
             </Card>
           ) : null}
@@ -1806,18 +1797,33 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
             <>
               <Card className="p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  LINE新規登録
+                  期間内LINE新規登録
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  {numberFormatter.format(allTimeLineRegistrations)}人
+                  {numberFormatter.format(lineRegistrationsInRange ?? 0)}人
                 </p>
               </Card>
               <Card className="p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  期間対応フロントCVR
+                  期間内フロントCVR
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  {frontendCvr === null ? '—' : `${frontendCvr.toFixed(1)}%`}
+                  {courseMetrics.frontendCvr === null
+                    ? '—'
+                    : `${courseMetrics.frontendCvr.toFixed(1)}%`}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  LINEリスト単価
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  {courseMetrics.listUnitValue === null
+                    ? '—'
+                    : `¥${numberFormatter.format(courseMetrics.listUnitValue)}`}
+                </p>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                  平均LTV × 期間内フロントCVR
                 </p>
               </Card>
             </>
@@ -1836,7 +1842,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
             <>
               <Card className="p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  フロント購入者
+                  期間内フロント購入者
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
                   {numberFormatter.format(courseMetrics.frontendBuyerCount)}人
@@ -1844,7 +1850,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
               </Card>
               <Card className="p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  バックエンド購入者
+                  期間内初回バック購入者
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
                   {numberFormatter.format(courseMetrics.backendBuyerCount)}人
@@ -1852,7 +1858,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
               </Card>
               <Card className="p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  フロント→バック転換率
+                  期間内 フロント→バック転換率
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
                   {courseMetrics.frontendToBackendRate === null
@@ -1862,10 +1868,15 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
               </Card>
               <Card className="p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  平均LTV
+                  平均LTV（フロント購入者）
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  ¥{numberFormatter.format(courseMetrics.averageLtv)}
+                  {courseMetrics.averageLtv === null
+                    ? '—'
+                    : `¥${numberFormatter.format(courseMetrics.averageLtv)}`}
+                </p>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                  対象者のフロント＋バック売上 ÷ 対象者数
                 </p>
               </Card>
             </>
