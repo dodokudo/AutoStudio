@@ -220,7 +220,12 @@ export function ScheduleCalendar({
                       {item.status === 'posted' && '投稿完了'}
                       {item.status === 'failed' && '失敗'}
                     </span>
-                    <span className="ml-1 rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[color:var(--color-text-secondary)]">
+                    <span
+                      className={classNames(
+                        'ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white',
+                        item.targetAccountKey === 'sub' ? 'bg-[#a83b00]' : 'bg-[#174ea6]',
+                      )}
+                    >
                       {item.targetAccountKey === 'sub' ? 'サブ' : 'メイン'}
                     </span>
                   </div>
