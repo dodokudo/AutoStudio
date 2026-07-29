@@ -34,5 +34,7 @@ export interface SalesExpense {
   createdAt: string;
   source: ExpenseSource;
   sourceCategory?: string;
+  sourceGroup?: string;
+  sourceColor?: string;
   sourceAccount?: string;
 }

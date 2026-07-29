@@ -74,6 +74,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
   const [errorMessage, setErrorMessage] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showAllExpenses, setShowAllExpenses] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(dateRange.to.slice(0, 7));
   const [form, setForm] = useState({
     amount: '',
     category: 'class_cost' as ExpenseCategoryId,
@@ -109,6 +110,11 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
       canceled = true;
     };
   }, [dateRange.from, dateRange.to]);
+
+  useEffect(() => {
+    setSelectedMonth(dateRange.to.slice(0, 7));
+    setShowAllExpenses(false);
+  }, [dateRange.to]);
 
   const handleAddExpense = useCallback(async () => {
     if (!form.amount || !form.expenseDate) return;
@@ -216,7 +222,46 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
     EXPENSE_TYPES.find((item) => item.id === id)?.label ?? id;
   const businessUnitLabel = (id: ExpenseBusinessUnitId) =>
     EXPENSE_BUSINESS_UNITS.find((item) => item.id === id)?.label ?? id;
-  const visibleExpenses = showAllExpenses ? expenses : expenses.slice(0, 100);
+  const selectedMonthRow = monthlyRows.find((row) => row.month === selectedMonth) ?? {
+    month: selectedMonth,
+    revenue: 0,
+    expenses: 0,
+    profit: 0,
+  };
+  const selectedMonthExpenses = expenses.filter(
+    (expense) => expense.expenseDate.slice(0, 7) === selectedMonth,
+  );
+  const visibleExpenses = showAllExpenses
+    ? selectedMonthExpenses
+    : selectedMonthExpenses.slice(0, 100);
+  const selectedMonthCategories = Array.from(
+    selectedMonthExpenses.reduce((map, expense) => {
+      const name = expense.sourceCategory || categoryLabel(expense.category);
+      const current = map.get(name) ?? {
+        name,
+        group: expense.sourceGroup ?? (expense.source === 'manual' ? '手入力' : ''),
+        color: expense.sourceColor ?? '#64748b',
+        amount: 0,
+        count: 0,
+      };
+      current.amount += expense.amount;
+      current.count += 1;
+      map.set(name, current);
+      return map;
+    }, new Map<string, {
+      name: string;
+      group: string;
+      color: string;
+      amount: number;
+      count: number;
+    }>()),
+  )
+    .map(([, category]) => category)
+    .sort((a, b) => b.amount - a.amount);
+  const selectedMonthMargin =
+    selectedMonthRow.revenue > 0
+      ? (selectedMonthRow.profit / selectedMonthRow.revenue) * 100
+      : null;
 
   return (
     <>
@@ -292,7 +337,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">費用台帳</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              MoneyForwardの集計対象支出を自動反映。手入力はMoneyForwardにない費用だけ追加
+              MoneyForwardの「事業」と「個人／家賃」だけを自動反映。その他の個人支出・未分類は除外
             </p>
           </div>
           <button
@@ -385,16 +430,109 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
           </div>
         ) : null}
 
+        <div className="mt-5 border-t border-[color:var(--color-border)] pt-4">
+          <p className="mb-2 text-xs font-medium text-[color:var(--color-text-muted)]">
+            台帳の表示月
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {monthlyRows.map((row) => {
+              const isSelected = row.month === selectedMonth;
+              return (
+                <button
+                  key={row.month}
+                  type="button"
+                  onClick={() => {
+                    setSelectedMonth(row.month);
+                    setShowAllExpenses(false);
+                  }}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition ${
+                    isSelected
+                      ? 'border-blue-600 bg-blue-600 text-white'
+                      : 'border-[color:var(--color-border)] bg-white text-[color:var(--color-text-secondary)] hover:border-blue-300 hover:text-blue-700'
+                  }`}
+                >
+                  {Number(row.month.slice(5))}月
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {loading ? (
           <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">費用データを読み込み中…</p>
-        ) : expenses.length > 0 ? (
+        ) : selectedMonthExpenses.length > 0 ? (
           <>
+            <div className="mt-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="font-semibold text-[color:var(--color-text-primary)]">
+                  {Number(selectedMonth.slice(0, 4))}年{Number(selectedMonth.slice(5))}月の内訳
+                </h3>
+                <span className="text-xs text-[color:var(--color-text-muted)]">
+                  発生日がこの月の明細
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  { label: '売上', value: selectedMonthRow.revenue, color: 'text-blue-700' },
+                  { label: '費用', value: selectedMonthRow.expenses, color: 'text-amber-700' },
+                  {
+                    label: '営業利益',
+                    value: selectedMonthRow.profit,
+                    color: selectedMonthRow.profit >= 0 ? 'text-emerald-700' : 'text-red-700',
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3"
+                  >
+                    <p className="text-xs text-[color:var(--color-text-muted)]">{item.label}</p>
+                    <p className={`mt-1 text-lg font-bold tabular-nums ${item.color}`}>
+                      ¥{numberFormatter.format(item.value)}
+                    </p>
+                  </div>
+                ))}
+                <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-3">
+                  <p className="text-xs text-[color:var(--color-text-muted)]">利益率</p>
+                  <p className={`mt-1 text-lg font-bold tabular-nums ${
+                    selectedMonthRow.profit >= 0 ? 'text-emerald-700' : 'text-red-700'
+                  }`}>
+                    {selectedMonthMargin === null ? '—' : `${selectedMonthMargin.toFixed(1)}%`}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {selectedMonthCategories.map((category) => (
+                  <div
+                    key={category.name}
+                    className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[color:var(--color-border)] px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: category.color }}
+                        />
+                        <span className="truncate text-sm font-medium text-[color:var(--color-text-primary)]">
+                          {category.name}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 pl-[18px] text-xs text-[color:var(--color-text-muted)]">
+                        {category.group}{category.group ? '・' : ''}{category.count}件
+                      </p>
+                    </div>
+                    <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
+                      ¥{numberFormatter.format(category.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
               <span>
                 {numberFormatter.format(visibleExpenses.length)}件を表示
-                （全{numberFormatter.format(expenses.length)}件）
+                （全{numberFormatter.format(selectedMonthExpenses.length)}件）
               </span>
-              {expenses.length > 100 ? (
+              {selectedMonthExpenses.length > 100 ? (
                 <button
                   type="button"
                   onClick={() => setShowAllExpenses((current) => !current)}
@@ -463,7 +601,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
           </>
         ) : (
           <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] p-8 text-center text-sm text-[color:var(--color-text-muted)]">
-            選択期間の費用はまだ登録されていません
+            {Number(selectedMonth.slice(0, 4))}年{Number(selectedMonth.slice(5))}月の対象費用はありません
           </div>
         )}
       </Card>

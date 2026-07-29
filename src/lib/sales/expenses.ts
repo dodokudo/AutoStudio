@@ -74,19 +74,25 @@ export async function getExpenses(startDate: string, endDate: string): Promise<S
   }));
 }
 
-const inferMoneyForwardCategory = (
-  category: string,
-  subCategory: string,
-  description: string,
-): ExpenseCategoryId => {
-  const value = `${category} ${subCategory} ${description}`.toLocaleLowerCase('ja-JP');
-  if (/広告|meta|facebook|instagram|google ads|tiktok ads/.test(value)) return 'advertising';
-  if (/決済手数料|振込手数料|atm 利用手数料/.test(value)) return 'payment_fee';
-  if (/講師|授業/.test(value)) return 'class_cost';
-  if (/外注|業務委託/.test(value)) return 'outsourcing';
-  if (/通信|情報サービス|システム|openai|anthropic|vercel|figma|google one/.test(value)) {
-    return 'system';
-  }
+type MoneyForwardCategory = {
+  id: number;
+  name: string;
+  group: string | null;
+  color: string | null;
+};
+
+type MoneyForwardRule = {
+  pattern: string;
+  matchType: string;
+  categoryId: number;
+};
+
+const mapMoneyForwardCategory = (categoryName: string): ExpenseCategoryId => {
+  if (categoryName === '広告費') return 'advertising';
+  if (categoryName === '外注費') return 'outsourcing';
+  if (categoryName === 'SaaS' || categoryName === '通信費') return 'system';
+  if (categoryName === 'ATM・手数料') return 'payment_fee';
+  if (categoryName === 'コンサル・講座参加費') return 'class_cost';
   return 'other';
 };
 
@@ -95,51 +101,123 @@ export async function getMoneyForwardExpenses(
   endDate: string,
 ): Promise<SalesExpense[]> {
   const client = createBigQueryClient(PROJECT_ID);
-  const [rows] = await client.query({
-    query: `
-      SELECT
-        CAST(t.mf_id AS STRING) AS mf_id,
-        CAST(t.date AS STRING) AS expense_date,
-        t.amount,
-        COALESCE(t.category, '未分類') AS category,
-        COALESCE(t.sub_category, '未分類') AS sub_category,
-        COALESCE(t.description, '') AS description,
-        COALESCE(a.name, a.institution, 'MoneyForward') AS account_name
-      FROM \`${PROJECT_ID}.moneyforward.transactions\` t
-      LEFT JOIN \`${PROJECT_ID}.moneyforward.accounts\` a
-        ON t.account_id = a.id
-      WHERE t.date BETWEEN @startDate AND @endDate
-        AND t.type = 'expense'
-        AND t.is_transfer = FALSE
-        AND t.is_excluded_from_calculation = FALSE
-      ORDER BY t.date DESC, t.amount DESC
-    `,
-    params: { startDate, endDate },
-  });
+  const [transactionsResult, categoriesResult, rulesResult, overridesResult] = await Promise.all([
+    client.query({
+      query: `
+        SELECT
+          t.id AS transaction_id,
+          CAST(t.mf_id AS STRING) AS mf_id,
+          CAST(t.date AS STRING) AS expense_date,
+          t.amount,
+          COALESCE(t.description, '') AS description,
+          COALESCE(a.name, a.institution, 'MoneyForward') AS account_name
+        FROM \`${PROJECT_ID}.moneyforward.transactions\` t
+        LEFT JOIN \`${PROJECT_ID}.moneyforward.accounts\` a
+          ON t.account_id = a.id
+        WHERE t.date BETWEEN @startDate AND @endDate
+          AND t.type = 'expense'
+          AND t.is_transfer = FALSE
+          AND t.is_excluded_from_calculation = FALSE
+        ORDER BY t.date DESC, t.amount DESC
+      `,
+      params: { startDate, endDate },
+    }),
+    client.query({
+      query: `
+        SELECT id, name, \`group\`, color
+        FROM \`${PROJECT_ID}.moneyforward.custom_categories\`
+      `,
+    }),
+    client.query({
+      query: `
+        SELECT
+          pattern,
+          match_type,
+          custom_category_id
+        FROM \`${PROJECT_ID}.moneyforward.classification_rules\`
+        WHERE is_active = TRUE
+        ORDER BY priority DESC
+      `,
+    }),
+    client.query({
+      query: `
+        SELECT transaction_id, custom_category_id
+        FROM \`${PROJECT_ID}.moneyforward.transaction_category_overrides\`
+      `,
+    }),
+  ]);
 
-  return (rows as Array<Record<string, unknown>>).map((row) => {
-    const sourceCategory = [row.category, row.sub_category]
-      .map((value) => String(value ?? '').trim())
-      .filter(Boolean)
-      .join(' / ');
+  const categories = new Map(
+    (categoriesResult[0] as Array<Record<string, unknown>>).map((row) => [
+      Number(row.id),
+      {
+        id: Number(row.id),
+        name: String(row.name ?? '不明'),
+        group: row.group == null ? null : String(row.group),
+        color: row.color == null ? null : String(row.color),
+      } satisfies MoneyForwardCategory,
+    ]),
+  );
+  const rules = (rulesResult[0] as Array<Record<string, unknown>>).map((row) => {
+    const rule: MoneyForwardRule & { regex: RegExp | null } = {
+      pattern: String(row.pattern ?? ''),
+      matchType: String(row.match_type ?? ''),
+      categoryId: Number(row.custom_category_id),
+      regex: null,
+    };
+    if (rule.matchType === 'regex') {
+      try {
+        rule.regex = new RegExp(rule.pattern, 'i');
+      } catch {
+        rule.regex = null;
+      }
+    }
+    return rule;
+  });
+  const overrides = new Map(
+    (overridesResult[0] as Array<Record<string, unknown>>)
+      .filter((row) => row.custom_category_id != null)
+      .map((row) => [Number(row.transaction_id), Number(row.custom_category_id)]),
+  );
+
+  return (transactionsResult[0] as Array<Record<string, unknown>>).flatMap((row) => {
+    const transactionId = Number(row.transaction_id);
     const description = String(row.description ?? '');
-    return {
+    let categoryId = overrides.get(transactionId);
+
+    if (categoryId == null && description) {
+      const descriptionLower = description.toLowerCase();
+      const matchingRule = rules.find((rule) =>
+        rule.matchType === 'contains'
+          ? descriptionLower.includes(rule.pattern.toLowerCase())
+          : rule.matchType === 'regex' && rule.regex
+            ? rule.regex.test(description)
+            : false,
+      );
+      categoryId = matchingRule?.categoryId;
+    }
+
+    const customCategory = categoryId == null ? null : categories.get(categoryId);
+    const isIncluded =
+      customCategory?.group === '事業' ||
+      (customCategory?.group === '個人' && customCategory.name === '家賃');
+    if (!customCategory || !isIncluded) return [];
+
+    return [{
       id: `moneyforward:${String(row.mf_id)}`,
       amount: Number(row.amount),
-      category: inferMoneyForwardCategory(
-        String(row.category ?? ''),
-        String(row.sub_category ?? ''),
-        description,
-      ),
-      expenseType: 'operating',
-      businessUnit: 'shared',
+      category: mapMoneyForwardCategory(customCategory.name),
+      expenseType: 'operating' as const,
+      businessUnit: 'shared' as const,
       description,
       expenseDate: String(row.expense_date),
       createdAt: '',
-      source: 'moneyforward',
-      sourceCategory,
+      source: 'moneyforward' as const,
+      sourceCategory: customCategory.name,
+      sourceGroup: customCategory.group ?? undefined,
+      sourceColor: customCategory.color ?? undefined,
       sourceAccount: String(row.account_name ?? 'MoneyForward'),
-    };
+    }];
   });
 }
 
