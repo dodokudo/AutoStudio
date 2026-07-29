@@ -144,6 +144,7 @@ interface CustomerProfile {
 interface GroupedPurchase {
   id: string;
   date: Date;
+  paymentDate: Date;
   amount: number;
   category: SalesCategoryId;
   customerName: string;
@@ -172,6 +173,7 @@ function buildGroupedPurchases(
     rows.push({
       id: charge.id,
       date: new Date(charge.created_on),
+      paymentDate: new Date(charge.created_on),
       amount: charge.charged_amount,
       category: (categories[charge.id] ?? 'other') as SalesCategoryId,
       customerName: charge.metadata?.['univapay-name'] ?? '-',
@@ -186,6 +188,7 @@ function buildGroupedPurchases(
     rows.push({
       id: sale.id,
       date: new Date(`${sale.transactionDate}T00:00:00`),
+      paymentDate: new Date(`${sale.paymentDate ?? sale.transactionDate}T00:00:00`),
       amount: sale.amount,
       category: sale.category ?? 'other',
       customerName: sale.customerName || '-',
@@ -238,6 +241,7 @@ function buildGroupedPurchases(
     result.push({
       id: group.id,
       date: new Date(Math.min(...groupRows.map((item) => item.date.getTime()))),
+      paymentDate: new Date(Math.max(...groupRows.map((item) => item.paymentDate.getTime()))),
       amount: groupRows.reduce((sum, item) => sum + item.amount, 0),
       category,
       customerName,
@@ -1203,6 +1207,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       backendAmount: number;
       backendPurchaseCount: number;
       lastPurchaseDate: Date;
+      lastPaymentDate: Date;
       firstFrontendDate: Date | null;
       lastRenewalDate: Date | null;
       renewalStartDate: Date | null;
@@ -1236,6 +1241,9 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         existing.categories.add(purchase.category);
         if (purchase.date > existing.lastPurchaseDate) {
           existing.lastPurchaseDate = purchase.date;
+        }
+        if (purchase.paymentDate > existing.lastPaymentDate) {
+          existing.lastPaymentDate = purchase.paymentDate;
         }
         if (
           isFrontendPurchase &&
@@ -1278,6 +1286,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         backendAmount: isBackendPurchase ? purchase.amount : 0,
         backendPurchaseCount: isBackendPurchase ? 1 : 0,
         lastPurchaseDate: purchase.date,
+        lastPaymentDate: purchase.paymentDate,
         firstFrontendDate: isFrontendPurchase ? purchase.date : null,
         lastRenewalDate: purchase.category === 'backend_renewal' ? purchase.date : null,
         renewalStartDate: purchase.category === 'backend_renewal' ? purchase.date : null,
@@ -2098,7 +2107,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                       </>
                     )}
                     <th className="px-3 py-2 text-left">購入紐付け</th>
-                    <th className="px-3 py-2 text-left">LINE名</th>
+                    <th className="px-3 py-2 text-left">直近決済日</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2205,19 +2214,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                           ))}
                         </div>
                       </td>
-                      <td className="px-3 py-2 min-w-36">
-                        <input
-                          key={`${buyer.customerKey}:line:${buyer.lineDisplayName}`}
-                          defaultValue={buyer.lineDisplayName}
-                          placeholder="未紐付け"
-                          onBlur={(event) => {
-                            const lineDisplayName = event.target.value.trim();
-                            if (lineDisplayName !== buyer.lineDisplayName) {
-                              handleCustomerProfileUpdate({ ...profile, lineDisplayName });
-                            }
-                          }}
-                          className="w-full rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm"
-                        />
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {formatJapanDate(buyer.lastPaymentDate)}
                       </td>
                     </tr>
                     );
