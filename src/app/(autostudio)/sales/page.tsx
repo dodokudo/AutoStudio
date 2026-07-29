@@ -11,6 +11,8 @@ const SALES_TABS = [
   { id: 'courses', label: '講座管理' },
   { id: 'frontend', label: 'フロントエンド' },
   { id: 'backend', label: 'バックエンド' },
+  { id: 'analyca', label: 'ANALYCA' },
+  { id: 'profit', label: '利益管理' },
 ] as const;
 
 type SalesTabKey = (typeof SALES_TABS)[number]['id'];

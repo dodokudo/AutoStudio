@@ -3,6 +3,8 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
+import { AnalycaSalesView } from './AnalycaSalesView';
+import { SalesProfitView } from './SalesProfitView';
 import {
   Bar,
   BarChart,
@@ -83,12 +85,14 @@ const getSixMonthContractEnd = (lastRenewalDate: Date) =>
 const isJapaneseHoliday = (date: Date) => JP_HOLIDAYS.has(toLocalDateKey(date));
 
 type SalesCategoryId = typeof SALES_CATEGORIES[number]['id'];
-type SalesDashboardView = 'main' | 'courses' | 'frontend' | 'backend';
+type SalesDashboardView = 'main' | 'courses' | 'frontend' | 'backend' | 'analyca' | 'profit';
 type BuyerSort = 'purchase_recent' | 'purchase_oldest' | 'ltv_desc';
 type MonthlyMetric = 'amount' | 'count';
 
 interface Charge {
   id: string;
+  subscription_id?: string;
+  transaction_token_id?: string;
   charged_amount: number;
   charged_currency: string;
   status: string;
@@ -1186,6 +1190,111 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     );
   }, [fullData, initialData, monthlyGroupedPurchases]);
 
+  const allRevenueItems = useMemo(() => {
+    const customerData = fullData?.customerData ?? initialData.customerData;
+    if (!customerData) return [];
+
+    const aliasToProfile = new Map<string, CustomerProfile>();
+    for (const profile of customerProfiles) {
+      aliasToProfile.set(normalizeCustomerKey(profile.customerKey), profile);
+      aliasToProfile.set(normalizeCustomerKey(profile.displayName), profile);
+      for (const alias of profile.aliases) {
+        aliasToProfile.set(normalizeCustomerKey(alias), profile);
+      }
+    }
+
+    const replacedSubscriptionIds = new Map<string, string>();
+    for (const charge of customerData.charges) {
+      const replacedId = charge.metadata?.replacesSubscriptionId;
+      if (charge.subscription_id && replacedId) {
+        replacedSubscriptionIds.set(charge.subscription_id, replacedId);
+      }
+    }
+    const resolveSubscriptionId = (subscriptionId: string) => {
+      let current = subscriptionId;
+      const visited = new Set<string>();
+      while (replacedSubscriptionIds.has(current) && !visited.has(current)) {
+        visited.add(current);
+        current = replacedSubscriptionIds.get(current) as string;
+      }
+      return current;
+    };
+    const analycaUserBySubscription = new Map<string, string>();
+    for (const charge of customerData.charges) {
+      if (charge.subscription_id && charge.metadata?.analycaUserId) {
+        analycaUserBySubscription.set(
+          resolveSubscriptionId(charge.subscription_id),
+          charge.metadata.analycaUserId,
+        );
+      }
+    }
+
+    const resolveCustomer = (charge: Charge) => {
+      const rawName = charge.metadata?.['univapay-name'] ?? '';
+      const normalizedName = normalizeCustomerKey(rawName);
+      const profile = aliasToProfile.get(normalizedName);
+      const subscriptionId = charge.subscription_id
+        ? resolveSubscriptionId(charge.subscription_id)
+        : '';
+      const analycaUserId =
+        charge.metadata?.analycaUserId ||
+        (subscriptionId ? analycaUserBySubscription.get(subscriptionId) : undefined);
+      const fallbackKey =
+        analycaUserId ? `analyca:${analycaUserId}`
+          : subscriptionId ? `subscription:${subscriptionId}`
+            : normalizedName || `token:${charge.transaction_token_id || charge.id}`;
+      const shortId = (analycaUserId || subscriptionId || charge.id).slice(-4);
+      return {
+        customerKey: profile?.customerKey ?? fallbackKey,
+        customerName: profile?.displayName || rawName || `ANALYCA会員 ${shortId}`,
+      };
+    };
+
+    const chargeRows = customerData.charges
+      .filter((charge) => charge.status === 'successful')
+      .map((charge) => {
+        const customer = resolveCustomer(charge);
+        return {
+          id: charge.id,
+          amount: charge.charged_amount,
+          category: (customerData.categories[charge.id] ?? 'other') as SalesCategoryId,
+          paymentDate: toLocalDateKey(new Date(charge.created_on)),
+          ...customer,
+        };
+      });
+
+    const manualRows = customerData.manualSales.map((sale) => {
+      const normalizedName = normalizeCustomerKey(sale.customerName);
+      const profile = aliasToProfile.get(normalizedName);
+      const customer = {
+        customerKey: profile?.customerKey ?? (normalizedName || `manual:${sale.id}`),
+        customerName: profile?.displayName || sale.customerName || '購入者名未確認',
+      };
+      return {
+        id: sale.id,
+        amount: sale.amount,
+        category: sale.category ?? 'other',
+        paymentDate: sale.paymentDate || sale.transactionDate,
+        ...customer,
+      };
+    });
+
+    return [...chargeRows, ...manualRows];
+  }, [customerProfiles, fullData, initialData.customerData]);
+
+  const selectedRangeRevenueItems = useMemo(
+    () =>
+      allRevenueItems.filter(
+        (item) => item.paymentDate >= dateRange.from && item.paymentDate <= dateRange.to
+      ),
+    [allRevenueItems, dateRange.from, dateRange.to],
+  );
+
+  const analycaRevenueItems = useMemo(
+    () => allRevenueItems.filter((item) => item.category === 'analyca'),
+    [allRevenueItems],
+  );
+
   const buyerSummaries = useMemo(() => {
     const aliasToProfile = new Map<string, CustomerProfile>();
     for (const profile of customerProfiles) {
@@ -1723,6 +1832,24 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       currentMonthKey,
     };
   }, [displayTransactions, manualSales, dateRange.from, dateRange.to, fullData, initialData.cashflowCharges, charges]);
+
+  if (view === 'analyca') {
+    return (
+      <AnalycaSalesView
+        items={analycaRevenueItems}
+        dateRange={dateRange}
+      />
+    );
+  }
+
+  if (view === 'profit') {
+    return (
+      <SalesProfitView
+        revenueItems={selectedRangeRevenueItems}
+        dateRange={dateRange}
+      />
+    );
+  }
 
   if (view !== 'main') {
     const viewLabel =
