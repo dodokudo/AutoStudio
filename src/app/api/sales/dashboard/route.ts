@@ -3,6 +3,7 @@ import { getSalesSummary } from '@/lib/univapay/client';
 import { getChargeCategories, getManualSales } from '@/lib/sales/categories';
 import { getAllGroups } from '@/lib/sales/groups';
 import { getCustomerProfiles } from '@/lib/sales/customerProfiles';
+import { getAnalycaCustomerIdentities } from '@/lib/sales/analycaCustomers';
 import { getLineRegistrationsDailyByDateRange } from '@/lib/lstep/analytics';
 import { resolveProjectId } from '@/lib/bigquery';
 import { formatDateInput } from '@/lib/dateRangePresets';
@@ -53,6 +54,7 @@ async function getDashboard(startParam: string, endParam: string) {
     customerManualSales,
     groupsMap,
     customerProfiles,
+    analycaCustomers,
     lineDailyRegistrations,
   ] = await Promise.all([
     getSalesSummary(startDate.toISOString(), endDate.toISOString()),
@@ -64,6 +66,10 @@ async function getDashboard(startParam: string, endParam: string) {
     getManualSales(CUSTOMER_DATA_START, endDateStr),
     getAllGroups().catch(() => new Map()),
     getCustomerProfiles().catch(() => []),
+    getAnalycaCustomerIdentities().catch((error) => {
+      console.error('[api/sales/dashboard] Failed to load ANALYCA customers:', error);
+      return [];
+    }),
     LSTEP_PROJECT_ID
       ? getLineRegistrationsDailyByDateRange(
           LSTEP_PROJECT_ID,
@@ -120,6 +126,7 @@ async function getDashboard(startParam: string, endParam: string) {
     manualSales,
     groups,
     customerProfiles,
+    analycaCustomers,
     lineDailyRegistrations,
     monthlyData: {
       charges: monthlySummary.charges,

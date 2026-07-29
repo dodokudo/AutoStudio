@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { addExpense, deleteExpense, getExpenses } from '@/lib/sales/expenses';
+import {
+  addExpense,
+  deleteExpense,
+  getExpenses,
+  getMoneyForwardExpenses,
+} from '@/lib/sales/expenses';
 import {
   EXPENSE_BUSINESS_UNITS,
   EXPENSE_CATEGORIES,
@@ -24,9 +29,21 @@ export async function GET(request: Request) {
   }
 
   try {
-    const expenses = await getExpenses(startDate, endDate);
+    const [manualExpenses, moneyForwardExpenses] = await Promise.all([
+      getExpenses(startDate, endDate),
+      getMoneyForwardExpenses(startDate, endDate),
+    ]);
+    const expenses = [...moneyForwardExpenses, ...manualExpenses]
+      .sort((a, b) => b.expenseDate.localeCompare(a.expenseDate));
     return NextResponse.json(
-      { success: true, expenses },
+      {
+        success: true,
+        expenses,
+        totals: {
+          moneyForward: moneyForwardExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+          manual: manualExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+        },
+      },
       { headers: { 'Cache-Control': 'private, no-store, max-age=0' } },
     );
   } catch (error) {

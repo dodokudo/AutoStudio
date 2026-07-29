@@ -73,6 +73,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showAllExpenses, setShowAllExpenses] = useState(false);
   const [form, setForm] = useState({
     amount: '',
     category: 'class_cost' as ExpenseCategoryId,
@@ -165,6 +166,14 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
     );
     const grossProfit = revenue - directCosts;
     const operatingProfit = grossProfit - operatingCosts;
+    const moneyForwardCosts = expenses.reduce(
+      (sum, expense) => sum + (expense.source === 'moneyforward' ? expense.amount : 0),
+      0,
+    );
+    const manualCosts = expenses.reduce(
+      (sum, expense) => sum + (expense.source === 'manual' ? expense.amount : 0),
+      0,
+    );
     return {
       revenue,
       courseRevenue,
@@ -174,6 +183,8 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
       operatingCosts,
       grossProfit,
       operatingProfit,
+      moneyForwardCosts,
+      manualCosts,
       margin: revenue > 0 ? (operatingProfit / revenue) * 100 : null,
     };
   }, [expenses, revenueItems]);
@@ -205,6 +216,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
     EXPENSE_TYPES.find((item) => item.id === id)?.label ?? id;
   const businessUnitLabel = (id: ExpenseBusinessUnitId) =>
     EXPENSE_BUSINESS_UNITS.find((item) => item.id === id)?.label ?? id;
+  const visibleExpenses = showAllExpenses ? expenses : expenses.slice(0, 100);
 
   return (
     <>
@@ -224,7 +236,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
             ¥{numberFormatter.format(metrics.directCosts + metrics.operatingCosts)}
           </p>
           <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-            原価 ¥{numberFormatter.format(metrics.directCosts)}・運営費 ¥{numberFormatter.format(metrics.operatingCosts)}
+            MoneyForward ¥{numberFormatter.format(metrics.moneyForwardCosts)}・手入力 ¥{numberFormatter.format(metrics.manualCosts)}
           </p>
         </Card>
         <Card className="p-4">
@@ -280,7 +292,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">費用台帳</h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              授業原価・広告費など、実際に使った金額を登録
+              MoneyForwardの集計対象支出を自動反映。手入力はMoneyForwardにない費用だけ追加
             </p>
           </div>
           <button
@@ -288,7 +300,7 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
             onClick={() => setShowForm((current) => !current)}
             className="rounded-[var(--radius-md)] bg-[color:var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
-            {showForm ? '閉じる' : '+ 費用を追加'}
+            {showForm ? '閉じる' : '+ 未登録費用を追加'}
           </button>
         </div>
 
@@ -376,11 +388,28 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
         {loading ? (
           <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">費用データを読み込み中…</p>
         ) : expenses.length > 0 ? (
-          <div className="mt-4 overflow-x-auto">
-            <Table>
+          <>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
+              <span>
+                {numberFormatter.format(visibleExpenses.length)}件を表示
+                （全{numberFormatter.format(expenses.length)}件）
+              </span>
+              {expenses.length > 100 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllExpenses((current) => !current)}
+                  className="font-medium text-[color:var(--color-accent)] hover:underline"
+                >
+                  {showAllExpenses ? '最新100件に戻す' : '全件表示'}
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-2 overflow-x-auto">
+              <Table>
               <thead className="bg-[color:var(--color-surface-muted)] text-xs uppercase text-[color:var(--color-text-muted)]">
                 <tr>
                   <th className="px-3 py-2 text-left">発生日</th>
+                  <th className="px-3 py-2 text-left">データ元</th>
                   <th className="px-3 py-2 text-left">対象</th>
                   <th className="px-3 py-2 text-left">費目</th>
                   <th className="px-3 py-2 text-left">区分</th>
@@ -390,30 +419,48 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
                 </tr>
               </thead>
               <tbody>
-                {expenses.map((expense) => (
+                {visibleExpenses.map((expense) => (
                   <tr key={expense.id} className="border-t border-[color:var(--color-border)]">
                     <td className="px-3 py-2 whitespace-nowrap">{expense.expenseDate}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        expense.source === 'moneyforward'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {expense.source === 'moneyforward' ? 'MoneyForward' : '手入力'}
+                      </span>
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">{businessUnitLabel(expense.businessUnit)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{categoryLabel(expense.category)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {expense.sourceCategory || categoryLabel(expense.category)}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">{typeLabel(expense.expenseType)}</td>
                     <td className="px-3 py-2">{expense.description || '—'}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
                       ¥{numberFormatter.format(expense.amount)}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteExpense(expense.id)}
-                        className="text-xs font-medium text-red-600 hover:text-red-700"
-                      >
-                        削除
-                      </button>
+                      {expense.source === 'manual' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExpense(expense.id)}
+                          className="text-xs font-medium text-red-600 hover:text-red-700"
+                        >
+                          削除
+                        </button>
+                      ) : (
+                        <span className="text-xs text-[color:var(--color-text-muted)]">
+                          自動
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </Table>
-          </div>
+              </Table>
+            </div>
+          </>
         ) : (
           <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] p-8 text-center text-sm text-[color:var(--color-text-muted)]">
             選択期間の費用はまだ登録されていません

@@ -70,7 +70,77 @@ export async function getExpenses(startDate: string, endDate: string): Promise<S
     description: String(row.description ?? ''),
     expenseDate: String(row.expense_date),
     createdAt: String(row.created_at),
+    source: 'manual',
   }));
+}
+
+const inferMoneyForwardCategory = (
+  category: string,
+  subCategory: string,
+  description: string,
+): ExpenseCategoryId => {
+  const value = `${category} ${subCategory} ${description}`.toLocaleLowerCase('ja-JP');
+  if (/広告|meta|facebook|instagram|google ads|tiktok ads/.test(value)) return 'advertising';
+  if (/決済手数料|振込手数料|atm 利用手数料/.test(value)) return 'payment_fee';
+  if (/講師|授業/.test(value)) return 'class_cost';
+  if (/外注|業務委託/.test(value)) return 'outsourcing';
+  if (/通信|情報サービス|システム|openai|anthropic|vercel|figma|google one/.test(value)) {
+    return 'system';
+  }
+  return 'other';
+};
+
+export async function getMoneyForwardExpenses(
+  startDate: string,
+  endDate: string,
+): Promise<SalesExpense[]> {
+  const client = createBigQueryClient(PROJECT_ID);
+  const [rows] = await client.query({
+    query: `
+      SELECT
+        CAST(t.mf_id AS STRING) AS mf_id,
+        CAST(t.date AS STRING) AS expense_date,
+        t.amount,
+        COALESCE(t.category, '未分類') AS category,
+        COALESCE(t.sub_category, '未分類') AS sub_category,
+        COALESCE(t.description, '') AS description,
+        COALESCE(a.name, a.institution, 'MoneyForward') AS account_name
+      FROM \`${PROJECT_ID}.moneyforward.transactions\` t
+      LEFT JOIN \`${PROJECT_ID}.moneyforward.accounts\` a
+        ON t.account_id = a.id
+      WHERE t.date BETWEEN @startDate AND @endDate
+        AND t.type = 'expense'
+        AND t.is_transfer = FALSE
+        AND t.is_excluded_from_calculation = FALSE
+      ORDER BY t.date DESC, t.amount DESC
+    `,
+    params: { startDate, endDate },
+  });
+
+  return (rows as Array<Record<string, unknown>>).map((row) => {
+    const sourceCategory = [row.category, row.sub_category]
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean)
+      .join(' / ');
+    const description = String(row.description ?? '');
+    return {
+      id: `moneyforward:${String(row.mf_id)}`,
+      amount: Number(row.amount),
+      category: inferMoneyForwardCategory(
+        String(row.category ?? ''),
+        String(row.sub_category ?? ''),
+        description,
+      ),
+      expenseType: 'operating',
+      businessUnit: 'shared',
+      description,
+      expenseDate: String(row.expense_date),
+      createdAt: '',
+      source: 'moneyforward',
+      sourceCategory,
+      sourceAccount: String(row.account_name ?? 'MoneyForward'),
+    };
+  });
 }
 
 export async function addExpense(input: {
@@ -107,7 +177,7 @@ export async function addExpense(input: {
     },
   });
 
-  return { id, createdAt, ...input };
+  return { id, createdAt, source: 'manual', ...input };
 }
 
 export async function deleteExpense(id: string): Promise<void> {

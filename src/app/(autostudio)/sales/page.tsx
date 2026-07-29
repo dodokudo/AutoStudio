@@ -135,6 +135,7 @@ export default async function SalesPage({
             categories: {},
             manualSales: [],
             groups: [],
+            analycaCustomers: [],
             lineDailyRegistrations: [],
             deferred: true,
           }}

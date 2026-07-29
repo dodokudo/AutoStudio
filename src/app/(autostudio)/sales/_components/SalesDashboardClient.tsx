@@ -145,6 +145,16 @@ interface CustomerProfile {
   updatedAt: string;
 }
 
+interface AnalycaCustomerIdentity {
+  userId: string;
+  subscriptionId: string | null;
+  transactionTokenId: string | null;
+  lineName: string | null;
+  threadsUsername: string | null;
+  instagramUsername: string | null;
+  email: string | null;
+}
+
 interface GroupedPurchase {
   id: string;
   date: Date;
@@ -282,6 +292,7 @@ interface SalesDashboardClientProps {
     manualSales: ManualSale[];
     groups?: TransactionGroup[];
     customerProfiles?: CustomerProfile[];
+    analycaCustomers?: AnalycaCustomerIdentity[];
     lineDailyRegistrations?: LineDailyRegistration[];
     monthlyData?: {
       charges: Charge[];
@@ -1228,6 +1239,23 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         );
       }
     }
+    const analycaCustomers = fullData?.analycaCustomers ?? initialData.analycaCustomers ?? [];
+    const identityByUserId = new Map(
+      analycaCustomers.map((identity) => [identity.userId, identity]),
+    );
+    const identityBySubscription = new Map(
+      analycaCustomers
+        .filter((identity) => identity.subscriptionId)
+        .map((identity) => [
+          resolveSubscriptionId(identity.subscriptionId as string),
+          identity,
+        ]),
+    );
+    const identityByToken = new Map(
+      analycaCustomers
+        .filter((identity) => identity.transactionTokenId)
+        .map((identity) => [identity.transactionTokenId as string, identity]),
+    );
 
     const resolveCustomer = (charge: Charge) => {
       const rawName = charge.metadata?.['univapay-name'] ?? '';
@@ -1239,14 +1267,45 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       const analycaUserId =
         charge.metadata?.analycaUserId ||
         (subscriptionId ? analycaUserBySubscription.get(subscriptionId) : undefined);
+      const identity =
+        (analycaUserId ? identityByUserId.get(analycaUserId) : undefined) ||
+        (subscriptionId ? identityBySubscription.get(subscriptionId) : undefined) ||
+        (charge.transaction_token_id
+          ? identityByToken.get(charge.transaction_token_id)
+          : undefined);
+      const identityAliases = identity
+        ? [
+            identity.lineName,
+            identity.threadsUsername,
+            identity.instagramUsername,
+            identity.email,
+          ].filter((value): value is string => Boolean(value))
+        : [];
+      const identityProfile = identityAliases
+        .map((alias) => aliasToProfile.get(normalizeCustomerKey(alias)))
+        .find(Boolean);
+      const identityHandle = identity?.threadsUsername || identity?.instagramUsername;
+      const identityName = identity?.lineName
+        ? identityHandle
+          ? `${identity.lineName} / @${identityHandle.replace(/^@/, '')}`
+          : identity.lineName
+        : identityHandle
+          ? `@${identityHandle.replace(/^@/, '')}`
+          : identity?.email;
       const fallbackKey =
-        analycaUserId ? `analyca:${analycaUserId}`
+        identity?.userId ? `analyca:${identity.userId}`
+          : analycaUserId ? `analyca:${analycaUserId}`
           : subscriptionId ? `subscription:${subscriptionId}`
             : normalizedName || `token:${charge.transaction_token_id || charge.id}`;
       const shortId = (analycaUserId || subscriptionId || charge.id).slice(-4);
       return {
-        customerKey: profile?.customerKey ?? fallbackKey,
-        customerName: profile?.displayName || rawName || `ANALYCA会員 ${shortId}`,
+        customerKey: profile?.customerKey ?? identityProfile?.customerKey ?? fallbackKey,
+        customerName:
+          profile?.displayName ||
+          identityProfile?.displayName ||
+          rawName ||
+          identityName ||
+          `ANALYCA会員 ${shortId}`,
       };
     };
 
@@ -1280,7 +1339,12 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     });
 
     return [...chargeRows, ...manualRows];
-  }, [customerProfiles, fullData, initialData.customerData]);
+  }, [
+    customerProfiles,
+    fullData,
+    initialData.analycaCustomers,
+    initialData.customerData,
+  ]);
 
   const selectedRangeRevenueItems = useMemo(
     () =>
@@ -1861,13 +1925,15 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         }`}>
           <Card className="p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-              {view === 'courses' ? 'LINEリスト単価' : `${viewLabel}売上`}
+              {view === 'courses' ? '講座の総売上' : `${viewLabel}売上`}
             </p>
             <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
               {view === 'courses'
-                ? courseMetrics.listUnitValue === null
-                  ? '—'
-                  : `¥${numberFormatter.format(courseMetrics.listUnitValue)}`
+                ? `¥${numberFormatter.format(
+                    selectedRangeCourseSalesBreakdown.frontend +
+                    selectedRangeCourseSalesBreakdown.backend +
+                    selectedRangeCourseSalesBreakdown.renewal
+                  )}`
                 : `¥${numberFormatter.format(
                     view === 'frontend'
                       ? selectedRangeCourseSalesBreakdown.frontend
@@ -1875,11 +1941,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                         selectedRangeCourseSalesBreakdown.renewal
                   )}`}
             </p>
-            {view === 'courses' ? (
-              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                平均LTV × 期間内フロントCVR
-              </p>
-            ) : null}
           </Card>
           {view === 'courses' ? (
             <>
@@ -1896,15 +1957,26 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                   バックエンド売上
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  ¥{numberFormatter.format(selectedRangeCourseSalesBreakdown.backend)}
+                  ¥{numberFormatter.format(
+                    selectedRangeCourseSalesBreakdown.backend +
+                    selectedRangeCourseSalesBreakdown.renewal
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                  初回・成果報酬・継続を合算
                 </p>
               </Card>
               <Card className="p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                  バックエンド継続売上
+                  LINEリスト単価
                 </p>
                 <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                  ¥{numberFormatter.format(selectedRangeCourseSalesBreakdown.renewal)}
+                  {courseMetrics.listUnitValue === null
+                    ? '—'
+                    : `¥${numberFormatter.format(courseMetrics.listUnitValue)}`}
+                </p>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                  期間内LINE登録者1人あたりの講座累計売上
                 </p>
               </Card>
             </>

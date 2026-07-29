@@ -21,6 +21,7 @@ export const EXPENSE_BUSINESS_UNITS = [
 export type ExpenseCategoryId = (typeof EXPENSE_CATEGORIES)[number]['id'];
 export type ExpenseTypeId = (typeof EXPENSE_TYPES)[number]['id'];
 export type ExpenseBusinessUnitId = (typeof EXPENSE_BUSINESS_UNITS)[number]['id'];
+export type ExpenseSource = 'manual' | 'moneyforward';
 
 export interface SalesExpense {
   id: string;
@@ -31,4 +32,7 @@ export interface SalesExpense {
   description: string;
   expenseDate: string;
   createdAt: string;
+  source: ExpenseSource;
+  sourceCategory?: string;
+  sourceAccount?: string;
 }
