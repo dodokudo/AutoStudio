@@ -378,7 +378,7 @@ export function ScheduleEditor({
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                className="ui-button-primary h-[42px] justify-center"
+                className="h-[42px] rounded-[var(--radius-lg)] bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 disabled={isSaving || isPublishing || isEditorReadOnly || uploadingMedia}
                 onClick={() => handleSubmit('scheduled')}
               >
