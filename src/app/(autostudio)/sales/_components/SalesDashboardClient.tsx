@@ -149,6 +149,7 @@ interface AnalycaCustomerIdentity {
   userId: string;
   subscriptionId: string | null;
   transactionTokenId: string | null;
+  displayName: string | null;
   lineName: string | null;
   threadsUsername: string | null;
   instagramUsername: string | null;
@@ -1275,6 +1276,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           : undefined);
       const identityAliases = identity
         ? [
+            identity.displayName,
             identity.lineName,
             identity.threadsUsername,
             identity.instagramUsername,
@@ -1285,24 +1287,30 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         .map((alias) => aliasToProfile.get(normalizeCustomerKey(alias)))
         .find(Boolean);
       const identityHandle = identity?.threadsUsername || identity?.instagramUsername;
-      const identityName = identity?.lineName
+      const identityName = identity?.displayName || (identity?.lineName
         ? identityHandle
           ? `${identity.lineName} / @${identityHandle.replace(/^@/, '')}`
           : identity.lineName
         : identityHandle
           ? `@${identityHandle.replace(/^@/, '')}`
-          : identity?.email;
+          : identity?.email);
+      const identityCustomerKey = identity?.displayName
+        ? normalizeCustomerKey(identity.displayName)
+        : '';
       const fallbackKey =
-        identity?.userId ? `analyca:${identity.userId}`
+        identityCustomerKey || (
+          identity?.userId ? `analyca:${identity.userId}`
           : analycaUserId ? `analyca:${analycaUserId}`
           : subscriptionId ? `subscription:${subscriptionId}`
-            : normalizedName || `token:${charge.transaction_token_id || charge.id}`;
+            : normalizedName || `token:${charge.transaction_token_id || charge.id}`
+        );
       const shortId = (analycaUserId || subscriptionId || charge.id).slice(-4);
       return {
         customerKey: profile?.customerKey ?? identityProfile?.customerKey ?? fallbackKey,
         customerName:
           profile?.displayName ||
           identityProfile?.displayName ||
+          identity?.displayName ||
           rawName ||
           identityName ||
           `ANALYCA会員 ${shortId}`,

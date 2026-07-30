@@ -2,10 +2,20 @@ import { createBigQueryClient, resolveProjectId } from '../bigquery';
 
 const PROJECT_ID = resolveProjectId();
 
+const ANALYCA_DISPLAY_NAMES_BY_USERNAME: Record<string, string> = {
+  mitsuyo_5: '吉岡光代',
+  'hanarabi.mama24': 'マシモ ナギサ',
+  dr_sara_yubishaburi: '鬼谷 薫',
+  keiko_detox: '焼石啓子',
+  moto_donzokochan__: '寺井 はるか',
+  moyawork: 'アオノ ナオ',
+};
+
 export interface AnalycaCustomerIdentity {
   userId: string;
   subscriptionId: string | null;
   transactionTokenId: string | null;
+  displayName: string | null;
   lineName: string | null;
   threadsUsername: string | null;
   instagramUsername: string | null;
@@ -52,13 +62,22 @@ export async function getAnalycaCustomerIdentities(): Promise<AnalycaCustomerIde
     `,
   });
 
-  return (rows as Array<Record<string, unknown>>).map((row) => ({
-    userId: String(row.user_id),
-    subscriptionId: row.subscription_id ? String(row.subscription_id) : null,
-    transactionTokenId: row.transaction_token_id ? String(row.transaction_token_id) : null,
-    lineName: row.line_name ? String(row.line_name) : null,
-    threadsUsername: row.threads_username ? String(row.threads_username) : null,
-    instagramUsername: row.instagram_username ? String(row.instagram_username) : null,
-    email: row.email ? String(row.email) : null,
-  }));
+  return (rows as Array<Record<string, unknown>>).map((row) => {
+    const threadsUsername = row.threads_username ? String(row.threads_username) : null;
+    const instagramUsername = row.instagram_username ? String(row.instagram_username) : null;
+    const username = (threadsUsername || instagramUsername || '')
+      .replace(/^@/, '')
+      .toLowerCase();
+
+    return {
+      userId: String(row.user_id),
+      subscriptionId: row.subscription_id ? String(row.subscription_id) : null,
+      transactionTokenId: row.transaction_token_id ? String(row.transaction_token_id) : null,
+      displayName: ANALYCA_DISPLAY_NAMES_BY_USERNAME[username] ?? null,
+      lineName: row.line_name ? String(row.line_name) : null,
+      threadsUsername,
+      instagramUsername,
+      email: row.email ? String(row.email) : null,
+    };
+  });
 }
