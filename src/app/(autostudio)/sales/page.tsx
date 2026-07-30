@@ -42,7 +42,7 @@ export default async function SalesPage({
           } else {
             params.set('tab', tab.id);
           }
-          if (tab.id === 'analyca') {
+          if (tab.id === 'analyca' || tab.id === 'profit') {
             params.set('range', 'this-year');
             params.delete('start');
             params.delete('end');
