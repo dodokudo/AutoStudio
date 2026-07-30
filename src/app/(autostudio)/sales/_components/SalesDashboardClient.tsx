@@ -175,6 +175,19 @@ const normalizeCustomerKey = (value: string) =>
     .replace(/[\s　]+/g, '')
     .trim();
 
+const CUSTOMER_DISPLAY_NAMES_BY_ALIAS = new Map([
+  ['内山章', '内山明'],
+  ['内山章：断熱カントク', '内山明'],
+  ['マシモ ナギ', '眞下渚'],
+  ['マシモ ナギサ', '眞下渚'],
+  ['サトウ ヤヨイ', '佐藤弥生'],
+].map(([alias, displayName]) => [normalizeCustomerKey(alias), displayName]));
+
+const MERGED_CUSTOMER_DISPLAY_NAMES = new Set(['内山明', '眞下渚', '佐藤弥生']);
+
+const canonicalCustomerName = (value: string) =>
+  CUSTOMER_DISPLAY_NAMES_BY_ALIAS.get(normalizeCustomerKey(value)) ?? value;
+
 function buildGroupedPurchases(
   charges: Charge[],
   categories: Record<string, string>,
@@ -191,7 +204,7 @@ function buildGroupedPurchases(
       paymentDate: new Date(charge.created_on),
       amount: charge.charged_amount,
       category: (categories[charge.id] ?? 'other') as SalesCategoryId,
-      customerName: charge.metadata?.['univapay-name'] ?? '-',
+      customerName: canonicalCustomerName(charge.metadata?.['univapay-name'] ?? '-'),
       source: 'UnivaPay',
       paymentMethod: 'クレジットカード',
       itemCount: 1,
@@ -206,7 +219,7 @@ function buildGroupedPurchases(
       paymentDate: new Date(`${sale.paymentDate ?? sale.transactionDate}T00:00:00`),
       amount: sale.amount,
       category: sale.category ?? 'other',
-      customerName: sale.customerName || '-',
+      customerName: canonicalCustomerName(sale.customerName || '-'),
       source: '手動入力',
       paymentMethod: sale.paymentMethod,
       itemCount: 1,
@@ -245,10 +258,11 @@ function buildGroupedPurchases(
       processed.add(`${item.itemType}:${item.id}`);
     }
 
-    const customerName =
+    const customerName = canonicalCustomerName(
       group.name.trim() ||
       groupRows.find((item) => item.customerName !== '-')?.customerName ||
-      '-';
+      '-',
+    );
     const category =
       groupRows.find((item) => item.category !== 'other')?.category ??
       groupRows[0].category;
@@ -1260,7 +1274,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
 
     const resolveCustomer = (charge: Charge) => {
       const rawName = charge.metadata?.['univapay-name'] ?? '';
-      const normalizedName = normalizeCustomerKey(rawName);
+      const canonicalName = canonicalCustomerName(rawName);
+      const normalizedName = normalizeCustomerKey(canonicalName);
       const profile = aliasToProfile.get(normalizedName);
       const subscriptionId = charge.subscription_id
         ? resolveSubscriptionId(charge.subscription_id)
@@ -1311,7 +1326,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           profile?.displayName ||
           identityProfile?.displayName ||
           identity?.displayName ||
-          rawName ||
+          canonicalName ||
           identityName ||
           `ANALYCA会員 ${shortId}`,
       };
@@ -1331,11 +1346,12 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       });
 
     const manualRows = customerData.manualSales.map((sale) => {
-      const normalizedName = normalizeCustomerKey(sale.customerName);
+      const canonicalName = canonicalCustomerName(sale.customerName);
+      const normalizedName = normalizeCustomerKey(canonicalName);
       const profile = aliasToProfile.get(normalizedName);
       const customer = {
         customerKey: profile?.customerKey ?? (normalizedName || `manual:${sale.id}`),
-        customerName: profile?.displayName || sale.customerName || '購入者名未確認',
+        customerName: profile?.displayName || canonicalName || '購入者名未確認',
       };
       return {
         id: sale.id,
@@ -1346,7 +1362,15 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       };
     });
 
-    return [...chargeRows, ...manualRows];
+    return [...chargeRows, ...manualRows].map((item) => {
+      const customerName = canonicalCustomerName(item.customerName);
+      if (!MERGED_CUSTOMER_DISPLAY_NAMES.has(customerName)) return item;
+      return {
+        ...item,
+        customerKey: normalizeCustomerKey(customerName),
+        customerName,
+      };
+    });
   }, [
     customerProfiles,
     fullData,

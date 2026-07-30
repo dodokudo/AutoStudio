@@ -3,12 +3,14 @@ import { createBigQueryClient, resolveProjectId } from '../bigquery';
 const PROJECT_ID = resolveProjectId();
 
 const ANALYCA_DISPLAY_NAMES_BY_USERNAME: Record<string, string> = {
+  akirauchiyama_saa: '内山明',
   mitsuyo_5: '吉岡光代',
-  'hanarabi.mama24': 'マシモ ナギサ',
+  'hanarabi.mama24': '眞下渚',
   dr_sara_yubishaburi: '鬼谷 薫',
   keiko_detox: '焼石啓子',
   moto_donzokochan__: '寺井 はるか',
   moyawork: 'アオノ ナオ',
+  yayoi_yuruyakarich: '佐藤弥生',
 };
 
 export interface AnalycaCustomerIdentity {
