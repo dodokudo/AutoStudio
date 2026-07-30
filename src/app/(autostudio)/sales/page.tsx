@@ -42,6 +42,11 @@ export default async function SalesPage({
           } else {
             params.set('tab', tab.id);
           }
+          if (tab.id === 'analyca') {
+            params.set('range', 'this-year');
+            params.delete('start');
+            params.delete('end');
+          }
           const query = params.toString();
           const isActive = tab.id === activeTab;
 

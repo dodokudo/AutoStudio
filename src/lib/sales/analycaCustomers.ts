@@ -10,6 +10,7 @@ const ANALYCA_DISPLAY_NAMES_BY_USERNAME: Record<string, string> = {
   keiko_detox: '焼石啓子',
   moto_donzokochan__: '寺井 はるか',
   moyawork: 'アオノ ナオ',
+  hattatsukaizenkei: '千田めぐみ',
   yayoi_yuruyakarich: '佐藤弥生',
 };
 

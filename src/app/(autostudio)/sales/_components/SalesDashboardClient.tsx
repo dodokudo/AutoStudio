@@ -1508,6 +1508,13 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       });
     }
 
+    for (const item of analycaRevenueItems) {
+      const normalizedName = normalizeCustomerKey(canonicalCustomerName(item.customerName));
+      const matchedProfile = aliasToProfile.get(normalizedName) ?? null;
+      const customerKey = matchedProfile?.customerKey ?? normalizedName;
+      map.get(customerKey)?.categories.add('analyca');
+    }
+
     const now = new Date();
 
     return Array.from(map.values()).map((summary) => {
@@ -1547,7 +1554,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         aliases: summary.profile?.aliases ?? [],
       };
     });
-  }, [allTimeCoursePurchases, customerProfiles]);
+  }, [allTimeCoursePurchases, analycaRevenueItems, customerProfiles]);
 
   const frontendFirstBuyerCountsByMonth = useMemo(() => {
     const counts = new Map<string, number>();
