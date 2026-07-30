@@ -1411,7 +1411,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       frontendPurchaseCount: number;
       backendAmount: number;
       backendPurchaseCount: number;
-      backendRenewalAmount: number;
       lastPurchaseDate: Date;
       lastPaymentDate: Date;
       firstFrontendDate: Date | null;
@@ -1443,9 +1442,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         if (isBackendPurchase) {
           existing.backendAmount += purchase.amount;
           existing.backendPurchaseCount += 1;
-        }
-        if (purchase.category === 'backend_renewal') {
-          existing.backendRenewalAmount += purchase.amount;
         }
         existing.categories.add(purchase.category);
         if (purchase.date > existing.lastPurchaseDate) {
@@ -1494,7 +1490,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         frontendPurchaseCount: isFrontendPurchase ? 1 : 0,
         backendAmount: isBackendPurchase ? purchase.amount : 0,
         backendPurchaseCount: isBackendPurchase ? 1 : 0,
-        backendRenewalAmount: purchase.category === 'backend_renewal' ? purchase.amount : 0,
         lastPurchaseDate: purchase.date,
         lastPaymentDate: purchase.paymentDate,
         firstFrontendDate: isFrontendPurchase ? purchase.date : null,
@@ -2074,14 +2069,24 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
             </>
           ) : null}
           {view === 'backend' ? (
-            <Card className="p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
-                現在の継続人数
-              </p>
-              <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
-                {numberFormatter.format(activeRenewalCount)}人
-              </p>
-            </Card>
+            <>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  継続売上
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  ¥{numberFormatter.format(selectedRangeCourseSalesBreakdown.renewal)}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  現在の継続人数
+                </p>
+                <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
+                  {numberFormatter.format(activeRenewalCount)}人
+                </p>
+              </Card>
+            </>
           ) : null}
           {view === 'courses' ? (
             <>
@@ -2329,8 +2334,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                       <>
                         <th className="px-3 py-2 text-left">フロント初回購入日</th>
                         <th className="px-3 py-2 text-left">バック初回購入日</th>
-                        <th className="px-3 py-2 text-right">バック売上（継続込）</th>
-                        <th className="px-3 py-2 text-right">バック継続売上</th>
+                        <th className="px-3 py-2 text-right">バック売上</th>
                         <th className="px-3 py-2 text-left">継続開始日</th>
                         <th className="px-3 py-2 text-right">継続入金月数</th>
                         <th className="px-3 py-2 text-left">最終継続入金日</th>
@@ -2412,9 +2416,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
                             ¥{numberFormatter.format(buyer.backendAmount)}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
-                            ¥{numberFormatter.format(buyer.backendRenewalAmount)}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap">
                             {buyer.renewalStartDate ? formatJapanDate(buyer.renewalStartDate) : '-'}
