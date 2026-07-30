@@ -1341,6 +1341,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           amount: charge.charged_amount,
           category: (customerData.categories[charge.id] ?? 'other') as SalesCategoryId,
           paymentDate: toLocalDateKey(new Date(charge.created_on)),
+          isCardPayment: true,
           ...customer,
         };
       });
@@ -1358,6 +1359,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         amount: sale.amount,
         category: sale.category ?? 'other',
         paymentDate: sale.paymentDate || sale.transactionDate,
+        isCardPayment: /(クレジット|クレカ|credit|card|univapay)/i.test(sale.paymentMethod),
         ...customer,
       };
     });
