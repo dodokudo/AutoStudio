@@ -2337,14 +2337,13 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                       </>
                     ) : view === 'backend' ? (
                       <>
-                        <th className="px-3 py-2 text-left">フロント初回購入日</th>
-                        <th className="px-3 py-2 text-left">バック初回購入日</th>
+                        <th className="px-3 py-2 text-left">F購入日</th>
+                        <th className="px-3 py-2 text-left">B購入日</th>
                         <th className="px-3 py-2 text-right">バック売上</th>
                         <th className="px-3 py-2 text-right">継続売上</th>
                         <th className="px-3 py-2 text-left">継続開始日</th>
-                        <th className="px-3 py-2 text-right">継続入金月数</th>
-                        <th className="px-3 py-2 text-left">最終継続入金日</th>
-                        <th className="px-3 py-2 text-left">6ヶ月契約満了目安</th>
+                        <th className="px-3 py-2 text-right">継続月数</th>
+                        <th className="px-3 py-2 text-left">契約終了目安</th>
                       </>
                     ) : (
                       <>
@@ -2431,9 +2430,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">
                             {numberFormatter.format(buyer.renewalMonths)}ヶ月
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {buyer.lastRenewalDate ? formatJapanDate(buyer.lastRenewalDate) : '-'}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap">
                             {buyer.nextContractEndDate ? formatJapanDate(buyer.nextContractEndDate) : '-'}
