@@ -374,15 +374,25 @@ export function ScheduleEditor({
             />
           </label>
           <div className="flex flex-col">
-            <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">即時投稿</span>
-            <button
-              type="button"
-              className="mt-2 h-[42px] rounded-[var(--radius-lg)] bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-              disabled={isPublishing || isSaving || isEditorReadOnly || uploadingMedia}
-              onClick={handlePublishNow}
-            >
-              {isPublishing ? '投稿中...' : '今すぐ投稿'}
-            </button>
+            <span className="text-xs font-medium text-[color:var(--color-text-secondary)]">投稿操作</span>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="ui-button-primary h-[42px] justify-center"
+                disabled={isSaving || isPublishing || isEditorReadOnly || uploadingMedia}
+                onClick={() => handleSubmit('scheduled')}
+              >
+                {isSaving ? '登録中...' : '予約登録'}
+              </button>
+              <button
+                type="button"
+                className="h-[42px] rounded-[var(--radius-lg)] bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                disabled={isPublishing || isSaving || isEditorReadOnly || uploadingMedia}
+                onClick={handlePublishNow}
+              >
+                {isPublishing ? '投稿中...' : '今すぐ投稿'}
+              </button>
+            </div>
           </div>
         </div>
 
