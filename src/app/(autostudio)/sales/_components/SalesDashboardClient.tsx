@@ -1512,7 +1512,15 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       const normalizedName = normalizeCustomerKey(canonicalCustomerName(item.customerName));
       const matchedProfile = aliasToProfile.get(normalizedName) ?? null;
       const customerKey = matchedProfile?.customerKey ?? normalizedName;
-      map.get(customerKey)?.categories.add('analyca');
+      const summary = map.get(customerKey);
+      if (!summary) continue;
+      summary.categories.add('analyca');
+      summary.ltv += item.amount;
+      summary.purchaseCount += 1;
+      const paymentDate = new Date(`${item.paymentDate}T00:00:00`);
+      if (paymentDate > summary.lastPaymentDate) {
+        summary.lastPaymentDate = paymentDate;
+      }
     }
 
     const now = new Date();
