@@ -7,7 +7,7 @@ const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
 // 特典誘導テンプレート（文言・URLは必要に応じて変更）
-const TOKUTEN_GUIDE_TEMPLATE = `1000名以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
+const TOKUTEN_GUIDE_TEMPLATE = `2000人以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
 ${TOKUTEN_GUIDE_URL}`;
 
 // 投稿の伸び検知条件
@@ -23,6 +23,7 @@ interface TriggerCandidate {
   comment1_views: number;
   comment1_ctr: number;
   trigger_reason: string;
+  account_key: string;
 }
 
 interface TokutenCheckResult {
@@ -40,6 +41,7 @@ async function findTriggerCandidates(client: ReturnType<typeof createBigQueryCli
         p.post_id,
         p.impressions_total as impressions,
         p.posted_at,
+        IFNULL(p.account_key, 'main') as account_key,
         -- コメント欄1(depth=0)のviewsを取得
         (
           SELECT SUM(c.views)
@@ -60,6 +62,7 @@ async function findTriggerCandidates(client: ReturnType<typeof createBigQueryCli
     SELECT
       post_id,
       impressions,
+      account_key,
       IFNULL(comment1_views, 0) as comment1_views,
       CASE
         WHEN impressions > 0 THEN IFNULL(comment1_views, 0) / impressions
@@ -179,7 +182,8 @@ async function getLastComment2Id(
 async function scheduleComment(
   client: ReturnType<typeof createBigQueryClient>,
   postId: string,
-  commentText: string
+  commentText: string,
+  accountKey: string
 ): Promise<string | null> {
   // コメント欄2のIDを取得（これにリプライしてdepth=2にする）
   const comment2Id = await getLastComment2Id(client, postId);
@@ -193,8 +197,8 @@ async function scheduleComment(
 
   const query = `
     INSERT INTO \`${PROJECT_ID}.${DATASET}.comment_schedules\`
-    (schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status, created_at)
-    VALUES (@schedule_id, @plan_id, @parent_thread_id, @comment_order, @comment_text, CURRENT_TIMESTAMP(), 'pending', CURRENT_TIMESTAMP())
+    (schedule_id, plan_id, parent_thread_id, comment_order, comment_text, scheduled_time, status, created_at, target_account_key)
+    VALUES (@schedule_id, @plan_id, @parent_thread_id, @comment_order, @comment_text, CURRENT_TIMESTAMP(), 'pending', CURRENT_TIMESTAMP(), @target_account_key)
   `;
 
   await client.query({
@@ -205,6 +209,7 @@ async function scheduleComment(
       parent_thread_id: comment2Id, // コメント欄2のIDにリプライ → depth=2になる
       comment_order: 1,
       comment_text: commentText,
+      target_account_key: accountKey, // 投稿元アカウントのトークンで返信する
     },
   });
 
@@ -274,7 +279,7 @@ export async function POST() {
       // 3. 特典誘導がない場合は追加（コメント欄2の下 = depth=2に追加）
       if (!tokutenCheck.has_tokuten_guide) {
         console.log(`  Adding tokuten guide comment to comment3 (depth=2)...`);
-        const scheduleId = await scheduleComment(client, candidate.post_id, TOKUTEN_GUIDE_TEMPLATE);
+        const scheduleId = await scheduleComment(client, candidate.post_id, TOKUTEN_GUIDE_TEMPLATE, candidate.account_key);
         if (scheduleId) {
           tokutenCommentAdded = true;
           addedCount++;
