@@ -231,9 +231,9 @@ export function InsightsTab({
       {accountStatGroups && accountStatGroups.length > 0 ? (
         <Card className="p-6">
           <header className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">アカウントの概要</h2>
-              <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">{noteText}</p>
+              <p className="text-xs text-[color:var(--color-text-secondary)]">{noteText}</p>
             </div>
             <button
               onClick={() => setShowAccountOverview(!showAccountOverview)}
@@ -338,9 +338,6 @@ export function InsightsTab({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">インプレッション & フォロワー推移</h2>
-            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              日別のインプレッション（折れ線）、フォロワー増加数とLINE登録数（棒グラフ）を選択期間で確認できます。
-            </p>
           </div>
           <button
             onClick={() => setShowDailyTable(!showDailyTable)}

@@ -63,6 +63,7 @@ export async function GET(request: Request) {
 
     const response = {
       range: { start, end },
+      agency: sourceCounts.agency,
       threads: sourceCounts.threads,
       instagram: sourceCounts.instagram,
       youtube: sourceCounts.youtube,

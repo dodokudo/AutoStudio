@@ -322,6 +322,7 @@ export async function countAdLineRegistrationsDailyByDateRange(
 }
 
 export interface SourceCountResult {
+  agency: number;
   threads: number;
   instagram: number;
   youtube: number;
@@ -349,14 +350,15 @@ export async function countLineRegistrationsBySource(
 
   const snapshotDate = latestSnapshot?.snapshot_date;
   if (!snapshotDate) {
-    return { threads: 0, instagram: 0, youtube: 0, organic: 0, other: 0, total: 0 };
+    return { agency: 0, threads: 0, instagram: 0, youtube: 0, organic: 0, other: 0, total: 0 };
   }
 
   // 各流入経路のカウントを取得
   // 複数の流入経路を持つユーザーは、最も優先度の高い流入経路にカウント
-  // 優先順位: Threads > Instagram > YouTube > Organic > Other
+  // 優先順位: Agency > Threads > Instagram > YouTube > Organic > Other
   const [row] = await runQuery<{
     total: number;
+    agency: number;
     threads: number;
     instagram: number;
     youtube: number;
@@ -379,6 +381,8 @@ export async function countLineRegistrationsBySource(
             COALESCE(source_instagram_profile, 0),
             COALESCE(source_instagram_comment, 0)
           ) AS is_instagram,
+          -- 代理店（山崎）
+          COALESCE(yamazaki, 0) AS is_agency,
           -- YouTube
           COALESCE(source_youtube, 0) AS is_youtube,
           -- Organic
@@ -392,6 +396,7 @@ export async function countLineRegistrationsBySource(
         SELECT
           id,
           CASE
+            WHEN is_agency = 1 THEN 'agency'
             WHEN is_threads = 1 THEN 'threads'
             WHEN is_instagram = 1 THEN 'instagram'
             WHEN is_youtube = 1 THEN 'youtube'
@@ -402,6 +407,7 @@ export async function countLineRegistrationsBySource(
       )
       SELECT
         COUNT(DISTINCT id) AS total,
+        COUNTIF(source_category = 'agency') AS agency,
         COUNTIF(source_category = 'threads') AS threads,
         COUNTIF(source_category = 'instagram') AS instagram,
         COUNTIF(source_category = 'youtube') AS youtube,
@@ -412,13 +418,14 @@ export async function countLineRegistrationsBySource(
   });
 
   const total = Number(row?.total ?? 0);
+  const agency = Number(row?.agency ?? 0);
   const threads = Number(row?.threads ?? 0);
   const instagram = Number(row?.instagram ?? 0);
   const youtube = Number(row?.youtube ?? 0);
   const organic = Number(row?.organic ?? 0);
-  const other = total - threads - instagram - youtube - organic;
+  const other = total - agency - threads - instagram - youtube - organic;
 
-  return { threads, instagram, youtube, organic, other: Math.max(0, other), total };
+  return { agency, threads, instagram, youtube, organic, other: Math.max(0, other), total };
 }
 
 /**

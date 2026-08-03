@@ -185,13 +185,16 @@ export async function getHomeDashboardData(options: {
 
   const periodStartKey = toDateKey(periodStart);
   const periodEndKey = toDateKey(periodEnd);
+  const followerBaselineDate = new Date(periodStart.getTime());
+  followerBaselineDate.setDate(followerBaselineDate.getDate() - 1);
+  const followerBaselineDateKey = toDateKey(followerBaselineDate);
 
   const threadsFollowerLatest = threadsInsights.dailyMetrics[0]?.followers ?? 0;
-  const threadsFollowerStart = findValueOnOrBefore(threadsInsights.dailyMetrics, periodStartKey, (item) => item.followers) ?? threadsFollowerLatest;
+  const threadsFollowerStart = findValueOnOrBefore(threadsInsights.dailyMetrics, followerBaselineDateKey, (item) => item.followers) ?? threadsFollowerLatest;
   const threadsFollowerDelta = threadsFollowerLatest - threadsFollowerStart;
 
   const instagramFollowerLatest = instagramData.latestFollower?.followers ?? instagramData.followerSeries[0]?.followers ?? 0;
-  const instagramFollowerStart = findValueOnOrBefore(instagramData.followerSeries, periodStartKey, (item) => item.followers) ?? instagramFollowerLatest;
+  const instagramFollowerStart = findValueOnOrBefore(instagramData.followerSeries, followerBaselineDateKey, (item) => item.followers) ?? instagramFollowerLatest;
   const instagramFollowerDelta = instagramFollowerLatest - instagramFollowerStart;
 
   const youtubeSubscriberLatest = youtubeData.channelSummary?.subscriberCount ?? 0;
@@ -288,6 +291,7 @@ export async function getHomeDashboardData(options: {
   );
 
   const lineRegistrationBySource = [
+    { source: '代理店', registrations: lineSourceCounts.agency },
     { source: 'Threads', registrations: lineSourceCounts.threads },
     { source: 'Instagram', registrations: lineSourceCounts.instagram },
     { source: 'YouTube', registrations: lineSourceCounts.youtube },
