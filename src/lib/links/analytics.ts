@@ -21,10 +21,12 @@ export interface LinkClicksSummary {
   }>;
 }
 
+// 現在サブアカウントで使っているThreads→LPのshort_code。
+export const THREADS_SUB_LP_SHORT_CODES = ['6po', '6mpo', '6tp'] as const;
+
 // Threads導線LPに配置されているLINE登録ボタンのshort_code一覧。
-// LaunchKit /content/opt-3, opt-4, threads-opt* に埋め込まれているリンクを手動で列挙。
-// LP側でCTAを増やした際はここに追記する。
-export const THREADS_LP_LINE_SHORT_CODES = [
+// アカウント別集計で混ざらないよう、メインとサブを分けて管理する。
+export const THREADS_MAIN_LP_LINE_SHORT_CODES = [
   'L-opt4',
   'L-opt4-tp',
   'L-opt4-th',
@@ -37,6 +39,13 @@ export const THREADS_LP_LINE_SHORT_CODES = [
   'prf_LN',
   'kpost_LN',
   'IG_LN2',
+] as const;
+
+export const THREADS_SUB_LP_LINE_SHORT_CODES = ['rcHgxy', 'cjFRhe', 'LkLzHK'] as const;
+
+export const THREADS_LP_LINE_SHORT_CODES = [
+  ...THREADS_MAIN_LP_LINE_SHORT_CODES,
+  ...THREADS_SUB_LP_LINE_SHORT_CODES,
 ] as const;
 
 export const INSTAGRAM_LP_LINE_SHORT_CODES = [
@@ -114,7 +123,11 @@ export async function getThreadsLpLineClicksByRange(
   const startKey = formatDateInput(start);
   const endKey = formatDateInput(end);
   const slugPrefixes = accountKey ? getLaunchkitSlugPrefixesForAccount(accountKey) : [];
-  const includeLegacyClicks = accountKey !== 'sub';
+  const legacyCodes = accountKey === 'main'
+    ? THREADS_MAIN_LP_LINE_SHORT_CODES
+    : accountKey === 'sub'
+      ? THREADS_SUB_LP_LINE_SHORT_CODES
+      : THREADS_LP_LINE_SHORT_CODES;
   const launchkitAccountJoin = slugPrefixes.length
     ? `
       JOIN \`${projectId}.${dataset}.launchkit_lps\` lp
@@ -142,7 +155,6 @@ export async function getThreadsLpLineClicksByRange(
       FROM \`${projectId}.${dataset}.click_logs\` cl
       JOIN latest_links ll ON cl.short_link_id = ll.id
       WHERE ll.rn = 1
-        AND @includeLegacyClicks = TRUE
         AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
     ),
     launchkit_clicks AS (
@@ -170,10 +182,9 @@ export async function getThreadsLpLineClicksByRange(
   const [rows] = await bigquery.query({
     query,
     params: {
-      codes: [...THREADS_LP_LINE_SHORT_CODES],
+      codes: [...legacyCodes],
       startDate: startKey,
       endDate: endKey,
-      includeLegacyClicks,
       ...Object.fromEntries(slugPrefixes.map((prefix, index) => [`slugPrefix${index}`, prefix])),
     },
   });
@@ -203,7 +214,7 @@ export async function getThreadsLinkClicksByRange(
 ): Promise<LinkClicksByDate[]> {
   const bigquery = createBigQueryClient(projectId);
   const slugPrefixes = accountKey ? getLaunchkitSlugPrefixesForAccount(accountKey) : [];
-  const includeLegacyClicks = accountKey !== 'sub';
+  const legacyAccountKey = accountKey === 'main' || accountKey === 'sub' ? accountKey : 'all';
   const launchkitAccountJoin = slugPrefixes.length
     ? `
       JOIN \`${projectId}.${dataset}.launchkit_lps\` lp
@@ -219,6 +230,7 @@ export async function getThreadsLinkClicksByRange(
     WITH latest_links AS (
       SELECT
         id,
+        short_code,
         ROW_NUMBER() OVER (PARTITION BY id ORDER BY created_at DESC) as rn
       FROM \`${projectId}.${dataset}.short_links\`
       WHERE is_active = true
@@ -230,7 +242,11 @@ export async function getThreadsLinkClicksByRange(
       FROM \`${projectId}.${dataset}.click_logs\` cl
       INNER JOIN latest_links ll ON cl.short_link_id = ll.id
       WHERE ll.rn = 1
-        AND @includeLegacyClicks = TRUE
+        AND (
+          @legacyAccountKey = 'all'
+          OR (@legacyAccountKey = 'sub' AND ll.short_code IN UNNEST(@subLpCodes))
+          OR (@legacyAccountKey = 'main' AND ll.short_code NOT IN UNNEST(@subLpCodes))
+        )
         AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
     ),
     launchkit_views AS (
@@ -260,7 +276,8 @@ export async function getThreadsLinkClicksByRange(
     params: {
       startDate: start.toISOString().slice(0, 10),
       endDate: end.toISOString().slice(0, 10),
-      includeLegacyClicks,
+      legacyAccountKey,
+      subLpCodes: [...THREADS_SUB_LP_SHORT_CODES],
       ...Object.fromEntries(slugPrefixes.map((prefix, index) => [`slugPrefix${index}`, prefix])),
     },
   });

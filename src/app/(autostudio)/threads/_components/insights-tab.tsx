@@ -37,6 +37,10 @@ interface InsightsTabProps {
   accountStatGroups?: Array<{
     title: string;
     note: string;
+    tableStats?: Array<{
+      label: string;
+      value: string;
+    }>;
     stats: Array<{
       label: string;
       value: string;
@@ -74,7 +78,6 @@ interface InsightsTabProps {
 type TopContentSort = 'postedAt' | 'views' | 'likes';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
 export function InsightsTab({
   posts: initialPosts,
   selectedRangeValue,
@@ -240,52 +243,86 @@ export function InsightsTab({
             </button>
           </header>
           {showAccountOverview && (
-          <div className="mt-6 space-y-8">
-            {accountStatGroups.map((group) => (
-              <section key={group.title}>
-                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">{group.title}</h3>
-                <dl className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-                  {group.stats.map((stat) => (
-                    <div key={`${group.title}-${stat.label}`} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-5">
-                      <dt className="text-xs font-medium uppercase tracking-[0.08em] text-[color:var(--color-text-secondary)]">
+          <div className="mt-4 space-y-4">
+            <section>
+              <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">合算</h3>
+              <dl className="mt-2 grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+                {accountStatGroups[0].stats.map((stat) => (
+                  <div
+                    key={`total-${stat.label}`}
+                    className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-3 py-3"
+                  >
+                    <dt className="text-[11px] font-medium uppercase tracking-[0.06em] text-[color:var(--color-text-secondary)]">
+                      {stat.label}
+                    </dt>
+                    <dd className="mt-1.5 text-2xl font-semibold leading-none text-[color:var(--color-text-primary)]">
+                      {stat.value}
+                    </dd>
+                    {stat.delta ? (
+                      <p
+                        className={[
+                          'mt-1.5 text-[10px] font-medium leading-4',
+                          stat.deltaTone === 'up'
+                            ? 'text-emerald-700'
+                            : stat.deltaTone === 'down'
+                              ? 'text-rose-600'
+                              : 'text-[color:var(--color-text-muted)]',
+                        ].join(' ')}
+                      >
+                        {stat.delta}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </dl>
+            </section>
+
+            <section className="overflow-x-auto rounded-[var(--radius-md)] border border-[color:var(--color-border)]">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead className="bg-[color:var(--color-surface-muted)] text-xs text-[color:var(--color-text-secondary)]">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">アカウント</th>
+                    {(accountStatGroups[1]?.tableStats ?? []).map((stat) => (
+                      <th key={`heading-${stat.label}`} className="whitespace-nowrap px-2.5 py-2 text-right font-medium">
                         {stat.label}
-                      </dt>
-                      <dd className="mt-4 text-[2rem] font-semibold leading-none text-[color:var(--color-text-primary)]">
-                        {stat.value}
-                      </dd>
-                      {stat.delta ? (
-                        <p
-                          className={[
-                            'mt-3 text-xs font-medium',
-                            stat.deltaTone === 'up'
-                              ? 'text-emerald-700'
-                              : stat.deltaTone === 'down'
-                                ? 'text-rose-600'
-                                : 'text-[color:var(--color-text-muted)]',
-                          ].join(' ')}
-                        >
-                          {stat.delta}
-                        </p>
-                      ) : null}
-                      {stat.deltaTone ? (
-                        <span
-                          className={[
-                            'mt-3 inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium',
-                            stat.deltaTone === 'up'
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : stat.deltaTone === 'down'
-                                ? 'bg-rose-50 text-rose-600'
-                                : 'bg-slate-100 text-slate-500',
-                          ].join(' ')}
-                        >
-                          {stat.deltaTone === 'up' ? '増加傾向' : stat.deltaTone === 'down' ? '減少傾向' : '横ばい'}
-                        </span>
-                      ) : null}
-                    </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[color:var(--color-border)]">
+                  {accountStatGroups.slice(1).map((group) => (
+                    <tr key={group.title} className="bg-white">
+                      <th className="whitespace-nowrap px-3 py-3 text-left font-medium text-[color:var(--color-text-primary)]">
+                        {group.title}
+                      </th>
+                      {(group.tableStats ?? []).map((stat) => {
+                        const isPositive = stat.value.startsWith('+') || (Number(stat.value.replaceAll(',', '')) > 0);
+                        const value = stat.label === 'LINE' && isPositive && !stat.value.startsWith('+')
+                          ? `+${stat.value}`
+                          : stat.value;
+                        const valueClassName = stat.label === '増加'
+                          ? stat.value.startsWith('+')
+                            ? 'text-green-600'
+                            : 'text-[color:var(--color-text-secondary)]'
+                          : stat.label === 'LINE'
+                            ? isPositive
+                              ? 'text-amber-600'
+                              : 'text-[color:var(--color-text-secondary)]'
+                            : ['投稿', 'CTR', 'CVR'].includes(stat.label)
+                              ? 'text-[color:var(--color-text-secondary)]'
+                              : 'text-[color:var(--color-text-primary)]';
+
+                        return (
+                          <td key={`${group.title}-${stat.label}`} className="px-2.5 py-3 text-right">
+                            <span className={valueClassName}>{value}</span>
+                          </td>
+                        );
+                      })}
+                    </tr>
                   ))}
-                </dl>
-              </section>
-            ))}
+                </tbody>
+              </table>
+            </section>
           </div>
           )}
         </Card>
@@ -324,9 +361,9 @@ export function InsightsTab({
                   <th className="px-3 py-2 text-right">増加</th>
                   <th className="px-3 py-2 text-right">投稿</th>
                   <th className="px-3 py-2 text-right">インプ</th>
-                  <th className="px-3 py-2 text-right">クリック</th>
+                  <th className="px-3 py-2 text-right">LP</th>
                   <th className="px-3 py-2 text-right">CTR</th>
-                  <th className="px-3 py-2 text-right">LPクリック</th>
+                  <th className="px-3 py-2 text-right">LP CTA</th>
                   <th className="px-3 py-2 text-right">LINE</th>
                   <th className="px-3 py-2 text-right">登録率</th>
                   <th className="px-3 py-2 text-right">CVR</th>

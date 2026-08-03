@@ -17,8 +17,8 @@ export const THREADS_ACCOUNTS: ThreadsAccount[] = [
     label: '本垢',
     handle: 'kudooo_ai',
     threadsUserId: '10012809578833342',
-    launchkitSlugPrefixes: ['opt-4'],
-    lineSourceNames: ['Threads'],
+    launchkitSlugPrefixes: ['opt-4', '6mth', 'm6thk', '6mthp'],
+    lineSourceNames: ['Threads Main', 'Threads メイン'],
   },
   {
     key: 'sub',
@@ -26,7 +26,14 @@ export const THREADS_ACCOUNTS: ThreadsAccount[] = [
     handle: 'kudooo_aii',
     threadsUserId: '27016191458061252',
     launchkitSlugPrefixes: ['opt-sub4'],
-    lineSourceNames: ['Threads Sub', 'Threads サブ', 'Threads sub'],
+    lineSourceNames: [
+      'Threads ポスト',
+      'Threads 固定',
+      'Threads プロフ',
+      'Threads Sub',
+      'Threads サブ',
+      'Threads sub',
+    ],
   },
 ];
 
@@ -38,7 +45,8 @@ export const THREADS_ACCOUNT_OPTIONS = [
     handle: 'all',
     threadsUserId: '',
     launchkitSlugPrefixes: THREADS_ACCOUNTS.flatMap((account) => account.launchkitSlugPrefixes),
-    lineSourceNames: THREADS_ACCOUNTS.flatMap((account) => account.lineSourceNames),
+    // 合算では親流入名のprefixでThreads配下をすべて拾う。
+    lineSourceNames: ['Threads'],
   },
 ];
 

@@ -135,7 +135,7 @@ export function ThreadsFunnelComparison({
     { id: 'postCount', label: '投稿数', getValueA: () => dataA?.postCount ?? 0, getValueB: () => dataB?.postCount ?? 0, isFunnel: false },
     { id: 'followerDelta', label: 'フォロワー増加数', getValueA: () => dataA?.followerDelta ?? 0, getValueB: () => dataB?.followerDelta ?? 0, isFunnel: false },
     { id: 'impressions', label: 'インプレッション', getValueA: () => dataA?.impressions ?? 0, getValueB: () => dataB?.impressions ?? 0, isFunnel: true },
-    { id: 'linkClicks', label: 'リンククリック', getValueA: () => dataA?.linkClicks ?? 0, getValueB: () => dataB?.linkClicks ?? 0, isFunnel: true },
+    { id: 'linkClicks', label: 'LP', getValueA: () => dataA?.linkClicks ?? 0, getValueB: () => dataB?.linkClicks ?? 0, isFunnel: true },
     { id: 'lineRegistrations', label: 'LINE登録', getValueA: () => dataA?.lineRegistrations ?? 0, getValueB: () => dataB?.lineRegistrations ?? 0, isFunnel: true },
   ];
 

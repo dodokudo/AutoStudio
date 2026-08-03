@@ -15,6 +15,7 @@ import { ScheduleTab } from "./_components/schedule-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
 import { countLineSourceRegistrations, listLineSourceRegistrations } from "@/lib/lstep/dashboard";
 import { getThreadsLinkClicksByRange, getThreadsLpLineClicksByRange } from "@/lib/links/analytics";
+import { getThreadsAgencyMetrics, type ThreadsAgencyMetrics } from "@/lib/threadsAgencyMetrics";
 import {
   THREADS_ACCOUNT_OPTIONS,
   getLineSourceNamesForAccount,
@@ -99,7 +100,7 @@ const getCachedThreadsLinkClicksByRange = unstable_cache(
   async (startISO: string, endISO: string, accountKey?: ThreadsAccountKey) => {
     return getThreadsLinkClicksByRange(new Date(startISO), new Date(endISO), accountKey);
   },
-  ['threads-link-clicks-by-range'],
+  ['threads-link-clicks-by-range-v2'],
   { revalidate: 1800 }
 );
 
@@ -107,7 +108,15 @@ const getCachedThreadsLpLineClicksByRange = unstable_cache(
   async (startISO: string, endISO: string, accountKey?: ThreadsAccountKey) => {
     return getThreadsLpLineClicksByRange(new Date(startISO), new Date(endISO), accountKey);
   },
-  ['threads-lp-line-clicks-by-range'],
+  ['threads-lp-line-clicks-by-range-v2'],
+  { revalidate: 1800 }
+);
+
+const getCachedThreadsAgencyMetrics = unstable_cache(
+  async (startDate: string, endDate: string) => {
+    return getThreadsAgencyMetrics(startDate, endDate);
+  },
+  ['threads-agency-metrics-v1'],
   { revalidate: 1800 }
 );
 
@@ -455,11 +464,18 @@ export default async function ThreadsHome({
 
     const ctrValue = safeDivide(totalLinkClicks, profileViewsNumeric);
     const lpClickConversionRate = safeDivide(lpLineClicksForRange, totalLinkClicks);
-    const lineRegistrationConversionRate = safeDivide(lineRegistrationsNumeric, lpLineClicksForRange);
     const lineRegistrationCvr = safeDivide(lineRegistrationsNumeric, totalLinkClicks);
     const lpLineClicksDeltaValue = lpLineClicksForRange - previousLpLineClicks;
 
     const rangeDurationDays = Math.max(1, Math.round((selectedRangeWindow.end.getTime() - selectedRangeWindow.start.getTime()) / DAY_MS) + 1);
+    const tableRangeDurationDays = Math.max(
+      1,
+      Math.round(
+        (Date.parse(`${formatDateInput(selectedRangeWindow.end)}T00:00:00Z`) -
+          Date.parse(`${formatDateInput(selectedRangeWindow.start)}T00:00:00Z`)) /
+          DAY_MS,
+      ) + 1,
+    );
 
     const postsPerDay = rangeDurationDays ? postsCountForRange / rangeDurationDays : null;
 
@@ -481,14 +497,13 @@ export default async function ThreadsHome({
     ].filter((part): part is string => Boolean(part));
 
     const lpClicksDeltaParts = [
-      lpClickConversionRate !== null ? `LP遷移率: ${formatPercent(lpClickConversionRate, 2)}` : null,
+      lpClickConversionRate !== null ? `LP CTA率: ${formatPercent(lpClickConversionRate, 2)}` : null,
       lpLineClicksDeltaValue !== 0
         ? `${lpLineClicksDeltaValue > 0 ? '+' : ''}${formatNumber(lpLineClicksDeltaValue)}`
         : null,
     ].filter((part): part is string => Boolean(part));
 
     const lineRegistrationDeltaParts = [
-      lineRegistrationConversionRate !== null ? `登録率: ${formatPercent(lineRegistrationConversionRate, 2)}` : null,
       lineRegistrationCvr !== null ? `CVR: ${formatPercent(lineRegistrationCvr, 2)}` : null,
       lineRegistrationDeltaValue !== null && lineRegistrationDeltaValue !== 0
         ? `${lineRegistrationDeltaValue > 0 ? '+' : ''}${formatNumber(lineRegistrationDeltaValue)}`
@@ -518,13 +533,13 @@ export default async function ThreadsHome({
         deltaTone: profileViewsDeltaTone,
       },
       {
-        label: 'リンククリック数',
+        label: 'LP',
         value: formatNumber(totalLinkClicks),
         delta: linkClicksDeltaParts.length ? linkClicksDeltaParts.join(' / ') : undefined,
         deltaTone: resolveDeltaTone(linkClicksDeltaValue ?? undefined),
       },
       {
-        label: 'LPクリック',
+        label: 'LP CTA',
         value: formatNumber(lpLineClicksForRange),
         delta: lpClicksDeltaParts.length ? lpClicksDeltaParts.join(' / ') : undefined,
         deltaTone: resolveDeltaTone(lpLineClicksDeltaValue),
@@ -588,6 +603,7 @@ export default async function ThreadsHome({
       const accountPreviousPostsCount = accountPreviousDailyPostStats.reduce((sum, d) => sum + d.postCount, 0);
       const accountPostsDelta = accountPostsCount - accountPreviousPostsCount;
       const accountPostsPerDay = rangeDurationDays ? accountPostsCount / rangeDurationDays : null;
+      const accountPostsPerDayForTable = accountPostsCount / tableRangeDurationDays;
       const accountPostsDeltaParts = [
         `${accountPostsDelta > 0 ? '+' : ''}${formatNumber(accountPostsDelta)}投稿`,
         accountPostsPerDay !== null ? `${accountPostsPerDay.toFixed(1)}件` : null,
@@ -621,12 +637,13 @@ export default async function ThreadsHome({
       const accountFollowerDelta =
         accountFollowersStart !== null && accountFollowersEnd !== null ? accountFollowersEnd - accountFollowersStart : 0;
       const accountFollowersCurrent = accountFollowersEnd ?? 0;
+      const accountFollowerDeltaPerDay = accountFollowerDelta / tableRangeDurationDays;
 
       const accountCtr = safeDivide(accountLinkClicks, accountImpressions);
       const accountLpClickConversionRate = safeDivide(accountLpClicks, accountLinkClicks);
-      const accountLineRegistrationConversionRate = safeDivide(accountLineRegistrationCount, accountLpClicks);
       const accountLineRegistrationCvr = safeDivide(accountLineRegistrationCount, accountLinkClicks);
       const accountLineRegistrationDelta = accountLineRegistrationCount - accountPreviousLineRegistrationCount;
+      const accountLineRegistrationsPerDay = accountLineRegistrationCount / tableRangeDurationDays;
 
       const accountLinkClicksDeltaParts = [
         accountCtr !== null ? `CTR: ${formatPercent(accountCtr, 2)}` : null,
@@ -636,14 +653,13 @@ export default async function ThreadsHome({
       ].filter((part): part is string => Boolean(part));
 
       const accountLpClicksDeltaParts = [
-        accountLpClickConversionRate !== null ? `LP遷移率: ${formatPercent(accountLpClickConversionRate, 2)}` : null,
+        accountLpClickConversionRate !== null ? `LP CTA率: ${formatPercent(accountLpClickConversionRate, 2)}` : null,
         accountLpClicksDelta !== 0
           ? `${accountLpClicksDelta > 0 ? '+' : ''}${formatNumber(accountLpClicksDelta)}`
           : null,
       ].filter((part): part is string => Boolean(part));
 
       const accountLineRegistrationDeltaParts = [
-        accountLineRegistrationConversionRate !== null ? `登録率: ${formatPercent(accountLineRegistrationConversionRate, 2)}` : null,
         accountLineRegistrationCvr !== null ? `CVR: ${formatPercent(accountLineRegistrationCvr, 2)}` : null,
         accountLineRegistrationDelta !== 0
           ? `${accountLineRegistrationDelta > 0 ? '+' : ''}${formatNumber(accountLineRegistrationDelta)}`
@@ -653,6 +669,28 @@ export default async function ThreadsHome({
       return {
         title: accountKey === 'main' ? 'メインアカウント' : 'サブアカウント',
         note: noteText,
+        tableStats: [
+          { label: 'フォロワー', value: formatNumber(accountFollowersCurrent) },
+          {
+            label: '増加',
+            value: `${accountFollowerDelta > 0 ? '+' : ''}${formatNumber(accountFollowerDelta)} (${accountFollowerDeltaPerDay > 0 ? '+' : ''}${formatNumber(Math.round(accountFollowerDeltaPerDay))})`,
+          },
+          { label: '投稿', value: `${formatNumber(accountPostsCount)} (${formatNumber(Math.round(accountPostsPerDayForTable))})` },
+          { label: 'インプ', value: formatNumber(accountImpressions) },
+          { label: 'LP', value: formatNumber(accountLinkClicks) },
+          { label: 'CTR', value: accountCtr !== null ? formatPercent(accountCtr, 2) : '-' },
+          { label: 'LP CTA', value: formatNumber(accountLpClicks) },
+          {
+            label: 'LINE',
+            value: accountLineRegistrationCount > 0
+              ? `+${formatNumber(accountLineRegistrationCount)} (+${formatNumber(Math.round(accountLineRegistrationsPerDay))})`
+              : '0 (0)',
+          },
+          {
+            label: 'CVR',
+            value: accountLineRegistrationCvr !== null ? formatPercent(accountLineRegistrationCvr, 2) : '-',
+          },
+        ],
         stats: [
           {
             label: '現在のフォロワー数',
@@ -679,13 +717,13 @@ export default async function ThreadsHome({
             deltaTone: resolveDeltaTone(accountImpressionsDelta),
           },
           {
-            label: 'リンククリック数',
+            label: 'LP',
             value: formatNumber(accountLinkClicks),
             delta: accountLinkClicksDeltaParts.length ? accountLinkClicksDeltaParts.join(' / ') : undefined,
             deltaTone: resolveDeltaTone(accountLinkClicksDelta),
           },
           {
-            label: 'LPクリック',
+            label: 'LP CTA',
             value: formatNumber(accountLpClicks),
             delta: accountLpClicksDeltaParts.length ? accountLpClicksDeltaParts.join(' / ') : undefined,
             deltaTone: resolveDeltaTone(accountLpClicksDelta),
@@ -700,10 +738,55 @@ export default async function ThreadsHome({
       };
     };
 
+    let agencyMetrics: ThreadsAgencyMetrics | null = null;
+    if (selectedAccountKey === 'all') {
+      try {
+        agencyMetrics = await getCachedThreadsAgencyMetrics(
+          formatDateInput(rangeStartDate),
+          formatDateInput(rangeEndDate),
+        );
+      } catch (agencyError) {
+        console.error('[threads/page] Failed to load agency metrics:', agencyError);
+      }
+    }
+
+    const agencyCtr = agencyMetrics ? safeDivide(agencyMetrics.lpClicks, agencyMetrics.impressions) : null;
+    const agencyCvr = agencyMetrics ? safeDivide(agencyMetrics.lineRegistrations, agencyMetrics.lpClicks) : null;
+    const agencyFollowerDeltaPerDay = agencyMetrics ? agencyMetrics.followerDelta / tableRangeDurationDays : 0;
+    const agencyPostsPerDay = agencyMetrics ? agencyMetrics.posts / tableRangeDurationDays : 0;
+    const agencyLineRegistrationsPerDay = agencyMetrics ? agencyMetrics.lineRegistrations / tableRangeDurationDays : 0;
+    const agencyGroup = agencyMetrics
+      ? {
+          title: '代理店',
+          note: noteText,
+          tableStats: [
+            { label: 'フォロワー', value: formatNumber(agencyMetrics.followers) },
+            {
+              label: '増加',
+              value: `${agencyMetrics.followerDelta > 0 ? '+' : ''}${formatNumber(agencyMetrics.followerDelta)} (${agencyFollowerDeltaPerDay > 0 ? '+' : ''}${formatNumber(Math.round(agencyFollowerDeltaPerDay))})`,
+            },
+            { label: '投稿', value: `${formatNumber(agencyMetrics.posts)} (${formatNumber(Math.round(agencyPostsPerDay))})` },
+            { label: 'インプ', value: formatNumber(agencyMetrics.impressions) },
+            { label: 'LP', value: formatNumber(agencyMetrics.lpClicks) },
+            { label: 'CTR', value: agencyCtr !== null ? formatPercent(agencyCtr, 2) : '-' },
+            { label: 'LP CTA', value: formatNumber(agencyMetrics.lpCtaClicks) },
+            {
+              label: 'LINE',
+              value: agencyMetrics.lineRegistrations > 0
+                ? `+${formatNumber(agencyMetrics.lineRegistrations)} (+${formatNumber(Math.round(agencyLineRegistrationsPerDay))})`
+                : '0 (0)',
+            },
+            { label: 'CVR', value: agencyCvr !== null ? formatPercent(agencyCvr, 2) : '-' },
+          ],
+          stats: [],
+        }
+      : null;
+
     const accountStatGroups = selectedAccountKey === 'all'
       ? [
           { title: '合算', note: noteText, stats },
           ...(await Promise.all(CONCRETE_THREAD_ACCOUNTS.map((accountKey) => buildOverviewStatsForAccount(accountKey)))),
+          ...(agencyGroup ? [agencyGroup] : []),
         ]
       : undefined;
 
