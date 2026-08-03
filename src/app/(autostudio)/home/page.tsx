@@ -13,7 +13,7 @@ const getCachedHomeDashboardData = unstable_cache(
       rangeValue,
     });
   },
-  ['home-dashboard'],
+  ['home-dashboard-v2'],
   { revalidate: 1800 }
 );
 
