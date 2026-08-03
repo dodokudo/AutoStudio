@@ -15,6 +15,8 @@ import { DailyRegistrationsTable } from './DailyRegistrationsTable';
 import { LineFunnelsManager } from './LineFunnelsManager';
 import { CrossAnalysis, type CrossAnalysisData } from './CrossAnalysis';
 import { PanelAnalysis } from './PanelAnalysis';
+import { LineDeliveryDraft } from './LineDeliveryDraft';
+import { LinePromptDraft } from './LinePromptDraft';
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, type UnifiedRangePreset, isUnifiedRangePreset } from '@/lib/dateRangePresets';
 
 const fetcher = async (input: RequestInfo) => {
@@ -36,6 +38,8 @@ const LINE_TABS = [
   { id: 'funnel', label: 'ファネル分析' },
   { id: 'cross', label: 'クロス分析' },
   { id: 'custom_funnel', label: 'カスタムファネル' },
+  { id: 'delivery_create', label: '配信作成' },
+  { id: 'prompt', label: 'プロンプト' },
 ] as const;
 
 type LineTabKey = (typeof LINE_TABS)[number]['id'];
@@ -45,6 +49,8 @@ const LINE_TAB_SKELETON_SECTIONS: Record<LineTabKey, number> = {
   funnel: 2,
   cross: 1,
   custom_funnel: 1,
+  delivery_create: 2,
+  prompt: 2,
 };
 
 const TAB_SKELETON_DELAY_MS = 240;
@@ -707,16 +713,18 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
           }}
           className="flex-1 min-w-[240px]"
         />
-        <DashboardDateRangePicker
-          options={datePickerOptions}
-          value={dateRange}
-          onChange={handleRangeSelect}
-          allowCustom
-          customStart={customStartDate}
-          customEnd={customEndDate}
-          onCustomChange={handleCustomRangeChange}
-          latestLabel={initialData.latestSnapshotDate ? `最新 ${formatDateLabel(initialData.latestSnapshotDate)}` : undefined}
-        />
+        {activeTab === 'delivery_create' || activeTab === 'prompt' ? null : (
+          <DashboardDateRangePicker
+            options={datePickerOptions}
+            value={dateRange}
+            onChange={handleRangeSelect}
+            allowCustom
+            customStart={customStartDate}
+            customEnd={customEndDate}
+            onCustomChange={handleCustomRangeChange}
+            latestLabel={initialData.latestSnapshotDate ? `最新 ${formatDateLabel(initialData.latestSnapshotDate)}` : undefined}
+          />
+        )}
       </div>
 
       {isTabLoading ? (
@@ -1469,6 +1477,10 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
               })()}
             />
           ) : null}
+
+          {activeTab === 'delivery_create' ? <LineDeliveryDraft /> : null}
+
+          {activeTab === 'prompt' ? <LinePromptDraft /> : null}
         </>
       )}
     </div>
