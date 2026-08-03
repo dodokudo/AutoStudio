@@ -346,7 +346,7 @@ export function InsightsTab({
             onClick={() => setShowDailyTable(!showDailyTable)}
             className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text-secondary)] transition-colors hover:bg-[color:var(--color-surface-muted)]"
           >
-            {showDailyTable ? '表を閉じる' : '日別データを表示'}
+            {showDailyTable ? '表とグラフを閉じる' : '表とグラフを表示'}
           </button>
         </div>
 
@@ -474,9 +474,10 @@ export function InsightsTab({
           </div>
         )}
 
-        <div className="mt-6 h-72">
-          {hasChartData ? (
-            <ResponsiveContainer>
+        {showDailyTable && (
+          <div className="mt-6 h-72">
+            {hasChartData ? (
+              <ResponsiveContainer>
               <ComposedChart data={chartData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
                 <XAxis
@@ -543,13 +544,14 @@ export function InsightsTab({
                   activeDot={{ r: 5 }}
                 />
               </ComposedChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
-              <p className="text-sm text-[color:var(--color-text-muted)]">表示できるデータがまだありません。</p>
-            </div>
-          )}
-        </div>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
+                <p className="text-sm text-[color:var(--color-text-muted)]">表示できるデータがまだありません。</p>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {isUsingFallbackRange ? (
