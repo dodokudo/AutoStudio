@@ -13,6 +13,8 @@ ${TOKUTEN_GUIDE_URL}`;
 // 投稿の伸び検知条件
 const IMPRESSIONS_THRESHOLD = 1000; // インプレッション閾値
 const COMMENT_CTR_THRESHOLD = 0.1; // コメント1への遷移率閾値(10%)
+// この閾値を超えたインプレッションなら、遷移率を問わず誘導を出す
+const IMPRESSIONS_ONLY_THRESHOLD = 5000;
 
 // 監視対象期間（当日+前日の2日間）
 const MONITORING_DAYS = 2;
@@ -68,12 +70,21 @@ async function findTriggerCandidates(client: ReturnType<typeof createBigQueryCli
         WHEN impressions > 0 THEN IFNULL(comment1_views, 0) / impressions
         ELSE 0
       END as comment1_ctr,
-      'impressions_and_ctr' as trigger_reason
+      CASE
+        WHEN impressions >= @impressions_only_threshold THEN 'impressions_only'
+        ELSE 'impressions_and_ctr'
+      END as trigger_reason
     FROM post_stats
     WHERE
-      impressions >= @impressions_threshold
-      AND impressions > 0
-      AND (IFNULL(comment1_views, 0) / impressions) >= @ctr_threshold
+      impressions > 0
+      AND (
+        -- インプレッションが十分に大きければ遷移率は問わない
+        impressions >= @impressions_only_threshold
+        OR (
+          impressions >= @impressions_threshold
+          AND (IFNULL(comment1_views, 0) / impressions) >= @ctr_threshold
+        )
+      )
     ORDER BY posted_at DESC
   `;
 
@@ -82,6 +93,7 @@ async function findTriggerCandidates(client: ReturnType<typeof createBigQueryCli
     params: {
       impressions_threshold: IMPRESSIONS_THRESHOLD,
       ctr_threshold: COMMENT_CTR_THRESHOLD,
+      impressions_only_threshold: IMPRESSIONS_ONLY_THRESHOLD,
     },
   });
 
