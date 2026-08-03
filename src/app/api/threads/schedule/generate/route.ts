@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
 import { THREADS_OPERATION_PROMPT } from '@/lib/threadsOperationPrompt';
+import { getEffectivePrompt } from '@/lib/promptSettings';
 import type { BigQuery } from '@google-cloud/bigquery';
 
 const PROJECT_ID = resolveProjectId();
@@ -87,10 +88,12 @@ LIMIT 10
 }
 
 function buildPrompt({
+  operationPrompt,
   hook,
   theme,
   monguchiExamples,
 }: {
+  operationPrompt: string;
   hook: string | null;
   theme: string | null;
   monguchiExamples: string;
@@ -101,7 +104,7 @@ function buildPrompt({
 
   // フックが指定されている場合は、コメント1と2のみ生成する
   if (hook) {
-    return `${THREADS_OPERATION_PROMPT}
+    return `${operationPrompt}
 
 # 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿）
 以下の投稿の構成・文体・リズム・表現を完全にトレースしてThreads運用系の投稿を作成してください。
@@ -135,7 +138,7 @@ ${themeBlock}## 重要な指示
   }
 
   // フックが指定されていない場合は、全て生成する
-  return `${THREADS_OPERATION_PROMPT}
+  return `${operationPrompt}
 
 # 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿）
 以下の投稿の構成・文体・リズム・表現を完全にトレースしてThreads運用系の投稿を作成してください。
@@ -170,6 +173,7 @@ export async function POST(request: NextRequest) {
     const rawHook = typeof body?.hook === 'string' ? body.hook : '';
     const hook = rawHook.trim().length > 0 ? rawHook : null;
     const theme = typeof body?.theme === 'string' ? body.theme.trim() || null : null;
+    const operationPrompt = await getEffectivePrompt('threads-operation', THREADS_OPERATION_PROMPT);
 
     const client = createBigQueryClient(PROJECT_ID);
     const monguchiPosts = await fetchMonguchiPosts(client, PROJECT_ID);
@@ -178,7 +182,7 @@ export async function POST(request: NextRequest) {
       return `### 参考例${idx + 1}（${post.impressions.toLocaleString()}imp / フォロワー増${post.followers_delta}名 / ${post.tier}）\n${post.content}\n`;
     }).join('\n');
 
-    const prompt = buildPrompt({ hook, theme, monguchiExamples });
+    const prompt = buildPrompt({ operationPrompt, hook, theme, monguchiExamples });
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);

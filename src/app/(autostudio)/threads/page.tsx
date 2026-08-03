@@ -24,7 +24,7 @@ import {
   type ThreadsAccountKey,
   type ThreadsConcreteAccountKey,
 } from "@/lib/threadsAccounts";
-import { ThreadsTabShell } from "./_components/threads-tab-shell";
+import { ThreadsTabShell, type ThreadsTabKey } from "./_components/threads-tab-shell";
 import { UNIFIED_RANGE_OPTIONS, resolveDateRange, isUnifiedRangePreset, formatDateInput, type UnifiedRangePreset } from "@/lib/dateRangePresets";
 
 const PROJECT_ID = resolveProjectId();
@@ -125,8 +125,6 @@ const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CONCRETE_THREAD_ACCOUNTS: ThreadsConcreteAccountKey[] = ['main', 'sub'];
 
-type ThreadsTabKey = 'post' | 'schedule' | 'insights' | 'competitor' | 'report';
-
 export default async function ThreadsHome({
   searchParams,
 }: {
@@ -159,7 +157,7 @@ export default async function ThreadsHome({
 
   const tabParamRaw = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : undefined;
   const normalizedTabParam = tabParamRaw === 'overview' ? 'insights' : tabParamRaw;
-  const allowedTabs: ThreadsTabKey[] = ['insights', 'post', 'schedule', 'competitor', 'report'];
+  const allowedTabs = ['insights', 'post', 'schedule', 'competitor', 'report'] as const;
   const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'insights';
 
   const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
@@ -172,23 +170,25 @@ export default async function ThreadsHome({
     if (customEnd) sharedParams.set('end', customEnd);
   }
 
-  const tabItems = (
-    [
-      { id: 'insights' as ThreadsTabKey, label: 'インサイト' },
-      { id: 'schedule' as ThreadsTabKey, label: '予約投稿' },
-      { id: 'post' as ThreadsTabKey, label: '投稿' },
-      { id: 'competitor' as ThreadsTabKey, label: '競合インサイト' },
-      { id: 'report' as ThreadsTabKey, label: 'レポート' },
+  const tabItems = [
+    ...([
+      { id: 'insights' as const, label: 'インサイト' },
+      { id: 'schedule' as const, label: '予約投稿' },
+      { id: 'post' as const, label: '投稿' },
+      { id: 'competitor' as const, label: '競合インサイト' },
+      { id: 'report' as const, label: 'レポート' },
     ] satisfies Array<{ id: ThreadsTabKey; label: string }>
-  ).map((item) => {
-    const params = new URLSearchParams(sharedParams.toString());
-    params.set('tab', item.id);
-    return {
-      id: item.id,
-      label: item.label,
-      href: `?${params.toString()}`,
-    };
-  });
+    ).map((item) => {
+      const params = new URLSearchParams(sharedParams.toString());
+      params.set('tab', item.id);
+      return {
+        id: item.id,
+        label: item.label,
+        href: `?${params.toString()}`,
+      };
+    }),
+    { id: 'prompt' as const, label: 'プロンプト', href: '/threads/prompt' },
+  ];
 
   const accountSelector = (
     <div className="grid w-full min-w-0 grid-cols-3 gap-1 rounded-[var(--radius-lg)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-1 sm:w-auto sm:flex sm:flex-wrap sm:items-center">

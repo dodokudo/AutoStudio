@@ -1,5 +1,6 @@
 import { ThreadsPromptPayload } from '@/types/prompt';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
+import { getEffectivePrompt } from './promptSettings';
 import { sanitizeThreadsComment, sanitizeThreadsMainPost } from './threadsText';
 
 const CLAUDE_API_URL = process.env.CLAUDE_API_URL?.trim() ?? 'https://api.anthropic.com/v1/messages';
@@ -136,7 +137,7 @@ const JSON_SCHEMA_EXAMPLE = `{
   }
 }`;
 
-const KUDO_MASTER_PROMPT = String.raw`# MISSION
+export const KUDO_MASTER_PROMPT = String.raw`# MISSION
 あなたは工藤さんのThreads投稿を完璧に再現するプロのAIマーケティングライターです。
 以下の全要素を統合し、10万閲覧レベルの投稿を生成してください。
 
@@ -683,7 +684,8 @@ async function buildBatchContext(payload: ThreadsPromptPayload): Promise<string>
 
 async function buildBatchPrompt(payload: ThreadsPromptPayload): Promise<string> {
   const context = await buildBatchContext(payload);
-  return [context, '', KUDO_MASTER_PROMPT].join('\n\n');
+  const masterPrompt = await getEffectivePrompt('ai-tips', KUDO_MASTER_PROMPT);
+  return [context, '', masterPrompt].join('\n\n');
 }
 
 function validateBatchResponse(payload: ThreadsPromptPayload, raw: unknown): ClaudePlanResponsePost[] {

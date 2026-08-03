@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 import { classNames } from '@/lib/classNames';
 
-type ThreadsTabKey = 'post' | 'schedule' | 'insights' | 'competitor' | 'report';
+export type ThreadsTabKey = 'post' | 'schedule' | 'insights' | 'competitor' | 'report' | 'prompt';
 
 type TabItem = {
   id: ThreadsTabKey;
@@ -29,7 +29,7 @@ export function ThreadsTabShell({ tabItems, activeTab, accountSelector, rangeSel
     () =>
       tabItems.map((item) => ({
         ...item,
-        fullHref: `${pathname}${item.href}`,
+        fullHref: item.href.startsWith('/') ? item.href : `${pathname}${item.href}`,
       })),
     [tabItems, pathname],
   );

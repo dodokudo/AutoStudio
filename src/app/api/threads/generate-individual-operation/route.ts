@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
 import { upsertPlan } from '@/lib/bigqueryPlans';
 import { THREADS_OPERATION_PROMPT } from '@/lib/threadsOperationPrompt';
+import { getEffectivePrompt } from '@/lib/promptSettings';
 import type { BigQuery } from '@google-cloud/bigquery';
 
 const PROJECT_ID = resolveProjectId();
@@ -207,6 +208,8 @@ export async function POST(request: NextRequest) {
       throw new Error('CLAUDE_API_KEY is not configured');
     }
 
+    const operationPrompt = await getEffectivePrompt('threads-operation', THREADS_OPERATION_PROMPT);
+
     // リクエストからテーマを取得（任意）
     const body = await request.json().catch(() => ({}));
     const customTheme = typeof body?.theme === 'string' ? body.theme.trim() : '';
@@ -234,7 +237,7 @@ export async function POST(request: NextRequest) {
       return `### 参考例${idx + 1}（${post.impressions.toLocaleString()}imp / フォロワー増${post.followers_delta}名 / ${post.tier}）\n${post.content}\n`;
     }).join('\n');
 
-    const prompt = `${THREADS_OPERATION_PROMPT}
+    const prompt = `${operationPrompt}
 
 # 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿）
 以下の投稿の構成・文体・リズム・表現を完全にトレースしてThreads運用系の投稿を作成してください。

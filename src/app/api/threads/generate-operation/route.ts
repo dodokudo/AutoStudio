@@ -1,6 +1,7 @@
 import { resolveProjectId, createBigQueryClient } from '@/lib/bigquery';
 import { replaceTodayPlans } from '@/lib/bigqueryPlans';
 import { THREADS_OPERATION_PROMPT } from '@/lib/threadsOperationPrompt';
+import { getEffectivePrompt } from '@/lib/promptSettings';
 import { searchMultipleTopics } from '@/lib/tavily/client';
 import type { PlanStatus, ThreadPlanSummary } from '@/types/threadPlan';
 import type { BigQuery } from '@google-cloud/bigquery';
@@ -500,6 +501,8 @@ async function generateThreadsOperationPosts(latestUpdates: string): Promise<Cla
     throw new Error('CLAUDE_API_KEY is not configured');
   }
 
+  const operationPrompt = await getEffectivePrompt('threads-operation', THREADS_OPERATION_PROMPT);
+
   // 門口さんの投稿を20件取得
   const client = createBigQueryClient(PROJECT_ID);
   const monguchiPosts = await fetchMonguchiPostsForOperation(client, PROJECT_ID);
@@ -542,7 +545,7 @@ ${latestUpdates}
 `
       : '';
 
-    const prompt = `${THREADS_OPERATION_PROMPT}
+    const prompt = `${operationPrompt}
 
 ${latestUpdatesSection}# 門口さんの実際の投稿例（直近30日間の高パフォーマンス投稿20件）
 以下の投稿の構成・文体・リズム・表現を完全にトレースしてThreads運用系の投稿を作成してください。
