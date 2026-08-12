@@ -1,0 +1,33 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--file=deploy/lstep-yoko/Dockerfile'
+      - '--tag=${_IMAGE_URI}'
+      - '.'
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '${_IMAGE_URI}'
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - deploy
+      - ${_JOB_NAME}
+      - '--image=${_IMAGE_URI}'
+      - '--region=${_REGION}'
+      - '--service-account=${_SERVICE_ACCOUNT}'
+      - '--env-vars-file=deploy/lstep-yoko/env.yaml'
+      - '--set-secrets=LSTEP_SMTP_PASS=LSTEP_SMTP_PASS:latest,LSTEP_USERNAME=LSTEP_YOKO_USERNAME:latest,LSTEP_PASSWORD=LSTEP_YOKO_PASSWORD:latest'
+      - '--task-timeout=30m'
+      - '--max-retries=3'
+images:
+  - '${_IMAGE_URI}'
+
+substitutions:
+  _IMAGE_URI: 'asia-northeast1-docker.pkg.dev/mark-454114/autostudio/lstep-yoko:latest'
+  _JOB_NAME: 'autostudio-lstep-yoko'
+  _REGION: 'asia-northeast1'
+  _SERVICE_ACCOUNT: 'autostudio-lstep@mark-454114.iam.gserviceaccount.com'

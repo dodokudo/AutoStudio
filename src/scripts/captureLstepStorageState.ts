@@ -16,12 +16,25 @@ async function main(): Promise<void> {
   const workspaceDir = await mkdtemp(join(tmpdir(), 'lstep-capture-'));
   const storageStatePath = join(workspaceDir, 'storage-state.json');
 
-  const browser = await chromium.launch({ headless: false });
+  const browser = await chromium.launch({
+    headless: false,
+    ...(process.env.LSTEP_BROWSER_EXECUTABLE_PATH
+      ? { executablePath: process.env.LSTEP_BROWSER_EXECUTABLE_PATH }
+      : {}),
+  });
   const context = await browser.newContext({ acceptDownloads: true });
   const page = await context.newPage();
 
   console.log('Lstepログインページを開きます。reCAPTCHAを含め手動でログインしてください。');
   await page.goto(config.loginUrl, { waitUntil: 'networkidle' });
+
+  const username = process.env.LSTEP_USERNAME;
+  const password = process.env.LSTEP_PASSWORD;
+  if (username && password) {
+    await page.locator('#input_name,input[name="name"]').first().fill(username);
+    await page.locator('#input_password,input[name="password"]').first().fill(password);
+    console.log('ユーザーIDとパスワードを入力しました。reCAPTCHA確認後にログインしてください。');
+  }
 
   console.log('ログイン完了を自動検知します（最大10分待機）...');
   const deadline = Date.now() + 10 * 60 * 1000;

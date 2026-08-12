@@ -44,7 +44,7 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     await page.goto('https://manager.linestep.net/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     if (await isSessionExpired(page)) {
-      await loginWithCredentials(page);
+      await loginWithCredentials(page, config.loginUrl);
       await context.storageState({ path: storageStatePath });
       await uploadFileToGcs(
         storage,
@@ -100,15 +100,19 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
   }
 }
 
-async function loginWithCredentials(page: Page): Promise<void> {
+async function loginWithCredentials(page: Page, loginUrl: string): Promise<void> {
   const username = process.env.LSTEP_USERNAME;
   const password = process.env.LSTEP_PASSWORD;
   if (!username || !password) {
     throw new CookieExpiredError('Lstepのセッションが切れており、自動再ログイン用の認証情報がありません');
   }
 
-  const usernameInput = page.locator('input[type="email"]:visible,input[type="text"]:visible').first();
-  const passwordInput = page.locator('input[type="password"]:visible').first();
+  if (!isLoginPage(page)) {
+    await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  }
+
+  const usernameInput = page.locator('#input_name:visible,input[name="name"]:visible,input[type="email"]:visible,input[type="text"]:visible').first();
+  const passwordInput = page.locator('#input_password:visible,input[name="password"]:visible,input[type="password"]:visible').first();
   if (!await usernameInput.count() || !await passwordInput.count()) {
     throw new CookieExpiredError('Lstepのログイン入力欄が見つかりません');
   }
