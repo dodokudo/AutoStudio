@@ -111,11 +111,11 @@ export const PRESET_FUNNEL_3M: FunnelDefinition = {
   steps: [
     { id: 'base', label: '計測対象', tagColumn: '_base' },
     { id: 'survey', label: 'アンケート回答', tagColumn: 'survey_completed' },
-    { id: 'video_lp', label: '動画LP閲覧', tagColumn: '3m_lp' },
-    { id: 'seminar_form', label: 'セミナーフォーム遷移', tagColumn: '3m_3' },
-    { id: 'seminar_applied', label: 'セミナー申込済み', tagColumn: '3m_done' },
-    { id: 'fe_purchased', label: 'FE購入', tagColumn: '3m_fe' },
-    { id: 'be_purchased', label: 'BE購入', tagColumn: '3m_be' },
+    { id: 'video_lp', label: '動画LP閲覧', tagColumn: '3m_video_lp' },
+    { id: 'seminar_form', label: 'セミナーフォーム遷移', tagColumn: '3m_seminar_form' },
+    { id: 'seminar_applied', label: 'セミナー申込済み', tagColumn: '3m_seminar_applied' },
+    { id: 'fe_purchased', label: 'FE購入', tagColumn: '3m_fe_purchased' },
+    { id: 'be_purchased', label: 'BE購入', tagColumn: '3m_be_purchased' },
   ],
 };
 
