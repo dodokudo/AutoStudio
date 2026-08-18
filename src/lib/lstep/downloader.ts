@@ -144,25 +144,15 @@ function isLoginPage(page: Page): boolean {
   return false;
 }
 
-// Cookie/セッション失効を多面的に検知する。
-// Lstepはセッション切れ時に必ずしも /account/login にリダイレクトしない（空画面を返す）ため、
-// URL以外にも「ログインフォームの存在」「サイドバーの存在」を併せて確認する。
-async function isSessionExpired(page: Page): Promise<boolean> {
+// 実際のログインURLまたはログインフォームだけをセッション失効の根拠にする。
+// サイドバー文言の有無はUI変更で変わるため、失効判定には使わない。
+export async function isSessionExpired(page: Page): Promise<boolean> {
   if (isLoginPage(page)) {
     return true;
   }
-  // ログインフォーム要素が見える＝ログイン画面
+
   const loginFormCount = await page.locator('input[type="password"], form[action*="login"]').count();
-  if (loginFormCount > 0) {
-    return true;
-  }
-  // 5秒以内にサイドバーの「友だちリスト」テキストが見つからなければセッション切れ扱い
-  try {
-    await page.locator('text=友だちリスト').first().waitFor({ state: 'attached', timeout: 5000 });
-    return false;
-  } catch {
-    return true;
-  }
+  return loginFormCount > 0;
 }
 
 async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Download> {
