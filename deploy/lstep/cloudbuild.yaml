@@ -22,7 +22,8 @@ steps:
       - '--env-vars-file=deploy/lstep/env.yaml'
       - '--set-secrets=LSTEP_SMTP_PASS=LSTEP_SMTP_PASS:latest,LSTEP_USERNAME=LSTEP_USERNAME:latest,LSTEP_PASSWORD=LSTEP_PASSWORD:latest'
       - '--task-timeout=30m'
-      - '--max-retries=3'
+      # アプリ内で4回リトライするため、Cloud Run側ではコンテナを再実行しない
+      - '--max-retries=0'
 images:
   - '${_IMAGE_URI}'
 

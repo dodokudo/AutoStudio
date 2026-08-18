@@ -11,16 +11,16 @@ test('opens the configured friends URL without relying on dashboard clicks', asy
     waitForTimeout: async () => undefined,
   } as unknown as Parameters<typeof navigateToFriendsPage>[0];
 
-  await navigateToFriendsPage(page, 'https://manager.linestep.net/friends');
+  await navigateToFriendsPage(page, 'https://manager.linestep.net/line/show');
 
   assert.deepEqual(calls, [
-    { url: 'https://manager.linestep.net/friends', timeout: 60_000 },
+    { url: 'https://manager.linestep.net/line/show', timeout: 60_000 },
   ]);
 });
 
 test('does not treat a changed friends-page layout as an expired session', async () => {
   const page = {
-    url: () => 'https://manager.linestep.net/friends',
+    url: () => 'https://manager.linestep.net/line/show',
     locator: () => ({ count: async () => 0 }),
   } as unknown as Parameters<typeof isSessionExpired>[0];
 
