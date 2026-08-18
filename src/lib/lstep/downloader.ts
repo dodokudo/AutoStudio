@@ -14,6 +14,11 @@ interface DownloadOutcome {
   workspaceDir: string;
 }
 
+export async function navigateToFriendsPage(page: Page, friendsUrl: string): Promise<void> {
+  await page.goto(friendsUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  await page.waitForTimeout(2_000);
+}
+
 export async function downloadLstepCsv(storage: Storage, config: LstepConfig): Promise<DownloadOutcome> {
   let browser: Browser | null = null;
   const workspaceDir = await mkdtemp(join(tmpdir(), 'lstep-'));
@@ -40,8 +45,8 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
     const page = await context.newPage();
     page.setDefaultTimeout(180000); // 3分
 
-    // まずログイン後のダッシュボードに移動
-    await page.goto('https://manager.linestep.net/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // トップ画面の告知カードやモーダルを避け、友だち一覧へ直接移動する
+    await navigateToFriendsPage(page, config.friendsUrl);
 
     if (await isSessionExpired(page)) {
       await loginWithCredentials(page, config.loginUrl);
@@ -56,19 +61,8 @@ export async function downloadLstepCsv(storage: Storage, config: LstepConfig): P
       console.log('Lstepへ自動再ログインし、セッションをGCSへ保存しました');
     }
 
-    // サイドバーから友だちリストに移動
-    try {
-      await page.click('text=友だちリスト', { timeout: 10000 });
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2000);
-    } catch {
-      // 別の方法で友だちリストに移動を試行
-      await page.click('text=1対1トーク', { timeout: 5000 });
-      await page.waitForTimeout(1000);
-      await page.click('text=友だちリスト', { timeout: 5000 });
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2000);
-    }
+    // ログイン後はトップ画面へ戻るため、改めて友だち一覧を直接開く
+    await navigateToFriendsPage(page, config.friendsUrl);
 
     // 友だちリスト画面が出ている＝ログインできている、を再確認
     if (await isSessionExpired(page)) {
