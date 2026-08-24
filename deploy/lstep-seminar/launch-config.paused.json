@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "launchId": "legacy-2026-07-paused",
+  "enabled": false,
+  "window": null,
+  "schedule": {
+    "timeZone": "Asia/Tokyo",
+    "slotHours": [13, 21],
+    "runHours": [12, 20]
+  },
+  "reminder": {
+    "prefix": "【2026.7】",
+    "goalTime": "22:00"
+  },
+  "targets": {
+    "tagGroupName": "回答フォーム 用日程",
+    "form": {
+      "id": 1084212,
+      "groupId": 216354,
+      "choiceSelector": "#radio_3"
+    },
+    "dateTemplateId": 268609107,
+    "reminderTemplate": {
+      "id": 268822941,
+      "groupId": 1020108
+    },
+    "flexTemplates": [
+      { "id": 268607623, "label": "2日後07:08", "count": 6 },
+      { "id": 268607783, "label": "2日後20:58", "count": 6 },
+      { "id": 268607893, "label": "4日後06:58", "count": 6 },
+      { "id": 268608033, "label": "4日後23:00", "count": 6 },
+      { "id": 268608572, "label": "6日後20:03", "count": 6, "startsTomorrow": true },
+      { "id": 268608322, "label": "7日後20:03", "count": 4, "startsTomorrow": true },
+      { "id": 268608656, "label": "8日後20:03", "count": 2, "startsTomorrow": true }
+    ],
+    "oneTapTagId": 10242626
+  },
+  "counts": {
+    "form": 14,
+    "dateTemplate": 6,
+    "reminder": 8
+  },
+  "immutableActionPrefix": "AUTO_セミナー申込_"
+}

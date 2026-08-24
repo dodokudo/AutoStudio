@@ -1,12 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
 import {
   cloneInputsForDateTag,
   flexRotationPlan,
   replaceReminderDateBlock,
+  runSeminarSchedule,
   tagIdFromHref,
   type LstepAction,
 } from './seminarSlotRunner';
+import { parseSeminarLaunchConfig } from './seminarLaunchConfig';
+
+test('停止設定ではブラウザを開かず安全にskipする', async () => {
+  const source = await readFile('deploy/lstep-seminar/launch-config.paused.json', 'utf8');
+  const result = await runSeminarSchedule({
+    apply: true,
+    launchConfig: parseSeminarLaunchConfig(JSON.parse(source)),
+  });
+  assert.equal(result.steps[0].status, 'skipped');
+  assert.match(result.steps[0].detail, /停止中/);
+  assert.deepEqual(result.issues, []);
+});
 
 test('groupクエリ付きのタグURLからタグIDを取得する', () => {
   assert.equal(tagIdFromHref('/line/tag/setting/10222432?group=722246'), 10222432);

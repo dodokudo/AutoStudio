@@ -14,7 +14,7 @@ export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] 
 
 /** 1日に開催する枠の開始時刻（時）。運用が変わったらここだけ直す。 */
 export const SLOT_HOURS = [13, 21] as const;
-export type SlotHour = (typeof SLOT_HOURS)[number];
+export type SlotHour = number;
 
 export interface SeminarSlot {
   /** 2026-07-24 形式 */
@@ -47,7 +47,7 @@ export function upcomingSlots(now: Date, count: number, options: UpcomingSlotOpt
   const cutoff = now.getTime() + (options.minimumLeadMinutes ?? 60) * 60 * 1000;
   let day = jstDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
   while (slots.length < count) {
-    for (const hour of SLOT_HOURS) {
+    for (const hour of options.slotHours ?? SLOT_HOURS) {
       const startsAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime();
       if (startsAt > cutoff) slots.push(buildSlot(day, hour, options));
       if (slots.length === count) break;
@@ -79,6 +79,8 @@ export function choiceLabelWithCapacity(slot: SeminarSlot, memberCount: number, 
 }
 
 export interface BuildSlotOptions {
+  /** 1日に開催する枠の開始時刻（時）。 */
+  slotHours?: readonly number[];
   /** リマインダ名の接頭辞。ローンチが変わったら差し替える。 */
   reminderPrefix?: string;
   /** リマインダのゴール時刻（HH:mm）。現行運用は 22:00。 */
@@ -140,7 +142,7 @@ export function buildSlot(date: Date, hour: SlotHour, options: BuildSlotOptions 
 
 /** 指定日の全枠（13時・21時）を返す */
 export function buildSlotsForDate(date: Date, options: BuildSlotOptions = {}): SeminarSlot[] {
-  return SLOT_HOURS.map((h) => buildSlot(date, h, options));
+  return (options.slotHours ?? SLOT_HOURS).map((h) => buildSlot(date, h, options));
 }
 
 /**
@@ -150,7 +152,7 @@ export function buildSlotsForDate(date: Date, options: BuildSlotOptions = {}): S
  */
 export function slotToRemoveAt(now: Date, options: BuildSlotOptions = {}): SeminarSlot | null {
   const hour = now.getHours();
-  const target = SLOT_HOURS.find((h) => h - 1 === hour);
+  const target = (options.slotHours ?? SLOT_HOURS).find((h) => (h + 23) % 24 === hour);
   if (target === undefined) return null;
   return buildSlot(jstDate(now.getFullYear(), now.getMonth() + 1, now.getDate()), target, options);
 }

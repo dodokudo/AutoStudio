@@ -6,6 +6,11 @@ import { tmpdir } from 'node:os';
 import { loadLstepConfig } from './config';
 import { downloadObjectToFile, uploadFileToGcs } from './gcs';
 import {
+  launchRunState,
+  loadSeminarLaunchConfig,
+  type SeminarLaunchConfig,
+} from './seminarLaunchConfig';
+import {
   slotsFromTomorrow,
   upcomingSlots,
   type SeminarSlot,
@@ -13,24 +18,11 @@ import {
 
 const BASE = 'https://manager.linestep.net';
 const TAG_LIST_URL = `${BASE}/line/tag`;
-const APPLY_FORM_URL = `${BASE}/lvf/edit/1084212?group=216354`;
-const DATE_TEMPLATE_URL = `${BASE}/line/template/edit_v3/268609107?editMessage=1`;
-const REMINDER_TEMPLATE_URL = `${BASE}/line/template/edit/268822941?group=1020108`;
-const FLEX_TEMPLATES = [
-  { id: '268607623', label: '2日後07:08', count: 6 },
-  { id: '268607783', label: '2日後20:58', count: 6 },
-  { id: '268607893', label: '4日後06:58', count: 6 },
-  { id: '268608033', label: '4日後23:00', count: 6 },
-  { id: '268608572', label: '6日後20:03', count: 6, startsTomorrow: true },
-  { id: '268608322', label: '7日後20:03', count: 4, startsTomorrow: true },
-  { id: '268608656', label: '8日後20:03', count: 2, startsTomorrow: true },
-] as const;
-const ONE_TAP_TAG_ID = 10242626;
-const IMMUTABLE_ACTION_PREFIX = 'AUTO_セミナー申込_';
-const FORM_COUNT = 14;
-const DATE_TEMPLATE_COUNT = 6;
-const REMINDER_COUNT = 8;
 const DATE_LABEL_RE = /^\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~/;
+
+const formUrl = (config: SeminarLaunchConfig) => `${BASE}/lvf/edit/${config.targets.form.id}?group=${config.targets.form.groupId}`;
+const dateTemplateUrl = (config: SeminarLaunchConfig) => `${BASE}/line/template/edit_v3/${config.targets.dateTemplateId}?editMessage=1`;
+const reminderTemplateUrl = (config: SeminarLaunchConfig) => `${BASE}/line/template/edit/${config.targets.reminderTemplate.id}?group=${config.targets.reminderTemplate.groupId}`;
 
 interface DateTag {
   name: string;
@@ -81,6 +73,9 @@ interface FlexAssignment {
 export interface RunOptions {
   now?: Date;
   apply?: boolean;
+  launchConfig?: SeminarLaunchConfig;
+  /** 再開前の確認専用。dry-run時だけ実行期間外でも各画面を検査する。 */
+  ignoreWindow?: boolean;
   /** 本番動作確認用。各表示面の末尾へ追加で保持する枠数。通常運用は0。 */
   extraSlots?: number;
 }
@@ -185,14 +180,15 @@ async function goto(page: Page, url: string, delay = 2_500): Promise<void> {
   if (/login/i.test(page.url())) throw new Error('Lステップのログインセッションが切れています');
 }
 
-async function openTagGroup(page: Page): Promise<void> {
+async function openTagGroup(page: Page, config: SeminarLaunchConfig): Promise<void> {
   await goto(page, TAG_LIST_URL);
-  await page.getByText(/回答フォーム\s*用日程/).first().click();
+  await page.getByText(config.targets.tagGroupName, { exact: false }).first().click();
   await wait(page, 2_500);
 }
 
-async function readDateTags(page: Page): Promise<DateTag[]> {
-  await openTagGroup(page);
+async function readDateTags(page: Page, config: SeminarLaunchConfig): Promise<DateTag[]> {
+  await openTagGroup(page, config);
+  const allowedHours = new Set(config.schedule.slotHours);
   return page.locator('a[href*="/line/tag/setting/"]').evaluateAll((links) => links.map((link) => {
     const summary = (link.closest('tr') as HTMLElement | null)?.innerText.replace(/\s+/g, ' ').trim() ?? '';
     const memberCount = Number(summary.match(/\s(\d+)人\s\d{4}\//)?.[1] ?? 0);
@@ -202,7 +198,10 @@ async function readDateTags(page: Page): Promise<DateTag[]> {
       memberCount,
       summary,
     };
-  }).filter((tag) => /^\d+月\d+日(?:13|21)(?:時)?$/.test(tag.name)));
+  })).then((tags) => tags.filter((tag) => {
+    const hour = Number(tag.name.match(/^\d+月\d+日(\d+)(?:時)?$/)?.[1] ?? -1);
+    return allowedHours.has(hour);
+  }));
 }
 
 function tagForSlot(tags: DateTag[], slot: SeminarSlot): DateTag | undefined {
@@ -214,7 +213,7 @@ function assertTagSummary(slot: SeminarSlot, tag: DateTag): string[] {
   const issues: string[] = [];
   if (!tag.summary.includes(slot.applicationValue.replace(' ', ''))) issues.push(`${tag.name}: 友だち情報が ${slot.applicationValue} ではありません`);
   if (!tag.summary.includes(slot.reminderName)) issues.push(`${tag.name}: リマインダが ${slot.reminderName} ではありません`);
-  const jpDate = `${slot.year}年${slot.month}月${slot.day}日22:00`;
+  const jpDate = `${slot.year}年${slot.month}月${slot.day}日${slot.reminderGoal.time}`;
   if (!tag.summary.includes(jpDate)) issues.push(`${tag.name}: ゴール日時が ${jpDate} ではありません`);
   if (tag.summary.includes('条件ON')) issues.push(`${tag.name}: タグ側アクションに条件ONがあります`);
   return issues;
@@ -238,9 +237,9 @@ async function inputMatching(root: Locator, pattern: RegExp): Promise<Locator> {
   throw new Error(`入力欄 ${pattern} が見つかりません`);
 }
 
-async function chooseTag(dialog: Locator, page: Page, currentName: string, nextName: string): Promise<void> {
+async function chooseTag(dialog: Locator, page: Page, currentName: string | undefined, nextName: string): Promise<void> {
   if (currentName === nextName) return;
-  await dialog.getByText(currentName, { exact: true }).first().click();
+  if (currentName) await dialog.getByText(currentName, { exact: true }).first().click();
   const search = dialog.getByPlaceholder('タグ名を入力').last();
   await search.fill(nextName);
   await wait(page, 900);
@@ -249,7 +248,7 @@ async function chooseTag(dialog: Locator, page: Page, currentName: string, nextN
   if (!(await dialog.innerText()).includes(nextName)) throw new Error(`タグ ${nextName} を選択できませんでした`);
 }
 
-async function createTag(page: Page, slot: SeminarSlot, tags: DateTag[]): Promise<DateTag> {
+async function createTag(page: Page, slot: SeminarSlot, tags: DateTag[], config: SeminarLaunchConfig): Promise<DateTag> {
   const sortKey = (tag: DateTag): number => {
     const match = tag.name.match(/^(\d+)月(\d+)日/);
     return match ? Number(match[1]) * 100 + Number(match[2]) : 0;
@@ -259,7 +258,7 @@ async function createTag(page: Page, slot: SeminarSlot, tags: DateTag[]): Promis
     .sort((a, b) => sortKey(b) - sortKey(a))[0];
   if (!source) throw new Error(`${slot.hour}時タグのコピー元がありません`);
 
-  await openTagGroup(page);
+  await openTagGroup(page, config);
   const row = page.locator('tr').filter({ has: page.locator(`a[href="${source.href}"]`) }).first();
   await row.getByText('more_vert', { exact: true }).click();
   await page.locator('button:visible').filter({ hasText: 'コピーを作成' }).last().click();
@@ -269,13 +268,13 @@ async function createTag(page: Page, slot: SeminarSlot, tags: DateTag[]): Promis
   await copyDialog.getByRole('button', { name: 'コピー', exact: true }).click();
   await wait(page, 2_500);
 
-  const refreshed = await readDateTags(page);
+  const refreshed = await readDateTags(page, config);
   const created = tagForSlot(refreshed, slot);
   if (!created) throw new Error(`${slot.tagName} のコピー作成を確認できませんでした`);
-  return configureTag(page, slot, created);
+  return configureTag(page, slot, created, config);
 }
 
-async function configureTag(page: Page, slot: SeminarSlot, tag: DateTag): Promise<DateTag> {
+async function configureTag(page: Page, slot: SeminarSlot, tag: DateTag, config: SeminarLaunchConfig): Promise<DateTag> {
   await goto(page, `${BASE}${tag.href}`);
   await page.getByText('アクション設定', { exact: false }).first().click();
   await wait(page, 1_500);
@@ -299,7 +298,7 @@ async function configureTag(page: Page, slot: SeminarSlot, tag: DateTag): Promis
   await wait(page, 1_000);
   await page.getByRole('button', { name: '更新', exact: true }).click();
   await wait(page, 2_500);
-  const refreshed = await readDateTags(page);
+  const refreshed = await readDateTags(page, config);
   const verified = tagForSlot(refreshed, slot);
   if (!verified) throw new Error(`${slot.tagName} の保存後検証に失敗しました`);
   const issues = assertTagSummary(slot, verified);
@@ -307,17 +306,17 @@ async function configureTag(page: Page, slot: SeminarSlot, tag: DateTag): Promis
   return verified;
 }
 
-async function openFormChoices(page: Page): Promise<Locator> {
-  await goto(page, APPLY_FORM_URL, 3_500);
-  const radio = page.locator('#radio_3');
-  if (!await radio.count()) throw new Error('セミナー申込日時のラジオボタン #radio_3 が見つかりません');
+async function openFormChoices(page: Page, config: SeminarLaunchConfig): Promise<Locator> {
+  await goto(page, formUrl(config), 3_500);
+  const radio = page.locator(config.targets.form.choiceSelector);
+  if (!await radio.count()) throw new Error(`セミナー申込日時の選択欄 ${config.targets.form.choiceSelector} が見つかりません`);
   await radio.locator('.lvitem-edit-bar').click();
   await wait(page, 2_500);
   return radio.locator('[data-testid^="choice_"]:visible');
 }
 
-async function readFormState(page: Page): Promise<Array<{ label: string; action: string }>> {
-  const panels = await openFormChoices(page);
+async function readFormState(page: Page, config: SeminarLaunchConfig): Promise<Array<{ label: string; action: string }>> {
+  const panels = await openFormChoices(page, config);
   const choices = await panels.evaluateAll((elements) => elements.map((element) => ({
     label: (element.querySelector('input[data-testid="labelInput"]') as HTMLInputElement | null)?.value ?? '',
     action: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
@@ -330,7 +329,6 @@ async function configureFormPanel(page: Page, panel: Locator, slot: SeminarSlot,
   await wait(page, 800);
   const actionText = await panel.innerText();
   const currentTag = actionText.match(/タグ\[([^\]]+)\]を追加/)?.[1];
-  if (!currentTag) throw new Error(`${slot.choiceLabel}: フォームのコピー元タグを取得できません (${actionText.replace(/\s+/g, ' ').slice(0, 300)})`);
   await panel.getByText('アクション設定', { exact: true }).click();
   await wait(page, 1_200);
   const dialog = page.locator('[role="dialog"],.modal').last();
@@ -341,34 +339,35 @@ async function configureFormPanel(page: Page, panel: Locator, slot: SeminarSlot,
   await wait(page, 800);
 }
 
-async function formPanelLabels(page: Page): Promise<string[]> {
-  return page.locator('#radio_3 [data-testid^="choice_"]:visible input[data-testid="labelInput"]')
+async function formPanelLabels(page: Page, config: SeminarLaunchConfig): Promise<string[]> {
+  return page.locator(`${config.targets.form.choiceSelector} [data-testid^="choice_"]:visible input[data-testid="labelInput"]`)
     .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
 }
 
-async function waitForFormPanelCount(page: Page, expected: number, operation: string): Promise<void> {
+async function waitForFormPanelCount(page: Page, expected: number, operation: string, config: SeminarLaunchConfig): Promise<void> {
   try {
-    await page.waitForFunction((count) => [...document.querySelectorAll('#radio_3 [data-testid^="choice_"]')]
-      .filter((element) => (element as HTMLElement).getClientRects().length > 0).length === count, expected, { timeout: 8_000 });
+    await page.waitForFunction(({ count, selector }) => [...document.querySelectorAll(`${selector} [data-testid^="choice_"]`)]
+      .filter((element) => (element as HTMLElement).getClientRects().length > 0).length === count,
+    { count: expected, selector: config.targets.form.choiceSelector }, { timeout: 8_000 });
   } catch {
-    const labels = await formPanelLabels(page).catch(() => []);
+    const labels = await formPanelLabels(page, config).catch(() => []);
     const dialogs = await page.locator('[role="dialog"]:visible,.modal:visible').evaluateAll((elements) => elements
       .map((element) => (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim().slice(0, 300)));
     throw new Error(`フォーム${operation}失敗: 期待${expected}件・実際${labels.length}件 [${labels.join(' / ')}] ダイアログ=[${dialogs.join(' | ') || 'なし'}] URL=${page.url()}`);
   }
 }
 
-async function copyLastFormPanel(page: Page): Promise<void> {
-  const panels = page.locator('#radio_3 [data-testid^="choice_"]:visible');
+async function copyLastFormPanel(page: Page, config: SeminarLaunchConfig): Promise<void> {
+  const panels = page.locator(`${config.targets.form.choiceSelector} [data-testid^="choice_"]:visible`);
   const before = await panels.count();
   if (!before) throw new Error(`フォーム複製失敗: コピー元がありません URL=${page.url()}`);
   const sourceLabel = await panels.last().locator('input[data-testid="labelInput"]').inputValue().catch(() => '不明');
   await panels.last().locator('.lvitem-copy').click({ force: true });
-  await waitForFormPanelCount(page, before + 1, `複製（コピー元=${sourceLabel}）`);
+  await waitForFormPanelCount(page, before + 1, `複製（コピー元=${sourceLabel}）`, config);
 }
 
-async function removeLastFormPanel(page: Page): Promise<void> {
-  const panels = page.locator('#radio_3 [data-testid^="choice_"]:visible');
+async function removeLastFormPanel(page: Page, config: SeminarLaunchConfig): Promise<void> {
+  const panels = page.locator(`${config.targets.form.choiceSelector} [data-testid^="choice_"]:visible`);
   const before = await panels.count();
   if (!before) throw new Error(`フォーム削除失敗: 削除対象がありません URL=${page.url()}`);
   const target = panels.last();
@@ -385,7 +384,7 @@ async function removeLastFormPanel(page: Page): Promise<void> {
     }
     await confirm.click();
   }
-  await waitForFormPanelCount(page, before - 1, `削除（対象=${targetLabel}）`);
+  await waitForFormPanelCount(page, before - 1, `削除（対象=${targetLabel}）`, config);
 }
 
 function formVerificationError(actual: string[], expected: string[], url: string): Error {
@@ -403,8 +402,8 @@ function formVerificationError(actual: string[], expected: string[], url: string
   ].join(' '));
 }
 
-async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], apply: boolean): Promise<string> {
-  const current = await readFormState(page);
+async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], apply: boolean, config: SeminarLaunchConfig): Promise<string> {
+  const current = await readFormState(page, config);
   const currentLabels = current.map((choice) => choice.label);
   const desiredLabels = desired.map((slot) => slot.choiceLabel);
   if (JSON.stringify(currentLabels) === JSON.stringify(desiredLabels)) return '変更なし';
@@ -413,13 +412,13 @@ async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], a
   // Lステップの「コピー」は複製先が末尾になるとは限らず、差分更新だけでは
   // 古い日時が末尾へ回ることがある。件数を合わせた後、全パネルを上から
   // 正しい日時へ再設定して、順序・タグ・友だち情報を同時に保証する。
-  let panelCount = (await formPanelLabels(page)).length;
+  let panelCount = (await formPanelLabels(page, config)).length;
   while (panelCount > desired.length) {
-    await removeLastFormPanel(page);
+    await removeLastFormPanel(page, config);
     panelCount -= 1;
   }
   while (panelCount < desired.length) {
-    await copyLastFormPanel(page);
+    await copyLastFormPanel(page, config);
     panelCount += 1;
   }
 
@@ -427,12 +426,12 @@ async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], a
     const slot = desired[index];
     const tag = tagForSlot(tags, slot);
     if (!tag) throw new Error(`${slot.tagName} がないためフォーム${index + 1}件目を設定できません URL=${page.url()}`);
-    const panels = page.locator('#radio_3 [data-testid^="choice_"]:visible');
+    const panels = page.locator(`${config.targets.form.choiceSelector} [data-testid^="choice_"]:visible`);
     await configureFormPanel(page, panels.nth(index), slot, tag);
   }
   await page.locator('#lvbuildsave').click();
   await wait(page, 3_000);
-  const verified = await readFormState(page);
+  const verified = await readFormState(page, config);
   const labels = verified.map((choice) => choice.label);
   if (JSON.stringify(labels) !== JSON.stringify(desiredLabels)) throw formVerificationError(labels, desiredLabels, page.url());
   for (let index = 0; index < desired.length; index += 1) {
@@ -522,8 +521,8 @@ function tagId(tag: DateTag): number {
   return id;
 }
 
-function immutableActionName(slot: SeminarSlot): string {
-  return `${IMMUTABLE_ACTION_PREFIX}${slot.year}-${String(slot.month).padStart(2, '0')}-${String(slot.day).padStart(2, '0')}_${slot.hour}00`;
+function immutableActionName(slot: SeminarSlot, config: SeminarLaunchConfig): string {
+  return `${config.immutableActionPrefix}${slot.year}-${String(slot.month).padStart(2, '0')}-${String(slot.day).padStart(2, '0')}_${slot.hour}00`;
 }
 
 function actionIdOf(action: LstepAction): number {
@@ -647,12 +646,13 @@ async function createImmutableAction(
   dateTag: DateTag,
   sourceActionId: number,
   allDateTags: DateTag[],
+  config: SeminarLaunchConfig,
 ): Promise<ImmutableAction> {
   const source = await readAction(page, sourceActionId);
   assertFullSeminarAction(source, `コピー元アクション${sourceActionId}`);
   const nextDateTagId = tagId(dateTag);
   const inputs = cloneInputsForDateTag(source, new Set(allDateTags.map(tagId)), nextDateTagId);
-  const name = immutableActionName(slot);
+  const name = immutableActionName(slot, config);
   const multipart: Record<string, string> = {
     aid: '0',
     a_name: name,
@@ -674,7 +674,7 @@ async function createImmutableAction(
   assertFullSeminarAction(created, `新規アクション${createdId}`);
   const createdTagIds = actionTagIds(created);
   const otherDateTags = createdTagIds.filter((id) => id !== nextDateTagId && allDateTags.some((tag) => tagId(tag) === id));
-  if (!createdTagIds.includes(nextDateTagId) || !createdTagIds.includes(ONE_TAP_TAG_ID) || otherDateTags.length) {
+  if (!createdTagIds.includes(nextDateTagId) || !createdTagIds.includes(config.targets.oneTapTagId) || otherDateTags.length) {
     throw new Error(`${dateTag.name}: 新規アクション${createdId}のタグ検証に失敗しました`);
   }
   if (JSON.stringify(canonicalActionInputs(created.inputs)) !== JSON.stringify(canonicalActionInputs(inputs))) {
@@ -695,17 +695,18 @@ async function immutableActionForSlot(
   sourceActionId: number,
   allDateTags: DateTag[],
   registry: Map<number, ImmutableAction>,
+  config: SeminarLaunchConfig,
 ): Promise<ImmutableAction> {
   const dateTagId = tagId(dateTag);
   const cached = registry.get(dateTagId);
   if (cached) return cached;
-  const name = immutableActionName(slot);
+  const name = immutableActionName(slot, config);
   const existing = await findActionByName(page, name);
   if (existing) {
     assertFullSeminarAction(existing, `既存アクション「${name}」`);
     const existingIds = actionTagIds(existing);
     const otherDateTags = existingIds.filter((id) => id !== dateTagId && allDateTags.some((tag) => tagId(tag) === id));
-    if (!existingIds.includes(dateTagId) || !existingIds.includes(ONE_TAP_TAG_ID) || otherDateTags.length) {
+    if (!existingIds.includes(dateTagId) || !existingIds.includes(config.targets.oneTapTagId) || otherDateTags.length) {
       throw new Error(`${name}: 既存の不変アクション設定が一致しません`);
     }
     const action = {
@@ -717,7 +718,7 @@ async function immutableActionForSlot(
     registry.set(dateTagId, action);
     return action;
   }
-  const created = await createImmutableAction(page, slot, dateTag, sourceActionId, allDateTags);
+  const created = await createImmutableAction(page, slot, dateTag, sourceActionId, allDateTags, config);
   registry.set(dateTagId, created);
   return created;
 }
@@ -924,10 +925,11 @@ async function updateFlex(
   tags: DateTag[],
   apply: boolean,
   immutableActions: Map<number, ImmutableAction>,
+  config: SeminarLaunchConfig,
 ): Promise<string> {
   const current = await readFlexState(page, id);
   for (const card of current) {
-    if (!card.actionName.startsWith(IMMUTABLE_ACTION_PREFIX) || !card.actionId) continue;
+    if (!card.actionName.startsWith(config.immutableActionPrefix) || !card.actionId) continue;
     const dateTag = tags.find((tag) => card.tagIds.includes(tagId(tag)));
     if (!dateTag) continue;
     immutableActions.set(tagId(dateTag), {
@@ -943,9 +945,9 @@ async function updateFlex(
     const tag = tagForSlot(tags, desired[index]);
     return card.label === labels[index]
       && !!tag
-      && card.actionName === immutableActionName(desired[index])
+      && card.actionName === immutableActionName(desired[index], config)
       && card.tagIds.includes(tagId(tag))
-      && card.tagIds.includes(ONE_TAP_TAG_ID);
+      && card.tagIds.includes(config.targets.oneTapTagId);
   });
   if (correct) return '変更なし';
   if (!apply) return `${current.map((card) => card.label).join(' / ')} -> ${labels.join(' / ')}`;
@@ -969,6 +971,7 @@ async function updateFlex(
       sourceActionId,
       tags,
       immutableActions,
+      config,
     );
     assignments.push({ actionId: action.id, actionDescription: action.description });
   }
@@ -979,15 +982,15 @@ async function updateFlex(
     return card.label === labels[index]
       && !!tag
       && card.actionId === assignments[index].actionId
-      && card.actionName === immutableActionName(desired[index])
+      && card.actionName === immutableActionName(desired[index], config)
       && card.tagIds.includes(tagId(tag))
-      && card.tagIds.includes(ONE_TAP_TAG_ID);
+      && card.tagIds.includes(config.targets.oneTapTagId);
   })) throw new Error(`テンプレート${id}: 保存後検証に失敗しました`);
   return `${desired.length}枠を更新・新規アクションID検証済み`;
 }
 
-async function readDateTemplate(page: Page): Promise<string[]> {
-  await goto(page, DATE_TEMPLATE_URL, 3_000);
+async function readDateTemplate(page: Page, config: SeminarLaunchConfig): Promise<string[]> {
+  await goto(page, dateTemplateUrl(config), 3_000);
   const values = await page.locator('[contenteditable="true"]').evaluateAll((elements) => elements.map((element) => (element.textContent ?? '').trim()));
   return values.filter((value) => DATE_LABEL_RE.test(value));
 }
@@ -998,8 +1001,9 @@ async function updateDateTemplate(
   tags: DateTag[],
   apply: boolean,
   immutableActions: Map<number, ImmutableAction>,
+  config: SeminarLaunchConfig,
 ): Promise<string> {
-  return updateFlex(page, '268609107', desired, tags, apply, immutableActions);
+  return updateFlex(page, String(config.targets.dateTemplateId), desired, tags, apply, immutableActions, config);
 }
 
 function compactReminderLabel(slot: SeminarSlot): string {
@@ -1026,8 +1030,8 @@ async function reminderEditorText(editor: Locator): Promise<string> {
   ));
 }
 
-async function reminderEditor(page: Page): Promise<Locator> {
-  await goto(page, REMINDER_TEMPLATE_URL, 3_000);
+async function reminderEditor(page: Page, config: SeminarLaunchConfig): Promise<Locator> {
+  await goto(page, reminderTemplateUrl(config), 3_000);
   const editors = page.locator('textarea,[contenteditable="true"]');
   for (let index = 0; index < await editors.count(); index += 1) {
     const editor = editors.nth(index);
@@ -1037,14 +1041,14 @@ async function reminderEditor(page: Page): Promise<Locator> {
   throw new Error('最終リマインドの日程本文が見つかりません');
 }
 
-async function readReminderDates(page: Page): Promise<string[]> {
-  const editor = await reminderEditor(page);
+async function readReminderDates(page: Page, config: SeminarLaunchConfig): Promise<string[]> {
+  const editor = await reminderEditor(page, config);
   const value = await reminderEditorText(editor);
   return value.match(/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00~/g) ?? [];
 }
 
-async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean): Promise<string> {
-  const editor = await reminderEditor(page);
+async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean, config: SeminarLaunchConfig): Promise<string> {
+  const editor = await reminderEditor(page, config);
   const currentText = await reminderEditorText(editor);
   const nextDates = desired.map(compactReminderLabel);
   const currentDates = currentText.match(/・\d{1,2}\/\d{1,2}\([日月火水木金土]\)[ \t]*\d{1,2}:00~/g) ?? [];
@@ -1069,22 +1073,22 @@ async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean
   if (await reminderEditorText(editor) !== expectedText) throw new Error('日程以外の本文または改行が変化したため保存を中断しました');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await wait(page, 3_000);
-  const verified = await readReminderDates(page);
+  const verified = await readReminderDates(page, config);
   if (JSON.stringify(verified) !== JSON.stringify(nextDates)) throw new Error('最終リマインドの保存後検証に失敗しました');
-  const persistedText = await reminderEditorText(await reminderEditor(page));
+  const persistedText = await reminderEditorText(await reminderEditor(page, config));
   if (persistedText !== expectedText) throw new Error('最終リマインドの本文または改行が保存後に変化しました');
   return `${nextDates.length}枠を更新・検証済み`;
 }
 
-async function snapshot(page: Page): Promise<SurfaceSnapshot> {
-  const form = (await readFormState(page)).map((choice) => choice.label);
+async function snapshot(page: Page, config: SeminarLaunchConfig): Promise<SurfaceSnapshot> {
+  const form = (await readFormState(page, config)).map((choice) => choice.label);
   const flex: SurfaceSnapshot['flex'] = {};
-  for (const template of FLEX_TEMPLATES) flex[template.id] = await readFlexState(page, template.id);
+  for (const template of config.targets.flexTemplates) flex[template.id] = await readFlexState(page, String(template.id));
   return {
     form,
     flex,
-    dateTemplate: await readDateTemplate(page),
-    reminder: await readReminderDates(page),
+    dateTemplate: await readDateTemplate(page, config),
+    reminder: await readReminderDates(page, config),
   };
 }
 
@@ -1098,6 +1102,28 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
   const extraSlots = options.extraSlots ?? 0;
   const steps: StepResult[] = [];
   const issues: string[] = [];
+  const config = options.launchConfig ?? await loadSeminarLaunchConfig();
+  const state = launchRunState(config, now);
+  const mayInspectOutsideWindow = !apply && options.ignoreWindow === true;
+  if (!state.runnable && !mayInspectOutsideWindow) {
+    const reasons = {
+      disabled: 'enabled=false のため停止中',
+      before_window: `開始日前のため待機中 (${config.window?.startDate})`,
+      after_window: `終了日を過ぎたため停止 (${config.window?.endDate})`,
+      ready: '実行可能',
+    } as const;
+    return {
+      ranAt: now.toISOString(),
+      mode: apply ? 'apply' : 'dry-run',
+      steps: [{ step: `ローンチ設定 ${config.launchId}`, status: 'skipped', detail: reasons[state.reason] }],
+      issues: [],
+    };
+  }
+  const slotOptions = {
+    slotHours: config.schedule.slotHours,
+    reminderPrefix: config.reminder.prefix,
+    reminderGoalTime: config.reminder.goalTime,
+  };
   const {
     browser,
     context,
@@ -1109,9 +1135,9 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
   } = await openBrowser();
   let activeStep = 'Lステップログイン・日程タグ';
   try {
-    let tags = await readDateTags(page);
+    let tags = await readDateTags(page, config);
     steps.push({ step: 'Lステップログイン・日程タグ', status: 'ok', detail: `${tags.length}件を取得` });
-    const desiredForm = upcomingSlots(now, FORM_COUNT + extraSlots);
+    const desiredForm = upcomingSlots(now, config.counts.form + extraSlots, slotOptions);
     for (const slot of desiredForm) {
       let tag = tagForSlot(tags, slot);
       if (!tag) {
@@ -1119,13 +1145,13 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
           steps.push({ step: `タグ ${slot.tagName}`, status: 'ok', detail: '要作成' });
           continue;
         }
-        tag = await createTag(page, slot, tags);
+        tag = await createTag(page, slot, tags, config);
         tags = [...tags, tag];
         steps.push({ step: `タグ ${slot.tagName}`, status: 'ok', detail: '作成・アクション検証済み' });
       }
       let tagIssues = assertTagSummary(slot, tag);
       if (tagIssues.length && apply) {
-        tag = await configureTag(page, slot, tag);
+        tag = await configureTag(page, slot, tag, config);
         tags = tags.map((current) => current.href === tag?.href ? tag : current);
         tagIssues = assertTagSummary(slot, tag);
         steps.push({ step: `タグ ${slot.tagName}`, status: 'ok', detail: '既存設定を修正・検証済み' });
@@ -1135,17 +1161,17 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
     if (issues.length) throw new Error(`タグ設定に異常があります: ${issues.join(' / ')}`);
 
     activeStep = 'セミナー申込フォーム';
-    steps.push({ step: activeStep, status: 'ok', detail: await updateForm(page, desiredForm, tags, apply) });
+    steps.push({ step: activeStep, status: 'ok', detail: await updateForm(page, desiredForm, tags, apply, config) });
     const immutableActions = new Map<number, ImmutableAction>();
-    for (const template of FLEX_TEMPLATES) {
+    for (const template of config.targets.flexTemplates) {
       activeStep = `ワンタップ ${template.label}`;
       const desiredFlex = 'startsTomorrow' in template
-        ? slotsFromTomorrow(now, template.count + extraSlots)
-        : upcomingSlots(now, template.count + extraSlots);
+        ? slotsFromTomorrow(now, template.count + extraSlots, slotOptions)
+        : upcomingSlots(now, template.count + extraSlots, slotOptions);
       steps.push({
         step: activeStep,
         status: 'ok',
-        detail: await updateFlex(page, template.id, desiredFlex, tags, apply, immutableActions),
+        detail: await updateFlex(page, String(template.id), desiredFlex, tags, apply, immutableActions, config),
       });
     }
     activeStep = 'セミナー日程選択テンプレート';
@@ -1154,18 +1180,23 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
       status: 'ok',
       detail: await updateDateTemplate(
         page,
-        upcomingSlots(now, DATE_TEMPLATE_COUNT + extraSlots),
+        upcomingSlots(now, config.counts.dateTemplate + extraSlots, slotOptions),
         tags,
         apply,
         immutableActions,
+        config,
       ),
     });
     activeStep = '最終リマインド';
-    steps.push({ step: activeStep, status: 'ok', detail: await updateReminder(page, upcomingSlots(now, REMINDER_COUNT + extraSlots), apply) });
+    steps.push({
+      step: activeStep,
+      status: 'ok',
+      detail: await updateReminder(page, upcomingSlots(now, config.counts.reminder + extraSlots, slotOptions), apply, config),
+    });
 
     if (apply) {
       activeStep = '全画面再読込検証';
-      const after = await snapshot(page);
+      const after = await snapshot(page, config);
       steps.push({
         step: '全画面再読込検証',
         status: 'ok',

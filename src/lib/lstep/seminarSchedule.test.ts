@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { slotsFromTomorrow, upcomingSlots } from './seminarSchedule';
+import { slotToRemoveAt, slotsFromTomorrow, upcomingSlots } from './seminarSchedule';
 
 test('16時時点では当日21時枠を残し、日時を6枠返す', () => {
   const slots = upcomingSlots(new Date(2026, 6, 22, 16, 0), 6);
@@ -56,4 +56,15 @@ test('7日後は明日から4枠、8日後は明日の2枠に絞る', () => {
     '7/24(金) 13:00~',
     '7/24(金) 21:00~',
   ]);
+});
+
+test('ローンチ設定で開催時刻とリマインダ名を差し替えられる', () => {
+  const options = { slotHours: [14, 19], reminderPrefix: '【2026.9】' };
+  const slots = upcomingSlots(new Date(2026, 8, 8, 12, 0), 3, options);
+  assert.deepEqual(slots.map((slot) => [slot.choiceLabel, slot.reminderName]), [
+    ['9/8(火) 14:00~', '【2026.9】14時回'],
+    ['9/8(火) 19:00~', '【2026.9】19時回'],
+    ['9/9(水) 14:00~', '【2026.9】14時回'],
+  ]);
+  assert.equal(slotToRemoveAt(new Date(2026, 8, 8, 13, 0), options)?.choiceLabel, '9/8(火) 14:00~');
 });
