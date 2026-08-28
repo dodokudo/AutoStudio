@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
@@ -9,6 +9,8 @@ import { DeliveryTimeline } from '../../_components/DeliveryTimeline';
 import { BroadcastDetail } from '../../_components/BroadcastDetail';
 import { KpiDashboard } from './KpiDashboard';
 import { KpiTab } from './KpiTab';
+import { PanelAnalysis } from '@/app/(autostudio)/line/_components/PanelAnalysis';
+import { isAutomationFunnelId } from '@/lib/lstep/funnel-campaigns';
 import type {
   FunnelData,
   BroadcastMetric,
@@ -21,8 +23,8 @@ import type {
 
 interface LaunchDetailClientProps {
   funnel: FunnelData;
-  broadcastMetrics: BroadcastMetric[];
-  tagMetrics: Record<string, number>;
+  broadcastMetrics?: BroadcastMetric[];
+  tagMetrics?: Record<string, number>;
 }
 
 // ------- Tabs -------
@@ -34,7 +36,7 @@ const TABS = [
   { id: 'analysis', label: '配信分析' },
 ] as const;
 
-type TabKey = (typeof TABS)[number]['id'];
+type TabKey = (typeof TABS)[number]['id'] | 'funnel-measurement';
 
 // ------- Helpers -------
 
@@ -264,13 +266,51 @@ export function LaunchDetailClient({
   broadcastMetrics,
   tagMetrics,
 }: LaunchDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>('kpi');
+  const isAutomationFunnel = isAutomationFunnelId(funnel.id);
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    isAutomationFunnel ? 'funnel-measurement' : 'kpi',
+  );
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadedBroadcastMetrics, setLoadedBroadcastMetrics] = useState<BroadcastMetric[]>(broadcastMetrics ?? []);
+  const [loadedTagMetrics, setLoadedTagMetrics] = useState<Record<string, number>>(tagMetrics ?? {});
+  const [metricsLoaded, setMetricsLoaded] = useState(Boolean(broadcastMetrics || tagMetrics));
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const needsMetrics = activeTab === 'line-delivery' || activeTab === 'analysis';
+    if (isAutomationFunnel || !needsMetrics || metricsLoaded || metricsLoading) return;
+
+    let cancelled = false;
+    setMetricsLoading(true);
+    setMetricsError(null);
+    fetch(`/api/launch/funnels/${funnel.id}?metrics=1`)
+      .then(async (response) => {
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error ?? '配信実績の取得に失敗しました');
+        if (cancelled) return;
+        setLoadedBroadcastMetrics(json.broadcastMetrics ?? []);
+        setLoadedTagMetrics(json.tagMetrics ?? {});
+        setMetricsLoaded(true);
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setMetricsError(loadError instanceof Error ? loadError.message : '配信実績の取得に失敗しました');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMetricsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, funnel.id, isAutomationFunnel, metricsLoaded, metricsLoading]);
 
   // Match deliveries with metrics
   const deliveriesWithMetrics = useMemo(
-    () => matchDeliveriesWithMetrics(funnel.deliveries, broadcastMetrics, tagMetrics),
-    [funnel.deliveries, broadcastMetrics, tagMetrics]
+    () => matchDeliveriesWithMetrics(funnel.deliveries, loadedBroadcastMetrics, loadedTagMetrics),
+    [funnel.deliveries, loadedBroadcastMetrics, loadedTagMetrics]
   );
 
   // Segment map
@@ -444,16 +484,31 @@ export function LaunchDetailClient({
 
       {/* Tabs - directly below header */}
       <DashboardTabsInteractive
-        items={[...TABS]}
+        items={isAutomationFunnel
+          ? [{ id: 'funnel-measurement', label: 'ファネル計測' }]
+          : [...TABS]}
         value={activeTab}
         onChange={(v) => setActiveTab(v as TabKey)}
         aria-label="Launch タブ"
       />
 
       {/* Tab content */}
+      {activeTab === 'funnel-measurement' && (
+        <PanelAnalysis fixedCampaignId="2026-09" kpiFunnelId={funnel.id} />
+      )}
       {activeTab === 'kpi' && <KpiDashboard funnelId={funnel.id} startDate={funnel.startDate} endDate={funnel.endDate} baseDate={funnel.baseDate} />}
       {activeTab === 'kpi-settings' && <KpiTab funnelId={funnel.id} />}
-      {activeTab === 'line-delivery' && (
+      {(activeTab === 'line-delivery' || activeTab === 'analysis') && metricsLoading ? (
+        <Card className="p-5">
+          <p className="text-sm text-[color:var(--color-text-secondary)]">配信実績を読み込み中...</p>
+        </Card>
+      ) : null}
+      {(activeTab === 'line-delivery' || activeTab === 'analysis') && metricsError ? (
+        <Card className="p-5">
+          <p className="text-sm font-semibold text-red-600">{metricsError}</p>
+        </Card>
+      ) : null}
+      {activeTab === 'line-delivery' && metricsLoaded && (
         <>
           {/* Summary stats - 5 columns on desktop */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -557,7 +612,7 @@ export function LaunchDetailClient({
           />
         </>
       )}
-      {activeTab === 'analysis' && (
+      {activeTab === 'analysis' && metricsLoaded && (
         <>
           {/* Channel filter */}
           {channelFilter}

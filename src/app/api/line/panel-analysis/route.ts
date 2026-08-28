@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import {
+  DEFAULT_FUNNEL_CAMPAIGN_ID,
+  getFunnelCampaign,
+  type FunnelCampaignId,
+} from '@/lib/lstep/funnel-campaigns';
 
 const PROJECT_ID = (() => {
   const preferred = process.env.LSTEP_BQ_PROJECT_ID ?? process.env.BQ_PROJECT_ID;
@@ -9,9 +14,8 @@ const PROJECT_ID = (() => {
 
 const DEFAULT_DATASET = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
 const TABLE_NAME = 'lstep_friends_raw';
-const TARGET_START_DATE = '2026-07-03';
 
-export const revalidate = 1800;
+export const revalidate = 300;
 
 // 【2026.7】7月セミナーのパネル計測タグ（rawCsvLoader.ts の SEMINAR_2026_7_COLUMNS に対応）
 const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; label: string }> }> = [
@@ -97,7 +101,7 @@ const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; labe
 
 // サマリーファネル（上から順に移行率を計算）
 const SUMMARY_STEPS: Array<{ column: string | null; label: string }> = [
-  { column: null, label: '計測対象（7/3以降LINE登録）' },
+  { column: null, label: '計測対象' },
   { column: 'survey_completed', label: '回答完了' },
   { column: 's7_video_watched_total', label: '動画視聴' },
   { column: 'applied_by_info', label: 'セミナー申込' },
@@ -111,11 +115,7 @@ const SEMINAR_SLOT_COLUMN = 'seminar_application_slot';
 // 申込判定は友だち情報「セミナー申込日」を正とする（タグではなく友だち情報で確定させる運用ルール）
 const APPLIED_SQL = `TRIM(COALESCE(seminar_application_slot, '')) != ''`;
 
-// セミナー枠は固定テンプレートを持たず、選択期間の実データに存在する枠から組み立てる
-// （枠を増減しても、期間を切り替えても、表示が実態に追従する）
-// ただし今回のローンチは 7/8 開催分から。6月の枠は前ローンチなので混ぜない。
-const SEMINAR_SLOT_FIRST_MONTH = 7;
-const SEMINAR_SLOT_FIRST_DAY = 8;
+// セミナー枠は固定テンプレートを持たず、選択した月別コホートの実データから組み立てる。
 
 const DEMOGRAPHIC_GROUPS = [
   {
@@ -229,7 +229,11 @@ const SOURCE_LABEL_SQL = `
 
 type PanelPayload = Record<string, unknown> & { error?: string; status?: number };
 
-async function computePanelAnalysis(targetStartDate: string, targetEndDate: string): Promise<PanelPayload> {
+async function computePanelAnalysis(
+  targetStartDate: string,
+  targetEndDate: string,
+  campaignId: FunnelCampaignId,
+): Promise<PanelPayload> {
   if (!PROJECT_ID) {
     return { error: 'BigQuery プロジェクト ID が未設定です', status: 500 };
   }
@@ -368,6 +372,7 @@ async function computePanelAnalysis(targetStartDate: string, targetEndDate: stri
 
     const report = {
       targetStartDate,
+      targetEndDate: targetEndDate === '2099-12-31' ? null : targetEndDate,
       base,
       activeBase,
       blockedCount,
@@ -487,12 +492,13 @@ async function computePanelAnalysis(targetStartDate: string, targetEndDate: stri
       slotMap.set(parsed.key, current);
     }
 
+    const campaignStartMonth = Number(targetStartDate.slice(5, 7));
+    const campaignStartDay = Number(targetStartDate.slice(8, 10));
     const seminarSlots = [...slotMap.values()]
-      .filter(
-        (slot) =>
-          slot.month > SEMINAR_SLOT_FIRST_MONTH ||
-          (slot.month === SEMINAR_SLOT_FIRST_MONTH && slot.day >= SEMINAR_SLOT_FIRST_DAY),
-      )
+      .filter((slot) => (
+        slot.month > campaignStartMonth
+        || (slot.month === campaignStartMonth && slot.day >= campaignStartDay)
+      ))
       .sort((a, b) => a.month - b.month || a.day - b.day || a.hour - b.hour)
       .map((slot) => ({
         key: slot.key,
@@ -508,7 +514,7 @@ async function computePanelAnalysis(targetStartDate: string, targetEndDate: stri
 
     // 状態マップ: 全員を必ず1つの状態に割り当てる（ブロック以外の各状態＝リマーケ在庫）
     const nowMs = Date.now();
-    const slotYear = Number(TARGET_START_DATE.slice(0, 4));
+    const slotYear = Number(targetStartDate.slice(0, 4));
     const slotTimeMs = (slot: { date: string; time: string }) => {
       const [m, d] = slot.date.split('/').map(Number);
       const hour = Number(slot.time.replace('時', ''));
@@ -805,6 +811,7 @@ async function computePanelAnalysis(targetStartDate: string, targetEndDate: stri
     const snapshotDate = toDateString(row.snapshot_date);
 
     return {
+      campaignId,
       snapshotDate,
       base,
       report,
@@ -823,11 +830,11 @@ async function computePanelAnalysis(targetStartDate: string, targetEndDate: stri
   }
 }
 
-// BigQueryへの重いクエリ群を30分キャッシュする（メインタブと同じ更新頻度）
+// 通常表示は5分キャッシュし、画面の更新ボタンでは最新スナップショットを直接取りに行く。
 const computePanelAnalysisCached = unstable_cache(
   computePanelAnalysis,
-  ['line-panel-analysis-v1'],
-  { revalidate: 1800 },
+  ['line-panel-analysis-v2'],
+  { revalidate: 300 },
 );
 
 export async function GET(request: Request) {
@@ -835,19 +842,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'BigQuery プロジェクト ID が未設定です' }, { status: 500 });
   }
 
-  // 期間フィルタ（?start=YYYY-MM-DD&end=YYYY-MM-DD）。未指定時はローンチ開始日〜現在
   const url = new URL(request.url);
-  const isDateParam = (v: string | null): v is string => Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
-  const startParam = url.searchParams.get('start');
-  const endParam = url.searchParams.get('end');
-  // このファネルの計測開始は TARGET_START_DATE。「今月」「過去30日」など
-  // それより前に遡る期間を選ばれても、前ローンチのデータが混ざらないよう開始日で打ち止める。
-  const requestedStartDate = isDateParam(startParam) ? startParam : TARGET_START_DATE;
-  const targetStartDate = requestedStartDate < TARGET_START_DATE ? TARGET_START_DATE : requestedStartDate;
-  const targetEndDate = isDateParam(endParam) ? endParam : '2099-12-31';
+  const requestedCampaignId = url.searchParams.get('campaign') ?? DEFAULT_FUNNEL_CAMPAIGN_ID;
+  const campaign = getFunnelCampaign(requestedCampaignId);
+  if (!campaign) {
+    return NextResponse.json({ error: '指定された月のファネルは存在しません' }, { status: 400 });
+  }
+  const targetStartDate = campaign.startDate;
+  const targetEndDate = campaign.endDate ?? '2099-12-31';
+  const fresh = url.searchParams.get('fresh') === '1';
 
   try {
-    const result = await computePanelAnalysisCached(targetStartDate, targetEndDate);
+    const result = fresh
+      ? await computePanelAnalysis(targetStartDate, targetEndDate, campaign.id)
+      : await computePanelAnalysisCached(targetStartDate, targetEndDate, campaign.id);
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: result.status ?? 500 });
     }

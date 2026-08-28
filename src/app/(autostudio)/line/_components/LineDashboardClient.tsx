@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import useSWR, { preload } from 'swr';
+import useSWR from 'swr';
 
 import { Card } from '@/components/ui/card';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
@@ -204,26 +204,6 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
       setActiveTab(tabParam as LineTabKey);
     }
   }, []);
-  // ファネル分析タブ用の期間（「全期間」はAPIデフォルト＝ローンチ開始日〜現在）
-  const panelRange = useMemo(() => {
-    if (dateRange === 'all') return null;
-    const rangePreset = isUnifiedRangePreset(dateRange) ? dateRange : '7d';
-    const resolved = resolveDateRange(rangePreset, customStartDate, customEndDate, { includeToday: true });
-    const adjusted = adjustRangeWithSnapshot(resolved.start, resolved.end, initialData.latestSnapshotDate);
-    return { start: formatDateInput(adjusted.start), end: formatDateInput(adjusted.end) };
-  }, [dateRange, customStartDate, customEndDate, initialData.latestSnapshotDate]);
-
-  // ページを開いた時点でファネル分析のデータを先読みしておく（タブを開いた瞬間に表示される）
-  useEffect(() => {
-    const query = panelRange ? `?start=${panelRange.start}&end=${panelRange.end}` : '';
-    preload(`/api/line/panel-analysis${query}`, async (input: RequestInfo) => {
-      const res = await fetch(input.toString());
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'データの取得に失敗しました');
-      return json;
-    }).catch(() => undefined);
-  }, [panelRange]);
-
   const [pendingTab, setPendingTab] = useState<LineTabKey | null>(null);
   const [isTabLoading, setIsTabLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -713,7 +693,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
           }}
           className="flex-1 min-w-[240px]"
         />
-        {activeTab === 'delivery_create' || activeTab === 'prompt' ? null : (
+        {activeTab === 'delivery_create' || activeTab === 'prompt' || activeTab === 'funnel' ? null : (
           <DashboardDateRangePicker
             options={datePickerOptions}
             value={dateRange}
@@ -1450,7 +1430,7 @@ export function LineDashboardClient({ initialData }: LineDashboardClientProps) {
           ) : null}
 
           {activeTab === 'funnel' ? (
-            <PanelAnalysis startDate={panelRange?.start} endDate={panelRange?.end} />
+            <PanelAnalysis />
           ) : null}
 
           {activeTab === 'cross' ? (

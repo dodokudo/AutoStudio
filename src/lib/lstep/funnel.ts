@@ -64,11 +64,27 @@ export async function analyzeFunnel(
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\`
     )`;
 
-  // 計測対象の総数を取得
-  const [totalRows] = await client.query({
+  const measuredSteps = funnelDefinition.steps.filter(
+    (step, index) => index > 0 && step.id !== 'measure_target',
+  );
+  for (const step of measuredSteps) {
+    if (!/^[A-Za-z0-9_]+$/.test(step.tagColumn)) {
+      throw new Error(`Invalid funnel tag column: ${step.tagColumn}`);
+    }
+  }
+  const stepSelects = measuredSteps.map(
+    (step, index) => (
+      `COUNT(DISTINCT CASE WHEN t.\`${step.tagColumn}\` = 1 THEN t.id END) AS step_${index}`
+    ),
+  );
+
+  // 総数と全ステップを1クエリで集計する。ステップ数に比例したBigQuery往復を避ける。
+  const [aggregateRows] = await client.query({
     query: `
       ${latestJoinCTE}
-      SELECT COUNT(DISTINCT t.id) AS total
+      SELECT
+        COUNT(DISTINCT t.id) AS total
+        ${stepSelects.length > 0 ? `,\n        ${stepSelects.join(',\n        ')}` : ''}
       FROM \`${projectId}.${datasetId}.${TABLE_NAME}\` t
       JOIN latest l ON t.snapshot_date = l.sd
       WHERE t.friend_added_at IS NOT NULL
@@ -79,7 +95,8 @@ export async function analyzeFunnel(
     params: buildParams(),
   });
 
-  const totalBase = Number((totalRows[0] as { total: number }).total);
+  const aggregateRow = aggregateRows[0] as Record<string, number> | undefined;
+  const totalBase = Number(aggregateRow?.total ?? 0);
 
   if (totalBase === 0 && !options?.segmentFilter) {
     throw new Error('No snapshot data available');
@@ -89,6 +106,7 @@ export async function analyzeFunnel(
   const stepResults: FunnelStepResult[] = [];
   let previousReached = totalBase;
 
+  let aggregateStepIndex = 0;
   for (let i = 0; i < funnelDefinition.steps.length; i++) {
     const step = funnelDefinition.steps[i];
 
@@ -98,21 +116,8 @@ export async function analyzeFunnel(
     if (i === 0 || step.id === 'measure_target') {
       reached = totalBase;
     } else {
-      const [rows] = await client.query({
-        query: `
-          ${latestJoinCTE}
-          SELECT COUNT(DISTINCT CASE WHEN t.\`${step.tagColumn}\` = 1 THEN t.id END) AS reached
-          FROM \`${projectId}.${datasetId}.${TABLE_NAME}\` t
-          JOIN latest l ON t.snapshot_date = l.sd
-          WHERE t.friend_added_at IS NOT NULL
-            AND t.blocked = 0
-            ${dateFilter}
-            ${segmentFilterClause}
-        `,
-        params: buildParams(),
-      });
-
-      reached = Number((rows[0] as { reached: number }).reached);
+      reached = Number(aggregateRow?.[`step_${aggregateStepIndex}`] ?? 0);
+      aggregateStepIndex += 1;
     }
 
     const notReached = previousReached - reached;

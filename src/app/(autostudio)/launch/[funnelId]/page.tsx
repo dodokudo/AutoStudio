@@ -39,61 +39,6 @@ async function fetchFunnelData(funnelId: string) {
   return funnel;
 }
 
-async function fetchBroadcastMetrics() {
-  if (!PROJECT_ID) return [];
-
-  const bq = createBigQueryClient(PROJECT_ID);
-  const dataset = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
-
-  try {
-    const [rows] = await bq.query({
-      query: `
-        SELECT
-          broadcast_id,
-          broadcast_name,
-          sent_at,
-          delivery_count,
-          open_count,
-          open_rate,
-          elapsed_minutes,
-          CAST(measured_at AS STRING) as measured_at
-        FROM \`${PROJECT_ID}.${dataset}.broadcast_metrics\`
-        ORDER BY broadcast_id, elapsed_minutes
-      `,
-      useLegacySql: false,
-    });
-    return rows ?? [];
-  } catch {
-    // Table might not exist yet
-    return [];
-  }
-}
-
-async function fetchTagMetrics(): Promise<Record<string, number>> {
-  if (!PROJECT_ID) return {};
-
-  const bq = createBigQueryClient(PROJECT_ID);
-  const dataset = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
-
-  try {
-    const [rows] = await bq.query({
-      query: `
-        SELECT tag_name, friend_count
-        FROM \`${PROJECT_ID}.${dataset}.tag_metrics\`
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY tag_name ORDER BY measured_at DESC) = 1
-      `,
-      useLegacySql: false,
-    });
-    const result: Record<string, number> = {};
-    for (const row of rows ?? []) {
-      result[row.tag_name] = Number(row.friend_count) || 0;
-    }
-    return result;
-  } catch {
-    return {};
-  }
-}
-
 export default async function LaunchDetailPage({ params }: PageProps) {
   const { funnelId } = await params;
 
@@ -111,11 +56,7 @@ export default async function LaunchDetailPage({ params }: PageProps) {
   }
 
   try {
-    const [funnel, metrics, tagMetrics] = await Promise.all([
-      fetchFunnelData(funnelId),
-      fetchBroadcastMetrics(),
-      fetchTagMetrics(),
-    ]);
+    const funnel = await fetchFunnelData(funnelId);
 
     if (!funnel) {
       return (
@@ -130,13 +71,7 @@ export default async function LaunchDetailPage({ params }: PageProps) {
       );
     }
 
-    return (
-      <LaunchDetailClient
-        funnel={funnel}
-        broadcastMetrics={metrics}
-        tagMetrics={tagMetrics}
-      />
-    );
+    return <LaunchDetailClient funnel={funnel} />;
   } catch (error) {
     console.error('[launch/detail] Error:', error);
     return (

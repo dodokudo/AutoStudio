@@ -1,9 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import useSWR from 'swr';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Card } from '@/components/ui/card';
+import { AutomationKpiTargets } from '@/components/launch/AutomationKpiTargets';
+import {
+  DEFAULT_FUNNEL_CAMPAIGN_ID,
+  FUNNEL_CAMPAIGNS,
+  getFunnelCampaign,
+  type FunnelCampaignId,
+} from '@/lib/lstep/funnel-campaigns';
 
 interface PanelItem {
   label: string;
@@ -26,6 +34,7 @@ interface SummaryStep {
 
 interface FunnelReport {
   targetStartDate: string;
+  targetEndDate: string | null;
   base: number;
   activeBase: number;
   blockedCount: number;
@@ -131,6 +140,7 @@ interface LeadTimeRow {
 }
 
 interface PanelAnalysisResponse {
+  campaignId: FunnelCampaignId;
   snapshotDate: string | null;
   base: number;
   report: FunnelReport;
@@ -170,37 +180,109 @@ function formatPercent(value: number): string {
 }
 
 interface PanelAnalysisProps {
-  startDate?: string;
-  endDate?: string;
+  fixedCampaignId?: FunnelCampaignId;
+  kpiFunnelId?: string;
 }
 
-export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
-  const query = startDate && endDate ? `?start=${startDate}&end=${endDate}` : '';
-  const { data, error, isLoading } = useSWR<PanelAnalysisResponse>(`/api/line/panel-analysis${query}`, fetcher, {
+export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisProps) {
+  const [selectedCampaignId, setSelectedCampaignId] = useState<FunnelCampaignId>(
+    fixedCampaignId ?? DEFAULT_FUNNEL_CAMPAIGN_ID,
+  );
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const campaignId = fixedCampaignId ?? selectedCampaignId;
+  const campaign = getFunnelCampaign(campaignId) ?? getFunnelCampaign(DEFAULT_FUNNEL_CAMPAIGN_ID)!;
+  const query = new URLSearchParams({ campaign: campaign.id });
+  if (refreshVersion > 0) {
+    query.set('fresh', '1');
+    query.set('v', String(refreshVersion));
+  }
+  const { data, error, isLoading } = useSWR<PanelAnalysisResponse>(`/api/line/panel-analysis?${query}`, fetcher, {
     revalidateOnFocus: false,
   });
 
+  const campaignControls = (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">自動化ファネルの計測期間</p>
+          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+            同じEVER導線を、LINE登録日で月別に分けています。実績は最新のLSTEPスナップショットから集計します。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setRefreshVersion(Date.now())}
+          disabled={isLoading}
+          className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-secondary)] transition-colors hover:bg-[color:var(--color-surface-muted)] disabled:cursor-wait disabled:opacity-50"
+        >
+          {isLoading ? '更新中…' : '最新データに更新'}
+        </button>
+      </div>
+      {fixedCampaignId ? (
+        <div className="mt-3 inline-flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+          {campaign.label}
+          <span className="text-xs font-medium">計測中</span>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="ファネル計測月">
+          {FUNNEL_CAMPAIGNS.map((item) => {
+            const selected = item.id === campaign.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => {
+                  setSelectedCampaignId(item.id);
+                  setRefreshVersion(0);
+                }}
+                className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
+                  selected
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
+                    : 'border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                {item.label}
+                <span className="ml-2 text-[10px] font-medium opacity-70">
+                  {item.status === 'active' ? '計測中' : '計測終了'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+
   if (isLoading) {
     return (
-      <Card className="p-5">
-        <p className="text-sm text-[color:var(--color-text-secondary)]">ファネルデータを読み込み中...</p>
-      </Card>
+      <div className="section-stack">
+        {campaignControls}
+        <Card className="p-5">
+          <p className="text-sm text-[color:var(--color-text-secondary)]">ファネルデータを読み込み中...</p>
+        </Card>
+      </div>
     );
   }
 
   if (error || !data) {
     return (
-      <Card className="p-5">
-        <p className="text-sm font-semibold text-red-600">ファネルデータの取得に失敗しました</p>
-        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
-          {error instanceof Error ? error.message : '不明なエラー'}
-        </p>
-      </Card>
+      <div className="section-stack">
+        {campaignControls}
+        <Card className="p-5">
+          <p className="text-sm font-semibold text-red-600">ファネルデータの取得に失敗しました</p>
+          <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
+            {error instanceof Error ? error.message : '不明なエラー'}
+          </p>
+        </Card>
+      </div>
     );
   }
 
   const fallbackReport: FunnelReport = {
     targetStartDate: '2026-07-03',
+    targetEndDate: null,
     base: data.base,
     activeBase: data.base,
     blockedCount: 0,
@@ -227,7 +309,13 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
   const leadTime = data.leadTime ?? [];
   const maxBlockTiming = Math.max(...blockTiming.map((item) => item.count), 1);
   const reportCards = [
-    { label: '計測対象', value: report.base, sub: `${report.targetStartDate}以降登録` },
+    {
+      label: '計測対象',
+      value: report.base,
+      sub: report.targetEndDate
+        ? `${report.targetStartDate}〜${report.targetEndDate}登録`
+        : `${report.targetStartDate}以降登録`,
+    },
     { label: '回答完了', value: report.surveyCompleted, sub: `回答率 ${formatPercent((report.surveyCompleted / Math.max(report.base, 1)) * 100)}` },
     { label: '申込数', value: report.seminarApplied, sub: `申込率 ${formatPercent(report.seminarApplicationRate)}` },
     { label: '参加', value: report.seminarJoined, sub: `参加率 ${formatPercent(report.seminarJoinRate)}` },
@@ -391,15 +479,26 @@ export function PanelAnalysis({ startDate, endDate }: PanelAnalysisProps) {
     .join(' × ');
 
   return (
-    <div className="space-y-3">
+    <div className="section-stack">
+      {campaignControls}
+      {kpiFunnelId ? (
+        <AutomationKpiTargets
+          funnelId={kpiFunnelId}
+          actual={{
+            targetPeople: report.base,
+            applications: report.seminarApplied,
+            purchases: report.purchased,
+          }}
+        />
+      ) : null}
       <Card className="p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-            【2026.7】セミナーファネル サマリー
+            {campaign.heading}
           </h2>
           {data.snapshotDate ? (
             <span className="text-xs text-[color:var(--color-text-muted)]">
-              スナップショット: {data.snapshotDate}
+              LSTEP最新データ: {data.snapshotDate}時点
             </span>
           ) : null}
         </div>

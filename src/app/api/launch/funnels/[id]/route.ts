@@ -5,7 +5,9 @@ const PROJECT_ID = resolveProjectId(process.env.LSTEP_BQ_PROJECT_ID || process.e
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const editorOnly = new URL(request.url).searchParams.get('editor') === '1';
+  const searchParams = new URL(request.url).searchParams;
+  const editorOnly = searchParams.get('editor') === '1';
+  const includeMetrics = searchParams.get('metrics') === '1';
 
   try {
     const bq = createBigQueryClient(PROJECT_ID);
@@ -35,16 +37,44 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // The editor only needs the funnel JSON. Avoid loading the full metrics
     // history, which makes opening large projects unnecessarily slow.
-    if (editorOnly) {
+    if (editorOnly || !includeMetrics) {
       return NextResponse.json({ funnel });
     }
 
-    // Fetch broadcast metrics for this funnel's date range
+    // 配信タブを開いた時だけ、このファネルの期間・IDに必要な実績を取得する。
     const dataset = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
     let broadcastMetrics: any[] = [];
+    const broadcastIds = Array.from(new Set<string>(
+      (funnel.deliveries ?? []).flatMap((delivery: { lstepBroadcastId?: string }) => (
+        delivery.lstepBroadcastId ? [delivery.lstepBroadcastId] : []
+      )),
+    ));
 
     try {
+      const broadcastIdClause = broadcastIds.length > 0
+        ? 'OR broadcast_id IN UNNEST(@broadcastIds)'
+        : '';
       const metricsQuery = `
+        WITH scoped AS (
+          SELECT
+            broadcast_id,
+            broadcast_name,
+            sent_at,
+            delivery_count,
+            open_count,
+            open_rate,
+            elapsed_minutes,
+            measured_at,
+            ROW_NUMBER() OVER (PARTITION BY broadcast_id ORDER BY elapsed_minutes DESC) AS latest_rank
+          FROM \`${PROJECT_ID}.${dataset}.broadcast_metrics\`
+          WHERE (
+            SAFE_CAST(
+              REPLACE(REGEXP_EXTRACT(sent_at, r'\\d{4}/\\d{1,2}/\\d{1,2}'), '/', '-')
+              AS DATE
+            ) BETWEEN DATE(@startDate) AND DATE(@endDate)
+            ${broadcastIdClause}
+          )
+        )
         SELECT
           broadcast_id,
           broadcast_name,
@@ -53,40 +83,52 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           open_count,
           open_rate,
           elapsed_minutes,
-          CAST(measured_at AS STRING) as measured_at
-        FROM \`${PROJECT_ID}.${dataset}.broadcast_metrics\`
+          CAST(measured_at AS STRING) AS measured_at
+        FROM scoped
+        WHERE elapsed_minutes <= 1440 OR latest_rank = 1
         ORDER BY broadcast_id, elapsed_minutes
       `;
-      const [metricRows] = await bq.query({ query: metricsQuery, useLegacySql: false });
+      const params: Record<string, string | string[]> = {
+        startDate: funnel.startDate,
+        endDate: funnel.endDate,
+      };
+      if (broadcastIds.length > 0) params.broadcastIds = broadcastIds;
+      const [metricRows] = await bq.query({ query: metricsQuery, useLegacySql: false, params });
       broadcastMetrics = metricRows ?? [];
     } catch {
       // Table might be empty or not exist yet
     }
 
-    // Fetch URL click metrics
-    let urlMetrics: any[] = [];
-    try {
-      const urlQuery = `
-        SELECT
-          url_id,
-          url_name,
-          total_clicks,
-          unique_visitors,
-          click_rate,
-          CAST(measured_at AS STRING) as measured_at
-        FROM \`${PROJECT_ID}.${dataset}.url_click_metrics\`
-        ORDER BY url_id, measured_at
-      `;
-      const [urlRows] = await bq.query({ query: urlQuery, useLegacySql: false });
-      urlMetrics = urlRows ?? [];
-    } catch {
-      // Table might be empty
+    const clickTags = Array.from(new Set<string>(
+      (funnel.deliveries ?? []).flatMap((delivery: { clickTag?: string }) => (
+        delivery.clickTag ? [delivery.clickTag] : []
+      )),
+    ));
+    const tagMetrics: Record<string, number> = {};
+    if (clickTags.length > 0) {
+      try {
+        const [tagRows] = await bq.query({
+          query: `
+            SELECT tag_name, friend_count
+            FROM \`${PROJECT_ID}.${dataset}.tag_metrics\`
+            WHERE tag_name IN UNNEST(@clickTags)
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY tag_name ORDER BY measured_at DESC) = 1
+          `,
+          useLegacySql: false,
+          params: { clickTags },
+        });
+        for (const row of tagRows ?? []) {
+          tagMetrics[String(row.tag_name)] = Number(row.friend_count) || 0;
+        }
+      } catch {
+        // Table might be empty or not exist yet
+      }
     }
 
     return NextResponse.json({
       funnel,
       broadcastMetrics,
-      urlMetrics,
+      tagMetrics,
     });
   } catch (error) {
     console.error('Failed to fetch funnel detail:', error);
