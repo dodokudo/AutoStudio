@@ -279,7 +279,7 @@ export function LaunchDetailClient({
 
   useEffect(() => {
     const needsMetrics = activeTab === 'line-delivery' || activeTab === 'analysis';
-    if (isAutomationFunnel || !needsMetrics || metricsLoaded || metricsLoading) return;
+    if (isAutomationFunnel || !needsMetrics || metricsLoaded) return;
 
     let cancelled = false;
     setMetricsLoading(true);
@@ -305,7 +305,7 @@ export function LaunchDetailClient({
     return () => {
       cancelled = true;
     };
-  }, [activeTab, funnel.id, isAutomationFunnel, metricsLoaded, metricsLoading]);
+  }, [activeTab, funnel.id, isAutomationFunnel, metricsLoaded]);
 
   // Match deliveries with metrics
   const deliveriesWithMetrics = useMemo(
