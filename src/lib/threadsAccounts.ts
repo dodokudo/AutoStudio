@@ -17,7 +17,17 @@ export const THREADS_ACCOUNTS: ThreadsAccount[] = [
     label: '本垢',
     handle: 'kudooo_ai',
     threadsUserId: '10012809578833342',
-    launchkitSlugPrefixes: ['opt-4', '6mth', 'm6thk', '6mthp'],
+    launchkitSlugPrefixes: [
+      // 既存導線（過去リンクからの流入も継続集計）
+      'opt-4',
+      '6mth',
+      'm6thk',
+      '6mthp',
+      // 2026-08-29以降の新導線（末尾1あり＝メイン）
+      '8m1',
+      '8mpo1',
+      '8mth1',
+    ],
     lineSourceNames: ['Threads Main', 'Threads メイン'],
   },
   {
@@ -25,7 +35,14 @@ export const THREADS_ACCOUNTS: ThreadsAccount[] = [
     label: 'サブ垢',
     handle: 'kudooo_aii',
     threadsUserId: '27016191458061252',
-    launchkitSlugPrefixes: ['opt-sub4'],
+    launchkitSlugPrefixes: [
+      // 既存導線（過去リンクからの流入も継続集計）
+      'opt-sub4',
+      // 2026-08-29以降の新導線（末尾1なし＝サブ）
+      '8m',
+      '8mpo',
+      '8mth',
+    ],
     lineSourceNames: [
       'Threads ポスト',
       'Threads 固定',
