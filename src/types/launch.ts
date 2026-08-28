@@ -149,6 +149,80 @@ export interface DailyMetric {
   backendPurchases?: number;
 }
 
+export interface LimitedLaunchDailyApplication {
+  date: string;
+  newRegistrations: number | null;
+  existing: number | null;
+  new: number | null;
+}
+
+export interface LimitedLaunchEventDay {
+  date: string;
+  isOff?: boolean;
+  applicationTarget: number;
+  applications: number;
+  attendanceTarget: number;
+  attendees: number;
+  frontendTarget: number;
+  frontendPurchases: number;
+}
+
+export interface LimitedLaunchKpi {
+  measurementStartedAt: string;
+  snapshotDate: string;
+  fixedExistingAudience: number;
+  reachableExistingAudience: number;
+  newRegistrations: number;
+  /** 最新LSTEPタグから取得できる場合の全体実績 */
+  attendees?: number;
+  frontendPurchases?: number;
+  backendPurchases: number;
+  targets: {
+    revenue: number;
+    plannedExistingAudience: number;
+    newRegistrations: number;
+    applications: number;
+    existingApplications: number;
+    newApplications: number;
+    existingApplicationRate: number;
+    newApplicationRate: number;
+    attendees: number;
+    attendanceRate: number;
+    frontendPurchases: number;
+    frontendUnitPrice: number;
+    attendeeToFrontendRate: number;
+    backendPurchases: number;
+    backendUnitPrice: number;
+    frontendToBackendRate: number;
+  };
+  dailyApplications: LimitedLaunchDailyApplication[];
+  eventDays: LimitedLaunchEventDay[];
+}
+
+export interface LimitedLaunchSegmentFunnel {
+  surveyResponses: number;
+  videoViews: number;
+  applications: number;
+  attendees: number;
+  frontendPurchases: number;
+}
+
+export interface SeptemberLaunchSnapshot {
+  snapshotDate: string;
+  dailyNewRegistrations: Record<string, number>;
+  dailyApplications: Record<string, { existing: number; new: number }>;
+  eventApplications: Record<string, number>;
+  eventAttendees: Record<string, number>;
+  eventFrontendPurchases: Record<string, number>;
+  attendees: number | null;
+  frontendPurchases: number | null;
+  backendPurchases: number | null;
+  segmentFunnels: {
+    existing: LimitedLaunchSegmentFunnel;
+    new: LimitedLaunchSegmentFunnel;
+  };
+}
+
 export interface LaunchKpi {
   kgi: { target: number; unitPrice: number };
   inflow: {
@@ -188,4 +262,5 @@ export interface LaunchKpi {
   frontend: { unitPrice: number; target: number; actual: number };
   backend: { unitPrice: number; isVariable: boolean; target: number; actual: number; revenue: number };
   dailyMetrics?: DailyMetric[];
+  limitedLaunch?: LimitedLaunchKpi;
 }

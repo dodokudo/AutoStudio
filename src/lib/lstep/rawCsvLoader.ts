@@ -128,8 +128,29 @@ function parseCSVLine(line: string): string[] {
   return result.map((value) => value.replace(/\r$/, ''));
 }
 
-// 【2026.7】7月セミナーのパネル計測タグ。完全一致で英語カラム名に変換する
-const SEMINAR_2026_7_COLUMNS: Record<string, string> = {
+// 日本語や記号だけの列名は正規化時に欠落しやすいため、
+// 運用で参照するタグ・友だち情報は完全一致で安定した英語名へ変換する。
+const EXACT_COLUMN_NAMES: Record<string, string> = {
+  '商品：作成中': 'product_in_progress',
+  '商品：アフィリエイト': 'product_affiliate',
+  '商品：ない': 'product_none',
+  '商品：ある': 'product_exists',
+  'ジャンル：その他': 'genre_other',
+  'ジャンル：店舗経営': 'genre_store_business',
+  'ジャンル：物販': 'genre_retail',
+  'ジャンル：講師業': 'genre_instructor',
+  'ジャンル：美容・サロン系': 'genre_beauty_salon',
+  '受講生': 'course_student',
+  '【既存】配信対象': 'existing_delivery_target',
+  '【新規】配信対象': 'new_delivery_target',
+  '【2026.8】アンケート回答済み': 's8_survey_completed',
+  '【2026.8】動画視聴総数': 's8_video_watched_total',
+  '【2026.8】セミナーフォーム遷移': 's8_seminar_form',
+  '【2026.8】セミナー申込総数': 's8_seminar_applied_total',
+  '【2026.8】ワンタップセミナー申込': 's8_one_tap_seminar_applied',
+  '【2026.8】セミナーフォーム申込': 's8_seminar_form_applied',
+  '【2026.8】セミナー参加総数': 's8_seminar_joined_total',
+  '【2026.8】フロント購入総数': 's8_front_purchased_total',
   '【2026.7】個別相談会申込済み': 's7_consult_applied',
   '【2026.7】個別相談会タップ': 's7_consult_tap',
   '【2026.7】個別相談会参加': 's7_consult_joined',
@@ -173,16 +194,23 @@ const SEMINAR_2026_7_COLUMNS: Record<string, string> = {
   '【2026.7】購入ボタン': 's7_purchase_button',
   '【2026.7】銀振希望者': 's7_bank_transfer',
   '【2026.7】フロント購入者総数': 's7_front_purchased_total',
+  '【2026.7】セミナーフォーム遷移': 's7_seminar_form',
   // 友だち情報（従来 unnamed_* に潰れていた列）
   'アンケート回答日': 'survey_answered_date',
   'フロント購入日': 'front_purchased_date',
   'セミナー申込日': 'seminar_application_slot',
   'セミナー申込計測': 'seminar_applied_at',
+  '【2026.9】セミナー申込日': 's9_seminar_application_date',
+  '【2026.9】セミナー参加日': 's9_seminar_attendance_date',
+  '【2026.9】フロント購入日': 's9_frontend_purchase_date',
+  '【2026.9】セミナー参加総数': 's9_seminar_joined_total',
+  '【2026.9】フロント購入者総数': 's9_front_purchased_total',
+  '【2026.9】バックエンド購入者総数': 's9_backend_purchased_total',
 };
 
 function normalizeColumnName(name: string): string {
-  // 完全一致マップを最優先（【2026.7】パネル計測タグ）
-  const exact = SEMINAR_2026_7_COLUMNS[name.trim()];
+  // 完全一致マップを最優先
+  const exact = EXACT_COLUMN_NAMES[name.trim()];
   if (exact) return exact;
 
   // 日本語と特殊文字を英数字とアンダースコアに変換

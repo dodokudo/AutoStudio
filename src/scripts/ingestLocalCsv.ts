@@ -64,7 +64,7 @@ async function main(): Promise<void> {
 
     // Load into BigQuery
     console.log('BigQueryにロード中...');
-    await loadIntoBigQuery(bigquery, config, processedObjects);
+    await loadIntoBigQuery(bigquery, config, processedObjects, snapshotDate);
 
     // Load raw CSV to BigQuery
     console.log('Raw CSVをBigQueryにロード中...');
@@ -169,6 +169,7 @@ async function loadIntoBigQuery(
   bigquery: BigQuery,
   config: LstepConfig,
   objects: ProcessedObjectPaths,
+  snapshotDate: string,
 ): Promise<void> {
   const jobs = [
     { table: 'user_core', objectName: objects.userCore },
@@ -180,6 +181,8 @@ async function loadIntoBigQuery(
 
   for (const jobDef of jobs) {
     const uri = `gs://${config.gcsBucket}/${jobDef.objectName}`;
+    const partitionDecorator = snapshotDate.replace(/-/g, '');
+    const destinationTableId = `${jobDef.table}$${partitionDecorator}`;
     console.log(`  - ${jobDef.table} をロード中... (${uri})`);
     try {
       const [job] = await bigquery.createJob({
@@ -189,10 +192,12 @@ async function loadIntoBigQuery(
             destinationTable: {
               projectId: config.projectId,
               datasetId: config.dataset,
-              tableId: jobDef.table,
+              tableId: destinationTableId,
             },
             sourceFormat: 'NEWLINE_DELIMITED_JSON',
-            writeDisposition: 'WRITE_APPEND',
+            // 同日の再取込は対象日パーティションだけを原子的に置換する。
+            // 履歴を維持しつつ、既存行との二重計上を防ぐ。
+            writeDisposition: 'WRITE_TRUNCATE',
             autodetect: false,
           },
         },

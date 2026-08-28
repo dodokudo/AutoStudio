@@ -9,8 +9,10 @@ import { DeliveryTimeline } from '../../_components/DeliveryTimeline';
 import { BroadcastDetail } from '../../_components/BroadcastDetail';
 import { KpiDashboard } from './KpiDashboard';
 import { KpiTab } from './KpiTab';
+import { SeptemberLaunchKpi } from './SeptemberLaunchKpi';
 import { PanelAnalysis } from '@/app/(autostudio)/line/_components/PanelAnalysis';
 import { isAutomationFunnelId } from '@/lib/lstep/funnel-campaigns';
+import { SEPTEMBER_LAUNCH_FUNNEL_ID } from '@/lib/launch-constants';
 import type {
   FunnelData,
   BroadcastMetric,
@@ -34,6 +36,11 @@ const TABS = [
   { id: 'kpi-settings', label: 'KPI設定' },
   { id: 'line-delivery', label: 'LINE配信' },
   { id: 'analysis', label: '配信分析' },
+] as const;
+
+const SEPTEMBER_LAUNCH_TABS = [
+  { id: 'kpi', label: 'サマリー' },
+  { id: 'kpi-settings', label: '目標・実績入力' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['id'] | 'funnel-measurement';
@@ -266,7 +273,8 @@ export function LaunchDetailClient({
   broadcastMetrics,
   tagMetrics,
 }: LaunchDetailClientProps) {
-  const isAutomationFunnel = isAutomationFunnelId(funnel.id);
+  const isSeptemberLaunch = funnel.id === SEPTEMBER_LAUNCH_FUNNEL_ID;
+  const isAutomationFunnel = !isSeptemberLaunch && isAutomationFunnelId(funnel.id);
   const [activeTab, setActiveTab] = useState<TabKey>(
     isAutomationFunnel ? 'funnel-measurement' : 'kpi',
   );
@@ -279,7 +287,7 @@ export function LaunchDetailClient({
 
   useEffect(() => {
     const needsMetrics = activeTab === 'line-delivery' || activeTab === 'analysis';
-    if (isAutomationFunnel || !needsMetrics || metricsLoaded) return;
+    if (isAutomationFunnel || isSeptemberLaunch || !needsMetrics || metricsLoaded) return;
 
     let cancelled = false;
     setMetricsLoading(true);
@@ -305,7 +313,7 @@ export function LaunchDetailClient({
     return () => {
       cancelled = true;
     };
-  }, [activeTab, funnel.id, isAutomationFunnel, metricsLoaded]);
+  }, [activeTab, funnel.id, isAutomationFunnel, isSeptemberLaunch, metricsLoaded]);
 
   // Match deliveries with metrics
   const deliveriesWithMetrics = useMemo(
@@ -463,8 +471,8 @@ export function LaunchDetailClient({
 
   return (
     <div className="launch-detail-wide flex flex-col gap-5 md:gap-6">
-      {/* Header */}
       <div className="flex flex-col gap-2">
+        {/* 現在地の月表示は残し、9月だけ重複する大見出しを省く */}
         <div className="flex items-center gap-2 text-sm text-[color:var(--color-text-muted)]">
           <Link href="/launch" className="hover:text-[color:var(--color-accent)] transition-colors">
             Launch
@@ -472,21 +480,25 @@ export function LaunchDetailClient({
           <span>/</span>
           <span>{funnel.name}</span>
         </div>
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-          <h1 className="text-xl font-bold text-[color:var(--color-text-primary)]">
-            {funnel.name}
-          </h1>
-          <span className="text-xs text-[color:var(--color-text-muted)]">
-            {formatDate(funnel.startDate)} - {formatDate(funnel.endDate)}
-          </span>
-        </div>
+        {!isSeptemberLaunch ? (
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+            <h1 className="text-xl font-bold text-[color:var(--color-text-primary)]">
+              {funnel.name}
+            </h1>
+            <span className="text-xs text-[color:var(--color-text-muted)]">
+              {formatDate(funnel.startDate)} - {formatDate(funnel.endDate)}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {/* Tabs - directly below header */}
       <DashboardTabsInteractive
-        items={isAutomationFunnel
-          ? [{ id: 'funnel-measurement', label: 'ファネル計測' }]
-          : [...TABS]}
+        items={isSeptemberLaunch
+          ? [...SEPTEMBER_LAUNCH_TABS]
+          : isAutomationFunnel
+            ? [{ id: 'funnel-measurement', label: 'ファネル計測' }]
+            : [...TABS]}
         value={activeTab}
         onChange={(v) => setActiveTab(v as TabKey)}
         aria-label="Launch タブ"
@@ -496,8 +508,12 @@ export function LaunchDetailClient({
       {activeTab === 'funnel-measurement' && (
         <PanelAnalysis fixedCampaignId="2026-09" kpiFunnelId={funnel.id} />
       )}
-      {activeTab === 'kpi' && <KpiDashboard funnelId={funnel.id} startDate={funnel.startDate} endDate={funnel.endDate} baseDate={funnel.baseDate} />}
-      {activeTab === 'kpi-settings' && <KpiTab funnelId={funnel.id} />}
+      {activeTab === 'kpi' && (isSeptemberLaunch
+        ? <SeptemberLaunchKpi funnelId={funnel.id} mode="summary" />
+        : <KpiDashboard funnelId={funnel.id} startDate={funnel.startDate} endDate={funnel.endDate} baseDate={funnel.baseDate} />)}
+      {activeTab === 'kpi-settings' && (isSeptemberLaunch
+        ? <SeptemberLaunchKpi funnelId={funnel.id} mode="input" />
+        : <KpiTab funnelId={funnel.id} />)}
       {(activeTab === 'line-delivery' || activeTab === 'analysis') && metricsLoading ? (
         <Card className="p-5">
           <p className="text-sm text-[color:var(--color-text-secondary)]">配信実績を読み込み中...</p>

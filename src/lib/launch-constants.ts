@@ -8,3 +8,6 @@ export const SEGMENT_CUTOFF_DATE = '2026-03-08';
 
 /** BigQueryデータセット */
 export const LSTEP_DATASET = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
+
+/** 2026年9月の期間限定ローンチ */
+export const SEPTEMBER_LAUNCH_FUNNEL_ID = 'funnel-1787405840209';

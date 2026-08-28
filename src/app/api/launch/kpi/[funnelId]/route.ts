@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { SEPTEMBER_LAUNCH_FUNNEL_ID } from '@/lib/launch-constants';
+import { fetchSeptemberLaunchSnapshot } from '@/lib/lstep/septemberLaunchSnapshot';
 import type { LaunchKpi } from '@/types/launch';
 
 const PROJECT_ID = resolveProjectId(process.env.LSTEP_BQ_PROJECT_ID || process.env.BQ_PROJECT_ID);
 const DATASET = process.env.LSTEP_BQ_DATASET || 'autostudio_lstep';
 const TABLE = `${PROJECT_ID}.${DATASET}.launch_kpi`;
+
+export const dynamic = 'force-dynamic';
 
 const DEFAULT_KPI: LaunchKpi = {
   kgi: { target: 0, unitPrice: 0 },
@@ -37,6 +41,8 @@ export async function GET(
     }
 
     const bq = createBigQueryClient(PROJECT_ID);
+    let kpi = DEFAULT_KPI;
+    let isDefault = true;
 
     try {
       const [rows] = await bq.query({
@@ -45,25 +51,28 @@ export async function GET(
         params: { funnelId },
       });
 
-      if (!rows || rows.length === 0) {
-        return NextResponse.json({ kpi: DEFAULT_KPI, isDefault: true });
+      if (rows && rows.length > 0) {
+        const raw = JSON.parse((rows[0] as { data: string }).data);
+        // 後方互換: 旧キー benefitReceivers → videoViewers にマイグレーション
+        if (raw.benefitReceivers && !raw.videoViewers) {
+          raw.videoViewers = raw.benefitReceivers;
+          delete raw.benefitReceivers;
+        }
+        kpi = raw as LaunchKpi;
+        isDefault = false;
       }
-
-      const raw = JSON.parse((rows[0] as any).data);
-      // 後方互換: 旧キー benefitReceivers → videoViewers にマイグレーション
-      if (raw.benefitReceivers && !raw.videoViewers) {
-        raw.videoViewers = raw.benefitReceivers;
-        delete raw.benefitReceivers;
-      }
-      const parsed: LaunchKpi = raw;
-      return NextResponse.json({ kpi: parsed, isDefault: false });
     } catch (e: unknown) {
       const err = e as { message?: string; code?: number };
-      if (err?.message?.includes('Not found') || err?.code === 404) {
-        return NextResponse.json({ kpi: DEFAULT_KPI, isDefault: true });
+      if (!err?.message?.includes('Not found') && err?.code !== 404) {
+        throw e;
       }
-      throw e;
     }
+
+    const lstepSnapshot = funnelId === SEPTEMBER_LAUNCH_FUNNEL_ID
+      ? await fetchSeptemberLaunchSnapshot(bq, PROJECT_ID, DATASET)
+      : null;
+
+    return NextResponse.json({ kpi, isDefault, lstepSnapshot });
   } catch (error) {
     console.error('Failed to fetch KPI:', error);
     return NextResponse.json({ error: 'Failed to fetch KPI' }, { status: 500 });
