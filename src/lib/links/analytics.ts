@@ -22,7 +22,7 @@ export interface LinkClicksSummary {
 }
 
 // 現在サブアカウントで使っているThreads→LPのshort_code。
-export const THREADS_SUB_LP_SHORT_CODES = ['6po', '6mpo', '6tp'] as const;
+export const THREADS_SUB_LP_SHORT_CODES = ['6po', '6mpo', '6tp', '8mpo'] as const;
 
 // Threads導線LPに配置されているLINE登録ボタンのshort_code一覧。
 // アカウント別集計で混ざらないよう、メインとサブを分けて管理する。
