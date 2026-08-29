@@ -248,6 +248,7 @@ export async function getThreadsLinkClicksByRange(
           OR (@legacyAccountKey = 'main' AND ll.short_code NOT IN UNNEST(@subLpCodes))
         )
         AND DATE(TIMESTAMP(cl.clicked_at), "Asia/Tokyo") BETWEEN @startDate AND @endDate
+        AND COALESCE(cl.user_agent, '') NOT LIKE 'AutoStudio-Redirect-Verification/%'
     ),
     launchkit_views AS (
       SELECT
