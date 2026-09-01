@@ -9,6 +9,7 @@ import { DeliveryTimeline } from '../../_components/DeliveryTimeline';
 import { BroadcastDetail } from '../../_components/BroadcastDetail';
 import { KpiDashboard } from './KpiDashboard';
 import { KpiTab } from './KpiTab';
+import { SeptemberLaunchAnalysis } from './SeptemberLaunchAnalysis';
 import { SeptemberLaunchKpi } from './SeptemberLaunchKpi';
 import { PanelAnalysis } from '@/app/(autostudio)/line/_components/PanelAnalysis';
 import { isAutomationFunnelId } from '@/lib/lstep/funnel-campaigns';
@@ -40,6 +41,7 @@ const TABS = [
 
 const SEPTEMBER_LAUNCH_TABS = [
   { id: 'kpi', label: 'サマリー' },
+  { id: 'analysis', label: 'セミナー参加者分析' },
   { id: 'kpi-settings', label: '目標・実績入力' },
 ] as const;
 
@@ -514,12 +516,15 @@ export function LaunchDetailClient({
       {activeTab === 'kpi-settings' && (isSeptemberLaunch
         ? <SeptemberLaunchKpi funnelId={funnel.id} mode="input" />
         : <KpiTab funnelId={funnel.id} />)}
-      {(activeTab === 'line-delivery' || activeTab === 'analysis') && metricsLoading ? (
+      {activeTab === 'analysis' && isSeptemberLaunch ? (
+        <SeptemberLaunchAnalysis funnelId={funnel.id} />
+      ) : null}
+      {!isSeptemberLaunch && (activeTab === 'line-delivery' || activeTab === 'analysis') && metricsLoading ? (
         <Card className="p-5">
           <p className="text-sm text-[color:var(--color-text-secondary)]">配信実績を読み込み中...</p>
         </Card>
       ) : null}
-      {(activeTab === 'line-delivery' || activeTab === 'analysis') && metricsError ? (
+      {!isSeptemberLaunch && (activeTab === 'line-delivery' || activeTab === 'analysis') && metricsError ? (
         <Card className="p-5">
           <p className="text-sm font-semibold text-red-600">{metricsError}</p>
         </Card>
@@ -628,7 +633,7 @@ export function LaunchDetailClient({
           />
         </>
       )}
-      {activeTab === 'analysis' && metricsLoaded && (
+      {!isSeptemberLaunch && activeTab === 'analysis' && metricsLoaded && (
         <>
           {/* Channel filter */}
           {channelFilter}

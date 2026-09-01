@@ -223,6 +223,43 @@ export interface SeptemberLaunchSnapshot {
   };
 }
 
+export type LaunchAnalysisStage = 'application' | 'attendance' | 'frontend';
+export type LaunchAnalysisSegment = 'new' | 'existing';
+
+export interface SeptemberLaunchAnalysisPerson {
+  userId: string;
+  displayName: string;
+  segment: LaunchAnalysisSegment;
+  applicationAt: string;
+  applicationDate: string;
+  seminarDate: string | null;
+  seminarSlot: string;
+  age: string;
+  gender: string;
+  job: string;
+  revenue: string;
+  sourceMedia: string[];
+  sourceRoutes: string[];
+  attended: boolean;
+  attendanceDate: string | null;
+  frontendPurchased: boolean;
+  frontendDate: string | null;
+}
+
+export interface SeptemberLaunchAnalysisResponse {
+  snapshotDate: string;
+  measurementStartedAt: string;
+  measurementEndedAt: string;
+  people: SeptemberLaunchAnalysisPerson[];
+  dataQuality: {
+    registeredApplications: number;
+    includedApplications: number;
+    excludedApplications: number;
+    demographicUnknown: number;
+    demographicMultiTagged: number;
+  };
+}
+
 export interface LaunchKpi {
   kgi: { target: number; unitPrice: number };
   inflow: {

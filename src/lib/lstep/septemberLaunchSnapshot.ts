@@ -101,8 +101,6 @@ export async function fetchSeptemberLaunchSnapshot(
         SELECT
           *,
           CASE
-            WHEN new_target = 1 THEN 'new'
-            WHEN existing_target = 1 THEN 'existing'
             WHEN friend_added_at >= PARSE_DATETIME('%Y-%m-%dT%H:%M', @measurementStart) THEN 'new'
             ELSE 'existing'
           END AS segment
@@ -114,7 +112,15 @@ export async function fetchSeptemberLaunchSnapshot(
         WHERE
           (segment = 'new' AND friend_added_at BETWEEN PARSE_DATETIME('%Y-%m-%dT%H:%M', @measurementStart)
             AND PARSE_DATETIME('%Y-%m-%dT%H:%M', @measurementEnd))
-          OR (segment = 'existing' AND existing_target = 1)
+          OR (
+            segment = 'existing'
+            AND (
+              existing_target = 1
+              OR application_slot IS NOT NULL
+              OR attended = 1
+              OR frontend_purchased = 1
+            )
+          )
       ),
       applications AS (
         SELECT
