@@ -64,7 +64,7 @@ export function sanitizeThreadsComment(value: string): string {
   return stripWithPatterns(value, COMMENT_LABEL_PATTERNS);
 }
 
-export const TOKUTEN_GUIDE_URL = 'https://asto.jp/l/6po';
+export const TOKUTEN_GUIDE_URL = 'https://lkit.jp/8mpo';
 
 const TOKUTEN_GUIDE_PATTERNS = [
   /\d+(名|人)以上が受け取っている.*Threadsノウハウはこちら/u,

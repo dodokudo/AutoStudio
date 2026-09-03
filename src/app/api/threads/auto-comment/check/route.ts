@@ -7,7 +7,7 @@ const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
 // 特典誘導テンプレート（文言・URLは必要に応じて変更）
-const TOKUTEN_GUIDE_TEMPLATE = `2000人以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
+const TOKUTEN_GUIDE_TEMPLATE = `2500人以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
 ${TOKUTEN_GUIDE_URL}`;
 
 // 投稿の伸び検知条件
@@ -128,7 +128,7 @@ async function checkTokutenGuide(
 
   // チェック1: コメント欄2以降(depth>=1)に特典誘導URLがあるか（手動追加も検知）
   const commentWithTokutenUrl = comments.find(
-    (c: any) => c.depth >= 1 && c.text && (c.text.includes('asto.jp') || c.text.includes('autostudio-self.vercel.app'))
+    (c: any) => c.depth >= 1 && c.text && (c.text.includes('asto.jp') || c.text.includes('lkit.jp') || c.text.includes('autostudio-self.vercel.app'))
   );
 
   if (commentWithTokutenUrl) {
