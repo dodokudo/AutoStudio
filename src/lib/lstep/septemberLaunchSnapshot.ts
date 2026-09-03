@@ -9,7 +9,8 @@ const EXISTING_TARGET_TAG = '【既存】配信対象';
 const NEW_TARGET_TAG = '【新規】配信対象';
 const SURVEY_RESPONSE_TAG = '【2026.8】アンケート回答済み';
 const VIDEO_VIEW_TAG = '【2026.8】動画視聴総数';
-const ATTENDANCE_TAG = '【2026.9】セミナー参加総数';
+// 今回の期間限定ローンチは8月に集客を開始したため、参加実績タグも8月名で運用されている。
+const ATTENDANCE_TAG = '【2026.8】セミナー参加総数';
 const FRONTEND_TAG = '【2026.9】フロント購入者総数';
 const BACKEND_TAG = '【2026.9】バックエンド購入者総数';
 
@@ -142,14 +143,15 @@ export async function fetchSeptemberLaunchSnapshot(
       dated_events AS (
         SELECT 'event_attendee' AS kind,
           CASE
-            WHEN REGEXP_CONTAINS(attendance_date, r'(^|[^0-9])0?9[/-]0?2([^0-9]|$)') THEN '2026-09-02'
-            WHEN REGEXP_CONTAINS(attendance_date, r'(^|[^0-9])0?9[/-]0?4([^0-9]|$)') THEN '2026-09-04'
-            WHEN REGEXP_CONTAINS(attendance_date, r'(^|[^0-9])0?9[/-]0?5([^0-9]|$)') THEN '2026-09-05'
-            WHEN REGEXP_CONTAINS(attendance_date, r'(^|[^0-9])0?9[/-]0?6([^0-9]|$)') THEN '2026-09-06'
-            WHEN REGEXP_CONTAINS(attendance_date, r'(^|[^0-9])0?9[/-]0?7([^0-9]|$)') THEN '2026-09-07'
+            WHEN REGEXP_CONTAINS(application_slot, r'(^|[^0-9])0?9[/-]0?2([^0-9]|$)') THEN '2026-09-02'
+            WHEN REGEXP_CONTAINS(application_slot, r'(^|[^0-9])0?9[/-]0?4([^0-9]|$)') THEN '2026-09-04'
+            WHEN REGEXP_CONTAINS(application_slot, r'(^|[^0-9])0?9[/-]0?5([^0-9]|$)') THEN '2026-09-05'
+            WHEN REGEXP_CONTAINS(application_slot, r'(^|[^0-9])0?9[/-]0?6([^0-9]|$)') THEN '2026-09-06'
+            WHEN REGEXP_CONTAINS(application_slot, r'(^|[^0-9])0?9[/-]0?7([^0-9]|$)') THEN '2026-09-07'
           END AS event_date
         FROM joined
-        WHERE attendance_date IS NOT NULL
+        WHERE attended = 1
+          AND application_slot IS NOT NULL
 
         UNION ALL
 
