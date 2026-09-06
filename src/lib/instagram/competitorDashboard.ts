@@ -96,7 +96,6 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
     }
   }
   // 各ユーザー最新フォロワー数 + delta
-  const today = new Date();
   const dateKey = (d: Date) => {
     const y = d.getFullYear();
     const m = `${d.getMonth() + 1}`.padStart(2, '0');
@@ -151,17 +150,27 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
         SELECT
           r.username,
           r.instagram_media_id,
-          ANY_VALUE(r.drive_file_id) AS drive_file_id,
-          ANY_VALUE(r.drive_file_url) AS drive_file_url,
-          ANY_VALUE(r.permalink) AS permalink,
-          ANY_VALUE(IFNULL(r.sheet_caption, r.caption)) AS caption,
+          ARRAY_AGG(r.drive_file_id ORDER BY IF(REGEXP_CONTAINS(r.drive_file_url, r'(drive\\.google\\.com|storage\\.googleapis\\.com)'), 1, 0) DESC, r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS drive_file_id,
+          ARRAY_AGG(r.drive_file_url ORDER BY IF(REGEXP_CONTAINS(r.drive_file_url, r'(drive\\.google\\.com|storage\\.googleapis\\.com)'), 1, 0) DESC, r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS drive_file_url,
+          ARRAY_AGG(r.permalink IGNORE NULLS ORDER BY r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS permalink,
+          ARRAY_AGG(IFNULL(r.sheet_caption, r.caption) IGNORE NULLS ORDER BY r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS caption,
           MAX(r.posted_at) AS posted_at,
           MAX(r.view_count) AS view_count,
           MAX(r.like_count) AS like_count,
           MAX(r.comments_count) AS comments_count
         FROM \`${projectId}.${dataset}.competitor_reels_raw\` r
         JOIN active_competitors a USING (username)
+        WHERE DATE(r.posted_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
         GROUP BY r.username, r.instagram_media_id
+      ),
+      ranked_reels AS (
+        SELECT
+          r.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY r.username
+            ORDER BY COALESCE(r.view_count, 0) DESC, r.posted_at DESC
+          ) AS account_rank
+        FROM unique_reels r
       ),
       latest_transcripts AS (
         SELECT instagram_media_id, ANY_VALUE(segments_json) AS segments_json
@@ -169,11 +178,11 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
         WHERE segments_json IS NOT NULL
         GROUP BY instagram_media_id
       )
-      SELECT r.*, t.segments_json
-      FROM unique_reels r
+      SELECT r.* EXCEPT(account_rank), t.segments_json
+      FROM ranked_reels r
       LEFT JOIN latest_transcripts t ON r.instagram_media_id = t.instagram_media_id
+      WHERE r.account_rank <= 60
       ORDER BY COALESCE(r.view_count, 0) DESC, r.posted_at DESC
-      LIMIT 60
     `,
     location,
   });

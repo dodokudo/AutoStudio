@@ -76,9 +76,9 @@ export async function getScriptLibraryData(): Promise<ScriptLibraryData> {
       reel_meta AS (
         SELECT
           username, instagram_media_id,
-          ANY_VALUE(permalink) AS permalink,
-          ANY_VALUE(IFNULL(sheet_caption, caption)) AS caption,
-          ANY_VALUE(drive_file_url) AS drive_file_url,
+          ARRAY_AGG(permalink IGNORE NULLS ORDER BY created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS permalink,
+          ARRAY_AGG(IFNULL(sheet_caption, caption) IGNORE NULLS ORDER BY created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS caption,
+          ARRAY_AGG(drive_file_url ORDER BY IF(REGEXP_CONTAINS(drive_file_url, r'(drive\\.google\\.com|storage\\.googleapis\\.com)'), 1, 0) DESC, created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS drive_file_url,
           MAX(posted_at) AS posted_at,
           MAX(view_count) AS view_count,
           MAX(like_count) AS like_count

@@ -24,7 +24,9 @@ steps:
       - '--cpu=1'
       - '--max-retries=2'
       - '--task-timeout=900'
+      - '--service-account=autostudio@${PROJECT_ID}.iam.gserviceaccount.com'
       - '--env-vars-file=deploy/instagram-competitor-bd/env.yaml'
+      - '--set-secrets=IG_COMPETITOR_FB_ACCESS_TOKEN=autostudio-ig-competitor-fb-token:latest,IG_COMPETITOR_FB_APP_SECRET=autostudio-ig-competitor-fb-app-secret:latest'
 images:
   - 'asia-northeast1-docker.pkg.dev/${PROJECT_ID}/autostudio/instagram-competitor-bd:latest'
 options:

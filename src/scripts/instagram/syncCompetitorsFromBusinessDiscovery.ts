@@ -1,21 +1,62 @@
 import { config as loadEnv } from 'dotenv';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { Storage } from '@google-cloud/storage';
 import { createInstagramBigQuery, ensureInstagramTables, getInstagramStorageConfig } from '@/lib/instagram/bigquery';
-import { getInstagramAccessContext } from '@/lib/instagram/auth';
+import { selectCompetitorDownloads } from '@/lib/instagram/competitorDownloadSelection';
+import { getCompetitorFacebookContext } from '@/lib/instagram/facebookBusinessAuth';
 
-const GCS_BUCKET = process.env.IG_COMPETITOR_MEDIA_BUCKET ?? 'autostudio-instagram-media';
+interface StoredVideo {
+  fileId: string;
+  url: string;
+}
 
-async function uploadVideoToGcs(mediaUrl: string, username: string, mediaId: string): Promise<string | null> {
+const storage = new Storage();
+const execFileAsync = promisify(execFile);
+
+function getGcsVideoReference(username: string, mediaId: string): StoredVideo & { objectName: string; bucketName: string } {
+  const bucketName = process.env.IG_COMPETITOR_MEDIA_BUCKET?.trim() || 'autostudio-instagram-media';
+  const objectName = `competitors/${username}/${mediaId}.mp4`;
+  return {
+    bucketName,
+    objectName,
+    fileId: `gcs:${bucketName}/${objectName}`,
+    url: `https://storage.googleapis.com/${bucketName}/${objectName}`,
+  };
+}
+
+async function findExistingGcsVideo(username: string, mediaId: string): Promise<StoredVideo | null> {
+  const reference = getGcsVideoReference(username, mediaId);
+  const [exists] = await storage.bucket(reference.bucketName).file(reference.objectName).exists();
+  return exists ? { fileId: reference.fileId, url: reference.url } : null;
+}
+
+async function resolvePublicReelVideoUrl(permalink: string, mediaId: string): Promise<string | null> {
   try {
-    const objectName = `competitors/${username}/${mediaId}.mp4`;
-    const storage = new Storage();
-    const bucket = storage.bucket(GCS_BUCKET);
-    const file = bucket.file(objectName);
+    const { stdout } = await execFileAsync(
+      'yt-dlp',
+      ['--no-warnings', '--no-playlist', '--get-url', '--format', 'best[ext=mp4]/best', permalink],
+      { encoding: 'utf8', timeout: 60_000, maxBuffer: 1024 * 1024 },
+    );
+    return stdout.split('\n').map((line) => line.trim()).find((line) => line.startsWith('https://')) ?? null;
+  } catch (error) {
+    console.warn(`[sync-competitors-bd] yt-dlp URL resolution failed for ${mediaId}:`, error);
+    return null;
+  }
+}
+
+async function uploadVideoToGcs(
+  mediaUrl: string,
+  username: string,
+  mediaId: string,
+): Promise<StoredVideo | null> {
+  try {
+    const reference = getGcsVideoReference(username, mediaId);
+    const file = storage.bucket(reference.bucketName).file(reference.objectName);
     const [exists] = await file.exists();
-    if (exists) {
-      return `https://storage.googleapis.com/${GCS_BUCKET}/${objectName}`;
-    }
+    if (exists) return { fileId: reference.fileId, url: reference.url };
+
     const response = await fetch(mediaUrl);
     if (!response.ok) {
       console.warn(`[sync-competitors-bd] media download failed ${response.status} for ${mediaId}`);
@@ -23,22 +64,42 @@ async function uploadVideoToGcs(mediaUrl: string, username: string, mediaId: str
     }
     const buffer = Buffer.from(await response.arrayBuffer());
     await file.save(buffer, {
-      contentType: 'video/mp4',
+      resumable: false,
+      contentType: response.headers.get('content-type') || 'video/mp4',
       metadata: { cacheControl: 'public, max-age=31536000' },
     });
-    return `https://storage.googleapis.com/${GCS_BUCKET}/${objectName}`;
+    return { fileId: reference.fileId, url: reference.url };
   } catch (error) {
     console.warn(`[sync-competitors-bd] uploadVideoToGcs failed for ${mediaId}:`, error);
     return null;
   }
 }
 
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  const queue = [...items];
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, concurrency), queue.length) }, async () => {
+      while (queue.length) {
+        const item = queue.shift();
+        if (item) await worker(item);
+      }
+    }),
+  );
+}
+
 loadEnv();
 loadEnv({ path: path.resolve(process.cwd(), '.env.local') });
 
-const GRAPH_VERSION = process.env.IG_GRAPH_VERSION ?? 'v25.0';
+const GRAPH_VERSION = process.env.IG_GRAPH_VERSION ?? 'v26.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const MEDIA_LIMIT = Number(process.env.IG_COMPETITOR_MEDIA_LIMIT ?? '30');
+const DOWNLOAD_LIMIT = Number(process.env.IG_COMPETITOR_DOWNLOAD_LIMIT ?? '60');
+const DOWNLOAD_MIN_PER_ACCOUNT = Number(process.env.IG_COMPETITOR_DOWNLOAD_MIN_PER_ACCOUNT ?? '5');
+const DOWNLOAD_CONCURRENCY = Number(process.env.IG_COMPETITOR_DOWNLOAD_CONCURRENCY ?? '3');
 
 // Instagram API は '2025-10-22T12:05:33+0000' 形式を返す。
 // BigQuery TIMESTAMP は +0000（コロン無し）を解釈できないため ISO8601 に正規化する。
@@ -73,9 +134,21 @@ interface BusinessDiscoveryResult {
   error?: { message: string; code: number };
 }
 
-interface GraphErrorResp {
-  error?: { message: string; code: number };
+interface ReelCandidate {
+  mediaUrl: string | null;
+  permalink: string;
+  row: Record<string, unknown>;
+  instagramMediaId: string;
+  postedAt: string | null;
+  username: string;
+  viewCount: number | null;
 }
+
+interface GraphErrorResp {
+  error?: { message: string; code: number; type?: string };
+}
+
+class BusinessDiscoveryAuthError extends Error {}
 
 async function fetchBusinessDiscovery(
   igUserId: string,
@@ -90,20 +163,35 @@ async function fetchBusinessDiscovery(
     const response = await fetch(url.toString());
     const json = await response.json();
     if (!response.ok || (json as GraphErrorResp).error) {
-      console.warn(`[business-discovery] ${username}: ${response.status} ${JSON.stringify((json as GraphErrorResp).error ?? json).slice(0, 200)}`);
+      const graphError = (json as GraphErrorResp).error;
+      if (graphError?.code === 10 || graphError?.code === 190) {
+        throw new BusinessDiscoveryAuthError(
+          `[business-discovery] ${username}: ${response.status} code=${graphError.code} ${graphError.message}`,
+        );
+      }
+      console.warn(`[business-discovery] ${username}: ${response.status} ${JSON.stringify(graphError ?? json).slice(0, 200)}`);
       return null;
     }
     const wrapped = json as { business_discovery?: BusinessDiscoveryResult };
     return wrapped.business_discovery ?? null;
   } catch (error) {
+    if (error instanceof BusinessDiscoveryAuthError) throw error;
     console.warn(`[business-discovery] ${username} fetch error:`, error);
     return null;
   }
 }
 
 async function main() {
-  const context = await getInstagramAccessContext('kudooo_ai');
-  console.log('[sync-competitors-bd] context:', { source: context.source, igUserId: context.instagramUserId });
+  const context = await getCompetitorFacebookContext();
+  console.log('[sync-competitors-bd] context:', {
+    source: context.source,
+    igUserId: context.instagramUserId,
+    instagramUsername: context.instagramUsername,
+    pageId: context.pageId,
+    tokenWasExchanged: context.tokenWasExchanged,
+    tokenExpiresAt: context.tokenExpiresAt,
+    tokenDataAccessExpiresAt: context.tokenDataAccessExpiresAt,
+  });
 
   const bigquery = createInstagramBigQuery();
   await ensureInstagramTables(bigquery);
@@ -119,17 +207,22 @@ async function main() {
   const today = new Date().toISOString().slice(0, 10);
   const nowIso = new Date().toISOString();
   const accountHistoryRows: Record<string, unknown>[] = [];
-  const reelRows: Record<string, unknown>[] = [];
+  const reelCandidates: ReelCandidate[] = [];
 
   // 2. 各 username に対して Business Discovery
   for (const username of usernames) {
-    const result = await fetchBusinessDiscovery(context.instagramUserId, username, context.accessToken);
+    let result: BusinessDiscoveryResult | null;
+    try {
+      result = await fetchBusinessDiscovery(context.instagramUserId, username, context.accessToken);
+    } catch (error) {
+      if (error instanceof BusinessDiscoveryAuthError) throw error;
+      console.warn(`[sync-competitors-bd] ${username}: fetch failed`, error);
+      continue;
+    }
     if (!result) {
       console.warn(`[sync-competitors-bd] ${username}: skipped (no result, likely shadowban or private)`);
       continue;
     }
-    console.log(`[sync-competitors-bd] ${username}: followers=${result.followers_count}, media=${result.media?.data?.length ?? 0}`);
-
     accountHistoryRows.push({
       date: today,
       username,
@@ -143,35 +236,86 @@ async function main() {
     const reels = (result.media?.data ?? []).filter(
       (m) => m.media_product_type === 'REELS' || m.media_type === 'VIDEO',
     );
-    // メタデータのみ即投入。動画 upload は IG_DOWNLOAD_VIDEOS=true 時のみ
-    const downloadEnabled = process.env.IG_DOWNLOAD_VIDEOS === 'true';
-    const gcsUrls = downloadEnabled
-      ? await Promise.all(
-          reels.map((reel) => (reel.media_url ? uploadVideoToGcs(reel.media_url, username, reel.id) : Promise.resolve(null))),
-        )
-      : reels.map(() => null);
-    reels.forEach((reel, idx) => {
-      const gcsUrl = gcsUrls[idx];
-      reelRows.push({
-        snapshot_date: today,
+    console.log(
+      `[sync-competitors-bd] ${username}: followers=${result.followers_count}, media=${result.media?.data?.length ?? 0}, reels=${reels.length}, sourceUrls=${reels.filter((reel) => reel.media_url).length}`,
+    );
+    reels.forEach((reel) => {
+      const postedAt = normalizeTimestamp(reel.timestamp) ?? nowIso;
+      reelCandidates.push({
+        mediaUrl: reel.media_url ?? null,
+        instagramMediaId: reel.id,
+        permalink: reel.permalink ?? `https://www.instagram.com/reel/${reel.id}/`,
+        postedAt,
         username,
-        instagram_media_id: reel.id,
-        drive_file_id: gcsUrl ? `gcs:${reel.id}` : reel.id,
-        drive_file_url: gcsUrl ?? (reel.permalink ?? `https://www.instagram.com/reel/${reel.id}/`),
-        caption: reel.caption ?? null,
-        permalink: reel.permalink ?? `https://www.instagram.com/${username}/`,
-        media_type: reel.media_product_type ?? reel.media_type ?? 'REELS',
-        posted_at: normalizeTimestamp(reel.timestamp) ?? nowIso,
-        created_at: nowIso,
-        sheet_caption: reel.caption ?? null,
-        view_count: reel.view_count ?? null,
-        like_count: reel.like_count ?? null,
-        comments_count: reel.comments_count ?? null,
+        viewCount: reel.view_count ?? null,
+        row: {
+          snapshot_date: today,
+          username,
+          instagram_media_id: reel.id,
+          drive_file_id: `instagram:${reel.id}`,
+          drive_file_url: reel.permalink ?? `https://www.instagram.com/reel/${reel.id}/`,
+          caption: reel.caption ?? null,
+          permalink: reel.permalink ?? `https://www.instagram.com/${username}/`,
+          media_type: reel.media_product_type ?? reel.media_type ?? 'REELS',
+          posted_at: postedAt,
+          created_at: nowIso,
+          sheet_caption: reel.caption ?? null,
+          view_count: reel.view_count ?? null,
+          like_count: reel.like_count ?? null,
+          comments_count: reel.comments_count ?? null,
+        },
       });
     });
     // レート対策
     await new Promise((resolve) => setTimeout(resolve, 800));
   }
+
+  if (usernames.length > 0 && accountHistoryRows.length === 0) {
+    throw new Error(
+      'Business Discovery returned no competitor accounts; refusing to report a successful sync',
+    );
+  }
+
+  const storedVideos = new Map<string, StoredVideo>();
+  const selectedDownloads = process.env.IG_DOWNLOAD_VIDEOS === 'true'
+    ? selectCompetitorDownloads(reelCandidates, DOWNLOAD_LIMIT, DOWNLOAD_MIN_PER_ACCOUNT)
+    : [];
+  if (selectedDownloads.length) {
+    console.log(
+      `[sync-competitors-bd] downloading ${selectedDownloads.length} selected reels to GCS`,
+    );
+    await mapWithConcurrency(selectedDownloads, DOWNLOAD_CONCURRENCY, async (candidate) => {
+      const existing = await findExistingGcsVideo(candidate.username, candidate.instagramMediaId);
+      if (existing) {
+        storedVideos.set(candidate.instagramMediaId, existing);
+        return;
+      }
+      const sourceUrl = candidate.mediaUrl
+        ?? await resolvePublicReelVideoUrl(candidate.permalink, candidate.instagramMediaId);
+      if (!sourceUrl) return;
+      const stored = await uploadVideoToGcs(
+        sourceUrl,
+        candidate.username,
+        candidate.instagramMediaId,
+      );
+      if (stored) storedVideos.set(candidate.instagramMediaId, stored);
+    });
+    const selectedStoredCount = selectedDownloads.filter((candidate) => storedVideos.has(candidate.instagramMediaId)).length;
+    if (selectedStoredCount !== selectedDownloads.length) {
+      throw new Error(
+        `GCS download incomplete: ${selectedStoredCount}/${selectedDownloads.length} videos saved`,
+      );
+    }
+    console.log(`[sync-competitors-bd] saved ${selectedStoredCount} selected videos to GCS`);
+  }
+  const reelRows = reelCandidates.map((candidate) => {
+    const stored = selectedDownloads.some((selected) => selected.instagramMediaId === candidate.instagramMediaId)
+      ? storedVideos.get(candidate.instagramMediaId)
+      : null;
+    return stored
+      ? { ...candidate.row, drive_file_id: stored.fileId, drive_file_url: stored.url }
+      : candidate.row;
+  });
 
   // 3. account history insert (streaming buffer 制約のため、既存の today+username をスキップ)
   if (accountHistoryRows.length) {
@@ -191,10 +335,20 @@ async function main() {
   // 4. reels insert (snapshot_date=today で重複スキップ)
   if (reelRows.length) {
     const [existingReels] = await bigquery.query({
-      query: `SELECT instagram_media_id FROM \`${projectId}.${dataset}.competitor_reels_raw\` WHERE snapshot_date = '${today}'`,
+      query: `SELECT instagram_media_id, LOGICAL_OR(REGEXP_CONTAINS(drive_file_url, r'(drive\\.google\\.com|storage\\.googleapis\\.com)')) AS saved_to_storage FROM \`${projectId}.${dataset}.competitor_reels_raw\` WHERE snapshot_date = '${today}' GROUP BY instagram_media_id`,
     });
-    const existingIds = new Set((existingReels as Array<{ instagram_media_id: string }>).map((r) => r.instagram_media_id));
-    const newReels = reelRows.filter((r) => !existingIds.has(r.instagram_media_id as string));
+    const existing = new Map(
+      (existingReels as Array<{ instagram_media_id: string; saved_to_storage: boolean }>).map((row) => [
+        row.instagram_media_id,
+        row.saved_to_storage,
+      ]),
+    );
+    const newReels = reelRows.filter((row) => {
+      const existingStoredCopy = existing.get(row.instagram_media_id as string);
+      const storageUrl = String(row.drive_file_url ?? '');
+      const rowHasStoredCopy = storageUrl.includes('drive.google.com') || storageUrl.includes('storage.googleapis.com');
+      return existingStoredCopy === undefined || (rowHasStoredCopy && !existingStoredCopy);
+    });
     if (newReels.length) {
       const chunkSize = 500;
       for (let i = 0; i < newReels.length; i += chunkSize) {
