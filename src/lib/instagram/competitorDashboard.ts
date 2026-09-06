@@ -52,15 +52,21 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
   // 1. フォロワー推移（直近120日）
   const [followerRows] = await client.query({
     query: `
+      WITH active_competitors AS (
+        SELECT username
+        FROM \`${projectId}.${dataset}.instagram_competitors_private\`
+        WHERE IFNULL(active, TRUE) = TRUE
+      )
       SELECT
-        FORMAT_DATE('%Y-%m-%d', date) AS date,
-        username,
-        followers_count,
-        follows_count,
-        media_count,
-        account_url
-      FROM \`${projectId}.${dataset}.instagram_competitor_account_history\`
-      ORDER BY username, date
+        FORMAT_DATE('%Y-%m-%d', h.date) AS date,
+        h.username,
+        h.followers_count,
+        h.follows_count,
+        h.media_count,
+        h.account_url
+      FROM \`${projectId}.${dataset}.instagram_competitor_account_history\` h
+      JOIN active_competitors a USING (username)
+      ORDER BY h.username, h.date
     `,
     location,
   });
@@ -136,20 +142,26 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
   // 3. リール一覧（views top + transcript JOIN）
   const [reelRows] = await client.query({
     query: `
-      WITH unique_reels AS (
+      WITH active_competitors AS (
+        SELECT username
+        FROM \`${projectId}.${dataset}.instagram_competitors_private\`
+        WHERE IFNULL(active, TRUE) = TRUE
+      ),
+      unique_reels AS (
         SELECT
-          username,
-          instagram_media_id,
-          ANY_VALUE(drive_file_id) AS drive_file_id,
-          ANY_VALUE(drive_file_url) AS drive_file_url,
-          ANY_VALUE(permalink) AS permalink,
-          ANY_VALUE(IFNULL(sheet_caption, caption)) AS caption,
-          MAX(posted_at) AS posted_at,
-          MAX(view_count) AS view_count,
-          MAX(like_count) AS like_count,
-          MAX(comments_count) AS comments_count
-        FROM \`${projectId}.${dataset}.competitor_reels_raw\`
-        GROUP BY username, instagram_media_id
+          r.username,
+          r.instagram_media_id,
+          ANY_VALUE(r.drive_file_id) AS drive_file_id,
+          ANY_VALUE(r.drive_file_url) AS drive_file_url,
+          ANY_VALUE(r.permalink) AS permalink,
+          ANY_VALUE(IFNULL(r.sheet_caption, r.caption)) AS caption,
+          MAX(r.posted_at) AS posted_at,
+          MAX(r.view_count) AS view_count,
+          MAX(r.like_count) AS like_count,
+          MAX(r.comments_count) AS comments_count
+        FROM \`${projectId}.${dataset}.competitor_reels_raw\` r
+        JOIN active_competitors a USING (username)
+        GROUP BY r.username, r.instagram_media_id
       ),
       latest_transcripts AS (
         SELECT instagram_media_id, ANY_VALUE(segments_json) AS segments_json
