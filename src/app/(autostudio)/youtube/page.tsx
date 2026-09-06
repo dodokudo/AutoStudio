@@ -14,12 +14,11 @@ export const maxDuration = 60; // Allow up to 60 seconds for BigQuery queries
 
 export default async function YoutubeDashboardPage() {
   try {
-    const data = await getYoutubeDashboardData();
-
     const projectId = resolveProjectId();
     const datasetId = process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media';
     const context = createYoutubeBigQueryContext(projectId, datasetId);
     await ensureYoutubeTables(context);
+    const data = await getYoutubeDashboardData();
     const scripts: StoredContentScript[] = await listContentScripts(context, { limit: 12 });
 
     return (
@@ -30,6 +29,7 @@ export default async function YoutubeDashboardPage() {
           analytics={data.analytics}
           topVideos={data.topVideos}
           competitors={data.competitors}
+          competitorVideos={data.competitorVideos}
           scripts={scripts}
           lineRegistrationCount={data.lineRegistrationCount}
         />

@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Table } from '@/components/ui/table';
-import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { ScriptGenerateButton } from '@/components/youtube/ScriptGenerateButton';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
@@ -19,6 +19,7 @@ import type {
 } from '@/lib/youtube/dashboard';
 import type { StoredContentScript } from '@/lib/youtube/bigquery';
 import { YoutubeViewTrendChart } from './YoutubeViewTrendChart';
+import { YoutubeCompetitorPanel } from './YoutubeCompetitorPanel';
 import { UNIFIED_RANGE_OPTIONS, isUnifiedRangePreset, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 
 type TabKey = 'scripts' | 'own' | 'competitors';
@@ -29,6 +30,7 @@ interface YoutubeDashboardShellProps {
   analytics: YoutubeDashboardData['analytics'];
   topVideos: YoutubeVideoSummary[];
   competitors: YoutubeDashboardData['competitors'];
+  competitorVideos: YoutubeDashboardData['competitorVideos'];
   scripts: StoredContentScript[];
   lineRegistrationCount: number | null;
 }
@@ -38,14 +40,6 @@ const TABS: { id: TabKey; label: string }[] = [
   { id: 'own', label: '自社データ' },
   { id: 'competitors', label: '競合データ' },
 ];
-
-const TAB_SKELETON_SECTIONS: Record<TabKey, number> = {
-  own: 3,
-  scripts: 2,
-  competitors: 2,
-};
-
-const TAB_SKELETON_DELAY_MS = 240;
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 const percentFormatter = new Intl.NumberFormat('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -93,15 +87,29 @@ export function YoutubeDashboardShell({
   analytics,
   topVideos,
   competitors,
+  competitorVideos,
   scripts,
   lineRegistrationCount,
 }: YoutubeDashboardShellProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>('own');
-  const [pendingTab, setPendingTab] = useState<TabKey | null>(null);
-  const [isTabLoading, setIsTabLoading] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selectedRange, setSelectedRange] = useState<UnifiedRangePreset>('7d');
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(topVideos[0]?.videoId ?? null);
+
+  const tabParam = searchParams.get('tab');
+  const activeTab: TabKey = TABS.some((tab) => tab.id === tabParam) ? (tabParam as TabKey) : 'own';
+
+  function selectTab(nextTab: TabKey) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', nextTab);
+    if (nextTab === 'competitors') {
+      if (!params.has('category')) params.set('category', 'threads');
+    } else {
+      params.delete('category');
+    }
+    const query = params.toString();
+    window.history.pushState(null, '', query ? `${pathname}?${query}` : pathname);
+  }
 
   useEffect(() => {
     if (topVideos.length === 0) {
@@ -110,17 +118,6 @@ export function YoutubeDashboardShell({
     }
     setSelectedVideoId((current) => current ?? topVideos[0]?.videoId ?? null);
   }, [topVideos]);
-
-  useEffect(() => {
-    if (!isPending && isTabLoading) {
-      const timer = window.setTimeout(() => {
-        setIsTabLoading(false);
-        setPendingTab(null);
-      }, TAB_SKELETON_DELAY_MS);
-      return () => window.clearTimeout(timer);
-    }
-    return undefined;
-  }, [isPending, isTabLoading]);
 
   const selectedVideo = selectedVideoId ? topVideos.find((video) => video.videoId === selectedVideoId) : undefined;
 
@@ -457,80 +454,7 @@ export function YoutubeDashboardShell({
     </div>
   );
 
-  const competitorTabContent = (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[color:var(--color-text-primary)]">競合チャンネル分析</h1>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-          監視対象のチャンネル推移と最新動画パフォーマンスを追跡できます。
-        </p>
-      </div>
-
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">チャンネル概要</h2>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-          登録者・再生回数・平均伸び速度など主要指標のスナップショットです。
-        </p>
-        {competitors.length ? (
-          <div className="mt-4 overflow-x-auto">
-            <Table className="rounded-none text-xs">
-              <thead className="bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-muted)]">
-                <tr>
-                  <th className="px-4 py-3 text-left">チャンネル</th>
-                  <th className="px-4 py-3 text-left">登録者</th>
-                  <th className="px-4 py-3 text-left">総再生数</th>
-                  <th className="px-4 py-3 text-left">動画数</th>
-                  <th className="px-4 py-3 text-left">平均伸び速度</th>
-                  <th className="px-4 py-3 text-left">平均ER</th>
-                  <th className="px-4 py-3 text-left">最新動画</th>
-                  <th className="px-4 py-3 text-left">投稿日</th>
-                </tr>
-              </thead>
-              <tbody>
-                {competitors.map((competitor) => (
-                  <tr key={competitor.channelId} className="hover:bg-[color:var(--color-surface-muted)]">
-                    <td className="px-4 py-3 text-sm font-medium text-[color:var(--color-text-primary)]">{competitor.channelTitle}</td>
-                    <td className="px-4 py-3">{competitor.subscriberCount ? `${formatNumber(competitor.subscriberCount)} 人` : '–'}</td>
-                    <td className="px-4 py-3">{competitor.viewCount ? `${formatNumber(competitor.viewCount)} 回` : '–'}</td>
-                    <td className="px-4 py-3">{competitor.videoCount ? `${formatNumber(competitor.videoCount)} 本` : '–'}</td>
-                    <td className="px-4 py-3">
-                      {competitor.avgViewVelocity ? `${formatNumber(Math.round(competitor.avgViewVelocity))} /日` : '–'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {competitor.avgEngagementRate !== null && competitor.avgEngagementRate !== undefined
-                        ? formatPercent(competitor.avgEngagementRate)
-                        : '–'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {competitor.latestVideoTitle ? (
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-[color:var(--color-text-primary)]">{competitor.latestVideoTitle}</span>
-                          <span className="text-xs text-[color:var(--color-text-muted)]">
-                            {competitor.latestVideoViewCount ? `${formatNumber(competitor.latestVideoViewCount)} 回` : '–'}
-                          </span>
-                        </div>
-                      ) : (
-                        '–'
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-[color:var(--color-text-secondary)]">
-                      {competitor.latestVideoPublishedAt ? dateTimeFormatter.format(new Date(competitor.latestVideoPublishedAt)) : '–'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </div>
-        ) : (
-          <div className="mt-4">
-            <EmptyState title="データがありません" description="競合チャンネルの統計が取り込まれると表示されます。" />
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-
-  const currentTabForSkeleton: TabKey = pendingTab ?? activeTab;
+  const competitorTabContent = <YoutubeCompetitorPanel competitors={competitors} videos={competitorVideos} />;
 
   return (
     <div className="space-y-6">
@@ -540,12 +464,7 @@ export function YoutubeDashboardShell({
           value={activeTab}
           onChange={(next) => {
             if (next === activeTab) return;
-            const nextTab = next as TabKey;
-            setPendingTab(nextTab);
-            setIsTabLoading(true);
-            startTransition(() => {
-              setActiveTab(nextTab);
-            });
+            selectTab(next as TabKey);
           }}
           className="flex-1 min-w-[240px]"
         />
@@ -558,15 +477,9 @@ export function YoutubeDashboardShell({
         />
       </div>
 
-      {isTabLoading ? (
-        <PageSkeleton sections={TAB_SKELETON_SECTIONS[currentTabForSkeleton]} showFilters={false} />
-      ) : (
-        <>
-          {activeTab === 'own' ? ownTabContent : null}
-          {activeTab === 'scripts' ? scriptTabContent : null}
-          {activeTab === 'competitors' ? competitorTabContent : null}
-        </>
-      )}
+      {activeTab === 'own' ? ownTabContent : null}
+      {activeTab === 'scripts' ? scriptTabContent : null}
+      {activeTab === 'competitors' ? competitorTabContent : null}
     </div>
   );
 }

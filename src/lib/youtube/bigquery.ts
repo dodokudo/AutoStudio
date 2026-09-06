@@ -132,7 +132,17 @@ export async function ensureYoutubeTables(context: YoutubeBigQueryContext) {
       title STRING
     )
     PARTITION BY DATE(generated_at)
-    CLUSTER BY media, status`
+    CLUSTER BY media, status`,
+    `CREATE TABLE IF NOT EXISTS ${datasetQualified}.youtube_competitors (
+      channel_id STRING NOT NULL,
+      channel_title STRING,
+      category STRING NOT NULL,
+      active BOOL NOT NULL,
+      note STRING,
+      added_at TIMESTAMP NOT NULL,
+      updated_at TIMESTAMP NOT NULL
+    )
+    CLUSTER BY category, active`
   ];
 
   for (const statement of ddlStatements) {

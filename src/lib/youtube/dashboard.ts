@@ -49,6 +49,7 @@ export interface YoutubeDashboardData {
     comparison: ComparisonSummary | null;
   };
   competitors: YoutubeCompetitorSummary[];
+  competitorVideos: YoutubeCompetitorVideo[];
   lineRegistrationCount: number | null;
 }
 
@@ -66,9 +67,10 @@ interface ComparisonSummary {
   competitorEngagementRate: number | null;
 }
 
-interface YoutubeCompetitorSummary {
+export interface YoutubeCompetitorSummary {
   channelId: string;
   channelTitle: string;
+  category: 'ai' | 'threads';
   subscriberCount?: number;
   viewCount?: number;
   videoCount?: number;
@@ -77,6 +79,20 @@ interface YoutubeCompetitorSummary {
   latestVideoTitle?: string;
   latestVideoViewCount?: number | null;
   latestVideoPublishedAt?: string;
+}
+
+export interface YoutubeCompetitorVideo {
+  videoId: string;
+  title: string;
+  channelId: string;
+  channelTitle: string;
+  category: 'ai' | 'threads';
+  subscriberCount: number | null;
+  viewCount: number | null;
+  durationSeconds: number | null;
+  viewVelocity: number | null;
+  performanceRatio: number | null;
+  publishedAt?: string;
 }
 
 export interface YoutubeChannelSummary {
@@ -376,13 +392,16 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
 
   console.log('[youtube/dashboard] Building competitor summary...');
   let competitors: YoutubeCompetitorSummary[] = [];
-  if (latestSnapshotDate) {
-    try {
-      competitors = await buildCompetitorSummary(client, projectId, datasetId, latestSnapshotDate);
-    } catch (error) {
-      console.warn('[youtube/dashboard] Failed to build competitor summary, using empty array:', error);
-      competitors = [];
-    }
+  let competitorVideos: YoutubeCompetitorVideo[] = [];
+  try {
+    [competitors, competitorVideos] = await Promise.all([
+      buildCompetitorSummary(client, projectId, datasetId),
+      buildCompetitorVideos(client, projectId, datasetId),
+    ]);
+  } catch (error) {
+    console.warn('[youtube/dashboard] Failed to build competitor data, using empty arrays:', error);
+    competitors = [];
+    competitorVideos = [];
   }
 
   console.log('[youtube/dashboard] Fetching self channel summary...');
@@ -423,6 +442,7 @@ export async function getYoutubeDashboardData(): Promise<YoutubeDashboardData> {
       channelSummary,
       analytics,
       competitors,
+      competitorVideos,
       lineRegistrationCount,
     };
   } catch (error) {
@@ -554,39 +574,59 @@ async function buildCompetitorSummary(
   client: ReturnType<typeof createBigQueryClient>,
   projectId: string,
   datasetId: string,
-  snapshotDate: string,
 ): Promise<YoutubeCompetitorSummary[]> {
   try {
     console.log('[youtube/dashboard] Querying competitor data...');
     const [rows] = await client.query({
     query: `
-      WITH ranked_channels AS (
+      WITH active_competitors AS (
+        SELECT channel_id, category
+        FROM \`${projectId}.${datasetId}.youtube_competitors\`
+        WHERE active = TRUE
+      ),
+      ranked_channels AS (
         SELECT
-          channel_id,
-          channel_title,
-          subscriber_count,
-          view_count,
-          video_count,
-          collected_at,
-          ROW_NUMBER() OVER (PARTITION BY channel_id ORDER BY collected_at DESC) AS rn
-        FROM \`${projectId}.${datasetId}.media_channels_snapshot\`
-        WHERE media = 'youtube'
-          AND snapshot_date = @snapshot_date
-          AND (is_self IS NULL OR is_self = FALSE)
+          c.channel_id,
+          c.channel_title,
+          c.subscriber_count,
+          c.view_count,
+          c.video_count,
+          c.collected_at,
+          a.category,
+          ROW_NUMBER() OVER (PARTITION BY c.channel_id ORDER BY c.collected_at DESC) AS rn
+        FROM \`${projectId}.${datasetId}.media_channels_snapshot\` c
+        JOIN active_competitors a USING (channel_id)
+        WHERE c.media = 'youtube'
       ),
       latest_channels AS (
-        SELECT channel_id, channel_title, subscriber_count, view_count, video_count
+        SELECT channel_id, channel_title, subscriber_count, view_count, video_count, category
         FROM ranked_channels
         WHERE rn = 1
+      ),
+      ranked_videos AS (
+        SELECT
+          channel_id,
+          content_id,
+          title,
+          view_count,
+          published_at,
+          view_velocity,
+          engagement_rate,
+          ROW_NUMBER() OVER (PARTITION BY content_id ORDER BY collected_at DESC) AS content_rn
+        FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
+        WHERE media = 'youtube'
+      ),
+      latest_videos AS (
+        SELECT *
+        FROM ranked_videos
+        WHERE content_rn = 1
       ),
       channel_video_stats AS (
         SELECT
           channel_id,
           AVG(view_velocity) AS avg_view_velocity,
           AVG(engagement_rate) AS avg_engagement_rate
-        FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
-        WHERE media = 'youtube'
-          AND snapshot_date = @snapshot_date
+        FROM latest_videos
         GROUP BY channel_id
       ),
       latest_video AS (
@@ -599,9 +639,7 @@ async function buildCompetitorSummary(
             PARTITION BY channel_id
             ORDER BY SAFE_CAST(published_at AS TIMESTAMP) DESC
           ) AS rn
-        FROM \`${projectId}.${datasetId}.media_videos_snapshot\`
-        WHERE media = 'youtube'
-          AND snapshot_date = @snapshot_date
+        FROM latest_videos
       )
       SELECT
         c.channel_id,
@@ -609,6 +647,7 @@ async function buildCompetitorSummary(
         c.subscriber_count,
         c.view_count,
         c.video_count,
+        c.category,
         s.avg_view_velocity,
         s.avg_engagement_rate,
         v.title AS latest_video_title,
@@ -620,9 +659,8 @@ async function buildCompetitorSummary(
         SELECT * FROM latest_video WHERE rn = 1
       ) v USING (channel_id)
       ORDER BY s.avg_view_velocity DESC NULLS LAST
-      LIMIT 10
+      LIMIT 50
     `,
-    params: { snapshot_date: snapshotDate },
   });
 
   return (rows as Array<{
@@ -631,6 +669,7 @@ async function buildCompetitorSummary(
     subscriber_count: number | null;
     view_count: number | null;
     video_count: number | null;
+    category: string;
     avg_view_velocity: number | null;
     avg_engagement_rate: number | null;
     latest_video_title: string | null;
@@ -639,6 +678,7 @@ async function buildCompetitorSummary(
   }>).map((row) => ({
     channelId: row.channel_id,
     channelTitle: row.channel_title ?? row.channel_id,
+    category: row.category === 'threads' ? 'threads' : 'ai',
     subscriberCount: row.subscriber_count ?? undefined,
     viewCount: row.view_count ?? undefined,
     videoCount: row.video_count ?? undefined,
@@ -655,6 +695,111 @@ async function buildCompetitorSummary(
     console.error('[youtube/dashboard] Error in buildCompetitorSummary:', error);
     throw error;
   }
+}
+
+async function buildCompetitorVideos(
+  client: ReturnType<typeof createBigQueryClient>,
+  projectId: string,
+  datasetId: string,
+): Promise<YoutubeCompetitorVideo[]> {
+  const [rows] = await client.query({
+    query: `
+      WITH active_competitors AS (
+        SELECT channel_id, channel_title, category
+        FROM \`${projectId}.${datasetId}.youtube_competitors\`
+        WHERE active = TRUE
+      ),
+      ranked_channels AS (
+        SELECT
+          c.channel_id,
+          c.channel_title,
+          c.subscriber_count,
+          ROW_NUMBER() OVER (PARTITION BY c.channel_id ORDER BY c.collected_at DESC) AS rn
+        FROM \`${projectId}.${datasetId}.media_channels_snapshot\` c
+        JOIN active_competitors a USING (channel_id)
+        WHERE c.media = 'youtube'
+      ),
+      latest_channels AS (
+        SELECT channel_id, channel_title, subscriber_count
+        FROM ranked_channels
+        WHERE rn = 1
+      ),
+      ranked_videos AS (
+        SELECT
+          v.*,
+          ROW_NUMBER() OVER (PARTITION BY v.content_id ORDER BY v.collected_at DESC) AS rn
+        FROM \`${projectId}.${datasetId}.media_videos_snapshot\` v
+        JOIN active_competitors a USING (channel_id)
+        WHERE v.media = 'youtube'
+          AND v.published_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 730 DAY)
+      ),
+      latest_videos AS (
+        SELECT *
+        FROM ranked_videos
+        WHERE rn = 1
+      )
+      SELECT
+        v.content_id,
+        v.title,
+        v.channel_id,
+        COALESCE(c.channel_title, a.channel_title, v.channel_id) AS channel_title,
+        a.category,
+        c.subscriber_count,
+        v.view_count,
+        v.duration_seconds,
+        v.view_velocity,
+        SAFE_DIVIDE(v.view_count, NULLIF(c.subscriber_count, 0)) AS performance_ratio,
+        v.published_at
+      FROM latest_videos v
+      JOIN active_competitors a USING (channel_id)
+      LEFT JOIN latest_channels c USING (channel_id)
+      WHERE a.category = 'ai'
+        OR REGEXP_CONTAINS(LOWER(IFNULL(v.title, '')), r'(threads|スレッズ)')
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY a.category
+        ORDER BY
+          CASE
+            WHEN v.duration_seconds >= 900
+              AND (
+                v.view_count >= 10000
+                OR (v.view_count >= 1000 AND SAFE_DIVIDE(v.view_count, NULLIF(c.subscriber_count, 0)) >= 1)
+              )
+            THEN 1 ELSE 0
+          END DESC,
+          performance_ratio DESC NULLS LAST,
+          v.view_count DESC NULLS LAST
+      ) <= 100
+    `,
+  });
+
+  return (rows as Array<{
+    content_id: string;
+    title: string | null;
+    channel_id: string;
+    channel_title: string | null;
+    category: string;
+    subscriber_count: number | null;
+    view_count: number | null;
+    duration_seconds: number | null;
+    view_velocity: number | null;
+    performance_ratio: number | null;
+    published_at: unknown;
+  }>).map((row) => {
+    const publishedAt = toTimestamp(row.published_at);
+    return {
+      videoId: row.content_id,
+      title: row.title ?? '(タイトル未設定)',
+      channelId: row.channel_id,
+      channelTitle: row.channel_title ?? row.channel_id,
+      category: row.category === 'threads' ? 'threads' : 'ai',
+      subscriberCount: row.subscriber_count === null ? null : Number(row.subscriber_count),
+      viewCount: row.view_count === null ? null : Number(row.view_count),
+      durationSeconds: row.duration_seconds === null ? null : Number(row.duration_seconds),
+      viewVelocity: row.view_velocity === null ? null : Number(row.view_velocity),
+      performanceRatio: row.performance_ratio === null ? null : Number(row.performance_ratio),
+      publishedAt: publishedAt ? new Date(publishedAt).toISOString() : undefined,
+    };
+  });
 }
 
 async function fetchSelfChannelSummary(

@@ -1,17 +1,15 @@
 import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 import { loadYoutubeConfig } from '@/lib/youtube/config';
-import { fetchChannelSnapshots, fetchVideosForChannel, fetchYoutubeAnalytics } from '@/lib/youtube/api';
+import { fetchYoutubeAnalytics } from '@/lib/youtube/api';
 import {
   createYoutubeBigQueryContext,
   ensureYoutubeTables,
   insertAnalytics,
-  insertChannels,
-  insertVideos,
-  type ChannelRow,
-  type VideoRow,
   type AnalyticsRow,
 } from '@/lib/youtube/bigquery';
+import { listActiveYoutubeCompetitors } from '@/lib/youtube/competitors';
+import { syncYoutubeChannelSnapshots } from '@/lib/youtube/sync';
 
 loadEnv();
 loadEnv({ path: path.resolve(process.cwd(), '.env.local') });
@@ -21,11 +19,14 @@ async function main() {
   const context = createYoutubeBigQueryContext(config.projectId, config.datasetId);
   await ensureYoutubeTables(context);
 
-  const snapshotDate = new Date().toISOString().slice(0, 10);
   const collectedAt = new Date().toISOString();
 
   const channelIdSet = new Set<string>();
-  config.competitorIds.forEach((id) => channelIdSet.add(id));
+  const managedCompetitors = await listActiveYoutubeCompetitors(context);
+  const competitorIds = managedCompetitors.length
+    ? managedCompetitors.map((competitor) => competitor.channelId)
+    : config.competitorIds;
+  competitorIds.forEach((id) => channelIdSet.add(id));
   if (config.channelId) {
     channelIdSet.add(config.channelId);
   }
@@ -36,53 +37,7 @@ async function main() {
     return;
   }
 
-  console.info(`[youtube-sync] Fetching channel snapshots for ${channelIds.length} channels`);
-  const channelSnapshots = await fetchChannelSnapshots(config, channelIds);
-
-  const channelRows: ChannelRow[] = channelSnapshots.map((snapshot) => ({
-    ...snapshot,
-    media: 'youtube',
-    snapshotDate,
-    collectedAt,
-    isSelf: snapshot.channelId === config.channelId,
-  }));
-
-  await insertChannels(context, channelRows);
-
-  console.info('[youtube-sync] Fetching latest videos for channels');
-  const videoRows: VideoRow[] = [];
-  for (const snapshot of channelSnapshots) {
-    if (!snapshot.uploadsPlaylistId) {
-      console.warn(`[youtube-sync] Missing uploads playlist for channel ${snapshot.channelId}`);
-      continue;
-    }
-
-    const videos = await fetchVideosForChannel(config, snapshot.uploadsPlaylistId, { maxResults: 60, daysBack: 180 });
-    for (const video of videos) {
-      const publishedAtDate = new Date(video.publishedAt);
-      const daysSincePublish = Math.max(
-        1,
-        Math.floor((Date.now() - publishedAtDate.getTime()) / (1000 * 60 * 60 * 24)),
-      );
-
-      const viewVelocity = video.viewCount ? video.viewCount / daysSincePublish : null;
-      const engagementRate = video.viewCount
-        ? ((video.likeCount ?? 0) + (video.commentCount ?? 0)) / Math.max(video.viewCount, 1)
-        : null;
-
-      videoRows.push({
-        ...video,
-        media: 'youtube',
-        snapshotDate,
-        collectedAt,
-        viewVelocity,
-        engagementRate,
-      });
-    }
-  }
-
-  await insertVideos(context, videoRows);
-  console.info(`[youtube-sync] Inserted ${videoRows.length} video snapshots`);
+  await syncYoutubeChannelSnapshots(config, context, channelIds);
 
   if (config.oauth && config.channelId) {
     console.info('[youtube-sync] Fetching analytics metrics');

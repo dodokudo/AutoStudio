@@ -40,6 +40,7 @@
     "lstep:check": "tsx src/scripts/checkLstepSetup.ts",
     "lstep:seminar": "tsx src/scripts/runLstepSeminarSchedule.ts",
     "youtube:sync": "tsx src/scripts/runYoutubeSync.ts",
+    "youtube:competitor": "tsx src/scripts/manageYoutubeCompetitor.ts",
     "notion:test": "tsx src/scripts/testNotionSync.ts",
     "links:init": "tsx src/scripts/initLinkManagement.ts",
     "launchkit:init-bq": "tsx src/scripts/initLaunchkitBQ.ts",
