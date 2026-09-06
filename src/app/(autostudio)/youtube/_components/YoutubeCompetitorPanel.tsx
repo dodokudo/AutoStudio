@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -18,6 +18,31 @@ interface YoutubeCompetitorPanelProps {
   competitors: YoutubeCompetitorSummary[];
   videos: YoutubeCompetitorVideo[];
 }
+
+interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+interface TranscriptChapter {
+  start: number;
+  end: number;
+  title: string;
+}
+
+interface VideoTranscript {
+  videoId: string;
+  model: string;
+  segments: TranscriptSegment[];
+  chapters: TranscriptChapter[];
+  chapterSource: 'youtube' | 'auto';
+}
+
+type TranscriptState =
+  | { status: 'loading' }
+  | { status: 'loaded'; transcript: VideoTranscript }
+  | { status: 'error'; message: string };
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
 const decimalFormatter = new Intl.NumberFormat('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -54,6 +79,41 @@ function formatDuration(value: number | null) {
     : `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+function formatTimestamp(value: number) {
+  const totalSeconds = Math.max(0, Math.floor(value));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+    : `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function groupTranscriptSegments(segments: TranscriptSegment[]): TranscriptSegment[] {
+  const grouped: TranscriptSegment[] = [];
+  let current: TranscriptSegment | null = null;
+
+  for (const segment of segments) {
+    if (!current) {
+      current = { ...segment };
+      continue;
+    }
+    current.end = segment.end;
+    current.text = `${current.text} ${segment.text}`.trim();
+    if (current.end - current.start >= 12 || current.text.length >= 150) {
+      grouped.push(current);
+      current = null;
+    }
+  }
+  if (current) grouped.push(current);
+  return grouped;
+}
+
+function chapterSegmentIndex(chapter: TranscriptChapter, segments: TranscriptSegment[]) {
+  const index = segments.findIndex((segment) => segment.end > chapter.start);
+  return index >= 0 ? index : Math.max(segments.length - 1, 0);
+}
+
 function isStrongSignal(video: YoutubeCompetitorVideo) {
   const views = video.viewCount ?? 0;
   const ratio = video.performanceRatio ?? 0;
@@ -74,6 +134,8 @@ export function YoutubeCompetitorPanel({ competitors, videos }: YoutubeCompetito
   const category: CompetitorCategory = searchParams.get('category') === 'ai' ? 'ai' : 'threads';
   const [videoFilter, setVideoFilter] = useState<VideoFilter>('signals');
   const [videoSort, setVideoSort] = useState<VideoSort>('ratio');
+  const [expandedVideoId, setExpandedVideoId] = useState<string | null>(null);
+  const [transcripts, setTranscripts] = useState<Record<string, TranscriptState>>({});
 
   useEffect(() => {
     setVideoFilter(category === 'threads' ? 'signals' : 'all');
@@ -111,6 +173,45 @@ export function YoutubeCompetitorPanel({ competitors, videos }: YoutubeCompetito
     params.set('tab', 'competitors');
     params.set('category', nextCategory);
     window.history.pushState(null, '', `${pathname}?${params.toString()}`);
+  }
+
+  async function toggleTranscript(video: YoutubeCompetitorVideo) {
+    if (!video.hasTranscript) return;
+    if (expandedVideoId === video.videoId) {
+      setExpandedVideoId(null);
+      return;
+    }
+
+    setExpandedVideoId(video.videoId);
+    if (transcripts[video.videoId]?.status === 'loaded') return;
+    setTranscripts((current) => ({ ...current, [video.videoId]: { status: 'loading' } }));
+    try {
+      const response = await fetch(`/api/youtube/transcripts/${video.videoId}`, { cache: 'no-store' });
+      const payload = await response.json() as { transcript?: VideoTranscript; error?: string };
+      if (!response.ok || !payload.transcript) {
+        throw new Error(payload.error ?? '文字起こしを取得できませんでした');
+      }
+      const transcript = payload.transcript;
+      setTranscripts((current) => ({
+        ...current,
+        [video.videoId]: {
+          status: 'loaded',
+          transcript: {
+            ...transcript,
+            segments: groupTranscriptSegments(transcript.segments),
+            chapters: transcript.chapters ?? [],
+          },
+        },
+      }));
+    } catch (error) {
+      setTranscripts((current) => ({
+        ...current,
+        [video.videoId]: {
+          status: 'error',
+          message: error instanceof Error ? error.message : '文字起こしを取得できませんでした',
+        },
+      }));
+    }
   }
 
   return (
@@ -212,7 +313,7 @@ export function YoutubeCompetitorPanel({ competitors, videos }: YoutubeCompetito
 
         {filteredVideos.length ? (
           <div className="overflow-x-auto">
-            <Table className="min-w-[980px] rounded-none text-xs">
+            <Table className="min-w-[1120px] rounded-none text-xs">
               <thead className="bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-muted)]">
                 <tr>
                   <th className="px-4 py-3 text-left">動画</th>
@@ -222,52 +323,179 @@ export function YoutubeCompetitorPanel({ competitors, videos }: YoutubeCompetito
                   <th className="px-4 py-3 text-right">再生倍率</th>
                   <th className="px-4 py-3 text-right">1日平均</th>
                   <th className="px-4 py-3 text-right">投稿日</th>
+                  <th className="px-4 py-3 text-right">台本</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredVideos.map((video) => (
-                  <tr key={video.videoId} className="hover:bg-[color:var(--color-surface-muted)]">
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-[360px] items-start gap-3">
-                        <Image
-                          src={`https://i.ytimg.com/vi/${video.videoId}/mqdefault.jpg`}
-                          alt=""
-                          width={128}
-                          height={72}
-                          className="h-[72px] w-32 shrink-0 rounded-[var(--radius-sm)] object-cover"
-                        />
-                        <div className="min-w-0">
-                          <Link
-                            href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                            target="_blank"
-                            className="line-clamp-2 text-sm font-medium text-[color:var(--color-text-primary)] hover:text-[color:var(--color-accent)] hover:underline"
+                {filteredVideos.map((video) => {
+                  const isExpanded = expandedVideoId === video.videoId;
+                  const transcriptState = transcripts[video.videoId];
+                  return (
+                    <Fragment key={video.videoId}>
+                      <tr className="hover:bg-[color:var(--color-surface-muted)]">
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-[360px] items-start gap-3">
+                            <Image
+                              src={`https://i.ytimg.com/vi/${video.videoId}/mqdefault.jpg`}
+                              alt=""
+                              width={128}
+                              height={72}
+                              className="h-[72px] w-32 shrink-0 rounded-[var(--radius-sm)] object-cover"
+                            />
+                            <div className="min-w-0">
+                              <Link
+                                href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                                target="_blank"
+                                className="line-clamp-2 text-sm font-medium text-[color:var(--color-text-primary)] hover:text-[color:var(--color-accent)] hover:underline"
+                              >
+                                {video.title}
+                              </Link>
+                              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{video.channelTitle}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-[color:var(--color-text-primary)]">
+                          {formatDuration(video.durationSeconds)}
+                        </td>
+                        <td className="px-4 py-3 text-right">{formatNumber(video.viewCount)}</td>
+                        <td className="px-4 py-3 text-right">{formatNumber(video.subscriberCount)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`inline-flex min-w-14 justify-center rounded-full px-2.5 py-1 font-semibold ${
+                            (video.performanceRatio ?? 0) >= 1
+                              ? 'bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]'
+                              : 'bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)]'
+                          }`}>
+                            {video.performanceRatio === null ? '–' : `${decimalFormatter.format(video.performanceRatio)}倍`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">{video.viewVelocity ? `${formatNumber(Math.round(video.viewVelocity))}回` : '–'}</td>
+                        <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
+                          {video.publishedAt ? dateFormatter.format(new Date(video.publishedAt)) : '–'}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            aria-controls={`transcript-${video.videoId}`}
+                            disabled={!video.hasTranscript}
+                            onClick={() => void toggleTranscript(video)}
+                            className={`whitespace-nowrap rounded-[var(--radius-sm)] border px-3 py-2 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] ${
+                              video.hasTranscript
+                                ? isExpanded
+                                  ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]'
+                                  : 'border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]'
+                                : 'cursor-not-allowed border-transparent bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-muted)]'
+                            }`}
                           >
-                            {video.title}
-                          </Link>
-                          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{video.channelTitle}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-[color:var(--color-text-primary)]">
-                      {formatDuration(video.durationSeconds)}
-                    </td>
-                    <td className="px-4 py-3 text-right">{formatNumber(video.viewCount)}</td>
-                    <td className="px-4 py-3 text-right">{formatNumber(video.subscriberCount)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`inline-flex min-w-14 justify-center rounded-full px-2.5 py-1 font-semibold ${
-                        (video.performanceRatio ?? 0) >= 1
-                          ? 'bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]'
-                          : 'bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)]'
-                      }`}>
-                        {video.performanceRatio === null ? '–' : `${decimalFormatter.format(video.performanceRatio)}倍`}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">{video.viewVelocity ? `${formatNumber(Math.round(video.viewVelocity))}回` : '–'}</td>
-                    <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">
-                      {video.publishedAt ? dateFormatter.format(new Date(video.publishedAt)) : '–'}
-                    </td>
-                  </tr>
-                ))}
+                            {video.hasTranscript ? (isExpanded ? '台本を閉じる' : '台本を見る') : '文字起こし待ち'}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr id={`transcript-${video.videoId}`}>
+                          <td colSpan={8} className="border-y border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-5 py-5 sm:px-6">
+                            <div className="w-full">
+                              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                                <div>
+                                  <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">タイムライン付き台本</h3>
+                                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                                    左の目次で章へ移動できます。台本の時刻を押すとYouTubeの該当箇所から再生します。
+                                  </p>
+                                </div>
+                                {transcriptState?.status === 'loaded' ? (
+                                  <div className="flex items-center gap-3 text-xs text-[color:var(--color-text-muted)]">
+                                    <span>{transcriptState.transcript.chapters.length}章</span>
+                                    <span>{transcriptState.transcript.segments.length}区間</span>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {transcriptState?.status === 'loading' || !transcriptState ? (
+                                <div className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-8 text-center text-sm text-[color:var(--color-text-secondary)]">
+                                  台本を読み込んでいます…
+                                </div>
+                              ) : transcriptState.status === 'error' ? (
+                                <div className="rounded-[var(--radius-sm)] border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
+                                  {transcriptState.message}
+                                </div>
+                              ) : (
+                                <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+                                  <aside className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] lg:max-h-[680px] lg:overflow-y-auto">
+                                    <div className="border-b border-[color:var(--color-border)] px-4 py-3">
+                                      <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">台本の構成</p>
+                                      <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                                        {transcriptState.transcript.chapterSource === 'youtube' ? '動画投稿者のチャプター' : '台本から自動で区切った目次'}
+                                      </p>
+                                    </div>
+                                    <nav aria-label="台本の構成" className="p-2">
+                                      {transcriptState.transcript.chapters.length ? transcriptState.transcript.chapters.map((chapter, chapterIndex) => (
+                                        <button
+                                          key={`${chapter.start}-${chapterIndex}`}
+                                          type="button"
+                                          onClick={() => {
+                                            document.getElementById(`transcript-${video.videoId}-chapter-${chapterIndex}`)?.scrollIntoView({
+                                              behavior: 'smooth',
+                                              block: 'start',
+                                            });
+                                          }}
+                                          className="block w-full rounded-[var(--radius-sm)] px-3 py-2.5 text-left hover:bg-[color:var(--color-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]"
+                                        >
+                                          <span className="block text-xs tabular-nums text-[color:var(--color-accent)]">
+                                            {formatTimestamp(chapter.start)}–{formatTimestamp(chapter.end)}
+                                          </span>
+                                          <span className="mt-1 block text-sm font-medium leading-5 text-[color:var(--color-text-primary)]">
+                                            {chapter.title}
+                                          </span>
+                                        </button>
+                                      )) : (
+                                        <p className="px-3 py-4 text-sm text-[color:var(--color-text-muted)]">目次を生成中です。</p>
+                                      )}
+                                    </nav>
+                                  </aside>
+
+                                  <div className="max-h-[680px] overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+                                    {transcriptState.transcript.segments.map((segment, index) => {
+                                      const chapterIndex = transcriptState.transcript.chapters.findIndex(
+                                        (chapter) => chapterSegmentIndex(chapter, transcriptState.transcript.segments) === index,
+                                      );
+                                      const chapter = chapterIndex >= 0 ? transcriptState.transcript.chapters[chapterIndex] : null;
+                                      return (
+                                        <Fragment key={`${segment.start}-${index}`}>
+                                          {chapter ? (
+                                            <div
+                                              id={`transcript-${video.videoId}-chapter-${chapterIndex}`}
+                                              className="scroll-mt-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3 sm:px-5"
+                                            >
+                                              <p className="text-xs font-medium tabular-nums text-[color:var(--color-accent)]">
+                                                {formatTimestamp(chapter.start)}–{formatTimestamp(chapter.end)}
+                                              </p>
+                                              <h4 className="mt-1 text-base font-semibold text-[color:var(--color-text-primary)]">{chapter.title}</h4>
+                                            </div>
+                                          ) : null}
+                                          <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 border-b border-[color:var(--color-border)] px-4 py-3 last:border-b-0 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:px-5">
+                                            <a
+                                              href={`https://www.youtube.com/watch?v=${video.videoId}&t=${Math.floor(segment.start)}s`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="w-fit tabular-nums font-semibold text-[color:var(--color-accent)] hover:underline"
+                                            >
+                                              {formatTimestamp(segment.start)}
+                                            </a>
+                                            <p className="text-sm leading-7 text-[color:var(--color-text-primary)]">{segment.text}</p>
+                                          </div>
+                                        </Fragment>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </Table>
           </div>

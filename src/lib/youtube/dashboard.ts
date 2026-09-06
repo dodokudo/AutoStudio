@@ -92,6 +92,7 @@ export interface YoutubeCompetitorVideo {
   durationSeconds: number | null;
   viewVelocity: number | null;
   performanceRatio: number | null;
+  hasTranscript: boolean;
   publishedAt?: string;
 }
 
@@ -737,6 +738,11 @@ async function buildCompetitorVideos(
         SELECT *
         FROM ranked_videos
         WHERE rn = 1
+      ),
+      transcribed_videos AS (
+        SELECT DISTINCT video_id
+        FROM \`${projectId}.${datasetId}.youtube_video_transcripts\`
+        WHERE status = 'complete'
       )
       SELECT
         v.content_id,
@@ -749,10 +755,12 @@ async function buildCompetitorVideos(
         v.duration_seconds,
         v.view_velocity,
         SAFE_DIVIDE(v.view_count, NULLIF(c.subscriber_count, 0)) AS performance_ratio,
+        t.video_id IS NOT NULL AS has_transcript,
         v.published_at
       FROM latest_videos v
       JOIN active_competitors a USING (channel_id)
       LEFT JOIN latest_channels c USING (channel_id)
+      LEFT JOIN transcribed_videos t ON t.video_id = v.content_id
       WHERE a.category = 'ai'
         OR REGEXP_CONTAINS(LOWER(IFNULL(v.title, '')), r'(threads|スレッズ)')
       QUALIFY ROW_NUMBER() OVER (
@@ -783,6 +791,7 @@ async function buildCompetitorVideos(
     duration_seconds: number | null;
     view_velocity: number | null;
     performance_ratio: number | null;
+    has_transcript: boolean | null;
     published_at: unknown;
   }>).map((row) => {
     const publishedAt = toTimestamp(row.published_at);
@@ -797,6 +806,7 @@ async function buildCompetitorVideos(
       durationSeconds: row.duration_seconds === null ? null : Number(row.duration_seconds),
       viewVelocity: row.view_velocity === null ? null : Number(row.view_velocity),
       performanceRatio: row.performance_ratio === null ? null : Number(row.performance_ratio),
+      hasTranscript: row.has_transcript === true,
       publishedAt: publishedAt ? new Date(publishedAt).toISOString() : undefined,
     };
   });

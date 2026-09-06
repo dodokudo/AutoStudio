@@ -142,12 +142,36 @@ export async function ensureYoutubeTables(context: YoutubeBigQueryContext) {
       added_at TIMESTAMP NOT NULL,
       updated_at TIMESTAMP NOT NULL
     )
-    CLUSTER BY category, active`
+    CLUSTER BY category, active`,
+    `CREATE TABLE IF NOT EXISTS ${datasetQualified}.youtube_video_transcripts (
+      video_id STRING NOT NULL,
+      source_url STRING NOT NULL,
+      language STRING NOT NULL,
+      model STRING NOT NULL,
+      status STRING NOT NULL,
+      raw_text STRING,
+      cleaned_text STRING,
+      segments_json STRING,
+      chapters_json STRING,
+      chapter_source STRING,
+      transcribed_at TIMESTAMP NOT NULL,
+      updated_at TIMESTAMP NOT NULL
+    )
+    CLUSTER BY video_id, status`
   ];
 
   for (const statement of ddlStatements) {
     await client.query({ query: statement });
   }
+
+  await client.query({
+    query: `ALTER TABLE ${datasetQualified}.youtube_video_transcripts
+      ADD COLUMN IF NOT EXISTS chapters_json STRING`,
+  });
+  await client.query({
+    query: `ALTER TABLE ${datasetQualified}.youtube_video_transcripts
+      ADD COLUMN IF NOT EXISTS chapter_source STRING`,
+  });
 }
 
 async function deleteExistingChannels(
