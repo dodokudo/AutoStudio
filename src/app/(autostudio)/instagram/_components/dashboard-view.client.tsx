@@ -255,17 +255,33 @@ export function InstagramDashboardView({ data }: Props) {
     });
   }, [data.reels, dateRange]);
 
-  const filteredStories = useMemo(() => {
-    if (dateRange.preset === 'all') return data.stories;
+  const effectiveStories = useMemo(() => {
+    if (!storyMetricsData?.rows.length) return data.stories;
+    return storyMetricsData.rows.map((story) => ({
+      instagramId: story.instagramId,
+      caption: story.caption,
+      views: story.views,
+      reach: story.reach,
+      replies: story.replies,
+      completionRate: story.viewRate,
+      timestamp: story.publishedAt,
+      profileVisits: story.profileVisits,
+      driveImageUrl: story.driveImageUrl,
+      thumbnailUrl: story.thumbnailUrl,
+    }));
+  }, [data.stories, storyMetricsData]);
 
-    return data.stories.filter((story) => {
+  const filteredStories = useMemo(() => {
+    if (dateRange.preset === 'all') return effectiveStories;
+
+    return effectiveStories.filter((story) => {
       if (!story.timestamp) return false;
       const storyDate = parseDate(story.timestamp);
       if (!storyDate) return false;
 
       return storyDate >= dateRange.start && storyDate <= dateRange.end;
     });
-  }, [data.stories, dateRange]);
+  }, [effectiveStories, dateRange]);
 
   const sortedReels = useMemo(() => {
     const sorted = [...filteredReels].sort((a, b) => {
@@ -311,12 +327,26 @@ export function InstagramDashboardView({ data }: Props) {
     return sorted;
   }, [filteredReels, reelSortBy, reelSortOrder]);
 
+  const effectiveFollowerSeries = useMemo(() => {
+    const byDate = new Map(data.followerSeries.map((point) => [point.date, point]));
+    for (const point of data.userInsightsDailySeries) {
+      const legacy = byDate.get(point.date);
+      byDate.set(point.date, {
+        date: point.date,
+        followers: point.followers ?? legacy?.followers ?? 0,
+        reach: point.reach ?? legacy?.reach ?? 0,
+        engagement: point.totalInteractions ?? legacy?.engagement ?? 0,
+      });
+    }
+    return Array.from(byDate.values());
+  }, [data.followerSeries, data.userInsightsDailySeries]);
+
   const followerByDate = useMemo(() => {
-    return data.followerSeries.reduce<Record<string, number>>((acc, point) => {
+    return effectiveFollowerSeries.reduce<Record<string, number>>((acc, point) => {
       acc[point.date] = point.followers ?? 0;
       return acc;
     }, {});
-  }, [data.followerSeries]);
+  }, [effectiveFollowerSeries]);
 
   const reelPostCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -335,7 +365,7 @@ export function InstagramDashboardView({ data }: Props) {
   }, [data.storyDailyCounts]);
 
   const followerSeriesWithDelta = useMemo(() => {
-    const sorted = [...data.followerSeries].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...effectiveFollowerSeries].sort((a, b) => a.date.localeCompare(b.date));
 
     // LINE登録数データをマップに変換
     const lineRegistrationMap = new Map<string, number>();
@@ -381,7 +411,7 @@ export function InstagramDashboardView({ data }: Props) {
         storyViewRate,
       };
     });
-  }, [data.followerSeries, data.lineRegistrationSeries, data.linkClickSeries, data.userInsightsDailySeries, reelPostCounts, storyDailyStats]);
+  }, [effectiveFollowerSeries, data.lineRegistrationSeries, data.linkClickSeries, data.userInsightsDailySeries, reelPostCounts, storyDailyStats]);
 
   const chartRange = useMemo(() => {
     const startKey = formatDateKey(dateRange.start);
@@ -496,8 +526,8 @@ export function InstagramDashboardView({ data }: Props) {
     const useAllRange = dateRange.preset === 'all';
 
     const followerSeriesInRange = useAllRange
-      ? data.followerSeries
-      : data.followerSeries.filter((point) => isWithinDateRange(point.date, startKey, endKey));
+      ? effectiveFollowerSeries
+      : effectiveFollowerSeries.filter((point) => isWithinDateRange(point.date, startKey, endKey));
 
     const followerSeriesAsc = [...followerSeriesInRange].sort((a, b) => a.date.localeCompare(b.date));
     const latestFollowerPoint =
@@ -505,8 +535,8 @@ export function InstagramDashboardView({ data }: Props) {
 
     const earliestFollowerPoint =
       followerSeriesAsc[0]
-      ?? (data.followerSeries.length > 0
-        ? data.followerSeries[data.followerSeries.length - 1]
+      ?? (effectiveFollowerSeries.length > 0
+        ? effectiveFollowerSeries[effectiveFollowerSeries.length - 1]
         : data.latestFollower);
 
     const followerGrowth =
@@ -569,7 +599,7 @@ export function InstagramDashboardView({ data }: Props) {
       lpLineCtaClicks,
       profileViews,
     };
-  }, [data, dateRange, filteredReels, filteredStories]);
+  }, [data, dateRange, effectiveFollowerSeries, filteredStories]);
 
   // 前期間の集計 (フォロワー比較・delta 表示用)
   const previousSummary = useMemo(() => {
@@ -580,7 +610,7 @@ export function InstagramDashboardView({ data }: Props) {
     const prevStartKey = formatDateKey(prevStart);
     const prevEndKey = formatDateKey(prevEnd);
 
-    const followerInPrev = data.followerSeries.filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey));
+    const followerInPrev = effectiveFollowerSeries.filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey));
     const reach = followerInPrev.reduce((s, p) => s + (p.reach ?? 0), 0);
     const profileViews = data.userInsightsDailySeries
       .filter((p) => isWithinDateRange(p.date, prevStartKey, prevEndKey))
@@ -608,7 +638,7 @@ export function InstagramDashboardView({ data }: Props) {
         : 0;
 
     return { reach, profileViews, postCount, lineRegistrations, linkClicks, lpLineCtaClicks, prevFollowerCount, prevFollowerGrowth };
-  }, [data, dateRange]);
+  }, [data, dateRange, effectiveFollowerSeries]);
 
   const summaryStats = useMemo(() => {
     const fmtNum = (n: number) => n.toLocaleString();
@@ -779,36 +809,6 @@ export function InstagramDashboardView({ data }: Props) {
             title="アカウント概要"
             stats={summaryStats}
           />
-
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">コスト指標</h2>
-            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">リール編集外注 1本 3,300円換算</p>
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {(() => {
-                const reelEditUnitPrice = 3300;
-                const editCount = summary.postCount;
-                const editCost = editCount * reelEditUnitPrice;
-                const cpa = summary.lineRegistrations && summary.lineRegistrations > 0
-                  ? editCost / summary.lineRegistrations
-                  : null;
-                const yen = (n: number) => `¥${n.toLocaleString()}`;
-                return (
-                  <>
-                    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
-                      <div className="text-xs text-[color:var(--color-text-muted)]">動画編集費用</div>
-                      <div className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">{yen(editCost)}</div>
-                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">期間内リール {editCount}本 × ¥{reelEditUnitPrice.toLocaleString()}</div>
-                    </div>
-                    <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-4">
-                      <div className="text-xs text-[color:var(--color-text-muted)]">LINE登録CPA</div>
-                      <div className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">{cpa !== null ? yen(Math.round(cpa)) : '—'}</div>
-                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">編集費用 ÷ LINE登録 {summary.lineRegistrations ?? 0}件</div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </Card>
 
           <Card className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -995,8 +995,8 @@ export function InstagramDashboardView({ data }: Props) {
           <Card className="p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">フォロー獲得リールTOP5</h2>
-                <p className="text-xs text-[color:var(--color-text-muted)]">リール経由のフォロー数で並び替え</p>
+                <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">リールTOP5</h2>
+                <p className="text-xs text-[color:var(--color-text-muted)]">期間内の再生数順</p>
               </div>
               <Button variant="secondary" className="h-9 px-3 text-sm" onClick={() => setActiveTab('reels')}>
                 詳細
@@ -1015,14 +1015,7 @@ export function InstagramDashboardView({ data }: Props) {
                 return key >= chartRange.startKey && key <= chartRange.endKey;
               });
               const top5 = [...filtered]
-                .sort((a, b) => {
-                  const af = a.snapshot.follows ?? -Infinity;
-                  const bf = b.snapshot.follows ?? -Infinity;
-                  if (bf !== af) return bf - af;
-                  const av = a.snapshot.views ?? 0;
-                  const bv = b.snapshot.views ?? 0;
-                  return bv - av;
-                })
+                .sort((a, b) => (b.snapshot.views ?? 0) - (a.snapshot.views ?? 0))
                 .slice(0, 5);
               if (top5.length === 0) {
                 return (
@@ -1158,7 +1151,7 @@ export function InstagramDashboardView({ data }: Props) {
               </div>
             ) : (
               <div className="mt-4 rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] p-6 text-center text-sm text-[color:var(--color-text-muted)]">
-                ストーリーデータがありません
+                {lazyLoading.stories ? 'ストーリーデータを読み込み中…' : 'ストーリーデータがありません'}
               </div>
             )}
           </Card>
