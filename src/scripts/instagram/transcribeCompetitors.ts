@@ -117,6 +117,7 @@ function applyVocabularyCorrections(value: string): string {
     [/無課金税/g, '無課金勢'],
     [/微生化被害/g, 'なりすまし被害'],
     [/ビールの動画編集/g, 'リールの動画編集'],
+    [/ビール(?=(?:を|が|で|に|の|投稿|再生|\d))/g, 'リール'],
   ];
   let text = value;
   for (const [pattern, replacement] of replacements) text = text.replace(pattern, replacement);
@@ -124,7 +125,7 @@ function applyVocabularyCorrections(value: string): string {
 }
 
 function parseWhisperSegments(filePath: string): CompetitorTranscriptSegmentInput[] {
-  const payload = JSON.parse(fs.readFileSync(filePath, 'utf8')) as WhisperOutput;
+  const payload = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/\bNaN\b/g, 'null')) as WhisperOutput;
   const whisperSegments = Array.isArray(payload.segments) ? payload.segments : [];
   const naturalSegments = whisperSegments.map((segment) => ({
     start: Number(segment.start ?? 0),
@@ -173,7 +174,12 @@ function parseWhisperSegments(filePath: string): CompetitorTranscriptSegmentInpu
   return [];
 }
 
-async function loadTargets(limit: number, minimumPerAccount: number): Promise<CompetitorReel[]> {
+async function loadTargets(
+  limit: number,
+  minimumPerAccount: number,
+  fromDate: string | null,
+  toDate: string | null,
+): Promise<CompetitorReel[]> {
   const bigquery = createInstagramBigQuery();
   const { projectId, dataset, location } = getInstagramStorageConfig();
   const [rows] = await bigquery.query({
@@ -195,13 +201,15 @@ async function loadTargets(limit: number, minimumPerAccount: number): Promise<Co
           MAX(r.view_count) AS view_count
         FROM \`${projectId}.${dataset}.competitor_reels_raw\` r
         JOIN active_competitors a USING (username)
-        WHERE DATE(r.posted_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
+        WHERE DATE(r.posted_at, 'Asia/Tokyo') >= COALESCE(DATE(@from_date), DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY))
+          AND DATE(r.posted_at, 'Asia/Tokyo') <= COALESCE(DATE(@to_date), CURRENT_DATE('Asia/Tokyo'))
           AND r.drive_file_url LIKE '%storage.googleapis.com%'
         GROUP BY r.username, r.instagram_media_id
       )
       SELECT * FROM unique_reels
     `,
     location,
+    params: { from_date: fromDate, to_date: toDate },
   });
   const candidates = (rows as Array<Record<string, unknown>>).map((row) => ({
     username: String(row.username),
@@ -213,7 +221,7 @@ async function loadTargets(limit: number, minimumPerAccount: number): Promise<Co
     postedAt: timestampValue(row.posted_at),
     viewCount: row.view_count == null ? null : Number(row.view_count),
   }));
-  return selectCompetitorDownloads(candidates, limit, minimumPerAccount);
+  return selectCompetitorDownloads(candidates, limit, minimumPerAccount, 'newest');
 }
 
 async function resolveVideo(reel: CompetitorReel, videoDirectory: string): Promise<string> {
@@ -384,38 +392,34 @@ async function saveTranscript(
       location,
     });
   }
-  await bigquery.query({
-    query: `
-      INSERT INTO \`${projectId}.${dataset}.competitor_reels_transcripts\` (
-        snapshot_date, instagram_media_id, drive_file_id, summary, key_points, hooks, cta_ideas,
-        created_at, username, posted_at, transcribed_at, model_name, segments_json, chapters_json,
-        duration_seconds, hook_text, hook_labels_json, visual_timeline_json, raw_text, caption
-      ) VALUES (
-        CURRENT_DATE('Asia/Tokyo'), @instagram_media_id, @drive_file_id, @summary, [], [], [],
-        TIMESTAMP(@now), @username, TIMESTAMP(@posted_at), TIMESTAMP(@now), @model_name,
-        @segments_json, @chapters_json, @duration_seconds, @hook_text, @hook_labels_json,
-        @visual_timeline_json, @raw_text, @caption
-      )
-    `,
-    params: {
-      instagram_media_id: reel.instagramMediaId,
-      drive_file_id: reel.driveFileId,
-      summary: result.title,
-      now,
-      username: reel.username,
-      posted_at: reel.postedAt,
-      model_name: WHISPER_MODEL,
-      segments_json: JSON.stringify(result.segments),
-      chapters_json: JSON.stringify(result.chapters),
-      duration_seconds: result.duration,
-      hook_text: result.hook.text,
-      hook_labels_json: JSON.stringify(result.hook.labels),
-      visual_timeline_json: JSON.stringify(result.visualTimeline),
-      raw_text: result.rawText,
-      caption: reel.caption,
-    },
-    location,
-  });
+  const snapshotDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  await bigquery.dataset(dataset).table('competitor_reels_transcripts').insert([{
+    snapshot_date: snapshotDate,
+    instagram_media_id: reel.instagramMediaId,
+    drive_file_id: reel.driveFileId,
+    summary: result.title,
+    key_points: [],
+    hooks: [],
+    cta_ideas: [],
+    created_at: now,
+    username: reel.username,
+    posted_at: reel.postedAt,
+    transcribed_at: now,
+    model_name: WHISPER_MODEL,
+    segments_json: JSON.stringify(result.segments),
+    chapters_json: JSON.stringify(result.chapters),
+    duration_seconds: result.duration,
+    hook_text: result.hook.text,
+    hook_labels_json: JSON.stringify(result.hook.labels),
+    visual_timeline_json: JSON.stringify(result.visualTimeline),
+    raw_text: result.rawText,
+    caption: reel.caption,
+  }]);
 }
 
 async function main(): Promise<void> {
@@ -430,10 +434,12 @@ async function main(): Promise<void> {
   const rebuildAnalysis = process.argv.includes('--rebuild-analysis');
   const mediaId = parseStringFlag('--media-id');
   const mediaIds = new Set((parseStringFlag('--media-ids') ?? '').split(',').filter(Boolean));
+  const fromDate = parseStringFlag('--from-date');
+  const toDate = parseStringFlag('--to-date');
   const bigquery = createInstagramBigQuery();
   await ensureInstagramTables(bigquery);
   const { projectId, dataset, location } = getInstagramStorageConfig();
-  const selected = (await loadTargets(limit, minimumPerAccount))
+  const selected = (await loadTargets(limit, minimumPerAccount, fromDate, toDate))
     .filter((reel) => (
       (!mediaId && mediaIds.size === 0)
       || reel.instagramMediaId === mediaId

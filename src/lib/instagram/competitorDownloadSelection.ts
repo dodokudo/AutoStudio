@@ -5,6 +5,8 @@ export interface CompetitorDownloadCandidate {
   viewCount: number | null;
 }
 
+export type CompetitorDownloadOrder = 'performance' | 'newest';
+
 function byPerformance(
   a: CompetitorDownloadCandidate,
   b: CompetitorDownloadCandidate,
@@ -14,10 +16,20 @@ function byPerformance(
   return String(b.postedAt ?? '').localeCompare(String(a.postedAt ?? ''));
 }
 
+function byNewest(
+  a: CompetitorDownloadCandidate,
+  b: CompetitorDownloadCandidate,
+): number {
+  const dateDiff = String(b.postedAt ?? '').localeCompare(String(a.postedAt ?? ''));
+  if (dateDiff !== 0) return dateDiff;
+  return (b.viewCount ?? 0) - (a.viewCount ?? 0);
+}
+
 export function selectCompetitorDownloads<T extends CompetitorDownloadCandidate>(
   candidates: T[],
   limit: number,
   minimumPerAccount: number,
+  order: CompetitorDownloadOrder = 'performance',
 ): T[] {
   if (limit <= 0 || candidates.length === 0) return [];
 
@@ -34,7 +46,8 @@ export function selectCompetitorDownloads<T extends CompetitorDownloadCandidate>
     rows.push(candidate);
     byAccount.set(candidate.username, rows);
   }
-  for (const rows of byAccount.values()) rows.sort(byPerformance);
+  const compare = order === 'newest' ? byNewest : byPerformance;
+  for (const rows of byAccount.values()) rows.sort(compare);
 
   const selected: T[] = [];
   const selectedIds = new Set<string>();
@@ -52,7 +65,7 @@ export function selectCompetitorDownloads<T extends CompetitorDownloadCandidate>
 
   const remaining = Array.from(unique.values())
     .filter((candidate) => !selectedIds.has(candidate.instagramMediaId))
-    .sort(byPerformance);
+    .sort(compare);
   selected.push(...remaining.slice(0, Math.max(0, limit - selected.length)));
 
   return selected.slice(0, limit);

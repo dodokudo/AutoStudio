@@ -34,9 +34,13 @@ async function findExistingGcsVideo(username: string, mediaId: string): Promise<
 
 async function resolvePublicReelVideoUrl(permalink: string, mediaId: string): Promise<string | null> {
   try {
+    const cookiesFromBrowser = process.env.IG_YTDLP_COOKIES_FROM_BROWSER?.trim();
+    const args = ['--no-warnings', '--no-playlist'];
+    if (cookiesFromBrowser) args.push('--cookies-from-browser', cookiesFromBrowser);
+    args.push('--get-url', '--format', 'best[ext=mp4]/best', permalink);
     const { stdout } = await execFileAsync(
       'yt-dlp',
-      ['--no-warnings', '--no-playlist', '--get-url', '--format', 'best[ext=mp4]/best', permalink],
+      args,
       { encoding: 'utf8', timeout: 60_000, maxBuffer: 1024 * 1024 },
     );
     return stdout.split('\n').map((line) => line.trim()).find((line) => line.startsWith('https://')) ?? null;
@@ -100,6 +104,21 @@ const MEDIA_LIMIT = Number(process.env.IG_COMPETITOR_MEDIA_LIMIT ?? '30');
 const DOWNLOAD_LIMIT = Number(process.env.IG_COMPETITOR_DOWNLOAD_LIMIT ?? '60');
 const DOWNLOAD_MIN_PER_ACCOUNT = Number(process.env.IG_COMPETITOR_DOWNLOAD_MIN_PER_ACCOUNT ?? '5');
 const DOWNLOAD_CONCURRENCY = Number(process.env.IG_COMPETITOR_DOWNLOAD_CONCURRENCY ?? '3');
+const DOWNLOAD_FROM_DATE = process.env.IG_COMPETITOR_FROM_DATE?.trim() || null;
+const DOWNLOAD_TO_DATE = process.env.IG_COMPETITOR_TO_DATE?.trim() || null;
+
+function isWithinDownloadRange(postedAt: string | null): boolean {
+  if (!postedAt) return false;
+  const timestamp = new Date(postedAt).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  const from = DOWNLOAD_FROM_DATE
+    ? new Date(`${DOWNLOAD_FROM_DATE}T00:00:00+09:00`).getTime()
+    : null;
+  const to = DOWNLOAD_TO_DATE
+    ? new Date(`${DOWNLOAD_TO_DATE}T23:59:59.999+09:00`).getTime()
+    : null;
+  return (from == null || timestamp >= from) && (to == null || timestamp <= to);
+}
 
 // Instagram API は '2025-10-22T12:05:33+0000' 形式を返す。
 // BigQuery TIMESTAMP は +0000（コロン無し）を解釈できないため ISO8601 に正規化する。
@@ -277,8 +296,11 @@ async function main() {
   }
 
   const storedVideos = new Map<string, StoredVideo>();
+  const downloadCandidates = DOWNLOAD_FROM_DATE || DOWNLOAD_TO_DATE
+    ? reelCandidates.filter((candidate) => isWithinDownloadRange(candidate.postedAt))
+    : reelCandidates;
   const selectedDownloads = process.env.IG_DOWNLOAD_VIDEOS === 'true'
-    ? selectCompetitorDownloads(reelCandidates, DOWNLOAD_LIMIT, DOWNLOAD_MIN_PER_ACCOUNT)
+    ? selectCompetitorDownloads(downloadCandidates, DOWNLOAD_LIMIT, DOWNLOAD_MIN_PER_ACCOUNT, 'newest')
     : [];
   if (selectedDownloads.length) {
     console.log(
@@ -293,17 +315,27 @@ async function main() {
       const sourceUrl = candidate.mediaUrl
         ?? await resolvePublicReelVideoUrl(candidate.permalink, candidate.instagramMediaId);
       if (!sourceUrl) return;
-      const stored = await uploadVideoToGcs(
+      let stored = await uploadVideoToGcs(
         sourceUrl,
         candidate.username,
         candidate.instagramMediaId,
       );
+      if (!stored && candidate.mediaUrl) {
+        const fallbackUrl = await resolvePublicReelVideoUrl(candidate.permalink, candidate.instagramMediaId);
+        if (fallbackUrl && fallbackUrl !== sourceUrl) {
+          stored = await uploadVideoToGcs(
+            fallbackUrl,
+            candidate.username,
+            candidate.instagramMediaId,
+          );
+        }
+      }
       if (stored) storedVideos.set(candidate.instagramMediaId, stored);
     });
     const selectedStoredCount = selectedDownloads.filter((candidate) => storedVideos.has(candidate.instagramMediaId)).length;
     if (selectedStoredCount !== selectedDownloads.length) {
-      throw new Error(
-        `GCS download incomplete: ${selectedStoredCount}/${selectedDownloads.length} videos saved`,
+      console.warn(
+        `[sync-competitors-bd] GCS download incomplete: ${selectedStoredCount}/${selectedDownloads.length} videos saved`,
       );
     }
     console.log(`[sync-competitors-bd] saved ${selectedStoredCount} selected videos to GCS`);

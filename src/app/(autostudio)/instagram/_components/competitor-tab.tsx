@@ -167,7 +167,7 @@ function AccountSummaryTable({ summaries }: { summaries: CompetitorAccountSummar
 
 export function CompetitorTab({ data }: Props) {
   const [accountFilter, setAccountFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<ReelSort>('views');
+  const [sortBy, setSortBy] = useState<ReelSort>('newest');
   const [expandedMediaId, setExpandedMediaId] = useState<string | null>(null);
 
   const accounts = useMemo(() => data.accountSummaries.map((summary) => summary.username), [data.accountSummaries]);

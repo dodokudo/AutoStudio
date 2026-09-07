@@ -33,3 +33,16 @@ test('deduplicates media IDs', () => {
   };
   assert.equal(selectCompetitorDownloads([duplicate, duplicate], 10, 1).length, 1);
 });
+
+test('selects the latest videos when newest order is requested', () => {
+  const candidates = [
+    { instagramMediaId: 'popular-old', postedAt: '2026-08-01', username: 'one', viewCount: 1_000_000 },
+    { instagramMediaId: 'newest', postedAt: '2026-09-07', username: 'one', viewCount: 100 },
+    { instagramMediaId: 'newer', postedAt: '2026-09-06', username: 'two', viewCount: 200 },
+  ];
+
+  assert.deepEqual(
+    selectCompetitorDownloads(candidates, 2, 0, 'newest').map((row) => row.instagramMediaId),
+    ['newest', 'newer'],
+  );
+});
