@@ -170,7 +170,21 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'hooks', type: 'STRING', mode: 'REPEATED' },
     { name: 'cta_ideas', type: 'STRING', mode: 'REPEATED' },
     { name: 'created_at', type: 'TIMESTAMP' },
+    { name: 'username', type: 'STRING' },
+    { name: 'posted_at', type: 'TIMESTAMP' },
+    { name: 'transcribed_at', type: 'TIMESTAMP' },
+    { name: 'model_name', type: 'STRING' },
+    { name: 'segments_json', type: 'STRING' },
+    { name: 'chapters_json', type: 'STRING' },
+    { name: 'raw_text', type: 'STRING' },
+    { name: 'caption', type: 'STRING' },
   ], 'snapshot_date', ['instagram_media_id']);
+
+  const { projectId, dataset: datasetId } = getInstagramStorageConfig();
+  await client.query({
+    query: `ALTER TABLE \`${projectId}.${datasetId}.competitor_reels_transcripts\`
+      ADD COLUMN IF NOT EXISTS chapters_json STRING`,
+  });
 
   await ensureTable(dataset, 'my_reels_scripts', [
     { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },

@@ -1,5 +1,10 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { getInstagramStorageConfig } from './bigquery';
+import {
+  buildCompetitorReelChapters,
+  deriveCompetitorReelTitle,
+  type CompetitorTranscriptChapter,
+} from './competitorTranscript';
 
 export interface CompetitorFollowerPoint {
   date: string;
@@ -35,7 +40,9 @@ export interface CompetitorReel {
   viewCount: number | null;
   likeCount: number | null;
   commentsCount: number | null;
+  transcriptTitle: string | null;
   transcriptSegments: CompetitorTranscriptSegment[];
+  transcriptChapters: CompetitorTranscriptChapter[];
 }
 
 export interface CompetitorDashboardData {
@@ -173,12 +180,27 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
         FROM unique_reels r
       ),
       latest_transcripts AS (
-        SELECT instagram_media_id, ANY_VALUE(segments_json) AS segments_json
-        FROM \`${projectId}.${dataset}.competitor_reels_transcripts\`
-        WHERE segments_json IS NOT NULL
-        GROUP BY instagram_media_id
+        SELECT * EXCEPT(rn)
+        FROM (
+          SELECT
+            instagram_media_id,
+            summary,
+            segments_json,
+            chapters_json,
+            ROW_NUMBER() OVER (
+              PARTITION BY instagram_media_id
+              ORDER BY COALESCE(transcribed_at, created_at) DESC
+            ) AS rn
+          FROM \`${projectId}.${dataset}.competitor_reels_transcripts\`
+          WHERE segments_json IS NOT NULL
+        )
+        WHERE rn = 1
       )
-      SELECT r.* EXCEPT(account_rank), t.segments_json
+      SELECT
+        r.* EXCEPT(account_rank),
+        t.summary AS transcript_title,
+        t.segments_json,
+        t.chapters_json
       FROM ranked_reels r
       LEFT JOIN latest_transcripts t ON r.instagram_media_id = t.instagram_media_id
       WHERE r.account_rank <= 60
@@ -203,7 +225,28 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
         // ignore
       }
     }
+    let chapters: CompetitorTranscriptChapter[] = [];
+    if (row.chapters_json) {
+      try {
+        const parsed = JSON.parse(String(row.chapters_json));
+        if (Array.isArray(parsed)) {
+          chapters = parsed.map((chapter) => ({
+            start: Number(chapter.start ?? 0),
+            end: Number(chapter.end ?? 0),
+            title: String(chapter.title ?? '').trim(),
+          })).filter((chapter) => chapter.title.length > 0 && chapter.end >= chapter.start);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!chapters.length && segments.length) chapters = buildCompetitorReelChapters(segments);
     const postedAtRaw = row.posted_at;
+    const transcriptTitle = row.transcript_title
+      ? String(row.transcript_title).trim()
+      : segments.length
+        ? deriveCompetitorReelTitle(segments)
+        : null;
     return {
       username: String(row.username ?? ''),
       instagramMediaId: String(row.instagram_media_id ?? ''),
@@ -219,7 +262,9 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
       viewCount: row.view_count !== null && row.view_count !== undefined ? Number(row.view_count) : null,
       likeCount: row.like_count !== null && row.like_count !== undefined ? Number(row.like_count) : null,
       commentsCount: row.comments_count !== null && row.comments_count !== undefined ? Number(row.comments_count) : null,
+      transcriptTitle,
       transcriptSegments: segments,
+      transcriptChapters: chapters,
     };
   });
 

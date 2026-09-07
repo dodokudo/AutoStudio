@@ -1,75 +1,97 @@
 import { config as loadEnv } from 'dotenv';
-import path from 'node:path';
 import fs from 'node:fs';
-import os from 'node:os';
-import crypto from 'node:crypto';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { google } from 'googleapis';
 import { createInstagramBigQuery, ensureInstagramTables, getInstagramStorageConfig } from '@/lib/instagram/bigquery';
+import { selectCompetitorDownloads } from '@/lib/instagram/competitorDownloadSelection';
+import {
+  buildCompetitorReelChapters,
+  deriveCompetitorReelTitle,
+  type CompetitorTranscriptSegmentInput,
+} from '@/lib/instagram/competitorTranscript';
 
 loadEnv();
 loadEnv({ path: path.resolve(process.cwd(), '.env.local') });
 
-const TARGET_USERNAMES = [
-  'mon_guchi',
-  'sugisan_insta_',
-  'yuri_insta_oni',
-  'hika_marke_',
-  'sakisns_ad',
-  'sns_freelance_aya',
-  'takumu_sns',
-  'freelance__barachan',
-];
-const PER_ACCOUNT_LIMIT = Number(process.env.IG_COMP_TRANSCRIBE_PER_ACCOUNT ?? '10');
-const CONCURRENCY = Number(process.env.IG_COMP_TRANSCRIBE_CONCURRENCY ?? '10');
-
-const WHISPER_CLI = process.env.WHISPER_CLI ?? '/opt/homebrew/bin/whisper-cli';
-const WHISPER_MODEL = process.env.WHISPER_MODEL ?? '/Users/kudo/whisper-models/ggml-medium.bin';
+const OUTPUT_ROOT = path.resolve(
+  process.env.IG_COMPETITOR_TRANSCRIPT_OUTPUT_DIR ?? 'output/instagram-transcripts/competitors',
+);
+const LOCAL_VIDEO_DIR = process.env.IG_COMPETITOR_LOCAL_VIDEO_DIR
+  ? path.resolve(process.env.IG_COMPETITOR_LOCAL_VIDEO_DIR)
+  : null;
 const FFMPEG_BIN = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
-const WHISPER_LANG = process.env.WHISPER_LANG ?? 'ja';
+const MLX_WHISPER_BIN = process.env.MLX_WHISPER_BIN ?? '/Users/kudo/.local/bin/mlx_whisper';
+const WHISPER_MODEL = process.env.IG_COMPETITOR_WHISPER_MODEL ?? 'mlx-community/whisper-large-v3-turbo';
+const DEFAULT_LIMIT = 60;
+const DEFAULT_MINIMUM_PER_ACCOUNT = 5;
+const DEFAULT_CONCURRENCY = 2;
 
 interface CompetitorReel {
   username: string;
-  instagram_media_id: string;
-  drive_file_id: string;
+  instagramMediaId: string;
+  driveFileId: string;
+  driveFileUrl: string;
   caption: string | null;
-  posted_at: string;
+  permalink: string | null;
+  postedAt: string;
+  viewCount: number | null;
 }
 
-interface TranscriptSegment {
-  start: number;
-  end: number;
-  text: string;
+interface WhisperWord {
+  word?: string;
+  start?: number;
+  end?: number;
 }
 
-interface WhisperJsonSegment {
-  offsets?: { from?: number; to?: number };
+interface WhisperSegment {
+  start?: number;
+  end?: number;
   text?: string;
+  words?: WhisperWord[];
 }
 
-interface WhisperJsonOutput {
-  transcription?: WhisperJsonSegment[];
+interface WhisperOutput {
+  segments?: WhisperSegment[];
 }
 
-function runProc(command: string, args: string[], timeoutMs: number): Promise<string> {
+function parseIntegerFlag(name: string, fallback: number): number {
+  const index = process.argv.indexOf(name);
+  const value = Number(index >= 0 ? process.argv[index + 1] : fallback);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function parseStringFlag(name: string): string | null {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? String(process.argv[index + 1] ?? '').trim() || null : null;
+}
+
+function timestampValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'value' in value) {
+    return String((value as { value: unknown }).value);
+  }
+  return String(value ?? '');
+}
+
+function runProcess(command: string, args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
-      proc.kill('SIGKILL');
-      reject(new Error(`Process timed out: ${command}`));
+      child.kill('SIGKILL');
+      reject(new Error(`timeout after ${Math.round(timeoutMs / 60_000)} minutes: ${command}`));
     }, timeoutMs);
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('error', (err) => {
+    child.stdout.on('data', (chunk) => { stdout = `${stdout}${chunk.toString()}`.slice(-65_536); });
+    child.stderr.on('data', (chunk) => { stderr = `${stderr}${chunk.toString()}`.slice(-65_536); });
+    child.on('error', (error) => {
       clearTimeout(timer);
-      reject(err);
+      reject(error);
     });
-    proc.on('close', (code) => {
+    child.on('close', (code) => {
       clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error(`${command} exited with ${code}: ${stderr.slice(0, 500)}`));
+        reject(new Error(`${path.basename(command)} exited with ${code}: ${stderr.slice(-2_000)}`));
         return;
       }
       resolve(stdout);
@@ -77,167 +99,264 @@ function runProc(command: string, args: string[], timeoutMs: number): Promise<st
   });
 }
 
-async function downloadDriveFile(fileId: string, destPath: string): Promise<void> {
-  const auth = await google.auth.getClient({
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
-  const drive = google.drive({ version: 'v3', auth });
-  const response = await drive.files.get(
-    { fileId, alt: 'media', supportsAllDrives: true },
-    { responseType: 'stream' },
-  );
-  await new Promise<void>((resolve, reject) => {
-    const writer = fs.createWriteStream(destPath);
-    response.data.on('end', () => resolve());
-    response.data.on('error', (err: Error) => reject(err));
-    response.data.pipe(writer);
-  });
+function applyVocabularyCorrections(value: string): string {
+  const replacements: Array<[RegExp, string]> = [
+    [/スレッツ/g, 'スレッズ'],
+    [/スレットズ/g, 'スレッズ'],
+    [/インスタグラム/gi, 'Instagram'],
+    [/チャットGPT/gi, 'ChatGPT'],
+    [/ジェミニー|ジェミニ/gi, 'Gemini'],
+    [/クロードコード/g, 'Claude Code'],
+    [/クロード/g, 'Claude'],
+  ];
+  let text = value;
+  for (const [pattern, replacement] of replacements) text = text.replace(pattern, replacement);
+  return text.replace(/\s+/g, ' ').trim();
 }
 
-function parseWhisperJson(jsonPath: string): TranscriptSegment[] {
-  try {
-    const raw = fs.readFileSync(jsonPath, 'utf8');
-    const data = JSON.parse(raw) as WhisperJsonOutput;
-    if (!Array.isArray(data.transcription)) return [];
-    return data.transcription
-      .map((item) => ({
-        start: Number(item.offsets?.from ?? 0) / 1000,
-        end: Number(item.offsets?.to ?? 0) / 1000,
-        text: String(item.text ?? '').trim(),
-      }))
-      .filter((seg) => seg.text.length > 0);
-  } catch {
-    return [];
-  }
-}
+function parseWhisperSegments(filePath: string): CompetitorTranscriptSegmentInput[] {
+  const payload = JSON.parse(fs.readFileSync(filePath, 'utf8')) as WhisperOutput;
+  const whisperSegments = Array.isArray(payload.segments) ? payload.segments : [];
+  const words = whisperSegments.flatMap((segment) => (
+    Array.isArray(segment.words) ? segment.words : []
+  )).filter((word) => (
+    typeof word.word === 'string' && Number.isFinite(word.start) && Number.isFinite(word.end)
+  ));
 
-async function transcribeReel(reel: CompetitorReel): Promise<{ segments: TranscriptSegment[]; rawText: string } | null> {
-  const tempBase = path.join(os.tmpdir(), `comp-${crypto.randomUUID()}`);
-  const videoPath = `${tempBase}.mp4`;
-  const wavPath = `${tempBase}.wav`;
-  const jsonPath = `${tempBase}.json`;
-  try {
-    await downloadDriveFile(reel.drive_file_id, videoPath);
-    await runProc(FFMPEG_BIN, [
-      '-y', '-i', videoPath, '-vn', '-ac', '1', '-ar', '16000', '-f', 'wav', wavPath,
-    ], 90_000);
-    await runProc(WHISPER_CLI, [
-      '-m', WHISPER_MODEL, '-f', wavPath, '-l', WHISPER_LANG, '-oj', '-of', tempBase, '-t', '2',
-    ], 600_000);
-    const segments = parseWhisperJson(jsonPath);
-    const rawText = segments.map((s) => s.text).join(' ');
-    return { segments, rawText };
-  } finally {
-    fs.promises.unlink(videoPath).catch(() => {});
-    fs.promises.unlink(wavPath).catch(() => {});
-    fs.promises.unlink(jsonPath).catch(() => {});
-  }
-}
-
-async function main() {
-  const bigquery = createInstagramBigQuery();
-  await ensureInstagramTables(bigquery);
-  const { projectId, dataset } = getInstagramStorageConfig();
-
-  const [reelRows] = await bigquery.query({
-    query: `
-      WITH unique_reels AS (
-        SELECT
-          username,
-          instagram_media_id,
-          ANY_VALUE(drive_file_id) AS drive_file_id,
-          ANY_VALUE(caption) AS caption,
-          MAX(posted_at) AS posted_at
-        FROM \`${projectId}.${dataset}.competitor_reels_raw\`
-        WHERE username IN UNNEST(@usernames)
-          AND drive_file_id IS NOT NULL
-        GROUP BY username, instagram_media_id
-      ),
-      ranked AS (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY username ORDER BY posted_at DESC) AS rn
-        FROM unique_reels
-      )
-      SELECT username, instagram_media_id, drive_file_id, caption, posted_at
-      FROM ranked
-      WHERE rn <= @limit
-    `,
-    params: { usernames: TARGET_USERNAMES, limit: PER_ACCOUNT_LIMIT },
-  });
-
-  const reels = reelRows as CompetitorReel[];
-  console.log(`[transcribe-competitors] Loaded ${reels.length} reels from ${TARGET_USERNAMES.length} accounts.`);
-
-  // 既に文字起こし済みのものを除外
-  const [existingRows] = await bigquery.query({
-    query: `SELECT DISTINCT instagram_media_id FROM \`${projectId}.${dataset}.competitor_reels_transcripts\``,
-  });
-  const done = new Set((existingRows as Array<{ instagram_media_id: string }>).map((r) => r.instagram_media_id));
-  const targets = reels.filter((r) => !done.has(r.instagram_media_id));
-  console.log(`[transcribe-competitors] ${targets.length} new reels to transcribe (${reels.length - targets.length} already done).`);
-
-  if (!targets.length) {
-    console.log('[transcribe-competitors] Nothing to do.');
-    return;
-  }
-
-  let successCount = 0;
-  let failCount = 0;
-  let processedCount = 0;
-
-  async function worker(workerIdx: number, queue: CompetitorReel[]) {
-    while (queue.length > 0) {
-      const reel = queue.shift();
-      if (!reel) return;
-      processedCount += 1;
-      const tag = `[W${workerIdx} ${processedCount}/${targets.length}]`;
-      try {
-        const result = await transcribeReel(reel);
-        if (!result || result.segments.length === 0) {
-          console.warn(`${tag} ${reel.username}/${reel.instagram_media_id}: no segments`);
-          failCount += 1;
-          continue;
-        }
-        const postedAt = typeof reel.posted_at === 'object' && reel.posted_at && 'value' in (reel.posted_at as object)
-          ? (reel.posted_at as { value: string }).value
-          : String(reel.posted_at);
-        await bigquery.dataset(dataset).table('competitor_reels_transcripts').insert([{
-          snapshot_date: new Date().toISOString().slice(0, 10),
-          username: reel.username,
-          instagram_media_id: reel.instagram_media_id,
-          drive_file_id: reel.drive_file_id,
-          posted_at: postedAt,
-          transcribed_at: new Date().toISOString(),
-          model_name: `whisper-cpp:${path.basename(WHISPER_MODEL)}`,
-          segments_json: JSON.stringify(result.segments),
-          raw_text: result.rawText,
-          caption: reel.caption,
-          summary: '',
-          key_points: [],
-          hooks: [],
-          cta_ideas: [],
-          created_at: new Date().toISOString(),
-        }]);
-        successCount += 1;
-        console.log(`${tag} OK ${reel.username}/${reel.instagram_media_id}: ${result.segments.length}seg`);
-      } catch (error) {
-        failCount += 1;
-        const err = error as Error & { errors?: unknown };
-        console.warn(`${tag} FAIL ${reel.username}/${reel.instagram_media_id}:`, err.message || err);
-        if (err.errors) {
-          console.warn(`${tag} insert errors:`, JSON.stringify(err.errors, null, 2).slice(0, 800));
-        }
+  if (words.length) {
+    const result: CompetitorTranscriptSegmentInput[] = [];
+    let current: WhisperWord[] = [];
+    for (const word of words) {
+      current.push(word);
+      const start = Number(current[0]?.start ?? 0);
+      const end = Number(word.end ?? start);
+      const text = current.map((item) => item.word ?? '').join('').trim();
+      if ((end - start >= 7 && /[。！？!?]$/u.test(text)) || end - start >= 14) {
+        result.push({ start, end, text: applyVocabularyCorrections(text) });
+        current = [];
       }
     }
+    if (current.length) {
+      const start = Number(current[0]?.start ?? 0);
+      const end = Number(current.at(-1)?.end ?? start);
+      const text = applyVocabularyCorrections(current.map((item) => item.word ?? '').join(''));
+      if (text) result.push({ start, end, text });
+    }
+    return result.filter((segment) => segment.text.length > 0 && segment.end >= segment.start);
   }
 
-  const queue = [...targets];
-  const workers = Array.from({ length: Math.min(CONCURRENCY, targets.length) }, (_, i) => worker(i + 1, queue));
-  await Promise.all(workers);
+  return whisperSegments.map((segment) => ({
+    start: Number(segment.start ?? 0),
+    end: Number(segment.end ?? 0),
+    text: applyVocabularyCorrections(String(segment.text ?? '')),
+  })).filter((segment) => segment.text.length > 0 && segment.end >= segment.start);
+}
 
-  console.log(`[transcribe-competitors] Done. ${successCount} OK, ${failCount} FAIL out of ${targets.length}.`);
+async function loadTargets(limit: number, minimumPerAccount: number): Promise<CompetitorReel[]> {
+  const bigquery = createInstagramBigQuery();
+  const { projectId, dataset, location } = getInstagramStorageConfig();
+  const [rows] = await bigquery.query({
+    query: `
+      WITH active_competitors AS (
+        SELECT username
+        FROM \`${projectId}.${dataset}.instagram_competitors_private\`
+        WHERE IFNULL(active, TRUE) = TRUE
+      ),
+      unique_reels AS (
+        SELECT
+          r.username,
+          r.instagram_media_id,
+          ARRAY_AGG(r.drive_file_id ORDER BY r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS drive_file_id,
+          ARRAY_AGG(r.drive_file_url ORDER BY r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS drive_file_url,
+          ARRAY_AGG(r.caption IGNORE NULLS ORDER BY r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS caption,
+          ARRAY_AGG(r.permalink IGNORE NULLS ORDER BY r.created_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS permalink,
+          MAX(r.posted_at) AS posted_at,
+          MAX(r.view_count) AS view_count
+        FROM \`${projectId}.${dataset}.competitor_reels_raw\` r
+        JOIN active_competitors a USING (username)
+        WHERE DATE(r.posted_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
+          AND r.drive_file_url LIKE '%storage.googleapis.com%'
+        GROUP BY r.username, r.instagram_media_id
+      )
+      SELECT * FROM unique_reels
+    `,
+    location,
+  });
+  const candidates = (rows as Array<Record<string, unknown>>).map((row) => ({
+    username: String(row.username),
+    instagramMediaId: String(row.instagram_media_id),
+    driveFileId: String(row.drive_file_id),
+    driveFileUrl: String(row.drive_file_url),
+    caption: row.caption ? String(row.caption) : null,
+    permalink: row.permalink ? String(row.permalink) : null,
+    postedAt: timestampValue(row.posted_at),
+    viewCount: row.view_count == null ? null : Number(row.view_count),
+  }));
+  return selectCompetitorDownloads(candidates, limit, minimumPerAccount);
+}
+
+async function resolveVideo(reel: CompetitorReel, videoDirectory: string): Promise<string> {
+  const cachedPath = LOCAL_VIDEO_DIR
+    ? path.join(LOCAL_VIDEO_DIR, `${reel.username}_${reel.instagramMediaId}.mp4`)
+    : null;
+  if (cachedPath && fs.existsSync(cachedPath)) return cachedPath;
+
+  const videoPath = path.join(videoDirectory, 'video.mp4');
+  if (fs.existsSync(videoPath)) return videoPath;
+  const response = await fetch(reel.driveFileUrl);
+  if (!response.ok) throw new Error(`video download failed: HTTP ${response.status}`);
+  await fs.promises.writeFile(videoPath, Buffer.from(await response.arrayBuffer()));
+  return videoPath;
+}
+
+async function transcribe(reel: CompetitorReel, force: boolean): Promise<{
+  segments: CompetitorTranscriptSegmentInput[];
+  chapters: ReturnType<typeof buildCompetitorReelChapters>;
+  title: string;
+  rawText: string;
+}> {
+  const videoDirectory = path.join(OUTPUT_ROOT, reel.instagramMediaId);
+  fs.mkdirSync(videoDirectory, { recursive: true });
+  const transcriptJson = path.join(videoDirectory, 'transcript.json');
+  if (force) {
+    for (const extension of ['json', 'txt', 'srt', 'tsv', 'vtt']) {
+      fs.rmSync(path.join(videoDirectory, `transcript.${extension}`), { force: true });
+    }
+  }
+  if (!fs.existsSync(transcriptJson)) {
+    const videoPath = await resolveVideo(reel, videoDirectory);
+    const wavPath = path.join(videoDirectory, 'audio16k.wav');
+    if (!fs.existsSync(wavPath)) {
+      await runProcess(FFMPEG_BIN, [
+        '-y', '-hide_banner', '-loglevel', 'error', '-i', videoPath,
+        '-vn', '-ac', '1', '-ar', '16000', wavPath,
+      ], 10 * 60_000);
+    }
+    await runProcess(MLX_WHISPER_BIN, [
+      wavPath,
+      '--model', WHISPER_MODEL,
+      '--language', 'ja',
+      '--word-timestamps', 'True',
+      '--output-format', 'all',
+      '--output-dir', videoDirectory,
+      '--output-name', 'transcript',
+      '--verbose', 'False',
+    ], 45 * 60_000);
+  }
+
+  const segments = parseWhisperSegments(transcriptJson);
+  if (!segments.length) throw new Error('Whisper returned no transcript segments');
+  const rawText = segments.map((segment) => segment.text).join(' ');
+  if (/固有語(?:[・\s]*固有語){3,}|スレッズ（スレッズ（スレッズ/u.test(rawText)) {
+    throw new Error('Whisper produced a repeated prompt hallucination');
+  }
+  const title = deriveCompetitorReelTitle(segments, reel.caption ?? '');
+  const chapters = buildCompetitorReelChapters(segments);
+  fs.writeFileSync(path.join(videoDirectory, 'transcript.cleaned.txt'), `${rawText}\n`, 'utf8');
+  fs.writeFileSync(path.join(videoDirectory, 'chapters.json'), `${JSON.stringify(chapters, null, 2)}\n`, 'utf8');
+  return { segments, chapters, title, rawText };
+}
+
+async function saveTranscript(
+  reel: CompetitorReel,
+  result: Awaited<ReturnType<typeof transcribe>>,
+  replace: boolean,
+): Promise<void> {
+  const bigquery = createInstagramBigQuery();
+  const { projectId, dataset, location } = getInstagramStorageConfig();
+  const now = new Date().toISOString();
+  if (replace) {
+    await bigquery.query({
+      query: `DELETE FROM \`${projectId}.${dataset}.competitor_reels_transcripts\`
+        WHERE instagram_media_id = @instagram_media_id`,
+      params: { instagram_media_id: reel.instagramMediaId },
+      location,
+    });
+  }
+  await bigquery.query({
+    query: `
+      INSERT INTO \`${projectId}.${dataset}.competitor_reels_transcripts\` (
+        snapshot_date, instagram_media_id, drive_file_id, summary, key_points, hooks, cta_ideas,
+        created_at, username, posted_at, transcribed_at, model_name, segments_json, chapters_json, raw_text, caption
+      ) VALUES (
+        CURRENT_DATE('Asia/Tokyo'), @instagram_media_id, @drive_file_id, @summary, [], [], [],
+        TIMESTAMP(@now), @username, TIMESTAMP(@posted_at), TIMESTAMP(@now), @model_name,
+        @segments_json, @chapters_json, @raw_text, @caption
+      )
+    `,
+    params: {
+      instagram_media_id: reel.instagramMediaId,
+      drive_file_id: reel.driveFileId,
+      summary: result.title,
+      now,
+      username: reel.username,
+      posted_at: reel.postedAt,
+      model_name: WHISPER_MODEL,
+      segments_json: JSON.stringify(result.segments),
+      chapters_json: JSON.stringify(result.chapters),
+      raw_text: result.rawText,
+      caption: reel.caption,
+    },
+    location,
+  });
+}
+
+async function main(): Promise<void> {
+  if (!fs.existsSync(MLX_WHISPER_BIN)) throw new Error(`mlx_whisper not found: ${MLX_WHISPER_BIN}`);
+  if (!fs.existsSync(FFMPEG_BIN)) throw new Error(`ffmpeg not found: ${FFMPEG_BIN}`);
+  const limit = parseIntegerFlag('--limit', DEFAULT_LIMIT);
+  const minimumPerAccount = parseIntegerFlag('--min-per-account', DEFAULT_MINIMUM_PER_ACCOUNT);
+  const concurrency = parseIntegerFlag('--concurrency', DEFAULT_CONCURRENCY);
+  const dryRun = process.argv.includes('--dry-run');
+  const force = process.argv.includes('--force');
+  const mediaId = parseStringFlag('--media-id');
+  const mediaIds = new Set((parseStringFlag('--media-ids') ?? '').split(',').filter(Boolean));
+  const bigquery = createInstagramBigQuery();
+  await ensureInstagramTables(bigquery);
+  const { projectId, dataset, location } = getInstagramStorageConfig();
+  const selected = (await loadTargets(limit, minimumPerAccount))
+    .filter((reel) => (
+      (!mediaId && mediaIds.size === 0)
+      || reel.instagramMediaId === mediaId
+      || mediaIds.has(reel.instagramMediaId)
+    ));
+  const [existingRows] = await bigquery.query({
+    query: `SELECT DISTINCT instagram_media_id FROM \`${projectId}.${dataset}.competitor_reels_transcripts\`
+      WHERE segments_json IS NOT NULL AND segments_json != '[]'`,
+    location,
+  });
+  const done = new Set((existingRows as Array<{ instagram_media_id: string }>).map((row) => row.instagram_media_id));
+  const targets = force ? selected : selected.filter((reel) => !done.has(reel.instagramMediaId));
+  fs.mkdirSync(OUTPUT_ROOT, { recursive: true });
+  console.info(`[transcribe-competitors] selected=${selected.length}, pending=${targets.length}, already=${selected.length - targets.length}`);
+  if (dryRun || !targets.length) return;
+
+  const queue = [...targets];
+  let completed = 0;
+  let failed = 0;
+  async function worker(workerId: number): Promise<void> {
+    while (queue.length) {
+      const reel = queue.shift();
+      if (!reel) return;
+      try {
+        console.info(`[W${workerId}] TRANSCRIBE ${reel.username}/${reel.instagramMediaId}`);
+        const result = await transcribe(reel, force);
+        await saveTranscript(reel, result, force);
+        completed += 1;
+        console.info(`[W${workerId}] COMPLETE ${reel.username}/${reel.instagramMediaId} title="${result.title}" chapters=${result.chapters.length} segments=${result.segments.length}`);
+      } catch (error) {
+        failed += 1;
+        console.error(`[W${workerId}] FAILED ${reel.username}/${reel.instagramMediaId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      console.info(`[transcribe-competitors] progress ${completed}/${targets.length}, failed=${failed}`);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(targets.length, 1)) }, (_, index) => worker(index + 1)));
+  console.info(`[transcribe-competitors] Done. ${completed} complete, ${failed} failed.`);
+  if (failed) process.exitCode = 1;
 }
 
 main().catch((error) => {
-  console.error('[transcribe-competitors] Fatal:', error);
+  console.error('[transcribe-competitors] Fatal:', error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });

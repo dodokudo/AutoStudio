@@ -9,6 +9,7 @@ import type {
   CompetitorReel,
   CompetitorTranscriptSegment,
 } from '@/lib/instagram/competitorDashboard';
+import type { CompetitorTranscriptChapter } from '@/lib/instagram/competitorTranscript';
 
 interface Props {
   data: CompetitorDashboardData;
@@ -52,6 +53,11 @@ function groupSegments(segments: CompetitorTranscriptSegment[]): CompetitorTrans
   }
   if (current) grouped.push(current);
   return grouped;
+}
+
+function chapterSegmentIndex(chapter: CompetitorTranscriptChapter, segments: CompetitorTranscriptSegment[]): number {
+  const index = segments.findIndex((segment) => segment.end > chapter.start);
+  return index >= 0 ? index : Math.max(segments.length - 1, 0);
 }
 
 function instagramThumbnailUrl(permalink: string | null): string | null {
@@ -176,6 +182,7 @@ export function CompetitorTab({ data }: Props) {
                 {filteredReels.map((reel) => {
                   const isExpanded = expandedMediaId === reel.instagramMediaId;
                   const hasTranscript = reel.transcriptSegments.length > 0;
+                  const isUnavailable = reel.driveFileUrl?.startsWith('unavailable:') ?? false;
                   const storedVideo = reel.driveFileUrl && (reel.driveFileUrl.includes('drive.google.com') || reel.driveFileUrl.includes('storage.googleapis.com')) ? reel.driveFileUrl : null;
                   const segments = groupSegments(reel.transcriptSegments);
                   return (
@@ -186,7 +193,9 @@ export function CompetitorTab({ data }: Props) {
                             <ReelThumbnail reel={reel} />
                             <div className="min-w-0 py-1">
                               <a href={reel.permalink ?? `https://www.instagram.com/${reel.username}/`} target="_blank" rel="noopener noreferrer" className="font-semibold text-[color:var(--color-text-primary)] hover:text-[color:var(--color-accent)] hover:underline">@{reel.username}</a>
-                              <p className="mt-2 line-clamp-3 text-sm leading-6 text-[color:var(--color-text-secondary)]">{reel.caption || '(キャプションなし)'}</p>
+                              <p className={`mt-2 line-clamp-2 text-sm font-medium leading-6 ${reel.transcriptTitle ? 'text-[color:var(--color-text-primary)]' : 'text-[color:var(--color-text-muted)]'}`}>
+                                {reel.transcriptTitle || '文字起こし後に動画タイトルを表示'}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -197,31 +206,73 @@ export function CompetitorTab({ data }: Props) {
                         <td className="px-4 py-3 text-right">
                           {storedVideo ? (
                             <a href={storedVideo} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap rounded-[var(--radius-sm)] border border-[color:var(--color-border)] px-3 py-2 font-semibold text-[color:var(--color-text-primary)] hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]">保存動画</a>
-                          ) : <span className="text-[color:var(--color-text-muted)]">未保存</span>}
+                          ) : <span className="text-[color:var(--color-text-muted)]">{isUnavailable ? '取得不可' : '未保存'}</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button type="button" aria-expanded={isExpanded} disabled={!hasTranscript} onClick={() => setExpandedMediaId(isExpanded ? null : reel.instagramMediaId)} className={`whitespace-nowrap rounded-[var(--radius-sm)] border px-3 py-2 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] ${hasTranscript ? isExpanded ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]' : 'border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]' : 'cursor-not-allowed border-transparent bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-muted)]'}`}>
-                            {hasTranscript ? (isExpanded ? '台本を閉じる' : '台本を見る') : '文字起こし待ち'}
+                            {hasTranscript ? (isExpanded ? '台本を閉じる' : '台本を見る') : isUnavailable ? '動画削除済み' : '文字起こし待ち'}
                           </button>
                         </td>
                       </tr>
                       {isExpanded && hasTranscript ? (
-                        <tr>
+                        <tr id={`transcript-${reel.instagramMediaId}`}>
                           <td colSpan={7} className="border-y border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-5 py-5 sm:px-6">
-                            <div className="mb-4 flex items-baseline justify-between gap-3">
-                              <div>
-                                <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">タイムライン付き台本</h3>
-                                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">時系列に沿って内容を確認できます。</p>
-                              </div>
-                              <span className="text-xs text-[color:var(--color-text-muted)]">{segments.length}区間</span>
-                            </div>
-                            <div className="max-h-[620px] overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-                              {segments.map((segment, index) => (
-                                <div key={`${segment.start}-${index}`} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 border-b border-[color:var(--color-border)] px-4 py-3 last:border-b-0 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:px-5">
-                                  <span className="tabular-nums font-semibold text-[color:var(--color-accent)]">{formatTimestamp(segment.start)}</span>
-                                  <p className="text-sm leading-7 text-[color:var(--color-text-primary)]">{segment.text}</p>
+                            <div className="w-full">
+                              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                                <div>
+                                  <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">タイムライン付き台本</h3>
+                                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">左の目次で章へ移動できます。台本の時刻を押すと保存動画の該当位置から再生します。</p>
                                 </div>
-                              ))}
+                                <div className="flex items-center gap-3 text-xs text-[color:var(--color-text-muted)]">
+                                  <span>{reel.transcriptChapters.length}章</span>
+                                  <span>{segments.length}区間</span>
+                                </div>
+                              </div>
+                              <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+                                <aside className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] lg:max-h-[680px] lg:overflow-y-auto">
+                                  <div className="border-b border-[color:var(--color-border)] px-4 py-3">
+                                    <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">台本の構成</p>
+                                    <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">台本から自動で区切った目次</p>
+                                  </div>
+                                  <nav aria-label="台本の構成" className="p-2">
+                                    {reel.transcriptChapters.map((chapter, chapterIndex) => (
+                                      <button
+                                        key={`${chapter.start}-${chapterIndex}`}
+                                        type="button"
+                                        onClick={() => document.getElementById(`transcript-${reel.instagramMediaId}-chapter-${chapterIndex}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                                        className="block w-full rounded-[var(--radius-sm)] px-3 py-2.5 text-left hover:bg-[color:var(--color-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]"
+                                      >
+                                        <span className="block text-xs tabular-nums text-[color:var(--color-accent)]">{formatTimestamp(chapter.start)}–{formatTimestamp(chapter.end)}</span>
+                                        <span className="mt-1 block text-sm font-medium leading-5 text-[color:var(--color-text-primary)]">{chapter.title}</span>
+                                      </button>
+                                    ))}
+                                  </nav>
+                                </aside>
+                                <div className="max-h-[680px] overflow-y-auto rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+                                  {segments.map((segment, index) => {
+                                    const chapterIndex = reel.transcriptChapters.findIndex((chapter) => chapterSegmentIndex(chapter, segments) === index);
+                                    const chapter = chapterIndex >= 0 ? reel.transcriptChapters[chapterIndex] : null;
+                                    return (
+                                      <Fragment key={`${segment.start}-${index}`}>
+                                        {chapter ? (
+                                          <div id={`transcript-${reel.instagramMediaId}-chapter-${chapterIndex}`} className="scroll-mt-3 border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-3 sm:px-5">
+                                            <p className="text-xs font-medium tabular-nums text-[color:var(--color-accent)]">{formatTimestamp(chapter.start)}–{formatTimestamp(chapter.end)}</p>
+                                            <h4 className="mt-1 text-base font-semibold text-[color:var(--color-text-primary)]">{chapter.title}</h4>
+                                          </div>
+                                        ) : null}
+                                        <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 border-b border-[color:var(--color-border)] px-4 py-3 last:border-b-0 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:px-5">
+                                          {storedVideo ? (
+                                            <a href={`${storedVideo}#t=${Math.floor(segment.start)}`} target="_blank" rel="noreferrer" className="w-fit tabular-nums font-semibold text-[color:var(--color-accent)] hover:underline">{formatTimestamp(segment.start)}</a>
+                                          ) : (
+                                            <span className="tabular-nums font-semibold text-[color:var(--color-accent)]">{formatTimestamp(segment.start)}</span>
+                                          )}
+                                          <p className="text-sm leading-7 text-[color:var(--color-text-primary)]">{segment.text}</p>
+                                        </div>
+                                      </Fragment>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             </div>
                           </td>
                         </tr>
