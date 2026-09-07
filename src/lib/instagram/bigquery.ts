@@ -176,6 +176,10 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     { name: 'model_name', type: 'STRING' },
     { name: 'segments_json', type: 'STRING' },
     { name: 'chapters_json', type: 'STRING' },
+    { name: 'duration_seconds', type: 'FLOAT64' },
+    { name: 'hook_text', type: 'STRING' },
+    { name: 'hook_labels_json', type: 'STRING' },
+    { name: 'visual_timeline_json', type: 'STRING' },
     { name: 'raw_text', type: 'STRING' },
     { name: 'caption', type: 'STRING' },
   ], 'snapshot_date', ['instagram_media_id']);
@@ -185,6 +189,17 @@ export async function ensureInstagramTables(bigquery?: BigQuery): Promise<void> 
     query: `ALTER TABLE \`${projectId}.${datasetId}.competitor_reels_transcripts\`
       ADD COLUMN IF NOT EXISTS chapters_json STRING`,
   });
+  for (const definition of [
+    'duration_seconds FLOAT64',
+    'hook_text STRING',
+    'hook_labels_json STRING',
+    'visual_timeline_json STRING',
+  ]) {
+    await client.query({
+      query: `ALTER TABLE \`${projectId}.${datasetId}.competitor_reels_transcripts\`
+        ADD COLUMN IF NOT EXISTS ${definition}`,
+    });
+  }
 
   await ensureTable(dataset, 'my_reels_scripts', [
     { name: 'snapshot_date', type: 'DATE', mode: 'REQUIRED' },

@@ -4,6 +4,7 @@ import {
   buildCompetitorReelChapters,
   deriveCompetitorReelTitle,
   type CompetitorTranscriptChapter,
+  type CompetitorVisualTimelineFrame,
 } from './competitorTranscript';
 
 export interface CompetitorFollowerPoint {
@@ -41,6 +42,10 @@ export interface CompetitorReel {
   likeCount: number | null;
   commentsCount: number | null;
   transcriptTitle: string | null;
+  durationSeconds: number | null;
+  hookText: string | null;
+  hookLabels: string[];
+  visualTimeline: CompetitorVisualTimelineFrame[];
   transcriptSegments: CompetitorTranscriptSegment[];
   transcriptChapters: CompetitorTranscriptChapter[];
 }
@@ -187,6 +192,10 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
             summary,
             segments_json,
             chapters_json,
+            duration_seconds,
+            hook_text,
+            hook_labels_json,
+            visual_timeline_json,
             ROW_NUMBER() OVER (
               PARTITION BY instagram_media_id
               ORDER BY COALESCE(transcribed_at, created_at) DESC
@@ -200,7 +209,11 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
         r.* EXCEPT(account_rank),
         t.summary AS transcript_title,
         t.segments_json,
-        t.chapters_json
+        t.chapters_json,
+        t.duration_seconds,
+        t.hook_text,
+        t.hook_labels_json,
+        t.visual_timeline_json
       FROM ranked_reels r
       LEFT JOIN latest_transcripts t ON r.instagram_media_id = t.instagram_media_id
       WHERE r.account_rank <= 60
@@ -234,6 +247,7 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
             start: Number(chapter.start ?? 0),
             end: Number(chapter.end ?? 0),
             title: String(chapter.title ?? '').trim(),
+            kind: chapter.kind === 'hook' || chapter.kind === 'cta' ? chapter.kind : 'body',
           })).filter((chapter) => chapter.title.length > 0 && chapter.end >= chapter.start);
         }
       } catch {
@@ -241,6 +255,31 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
       }
     }
     if (!chapters.length && segments.length) chapters = buildCompetitorReelChapters(segments);
+    let hookLabels: string[] = [];
+    if (row.hook_labels_json) {
+      try {
+        const parsed = JSON.parse(String(row.hook_labels_json));
+        if (Array.isArray(parsed)) hookLabels = parsed.map(String).filter(Boolean);
+      } catch {
+        // ignore
+      }
+    }
+    let visualTimeline: CompetitorVisualTimelineFrame[] = [];
+    if (row.visual_timeline_json) {
+      try {
+        const parsed = JSON.parse(String(row.visual_timeline_json));
+        if (Array.isArray(parsed)) {
+          visualTimeline = parsed.map((frame) => ({
+            time: Number(frame.time ?? 0),
+            imageUrl: String(frame.imageUrl ?? ''),
+            phase: frame.phase === 'hook' ? 'hook' as const : 'body' as const,
+            spokenText: String(frame.spokenText ?? '').trim(),
+          })).filter((frame) => frame.imageUrl && Number.isFinite(frame.time));
+        }
+      } catch {
+        // ignore
+      }
+    }
     const postedAtRaw = row.posted_at;
     const transcriptTitle = row.transcript_title
       ? String(row.transcript_title).trim()
@@ -263,6 +302,10 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
       likeCount: row.like_count !== null && row.like_count !== undefined ? Number(row.like_count) : null,
       commentsCount: row.comments_count !== null && row.comments_count !== undefined ? Number(row.comments_count) : null,
       transcriptTitle,
+      durationSeconds: row.duration_seconds !== null && row.duration_seconds !== undefined ? Number(row.duration_seconds) : null,
+      hookText: row.hook_text ? String(row.hook_text).trim() : null,
+      hookLabels,
+      visualTimeline,
       transcriptSegments: segments,
       transcriptChapters: chapters,
     };

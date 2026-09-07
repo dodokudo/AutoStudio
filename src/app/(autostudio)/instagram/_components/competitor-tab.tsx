@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
 import type {
@@ -36,28 +36,13 @@ function formatTimestamp(value: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function groupSegments(segments: CompetitorTranscriptSegment[]): CompetitorTranscriptSegment[] {
-  const grouped: CompetitorTranscriptSegment[] = [];
-  let current: CompetitorTranscriptSegment | null = null;
-  for (const segment of segments) {
-    if (!current) {
-      current = { ...segment };
-      continue;
-    }
-    current.end = segment.end;
-    current.text = `${current.text} ${segment.text}`.trim();
-    if (current.end - current.start >= 12 || current.text.length >= 150) {
-      grouped.push(current);
-      current = null;
-    }
-  }
-  if (current) grouped.push(current);
-  return grouped;
-}
-
 function chapterSegmentIndex(chapter: CompetitorTranscriptChapter, segments: CompetitorTranscriptSegment[]): number {
   const index = segments.findIndex((segment) => segment.end > chapter.start);
   return index >= 0 ? index : Math.max(segments.length - 1, 0);
+}
+
+function formatDuration(value: number | null): string {
+  return value === null ? '—' : formatTimestamp(value);
 }
 
 function instagramThumbnailUrl(permalink: string | null): string | null {
@@ -78,6 +63,71 @@ function ReelThumbnail({ reel }: { reel: CompetitorReel }) {
         <div className="flex h-full items-center justify-center px-2 text-center text-[10px] text-[color:var(--color-text-muted)]">サムネなし</div>
       )}
     </div>
+  );
+}
+
+function ReelVisualTimeline({ reel, storedVideo }: { reel: CompetitorReel; storedVideo: string }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hookFrames = reel.visualTimeline.filter((frame) => frame.phase === 'hook');
+  const bodyFrames = reel.visualTimeline.filter((frame) => frame.phase === 'body');
+
+  function jumpTo(seconds: number) {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = seconds;
+    video.pause();
+    video.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  return (
+    <section className="mb-5 overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
+      <div className="grid lg:grid-cols-[12rem_minmax(0,1fr)]">
+        <div className="border-b border-[color:var(--color-border)] bg-black p-3 lg:border-b-0 lg:border-r">
+          <video ref={videoRef} src={storedVideo} className="mx-auto aspect-[9/16] w-full max-w-48 bg-black object-contain" controls playsInline preload="metadata" />
+        </div>
+        <div className="min-w-0 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">冒頭フック 0〜3秒</h3>
+            {reel.hookLabels.map((label) => (
+              <span key={label} className="rounded-full bg-[color:var(--color-accent-soft)] px-2 py-1 text-[11px] font-semibold text-[color:var(--color-accent)]">{label}</span>
+            ))}
+          </div>
+          <p className="mt-2 max-w-4xl text-sm font-medium leading-6 text-[color:var(--color-text-primary)]">{reel.hookText || '冒頭フックを解析中です。'}</p>
+          {hookFrames.length ? (
+            <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {hookFrames.map((frame) => (
+                <button key={frame.time} type="button" onClick={() => jumpTo(frame.time)} className="group overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={frame.imageUrl} alt={`${frame.time.toFixed(1)}秒の映像`} className="aspect-[9/16] w-full object-cover" loading="lazy" />
+                  <span className="block px-2 py-1.5 text-xs font-semibold tabular-nums text-[color:var(--color-accent)] group-hover:underline">{frame.time.toFixed(1)}秒</span>
+                </button>
+              ))}
+            </div>
+          ) : <p className="mt-4 text-xs text-[color:var(--color-text-muted)]">冒頭スクショを生成中です。</p>}
+        </div>
+      </div>
+      {bodyFrames.length ? (
+        <div className="border-t border-[color:var(--color-border)] px-4 py-4 sm:px-5">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">映像タイムライン</h3>
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">場面を押すと左の動画がその位置へ移動します。</p>
+            </div>
+            <span className="text-xs text-[color:var(--color-text-muted)]">{formatDuration(reel.durationSeconds)}</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {bodyFrames.map((frame) => (
+              <button key={frame.time} type="button" onClick={() => jumpTo(frame.time)} className="w-36 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-left hover:border-[color:var(--color-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={frame.imageUrl} alt={`${formatTimestamp(frame.time)}の映像`} className="aspect-[9/16] w-full object-cover" loading="lazy" />
+                <span className="block px-2 pt-2 text-xs font-semibold tabular-nums text-[color:var(--color-accent)]">{formatTimestamp(frame.time)}</span>
+                <span className="line-clamp-3 block px-2 pb-2 pt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">{frame.spokenText}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -166,13 +216,14 @@ export function CompetitorTab({ data }: Props) {
 
         {filteredReels.length ? (
           <div className="overflow-x-auto">
-            <Table className="min-w-[980px] rounded-none text-xs">
+            <Table className="min-w-[1060px] rounded-none text-xs">
               <thead className="bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-muted)]">
                 <tr>
                   <th className="px-4 py-3 text-left">リール</th>
                   <th className="px-4 py-3 text-right">再生数</th>
                   <th className="px-4 py-3 text-right">いいね</th>
                   <th className="px-4 py-3 text-right">コメント</th>
+                  <th className="px-4 py-3 text-right">尺</th>
                   <th className="px-4 py-3 text-right">投稿日</th>
                   <th className="px-4 py-3 text-right">動画</th>
                   <th className="px-4 py-3 text-right">台本</th>
@@ -184,7 +235,7 @@ export function CompetitorTab({ data }: Props) {
                   const hasTranscript = reel.transcriptSegments.length > 0;
                   const isUnavailable = reel.driveFileUrl?.startsWith('unavailable:') ?? false;
                   const storedVideo = reel.driveFileUrl && (reel.driveFileUrl.includes('drive.google.com') || reel.driveFileUrl.includes('storage.googleapis.com')) ? reel.driveFileUrl : null;
-                  const segments = groupSegments(reel.transcriptSegments);
+                  const segments = reel.transcriptSegments;
                   return (
                     <Fragment key={`${reel.username}-${reel.instagramMediaId}`}>
                       <tr className="hover:bg-[color:var(--color-surface-muted)]">
@@ -202,6 +253,7 @@ export function CompetitorTab({ data }: Props) {
                         <td className="px-4 py-3 text-right font-semibold tabular-nums text-[color:var(--color-text-primary)]">{num(reel.viewCount)}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{num(reel.likeCount)}</td>
                         <td className="px-4 py-3 text-right tabular-nums">{num(reel.commentsCount)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-[color:var(--color-text-secondary)]">{formatDuration(reel.durationSeconds)}</td>
                         <td className="px-4 py-3 text-right text-[color:var(--color-text-secondary)]">{formatDate(reel.postedAt)}</td>
                         <td className="px-4 py-3 text-right">
                           {storedVideo ? (
@@ -216,8 +268,9 @@ export function CompetitorTab({ data }: Props) {
                       </tr>
                       {isExpanded && hasTranscript ? (
                         <tr id={`transcript-${reel.instagramMediaId}`}>
-                          <td colSpan={7} className="border-y border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-5 py-5 sm:px-6">
+                          <td colSpan={8} className="border-y border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-5 py-5 sm:px-6">
                             <div className="w-full">
+                              {storedVideo ? <ReelVisualTimeline reel={reel} storedVideo={storedVideo} /> : null}
                               <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                                 <div>
                                   <h3 className="text-sm font-semibold text-[color:var(--color-text-primary)]">タイムライン付き台本</h3>
@@ -243,6 +296,7 @@ export function CompetitorTab({ data }: Props) {
                                         className="block w-full rounded-[var(--radius-sm)] px-3 py-2.5 text-left hover:bg-[color:var(--color-surface-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]"
                                       >
                                         <span className="block text-xs tabular-nums text-[color:var(--color-accent)]">{formatTimestamp(chapter.start)}–{formatTimestamp(chapter.end)}</span>
+                                        {chapter.kind === 'hook' || chapter.kind === 'cta' ? <span className="mt-1 block text-[10px] font-semibold text-[color:var(--color-text-muted)]">{chapter.kind === 'hook' ? '冒頭フック' : 'CTA'}</span> : null}
                                         <span className="mt-1 block text-sm font-medium leading-5 text-[color:var(--color-text-primary)]">{chapter.title}</span>
                                       </button>
                                     ))}

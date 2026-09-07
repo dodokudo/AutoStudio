@@ -2,12 +2,15 @@ import { config as loadEnv } from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { Storage } from '@google-cloud/storage';
 import { createInstagramBigQuery, ensureInstagramTables, getInstagramStorageConfig } from '@/lib/instagram/bigquery';
 import { selectCompetitorDownloads } from '@/lib/instagram/competitorDownloadSelection';
 import {
   buildCompetitorReelChapters,
+  deriveCompetitorReelHook,
   deriveCompetitorReelTitle,
   type CompetitorTranscriptSegmentInput,
+  type CompetitorVisualTimelineFrame,
 } from '@/lib/instagram/competitorTranscript';
 
 loadEnv();
@@ -20,11 +23,13 @@ const LOCAL_VIDEO_DIR = process.env.IG_COMPETITOR_LOCAL_VIDEO_DIR
   ? path.resolve(process.env.IG_COMPETITOR_LOCAL_VIDEO_DIR)
   : null;
 const FFMPEG_BIN = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
+const FFPROBE_BIN = process.env.FFPROBE_BIN ?? path.join(path.dirname(FFMPEG_BIN), 'ffprobe');
 const MLX_WHISPER_BIN = process.env.MLX_WHISPER_BIN ?? '/Users/kudo/.local/bin/mlx_whisper';
 const WHISPER_MODEL = process.env.IG_COMPETITOR_WHISPER_MODEL ?? 'mlx-community/whisper-large-v3-turbo';
 const DEFAULT_LIMIT = 60;
 const DEFAULT_MINIMUM_PER_ACCOUNT = 5;
 const DEFAULT_CONCURRENCY = 2;
+const storage = new Storage();
 
 interface CompetitorReel {
   username: string;
@@ -131,7 +136,16 @@ function parseWhisperSegments(filePath: string): CompetitorTranscriptSegmentInpu
       const start = Number(current[0]?.start ?? 0);
       const end = Number(word.end ?? start);
       const text = current.map((item) => item.word ?? '').join('').trim();
-      if ((end - start >= 7 && /[。！？!?]$/u.test(text)) || end - start >= 14) {
+      const elapsed = end - start;
+      const isOpening = start < 3;
+      const isHookTail = start >= 3 && start < 5;
+      const shouldSplitOpening = isOpening && end >= 3;
+      const shouldSplitHookTail = isHookTail && end >= 5;
+      const shouldSplitBody = !isOpening && !isHookTail && (
+        (elapsed >= 4.5 && /[。！？!?]$/u.test(text))
+        || elapsed >= 8
+      );
+      if (shouldSplitOpening || shouldSplitHookTail || shouldSplitBody) {
         result.push({ start, end, text: applyVocabularyCorrections(text) });
         current = [];
       }
@@ -209,10 +223,95 @@ async function resolveVideo(reel: CompetitorReel, videoDirectory: string): Promi
   return videoPath;
 }
 
+function timelineFrameTimes(
+  duration: number,
+  chapters: ReturnType<typeof buildCompetitorReelChapters>,
+): number[] {
+  const opening = [0, 0.6, 1.2, 1.8, 2.4, 3].filter((time) => time < duration);
+  const body = chapters
+    .map((chapter) => chapter.start)
+    .filter((time) => time > 3.2 && time < duration - 0.2)
+    .slice(0, 10);
+  return [...opening, ...body].filter((time, index, values) => (
+    values.findIndex((candidate) => Math.abs(candidate - time) < 0.25) === index
+  ));
+}
+
+function spokenTextAt(
+  time: number,
+  segments: CompetitorTranscriptSegmentInput[],
+): string {
+  const segment = segments.find((candidate) => candidate.start <= time && candidate.end >= time)
+    ?? segments.find((candidate) => candidate.start >= time)
+    ?? segments.at(-1);
+  const text = segment?.text.trim() ?? '';
+  return text.length > 72 ? `${text.slice(0, 72)}…` : text;
+}
+
+async function videoDuration(videoPath: string): Promise<number> {
+  const output = await runProcess(FFPROBE_BIN, [
+    '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoPath,
+  ], 30_000);
+  const duration = Number(output.trim());
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error('ffprobe returned an invalid duration');
+  return duration;
+}
+
+async function buildVisualTimeline(
+  reel: CompetitorReel,
+  videoPath: string,
+  duration: number,
+  segments: CompetitorTranscriptSegmentInput[],
+  chapters: ReturnType<typeof buildCompetitorReelChapters>,
+): Promise<CompetitorVisualTimelineFrame[]> {
+  const sourceUrl = new URL(reel.driveFileUrl);
+  const bucketName = sourceUrl.hostname === 'storage.googleapis.com'
+    ? sourceUrl.pathname.split('/').filter(Boolean)[0]
+    : null;
+  if (!bucketName) throw new Error('cannot resolve GCS bucket for visual timeline');
+
+  const frameDirectory = path.join(OUTPUT_ROOT, reel.instagramMediaId, 'timeline');
+  fs.mkdirSync(frameDirectory, { recursive: true });
+  const frames: CompetitorVisualTimelineFrame[] = [];
+  for (const time of timelineFrameTimes(duration, chapters)) {
+    const frameKey = Math.round(time * 1000).toString().padStart(6, '0');
+    const localPath = path.join(frameDirectory, `${frameKey}.jpg`);
+    const objectName = `competitors/${reel.username}/${reel.instagramMediaId}/timeline/${frameKey}.jpg`;
+    const remoteFile = storage.bucket(bucketName).file(objectName);
+    if (!fs.existsSync(localPath)) {
+      await runProcess(FFMPEG_BIN, [
+        '-y', '-hide_banner', '-loglevel', 'error', '-ss', time.toFixed(3), '-i', videoPath,
+        '-frames:v', '1', '-vf', 'scale=320:-2', '-q:v', '3', localPath,
+      ], 60_000);
+    }
+    const [exists] = await remoteFile.exists();
+    if (!exists) {
+      await storage.bucket(bucketName).upload(localPath, {
+        destination: objectName,
+        resumable: false,
+        metadata: {
+          contentType: 'image/jpeg',
+          cacheControl: 'public, max-age=31536000, immutable',
+        },
+      });
+    }
+    frames.push({
+      time,
+      imageUrl: `https://storage.googleapis.com/${bucketName}/${objectName}`,
+      phase: time <= 3 ? 'hook' : 'body',
+      spokenText: spokenTextAt(time, segments),
+    });
+  }
+  return frames;
+}
+
 async function transcribe(reel: CompetitorReel, force: boolean): Promise<{
   segments: CompetitorTranscriptSegmentInput[];
   chapters: ReturnType<typeof buildCompetitorReelChapters>;
   title: string;
+  duration: number;
+  hook: ReturnType<typeof deriveCompetitorReelHook>;
+  visualTimeline: CompetitorVisualTimelineFrame[];
   rawText: string;
 }> {
   const videoDirectory = path.join(OUTPUT_ROOT, reel.instagramMediaId);
@@ -244,6 +343,7 @@ async function transcribe(reel: CompetitorReel, force: boolean): Promise<{
     ], 45 * 60_000);
   }
 
+  const videoPath = await resolveVideo(reel, videoDirectory);
   const segments = parseWhisperSegments(transcriptJson);
   if (!segments.length) throw new Error('Whisper returned no transcript segments');
   const rawText = segments.map((segment) => segment.text).join(' ');
@@ -252,9 +352,13 @@ async function transcribe(reel: CompetitorReel, force: boolean): Promise<{
   }
   const title = deriveCompetitorReelTitle(segments, reel.caption ?? '');
   const chapters = buildCompetitorReelChapters(segments);
+  const duration = await videoDuration(videoPath);
+  const hook = deriveCompetitorReelHook(segments);
+  const visualTimeline = await buildVisualTimeline(reel, videoPath, duration, segments, chapters);
   fs.writeFileSync(path.join(videoDirectory, 'transcript.cleaned.txt'), `${rawText}\n`, 'utf8');
   fs.writeFileSync(path.join(videoDirectory, 'chapters.json'), `${JSON.stringify(chapters, null, 2)}\n`, 'utf8');
-  return { segments, chapters, title, rawText };
+  fs.writeFileSync(path.join(videoDirectory, 'visual-timeline.json'), `${JSON.stringify(visualTimeline, null, 2)}\n`, 'utf8');
+  return { segments, chapters, title, duration, hook, visualTimeline, rawText };
 }
 
 async function saveTranscript(
@@ -277,11 +381,13 @@ async function saveTranscript(
     query: `
       INSERT INTO \`${projectId}.${dataset}.competitor_reels_transcripts\` (
         snapshot_date, instagram_media_id, drive_file_id, summary, key_points, hooks, cta_ideas,
-        created_at, username, posted_at, transcribed_at, model_name, segments_json, chapters_json, raw_text, caption
+        created_at, username, posted_at, transcribed_at, model_name, segments_json, chapters_json,
+        duration_seconds, hook_text, hook_labels_json, visual_timeline_json, raw_text, caption
       ) VALUES (
         CURRENT_DATE('Asia/Tokyo'), @instagram_media_id, @drive_file_id, @summary, [], [], [],
         TIMESTAMP(@now), @username, TIMESTAMP(@posted_at), TIMESTAMP(@now), @model_name,
-        @segments_json, @chapters_json, @raw_text, @caption
+        @segments_json, @chapters_json, @duration_seconds, @hook_text, @hook_labels_json,
+        @visual_timeline_json, @raw_text, @caption
       )
     `,
     params: {
@@ -294,6 +400,10 @@ async function saveTranscript(
       model_name: WHISPER_MODEL,
       segments_json: JSON.stringify(result.segments),
       chapters_json: JSON.stringify(result.chapters),
+      duration_seconds: result.duration,
+      hook_text: result.hook.text,
+      hook_labels_json: JSON.stringify(result.hook.labels),
+      visual_timeline_json: JSON.stringify(result.visualTimeline),
       raw_text: result.rawText,
       caption: reel.caption,
     },
@@ -304,11 +414,13 @@ async function saveTranscript(
 async function main(): Promise<void> {
   if (!fs.existsSync(MLX_WHISPER_BIN)) throw new Error(`mlx_whisper not found: ${MLX_WHISPER_BIN}`);
   if (!fs.existsSync(FFMPEG_BIN)) throw new Error(`ffmpeg not found: ${FFMPEG_BIN}`);
+  if (!fs.existsSync(FFPROBE_BIN)) throw new Error(`ffprobe not found: ${FFPROBE_BIN}`);
   const limit = parseIntegerFlag('--limit', DEFAULT_LIMIT);
   const minimumPerAccount = parseIntegerFlag('--min-per-account', DEFAULT_MINIMUM_PER_ACCOUNT);
   const concurrency = parseIntegerFlag('--concurrency', DEFAULT_CONCURRENCY);
   const dryRun = process.argv.includes('--dry-run');
   const force = process.argv.includes('--force');
+  const rebuildAnalysis = process.argv.includes('--rebuild-analysis');
   const mediaId = parseStringFlag('--media-id');
   const mediaIds = new Set((parseStringFlag('--media-ids') ?? '').split(',').filter(Boolean));
   const bigquery = createInstagramBigQuery();
@@ -326,7 +438,8 @@ async function main(): Promise<void> {
     location,
   });
   const done = new Set((existingRows as Array<{ instagram_media_id: string }>).map((row) => row.instagram_media_id));
-  const targets = force ? selected : selected.filter((reel) => !done.has(reel.instagramMediaId));
+  const shouldProcessCompleted = force || rebuildAnalysis;
+  const targets = shouldProcessCompleted ? selected : selected.filter((reel) => !done.has(reel.instagramMediaId));
   fs.mkdirSync(OUTPUT_ROOT, { recursive: true });
   console.info(`[transcribe-competitors] selected=${selected.length}, pending=${targets.length}, already=${selected.length - targets.length}`);
   if (dryRun || !targets.length) return;
