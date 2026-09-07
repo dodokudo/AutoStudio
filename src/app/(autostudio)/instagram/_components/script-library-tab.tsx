@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import type { ScriptEntry, ScriptLibraryData } from '@/lib/instagram/scriptLibrary';
+import type { GeneratedScriptEntry, ScriptEntry, ScriptLibraryData } from '@/lib/instagram/scriptLibrary';
 
 interface Props {
   data: ScriptLibraryData;
@@ -71,6 +71,75 @@ function ScriptCard({ entry }: { entry: ScriptEntry }) {
   );
 }
 
+function GeneratedScriptCard({ script }: { script: GeneratedScriptEntry }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((previous) => !previous)}
+        className="w-full p-4 text-left transition-colors hover:bg-[color:var(--color-bg-subtle)]"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs text-[color:var(--color-text-muted)]">撮影用台本・{formatDate(script.snapshotDate)}</p>
+            <h3 className="mt-1 font-semibold text-[color:var(--color-text-primary)]">{script.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-[color:var(--color-text-secondary)]">
+              <span className="font-semibold text-[color:var(--color-accent)]">冒頭フック：</span>
+              {script.hook}
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-medium text-[color:var(--color-accent)]">
+            {expanded ? '閉じる' : '台本を見る'}
+          </span>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="grid gap-4 border-t border-[color:var(--color-border)] p-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+          <div>
+            <p className="text-xs font-semibold text-[color:var(--color-text-muted)]">タイムライン付き台本</p>
+            <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[color:var(--color-text-primary)]">{script.body}</p>
+            <div className="mt-4 rounded-[var(--radius-sm)] bg-[color:var(--color-bg-subtle)] p-3">
+              <p className="text-xs font-semibold text-[color:var(--color-text-muted)]">CTA</p>
+              <p className="mt-1 text-sm leading-6 text-[color:var(--color-text-primary)]">{script.cta}</p>
+            </div>
+          </div>
+          <aside className="rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white p-4">
+            <p className="text-xs font-semibold text-[color:var(--color-text-muted)]">撮影・テロップ指示</p>
+            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[color:var(--color-text-primary)]">{script.storyText}</p>
+            {script.inspirationSources.length > 0 && (
+              <div className="mt-4 border-t border-[color:var(--color-border)] pt-4">
+                <p className="text-xs font-semibold text-[color:var(--color-text-muted)]">参考リール</p>
+                <div className="mt-2 space-y-1">
+                  {script.inspirationSources.map((source) => {
+                    const [label, url] = source.split('|').map((part) => part.trim());
+                    return url ? (
+                      <a
+                        key={source}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-[color:var(--color-accent)] hover:underline"
+                      >
+                        {label || 'Instagramで開く'}
+                      </a>
+                    ) : (
+                      <p key={source} className="text-xs text-[color:var(--color-text-secondary)]">{source}</p>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function ScriptLibraryTab({ data }: Props) {
   const [keyword, setKeyword] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'self' | 'competitor'>('all');
@@ -102,7 +171,28 @@ export function ScriptLibraryTab({ data }: Props) {
   }, [data.entries, sourceFilter, accountFilter, keyword, sortBy]);
 
   return (
-    <Card className="p-6">
+    <div className="section-stack">
+      <Card className="p-6">
+        <div>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">作成済み台本</h2>
+          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+            競合リールの型をThreads発信向けに転用した、撮影用の完成台本 {data.generatedCount}本
+          </p>
+        </div>
+        {data.generatedScripts.length === 0 ? (
+          <p className="mt-4 rounded-[var(--radius-sm)] bg-[color:var(--color-bg-subtle)] px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+            作成済み台本はまだありません
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+            {data.generatedScripts.map((script) => (
+              <GeneratedScriptCard key={script.scriptId} script={script} />
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">台本ライブラリ</h2>
@@ -157,6 +247,7 @@ export function ScriptLibraryTab({ data }: Props) {
           ))}
         </div>
       )}
-    </Card>
+      </Card>
+    </div>
   );
 }

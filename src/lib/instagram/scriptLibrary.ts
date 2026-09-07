@@ -24,7 +24,21 @@ export interface ScriptEntry {
   rawText: string;
 }
 
+export interface GeneratedScriptEntry {
+  scriptId: string;
+  snapshotDate: string;
+  title: string;
+  hook: string;
+  body: string;
+  cta: string;
+  storyText: string;
+  inspirationSources: string[];
+  createdAt: string | null;
+}
+
 export interface ScriptLibraryData {
+  generatedScripts: GeneratedScriptEntry[];
+  generatedCount: number;
   entries: ScriptEntry[];
   selfCount: number;
   competitorCount: number;
@@ -33,6 +47,26 @@ export interface ScriptLibraryData {
 export async function getScriptLibraryData(): Promise<ScriptLibraryData> {
   const { projectId, dataset, location } = getInstagramStorageConfig();
   const client = createBigQueryClient(projectId, location);
+
+  const [generatedRows] = await client.query({
+    query: `
+      SELECT
+        script_id,
+        snapshot_date,
+        title,
+        hook,
+        body,
+        cta,
+        story_text,
+        inspiration_sources,
+        created_at
+      FROM \`${projectId}.${dataset}.my_reels_scripts\`
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY script_id ORDER BY created_at DESC) = 1
+      ORDER BY created_at DESC, script_id ASC
+      LIMIT 100
+    `,
+    location,
+  });
 
   // 自分のリール
   const [selfRows] = await client.query({
@@ -120,6 +154,20 @@ export async function getScriptLibraryData(): Promise<ScriptLibraryData> {
     return String(raw);
   };
 
+  const generatedScripts: GeneratedScriptEntry[] = (generatedRows as Array<Record<string, unknown>>).map((row) => ({
+    scriptId: String(row.script_id ?? ''),
+    snapshotDate: tsToString(row.snapshot_date) ?? '',
+    title: String(row.title ?? ''),
+    hook: String(row.hook ?? ''),
+    body: String(row.body ?? ''),
+    cta: String(row.cta ?? ''),
+    storyText: String(row.story_text ?? ''),
+    inspirationSources: Array.isArray(row.inspiration_sources)
+      ? row.inspiration_sources.map(String).filter(Boolean)
+      : [],
+    createdAt: tsToString(row.created_at),
+  }));
+
   const selfEntries: ScriptEntry[] = (selfRows as Array<Record<string, unknown>>).map((row) => {
     const avgMs = row.ig_reels_avg_watch_time_ms !== null && row.ig_reels_avg_watch_time_ms !== undefined ? Number(row.ig_reels_avg_watch_time_ms) : null;
     return {
@@ -158,6 +206,8 @@ export async function getScriptLibraryData(): Promise<ScriptLibraryData> {
   }));
 
   return {
+    generatedScripts,
+    generatedCount: generatedScripts.length,
     entries: [...selfEntries, ...compEntries],
     selfCount: selfEntries.length,
     competitorCount: compEntries.length,

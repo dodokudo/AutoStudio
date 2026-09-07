@@ -2,12 +2,12 @@ import { unstable_cache } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { getScriptLibraryData } from '@/lib/instagram/scriptLibrary';
 
-export const revalidate = 1800;
+export const revalidate = 300;
 
 const getCachedScriptLibraryData = unstable_cache(
   async () => getScriptLibraryData(),
-  ['instagram-script-library'],
-  { revalidate: 1800 },
+  ['instagram-script-library-v2'],
+  { revalidate: 300 },
 );
 
 export async function GET() {
