@@ -150,7 +150,7 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
     }
   }
 
-  // 3. リール一覧（views top + transcript JOIN）
+  // 3. リール一覧（アカウント別の最新投稿 + transcript JOIN）
   const [reelRows] = await client.query({
     query: `
       WITH active_competitors AS (
@@ -180,7 +180,7 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
           r.*,
           ROW_NUMBER() OVER (
             PARTITION BY r.username
-            ORDER BY COALESCE(r.view_count, 0) DESC, r.posted_at DESC
+            ORDER BY r.posted_at DESC, COALESCE(r.view_count, 0) DESC
           ) AS account_rank
         FROM unique_reels r
       ),
