@@ -9,6 +9,7 @@ import {
   buildCompetitorReelChapters,
   deriveCompetitorReelHook,
   deriveCompetitorReelTitle,
+  formatCompetitorTranscriptSegments,
   type CompetitorTranscriptSegmentInput,
   type CompetitorVisualTimelineFrame,
 } from '@/lib/instagram/competitorTranscript';
@@ -113,6 +114,9 @@ function applyVocabularyCorrections(value: string): string {
     [/ジェミニー|ジェミニ/gi, 'Gemini'],
     [/クロードコード/g, 'Claude Code'],
     [/クロード/g, 'Claude'],
+    [/無課金税/g, '無課金勢'],
+    [/微生化被害/g, 'なりすまし被害'],
+    [/ビールの動画編集/g, 'リールの動画編集'],
   ];
   let text = value;
   for (const [pattern, replacement] of replacements) text = text.replace(pattern, replacement);
@@ -122,6 +126,13 @@ function applyVocabularyCorrections(value: string): string {
 function parseWhisperSegments(filePath: string): CompetitorTranscriptSegmentInput[] {
   const payload = JSON.parse(fs.readFileSync(filePath, 'utf8')) as WhisperOutput;
   const whisperSegments = Array.isArray(payload.segments) ? payload.segments : [];
+  const naturalSegments = whisperSegments.map((segment) => ({
+    start: Number(segment.start ?? 0),
+    end: Number(segment.end ?? 0),
+    text: applyVocabularyCorrections(String(segment.text ?? '')),
+  })).filter((segment) => segment.text.length > 0 && segment.end >= segment.start);
+  if (naturalSegments.length) return formatCompetitorTranscriptSegments(naturalSegments);
+
   const words = whisperSegments.flatMap((segment) => (
     Array.isArray(segment.words) ? segment.words : []
   )).filter((word) => (
@@ -156,14 +167,10 @@ function parseWhisperSegments(filePath: string): CompetitorTranscriptSegmentInpu
       const text = applyVocabularyCorrections(current.map((item) => item.word ?? '').join(''));
       if (text) result.push({ start, end, text });
     }
-    return result.filter((segment) => segment.text.length > 0 && segment.end >= segment.start);
+    return formatCompetitorTranscriptSegments(result);
   }
 
-  return whisperSegments.map((segment) => ({
-    start: Number(segment.start ?? 0),
-    end: Number(segment.end ?? 0),
-    text: applyVocabularyCorrections(String(segment.text ?? '')),
-  })).filter((segment) => segment.text.length > 0 && segment.end >= segment.start);
+  return [];
 }
 
 async function loadTargets(limit: number, minimumPerAccount: number): Promise<CompetitorReel[]> {

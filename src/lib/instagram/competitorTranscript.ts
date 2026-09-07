@@ -29,6 +29,50 @@ function compact(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+const STRONG_SENTENCE_END = /(?:です|ます|ません|でした|でしょう|ください|なります|終わります|あります|います|できます|ですよ|ですね|なんです)$/u;
+const INCOMPLETE_SENTENCE_END = /(?:なり|して|なので|ですが|けど|けれど|から|ので|たり|とか|という|って|までも|れば|なら|は|が|を|に|も|で)$/u;
+const CONTINUATION_START = /^(?:って|ので|から|けど|けれど|が|し|たり|とか|という|のに|なら|で|は|を|に|も)/u;
+
+function addJapanesePunctuation(value: string): string {
+  const text = compact(value)
+    .replace(/(?:、|,)+$/u, '')
+    .replace(/(ですが|なんですが|けど|けれど|なので)(?=[^、。！？!?])/gu, '$1、')
+    .replace(/(今回は|ちなみに|例えば|まず|次に)(?=[^、。！？!?])/gu, '$1、');
+  return /[。！？!?]$/u.test(text) ? text : `${text}。`;
+}
+
+export function formatCompetitorTranscriptSegments(
+  sourceSegments: CompetitorTranscriptSegmentInput[],
+): CompetitorTranscriptSegmentInput[] {
+  const source = sourceSegments
+    .map((segment) => ({ ...segment, text: compact(segment.text) }))
+    .filter((segment) => segment.text.length > 0 && segment.end >= segment.start)
+    .sort((a, b) => a.start - b.start);
+  const formatted: CompetitorTranscriptSegmentInput[] = [];
+  let current: CompetitorTranscriptSegmentInput | null = null;
+
+  source.forEach((segment, index) => {
+    current = current
+      ? { start: current.start, end: segment.end, text: `${current.text}${segment.text}` }
+      : { ...segment };
+    const next = source[index + 1];
+    const elapsed = current.end - current.start;
+    const gap = next ? Math.max(0, next.start - current.end) : 0;
+    const hasStrongEnd = /[。！？!?]$/u.test(current.text) || STRONG_SENTENCE_END.test(current.text);
+    const isContinuation = INCOMPLETE_SENTENCE_END.test(current.text)
+      || (next ? CONTINUATION_START.test(next.text) : false);
+    const shouldSplit = !next
+      || (!isContinuation && elapsed >= 2.2 && (hasStrongEnd || gap >= 0.45))
+      || elapsed >= 9;
+    if (shouldSplit) {
+      formatted.push({ ...current, text: addJapanesePunctuation(current.text) });
+      current = null;
+    }
+  });
+
+  return formatted;
+}
+
 function clip(value: string, maxLength: number): string {
   const text = compact(value).replace(/[。！？!?]+$/u, '');
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;

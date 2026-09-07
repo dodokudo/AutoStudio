@@ -4,6 +4,7 @@ import {
   buildCompetitorReelChapters,
   deriveCompetitorReelHook,
   deriveCompetitorReelTitle,
+  formatCompetitorTranscriptSegments,
 } from './competitorTranscript';
 
 const segments = [
@@ -47,4 +48,18 @@ test('classifies the first five seconds as overlapping hook techniques', () => {
   ]);
   assert.match(hook.text, /公式発表/);
   assert.deepEqual(hook.labels, ['数字・成果', '新情報', '危機・否定']);
+});
+
+test('restores readable punctuation without splitting a continuing phrase', () => {
+  const formatted = formatCompetitorTranscriptSegments([
+    { start: 0, end: 2.3, text: 'インスタ有料化しまして完全終了になります' },
+    { start: 2.3, end: 4.96, text: '月額で319円払えば超優遇されるようになり' },
+    { start: 4.96, end: 7.68, text: '無課金勢は完全に終了してアカウント終わります' },
+    { start: 8.34, end: 10.14, text: 'って思うんですがこれは当然です' },
+    { start: 10.14, end: 12.14, text: 'インスタ側からしたら課金してまでも伸ばして' },
+  ]);
+
+  assert.equal(formatted[0]?.text, 'インスタ有料化しまして完全終了になります。');
+  assert.equal(formatted[1]?.text, '月額で319円払えば超優遇されるようになり無課金勢は完全に終了してアカウント終わりますって思うんですが、これは当然です。');
+  assert.equal(formatted[2]?.text, 'インスタ側からしたら課金してまでも伸ばして。');
 });

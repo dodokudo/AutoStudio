@@ -81,8 +81,8 @@ function ReelVisualTimeline({ reel, storedVideo }: { reel: CompetitorReel; store
 
   return (
     <section className="mb-5 overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
-      <div className="grid lg:grid-cols-[12rem_minmax(0,1fr)]">
-        <div className="border-b border-[color:var(--color-border)] bg-black p-3 lg:border-b-0 lg:border-r">
+      <div className="grid items-start lg:grid-cols-[12rem_minmax(0,1fr)]">
+        <div className="self-start border-b border-[color:var(--color-border)] bg-black p-3 lg:border-b-0 lg:border-r">
           <video ref={videoRef} src={storedVideo} className="mx-auto aspect-[9/16] w-full max-w-48 bg-black object-contain" controls playsInline preload="metadata" />
         </div>
         <div className="min-w-0 p-4 sm:p-5">
@@ -94,9 +94,9 @@ function ReelVisualTimeline({ reel, storedVideo }: { reel: CompetitorReel; store
           </div>
           <p className="mt-2 max-w-4xl text-sm font-medium leading-6 text-[color:var(--color-text-primary)]">{reel.hookText || '冒頭フックを解析中です。'}</p>
           {hookFrames.length ? (
-            <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
               {hookFrames.map((frame) => (
-                <button key={frame.time} type="button" onClick={() => jumpTo(frame.time)} className="group overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]">
+                <button key={frame.time} type="button" onClick={() => jumpTo(frame.time)} className="group w-28 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] sm:w-32 xl:w-36">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={frame.imageUrl} alt={`${frame.time.toFixed(1)}秒の映像`} className="aspect-[9/16] w-full object-cover" loading="lazy" />
                   <span className="block px-2 py-1.5 text-xs font-semibold tabular-nums text-[color:var(--color-accent)] group-hover:underline">{frame.time.toFixed(1)}秒</span>
