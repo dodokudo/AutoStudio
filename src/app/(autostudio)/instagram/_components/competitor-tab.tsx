@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
@@ -214,6 +214,14 @@ export function CompetitorTab({ data }: Props) {
     setExpandedMediaId(nextExpandedMediaId);
     updateDashboardUrl(accountFilter, nextExpandedMediaId);
   }, [accountFilter, updateDashboardUrl]);
+
+  useEffect(() => {
+    if (!requestedReel || !expandedMediaId) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`transcript-${expandedMediaId}`)?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [expandedMediaId, requestedReel]);
 
   const accounts = useMemo(() => data.accountSummaries.map((summary) => summary.username), [data.accountSummaries]);
   const filteredReels = useMemo(() => {
