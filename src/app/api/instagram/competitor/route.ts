@@ -6,7 +6,7 @@ export const revalidate = 1800;
 
 const getCachedCompetitorDashboardData = unstable_cache(
   async () => getCompetitorDashboardData(),
-  ['instagram-competitor-dashboard-v11'],
+  ['instagram-competitor-dashboard-v12'],
   { revalidate: 1800 },
 );
 

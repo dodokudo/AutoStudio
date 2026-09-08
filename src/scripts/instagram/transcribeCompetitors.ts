@@ -432,12 +432,13 @@ async function main(): Promise<void> {
   const dryRun = process.argv.includes('--dry-run');
   const force = process.argv.includes('--force');
   const rebuildAnalysis = process.argv.includes('--rebuild-analysis');
+  const skipEnsure = process.argv.includes('--skip-ensure');
   const mediaId = parseStringFlag('--media-id');
   const mediaIds = new Set((parseStringFlag('--media-ids') ?? '').split(',').filter(Boolean));
   const fromDate = parseStringFlag('--from-date');
   const toDate = parseStringFlag('--to-date');
   const bigquery = createInstagramBigQuery();
-  await ensureInstagramTables(bigquery);
+  if (!skipEnsure) await ensureInstagramTables(bigquery);
   const { projectId, dataset, location } = getInstagramStorageConfig();
   const selected = (await loadTargets(limit, minimumPerAccount, fromDate, toDate))
     .filter((reel) => (

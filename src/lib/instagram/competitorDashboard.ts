@@ -158,6 +158,11 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
         FROM \`${projectId}.${dataset}.instagram_competitors_private\`
         WHERE IFNULL(active, TRUE) = TRUE
       ),
+      saved_transcript_ids AS (
+        SELECT DISTINCT instagram_media_id
+        FROM \`${projectId}.${dataset}.competitor_reels_transcripts\`
+        WHERE segments_json IS NOT NULL
+      ),
       unique_reels AS (
         SELECT
           r.username,
@@ -169,10 +174,13 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
           MAX(r.posted_at) AS posted_at,
           MAX(r.view_count) AS view_count,
           MAX(r.like_count) AS like_count,
-          MAX(r.comments_count) AS comments_count
+          MAX(r.comments_count) AS comments_count,
+          LOGICAL_OR(STARTS_WITH(IFNULL(r.sheet_caption, ''), '[保存対象]')) AS is_saved_target
         FROM \`${projectId}.${dataset}.competitor_reels_raw\` r
         JOIN active_competitors a USING (username)
+        LEFT JOIN saved_transcript_ids s USING (instagram_media_id)
         WHERE DATE(r.posted_at, 'Asia/Tokyo') >= DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY)
+          OR s.instagram_media_id IS NOT NULL
         GROUP BY r.username, r.instagram_media_id
       ),
       ranked_reels AS (
@@ -180,7 +188,7 @@ export async function getCompetitorDashboardData(): Promise<CompetitorDashboardD
           r.*,
           ROW_NUMBER() OVER (
             PARTITION BY r.username
-            ORDER BY r.posted_at DESC, COALESCE(r.view_count, 0) DESC
+            ORDER BY r.is_saved_target DESC, r.posted_at DESC, COALESCE(r.view_count, 0) DESC
           ) AS account_rank
         FROM unique_reels r
       ),
