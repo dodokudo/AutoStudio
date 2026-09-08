@@ -1,6 +1,7 @@
 'use client';
 
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
 import type {
@@ -49,6 +50,10 @@ function instagramThumbnailUrl(permalink: string | null): string | null {
   if (!permalink) return null;
   const shortcode = permalink.match(/instagram\.com\/(?:reel|p)\/([^/?#]+)/)?.[1];
   return shortcode ? `/api/instagram/competitor-thumbnail/${encodeURIComponent(shortcode)}` : null;
+}
+
+function reelUrlKey(reel: CompetitorReel): string {
+  return reel.permalink?.match(/instagram\.com\/(?:reel|p)\/([^/?#]+)/)?.[1] ?? reel.instagramMediaId;
 }
 
 function ReelThumbnail({ reel }: { reel: CompetitorReel }) {
@@ -166,9 +171,49 @@ function AccountSummaryTable({ summaries }: { summaries: CompetitorAccountSummar
 }
 
 export function CompetitorTab({ data }: Props) {
-  const [accountFilter, setAccountFilter] = useState('all');
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedAccount = searchParams.get('account');
+  const requestedReel = searchParams.get('reel');
+  const [accountFilter, setAccountFilter] = useState(() => (
+    requestedAccount && data.accountSummaries.some((summary) => summary.username === requestedAccount)
+      ? requestedAccount
+      : 'all'
+  ));
   const [sortBy, setSortBy] = useState<ReelSort>('newest');
-  const [expandedMediaId, setExpandedMediaId] = useState<string | null>(null);
+  const [expandedMediaId, setExpandedMediaId] = useState<string | null>(() => (
+    data.topReels.find((reel) => reel.instagramMediaId === requestedReel || reelUrlKey(reel) === requestedReel)?.instagramMediaId ?? null
+  ));
+
+  const updateDashboardUrl = useCallback((account: string, mediaId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (account === 'all') params.delete('account');
+    else params.set('account', account);
+    const reel = mediaId ? data.topReels.find((candidate) => candidate.instagramMediaId === mediaId) : null;
+    if (reel) params.set('reel', reelUrlKey(reel));
+    else params.delete('reel');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [data.topReels, pathname, router, searchParams]);
+
+  const changeAccountFilter = useCallback((account: string) => {
+    const expandedReel = expandedMediaId
+      ? data.topReels.find((reel) => reel.instagramMediaId === expandedMediaId)
+      : null;
+    const nextExpandedMediaId = expandedReel && (account === 'all' || expandedReel.username === account)
+      ? expandedMediaId
+      : null;
+    setAccountFilter(account);
+    setExpandedMediaId(nextExpandedMediaId);
+    updateDashboardUrl(account, nextExpandedMediaId);
+  }, [data.topReels, expandedMediaId, updateDashboardUrl]);
+
+  const toggleTranscript = useCallback((mediaId: string, isExpanded: boolean) => {
+    const nextExpandedMediaId = isExpanded ? null : mediaId;
+    setExpandedMediaId(nextExpandedMediaId);
+    updateDashboardUrl(accountFilter, nextExpandedMediaId);
+  }, [accountFilter, updateDashboardUrl]);
 
   const accounts = useMemo(() => data.accountSummaries.map((summary) => summary.username), [data.accountSummaries]);
   const filteredReels = useMemo(() => {
@@ -195,7 +240,7 @@ export function CompetitorTab({ data }: Props) {
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
                 アカウント
-                <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)} className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]">
+                <select value={accountFilter} onChange={(event) => changeAccountFilter(event.target.value)} className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-3 text-sm text-[color:var(--color-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]">
                   <option value="all">全アカウント</option>
                   {accounts.map((username) => <option key={username} value={username}>@{username}</option>)}
                 </select>
@@ -261,7 +306,7 @@ export function CompetitorTab({ data }: Props) {
                           ) : <span className="text-[color:var(--color-text-muted)]">{isUnavailable ? '取得不可' : '未保存'}</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button type="button" aria-expanded={isExpanded} disabled={!hasTranscript} onClick={() => setExpandedMediaId(isExpanded ? null : reel.instagramMediaId)} className={`whitespace-nowrap rounded-[var(--radius-sm)] border px-3 py-2 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] ${hasTranscript ? isExpanded ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]' : 'border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]' : 'cursor-not-allowed border-transparent bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-muted)]'}`}>
+                          <button type="button" aria-expanded={isExpanded} disabled={!hasTranscript} onClick={() => toggleTranscript(reel.instagramMediaId, isExpanded)} className={`whitespace-nowrap rounded-[var(--radius-sm)] border px-3 py-2 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] ${hasTranscript ? isExpanded ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]' : 'border-[color:var(--color-border)] text-[color:var(--color-text-primary)] hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)]' : 'cursor-not-allowed border-transparent bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-muted)]'}`}>
                             {hasTranscript ? (isExpanded ? '台本を閉じる' : '台本を見る') : isUnavailable ? '動画削除済み' : '文字起こし待ち'}
                           </button>
                         </td>
