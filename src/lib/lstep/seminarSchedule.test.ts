@@ -78,3 +78,21 @@ test('9月オートは9時・12時・19時に直前枠を締切り、月末も�
     assert.equal(slots[0].tagName, `【2026.9オート】${slots[0].choiceLabel.replace(') ', ')')}`);
   }
 });
+
+
+test('12〜19日を両端含む8日間にし、締切後も19日の全枠を残す', async () => {
+  const { upcomingSlotsForDays } = await import('./seminarSchedule');
+  const opts = { slotHours: [10,13,20] };
+  const initial = upcomingSlotsForDays(new Date(2026,8,11,20), 8, opts);
+  assert.equal(initial.length,24);
+  assert.equal(initial[0].date,'2026-09-12');
+  assert.equal(initial.at(-1)?.date,'2026-09-19');
+  assert.equal(initial.at(-1)?.hour,20);
+  const next = upcomingSlotsForDays(new Date(2026,8,12,9),8,opts);
+  assert.equal(next.length,23);
+  assert.equal(next[0].hour,13);
+  assert.equal(next.at(-1)?.date,'2026-09-19');
+  const evening = upcomingSlotsForDays(new Date(2026,8,12,19),8,opts);
+  assert.equal(evening[0].date,'2026-09-13');
+  assert.equal(evening.at(-1)?.date,'2026-09-20');
+});

@@ -3,6 +3,8 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import {
   cloneInputsForDateTag,
+  rebuildDateButtons,
+  dateButtonId,
   formActionCorrect,
   dateTagHour,
   flexRotationPlan,
@@ -138,4 +140,31 @@ test('表示タグだけが正しく、友だち情報の代入値が別時間�
   assert.equal(formActionCorrect(`${text} __APPLICATION_VALUE=9/15(火)10:00~__`, slot, tag, config), true);
   assert.equal(dateTagHour(slot.tagName), 10);
   assert.equal(dateTagHour('9月15日13時'), 13);
+});
+
+
+test('期限切れボタンを除外し、新日程は新しいIDで追加、既存枠と案内ボタンを保持する', () => {
+  const label = (day: number) => `9/${day}(土)10:00~`;
+  const block = (day: number, aid: number) => ({ id: dateButtonId('123', label(day), aid), type: 'button',
+    text: { type: 'doc', content: [{ type: 'text', text: label(day) }] },
+    action: { data: { act: { aid, description: 'old' } }, description: 'old' } });
+  const before = [{ id: 'heading', text: { text: '案内' } }, block(12, 100), block(13, 101), { id: 'form-link', action: { url: 'unchanged' } }];
+  const snapshot = structuredClone(before);
+  const after = rebuildDateButtons(before, '123', [label(13), label(14)], [{ actionId: 101, actionDescription: 'old' }, { actionId: 102, actionDescription: 'new' }]);
+  assert.deepEqual(before, snapshot);
+  assert.deepEqual(after[0], before[0]);
+  assert.deepEqual(after[1], before[2]);
+  assert.deepEqual(after[3], before[3]);
+  assert.equal(after.some((b) => b.id === before[1].id), false);
+  assert.equal(after[2].id, dateButtonId('123', label(14), 102));
+  assert.notEqual(after[2].id, before[2].id);
+  assert.equal((after[2].action as {data:{act:{aid:number}}}).data.act.aid, 102);
+  assert.deepEqual(rebuildDateButtons(after, '123', [label(13), label(14)], [{actionId:101,actionDescription:'old'},{actionId:102,actionDescription:'new'}]), after);
+});
+
+test('旧方式のボタンは表示が同じでも新しいボタンIDへ移行する', () => {
+  const before = [{ id: 'bl1234', text: { type: 'doc', content: [{text:'9/12(土)10:00~'}] }, action: { data: {act: {aid:100}} } }];
+  const next = rebuildDateButtons(before, '123', ['9/12(土)10:00~'], [{actionId:100,actionDescription:'same action'}]);
+  assert.notEqual(next[0].id, before[0].id);
+  assert.equal((next[0].action as {data:{act:{aid:number}}}).data.act.aid, 100);
 });

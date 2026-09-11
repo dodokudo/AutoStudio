@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright';
 import { Storage } from '@google-cloud/storage';
 import { mkdtemp } from 'node:fs/promises';
@@ -13,6 +14,7 @@ import {
 import {
   slotsFromTomorrow,
   upcomingSlots,
+  upcomingSlotsForDays,
   type SeminarSlot,
 } from './seminarSchedule';
 
@@ -39,6 +41,7 @@ interface SurfaceSnapshot {
 }
 
 interface FlexCardState {
+  blockId: string;
   label: string;
   action: string;
   actionId: number;
@@ -843,6 +846,34 @@ function setFlexAction(block: Record<string, unknown>, assignment: FlexAssignmen
   action.description = assignment.actionDescription;
 }
 
+export function dateButtonId(templateId: string, label: string, actionId: number): string {
+  const date = label.replace(/\(残り\d+名\)$/, '').replace(/\s/g, '');
+  return `blauto${createHash('sha256').update(`${templateId}:${date}:${actionId}`).digest('hex').slice(0, 24)}`;
+}
+
+/** 終了した日程ボタンを外し、新しい日程は新しいブロックIDで追加する。 */
+export function rebuildDateButtons(
+  source: Array<Record<string, unknown>>, templateId: string, labels: string[], assignments: FlexAssignment[],
+): Array<Record<string, unknown>> {
+  if (labels.length !== assignments.length) throw new Error('日程とアクションの件数が一致しません');
+  const isDate = (block: Record<string, unknown>) => DATE_LABEL_RE.test(textFromDoc(block.text));
+  const dates = source.filter(isDate);
+  const first = source.findIndex(isDate);
+  if (!dates.length) throw new Error('新規日程ボタンのコピー元がありません');
+  if (source.slice(first, first + dates.length).some((block) => !isDate(block))) throw new Error('日程ボタンが連続していないため保存を中断しました');
+  const next = labels.map((label, index) => {
+    const assignment = assignments[index];
+    const id = dateButtonId(templateId, label, assignment.actionId);
+    const existing = dates.find((block) => block.id === id);
+    const block = structuredClone(existing ?? dates.find((block) => textFromDoc(block.text) === label) ?? dates.at(-1)!);
+    block.id = id;
+    replaceDocText(block.text, label);
+    setFlexAction(block, assignment);
+    return block;
+  });
+  return [...structuredClone(source.slice(0, first)), ...next, ...structuredClone(source.slice(first + dates.length))];
+}
+
 async function patchFlexButtons(
   page: Page,
   id: string,
@@ -855,13 +886,12 @@ async function patchFlexButtons(
   const response = await apiGet(page, endpoint, `Flex ${id} の取得`);
   const resource = await parseFlexResponse(response, `Flex ${id} 取得`);
   const editor: Exclude<FlexResource['editor_json'], string> = typeof resource.editor_json === 'string' ? JSON.parse(resource.editor_json) : resource.editor_json;
-  const blocks = editor.panels.flatMap((panel) => panel.blocks ?? []);
-  const dateBlocks = blocks.filter((block) => DATE_LABEL_RE.test(textFromDoc(block.text)));
-  if (dateBlocks.length !== labels.length) throw new Error(`Flex ${id} の日程ブロックが${dateBlocks.length}件（期待${labels.length}件）`);
-  dateBlocks.forEach((block, index) => {
-    replaceDocText(block.text, labels[index]);
-    setFlexAction(block, assignments[index]);
-  });
+  const datePanels = editor.panels.filter((panel) => (panel.blocks ?? []).some((block) => DATE_LABEL_RE.test(textFromDoc(block.text))));
+  if (datePanels.length !== 1) throw new Error(`Flex ${id}: 日程ボタンのパネルを一意に取得できません`);
+  const panel = datePanels[0];
+  const beforeIds = (panel.blocks ?? []).filter((block) => DATE_LABEL_RE.test(textFromDoc(block.text))).map((block) => String(block.id));
+  panel.blocks = rebuildDateButtons(panel.blocks ?? [], id, labels, assignments);
+  const expectedIds = labels.map((label, index) => dateButtonId(id, label, assignments[index].actionId));
   const saved = await page.request.post(endpoint, {
     headers,
     data: {
@@ -883,6 +913,9 @@ async function patchFlexButtons(
   const verifiedEditor: Exclude<FlexResource['editor_json'], string> = typeof verifiedResource.editor_json === 'string' ? JSON.parse(verifiedResource.editor_json) : verifiedResource.editor_json;
   const verifiedBlocks = verifiedEditor.panels.flatMap((panel) => panel.blocks ?? []).filter((block) => DATE_LABEL_RE.test(textFromDoc(block.text)));
   const verifiedLabels = verifiedBlocks.map((block) => textFromDoc(block.text));
+  const actualIds = verifiedBlocks.map((block) => String(block.id));
+  if (JSON.stringify(actualIds) !== JSON.stringify(expectedIds)) throw new Error(`Flex ${id}: 新規ボタンIDの保存後検証に失敗しました`);
+  console.log(`[seminar] Flex ${id}: 旧ボタン削除${beforeIds.filter((id) => !actualIds.includes(id)).length}・新規ボタン${actualIds.filter((id) => !beforeIds.includes(id)).length}・ID検証済み`);
   const verifiedActionIds = verifiedBlocks.map((block) => Number(flexBlockAction(block)?.data?.act?.aid ?? 0));
   if (JSON.stringify(verifiedLabels) !== JSON.stringify(labels)) throw new Error(`Flex ${id} のAPI保存後検証に失敗しました`);
   if (JSON.stringify(verifiedActionIds) !== JSON.stringify(assignments.map((assignment) => assignment.actionId))) {
@@ -920,7 +953,7 @@ async function readFlexState(page: Page, id: string): Promise<FlexCardState[]> {
     };
   }));
 
-  return cards.map((card, index) => ({ ...card, ...actions[index] }));
+  return cards.map((card, index) => ({ ...card, blockId: String(dateBlocks[index].id), ...actions[index] }));
 }
 
 export function flexRotationPlan(currentLabels: string[], desiredLabels: string[]): { removeFromTop: number; appendToBottom: number } {
@@ -967,6 +1000,7 @@ async function updateFlex(
   const correct = current.length === desired.length && current.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
     return card.label === labels[index]
+      && card.blockId === dateButtonId(id, labels[index], card.actionId)
       && !!tag
       && card.actionName === immutableActionName(desired[index], config)
       && card.tagIds.includes(tagId(tag))
@@ -1004,6 +1038,7 @@ async function updateFlex(
   if (verified.length !== desired.length || !verified.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
     return card.label === labels[index]
+      && card.blockId === dateButtonId(id, labels[index], card.actionId)
       && !!tag
       && card.actionId === assignments[index].actionId
       && card.actionName === immutableActionName(desired[index], config)
@@ -1172,8 +1207,16 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
     }
     steps.push({ step: activeStep, status: 'ok', detail: `フォーム${before.form.length}枠・Flex${config.targets.flexTemplates.length + 1}素材を確認` });
     activeStep = '日程タグ';
-    const desiredForm = upcomingSlots(now, config.counts.form + extraSlots, slotOptions);
-    const neededSlots = new Map(upcomingSlots(now, Math.max(config.counts.form, config.counts.dateTemplate, config.counts.reminder) + extraSlots + (options.prepareNextSlot ? 1 : 0), slotOptions).map((slot) => [slot.tagName, slot]));
+    const desiredForm = config.targets.form.days
+      ? upcomingSlotsForDays(now, config.targets.form.days, slotOptions)
+      : upcomingSlots(now, config.counts.form + extraSlots, slotOptions);
+    const neededSlots = new Map(desiredForm.map((slot) => [slot.tagName, slot]));
+    upcomingSlots(now, Math.max(config.counts.dateTemplate, config.counts.reminder) + extraSlots, slotOptions)
+      .forEach((slot) => neededSlots.set(slot.tagName, slot));
+    if (options.prepareNextSlot) {
+      const next = upcomingSlots(now, desiredForm.length + 1, slotOptions).at(-1)!;
+      neededSlots.set(next.tagName, next);
+    }
     for (const template of config.targets.flexTemplates) {
       const slots = template.startsTomorrow ? slotsFromTomorrow(now, template.count + extraSlots, slotOptions) : upcomingSlots(now, template.count + extraSlots, slotOptions);
       slots.forEach((slot) => neededSlots.set(slot.tagName, slot));

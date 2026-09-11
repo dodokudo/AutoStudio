@@ -26,7 +26,7 @@ export interface SeminarLaunchConfig {
     tagGroupName: string;
     dateTagPrefix?: string;
     hourTags?: Record<string, { id: number; name: string }>;
-    form: { id: number; groupId: number; choiceSelector: string };
+    form: { id: number; groupId: number; choiceSelector: string; days?: number };
     dateTemplateId: number;
     reminderTemplate: { id: number; groupId: number } | null;
     flexTemplates: SeminarFlexTemplateConfig[];
@@ -179,6 +179,7 @@ export function parseSeminarLaunchConfig(value: unknown): SeminarLaunchConfig {
         id: positiveInteger(form.id, 'targets.form.id'),
         groupId: positiveInteger(form.groupId, 'targets.form.groupId'),
         choiceSelector: textValue(form.choiceSelector, 'targets.form.choiceSelector'),
+        ...(form.days === undefined ? {} : { days: positiveInteger(form.days, 'targets.form.days') }),
       },
       dateTemplateId: positiveInteger(targets.dateTemplateId, 'targets.dateTemplateId'),
       reminderTemplate: reminderTemplate ? {

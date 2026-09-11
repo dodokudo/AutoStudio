@@ -57,6 +57,15 @@ export function upcomingSlots(now: Date, count: number, options: UpcomingSlotOpt
   return slots;
 }
 
+/** 最初の申込可能日から指定日数分。最終日の全時間帯を含む。 */
+export function upcomingSlotsForDays(now: Date, days: number, options: UpcomingSlotOptions = {}): SeminarSlot[] {
+  if (!Number.isInteger(days) || days < 1) throw new Error('表示日数は正の整数が必要です');
+  const slots = upcomingSlots(now, days * (options.slotHours ?? SLOT_HOURS).length, options);
+  const first = slots[0];
+  const end = formatIsoDate(addDays(jstDate(first.year, first.month, first.day), days - 1));
+  return slots.filter((slot) => slot.date <= end);
+}
+
 /** 明日を起点に13時・21時の順で、指定数の枠を返す。 */
 export function slotsFromTomorrow(now: Date, count: number, options: BuildSlotOptions = {}): SeminarSlot[] {
   const slots: SeminarSlot[] = [];

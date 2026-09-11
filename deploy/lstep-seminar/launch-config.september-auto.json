@@ -43,7 +43,8 @@
     "form": {
       "id": 1123267,
       "groupId": 222026,
-      "choiceSelector": "#radio_3"
+      "choiceSelector": "#radio_3",
+      "days": 8
     },
     "dateTemplateId": 280521839,
     "reminderTemplate": {
@@ -75,7 +76,7 @@
     "oneTapTagId": 10463640
   },
   "counts": {
-    "form": 13,
+    "form": 24,
     "dateTemplate": 7,
     "reminder": 15
   },
