@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import { SEPTEMBER_AUTO_PANEL_SECTIONS } from '@/lib/lstep/septemberAutoColumns';
 import { unstable_cache } from 'next/cache';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import {
   DEFAULT_FUNNEL_CAMPAIGN_ID,
   getFunnelCampaign,
+  resolveFunnelQueryDates,
   type FunnelCampaignId,
 } from '@/lib/lstep/funnel-campaigns';
 
@@ -18,7 +20,7 @@ const TABLE_NAME = 'lstep_friends_raw';
 export const revalidate = 300;
 
 // 【2026.7】7月セミナーのパネル計測タグ（rawCsvLoader.ts の SEMINAR_2026_7_COLUMNS に対応）
-const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; label: string }> }> = [
+const JULY_PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; label: string }> }> = [
   {
     title: '登録特典',
     items: [
@@ -100,7 +102,7 @@ const PANEL_SECTIONS: Array<{ title: string; items: Array<{ column: string; labe
 ];
 
 // サマリーファネル（上から順に移行率を計算）
-const SUMMARY_STEPS: Array<{ column: string | null; label: string }> = [
+const JULY_SUMMARY_STEPS: Array<{ column: string | null; label: string }> = [
   { column: null, label: '計測対象' },
   { column: 'survey_completed', label: '回答完了' },
   { column: 's7_video_watched_total', label: '動画視聴' },
@@ -110,10 +112,10 @@ const SUMMARY_STEPS: Array<{ column: string | null; label: string }> = [
   { column: 's7_front_purchased_total', label: 'フロント購入' },
 ];
 
-const SEMINAR_SLOT_COLUMN = 'seminar_application_slot';
+
 
 // 申込判定は友だち情報「セミナー申込日」を正とする（タグではなく友だち情報で確定させる運用ルール）
-const APPLIED_SQL = `TRIM(COALESCE(seminar_application_slot, '')) != ''`;
+
 
 // セミナー枠は固定テンプレートを持たず、選択した月別コホートの実データから組み立てる。
 
@@ -178,10 +180,10 @@ const DEMOGRAPHIC_GROUPS = [
   },
 ];
 
-const buildDemographicSegments = (appliedSql: string) => [
+const buildDemographicSegments = (appliedSql: string, joinedColumn: string, purchasedColumn: string) => [
   { key: 'applicants', label: 'セミナー申込者', condition: appliedSql },
-  { key: 'attendees', label: 'セミナー参加者', condition: 'COALESCE(s7_seminar_joined_total, 0) = 1' },
-  { key: 'purchasers', label: '購入者', condition: 'COALESCE(s7_front_purchased_total, 0) = 1' },
+  { key: 'attendees', label: 'セミナー参加者', condition: `COALESCE(${joinedColumn}, 0) = 1` },
+  { key: 'purchasers', label: '購入者', condition: `COALESCE(${purchasedColumn}, 0) = 1` },
 ];
 
 const toNumber = (value: unknown) => Number(value ?? 0);
@@ -227,6 +229,40 @@ const SOURCE_LABEL_SQL = `
   END
 `;
 
+async function getAutoLeadTime(client: ReturnType<typeof createBigQueryClient>, targetStartDate: string, targetEndDate: string) {
+  const [rows] = await client.query({
+    query: `
+      WITH target AS (
+        SELECT * FROM \`${PROJECT_ID}.${DEFAULT_DATASET}.${TABLE_NAME}\`
+        WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM \`${PROJECT_ID}.${DEFAULT_DATASET}.${TABLE_NAME}\`)
+          AND DATE(friend_added_at, 'Asia/Tokyo') BETWEEN DATE(@targetStartDate) AND DATE(@targetEndDate)
+      ), first_seen AS (
+        SELECT user_id, CASE tag_id
+          WHEN 'タグ_10463642' THEN 'applied'
+          WHEN 'タグ_10463638' THEN 'joined' WHEN 'タグ_10463635' THEN 'purchased' END AS metric,
+          MIN(snapshot_date) AS first_date
+        FROM \`${PROJECT_ID}.${DEFAULT_DATASET}.user_tags\`
+        WHERE tag_flag = 1 AND tag_id IN ('タグ_10463642','タグ_10463638','タグ_10463635')
+        GROUP BY user_id, metric
+      ), diffs AS (
+        SELECT 'answered' AS metric,
+          DATE_DIFF(survey_answered_date, DATE(friend_added_at, 'Asia/Tokyo'), DAY) AS d
+        FROM target WHERE survey_completed = 1
+        UNION ALL
+        SELECT f.metric, DATE_DIFF(f.first_date, DATE(t.friend_added_at, 'Asia/Tokyo'), DAY) AS d
+        FROM target t
+        JOIN first_seen f ON f.user_id = CAST(t.id AS STRING)
+      )
+      SELECT metric, CASE WHEN d IS NULL OR d < 0 THEN 'unknown' WHEN d = 0 THEN 'd0'
+        WHEN d = 1 THEN 'd1' WHEN d = 2 THEN 'd2' WHEN d = 3 THEN 'd3'
+        WHEN d <= 7 THEN 'd4_7' ELSE 'd8p' END AS bucket,
+        COUNT(*) AS c, AVG(d) AS avg_days FROM diffs GROUP BY metric, bucket
+    `,
+    params: { targetStartDate, targetEndDate },
+  });
+  return rows as Array<Record<string, unknown>>;
+}
+
 type PanelPayload = Record<string, unknown> & { error?: string; status?: number };
 
 async function computePanelAnalysis(
@@ -237,6 +273,27 @@ async function computePanelAnalysis(
   if (!PROJECT_ID) {
     return { error: 'BigQuery プロジェクト ID が未設定です', status: 500 };
   }
+  const isAuto = campaignId === '2026-09';
+  const metrics = {
+    // 回答フォームは共通。月別タグの付与漏れを回答未完了として扱わない。
+    answered: 'survey_completed',
+    video: isAuto ? 's9_auto_video_watched_total' : 's7_video_watched_total',
+    applied: isAuto ? 's9_auto_seminar_applied_total' : 's7_seminar_applied_total',
+    joined: isAuto ? 's9_auto_seminar_joined_total' : 's7_seminar_joined_total',
+    purchased: isAuto ? 's9_auto_front_purchased_total' : 's7_front_purchased_total',
+    product: isAuto ? 's9_auto_product_lp_tap_total' : 's7_product_lp_tap_total',
+  };
+  const SEMINAR_SLOT_COLUMN = isAuto ? 's9_auto_seminar_application_slot' : 'seminar_application_slot';
+  const PANEL_SECTIONS = isAuto ? SEPTEMBER_AUTO_PANEL_SECTIONS : JULY_PANEL_SECTIONS;
+  const SUMMARY_STEPS = isAuto ? [
+    { column: null, label: '計測対象' },
+    { column: metrics.answered, label: '回答完了' },
+    { column: metrics.video, label: '動画視聴' },
+    { column: 'applied_by_info', label: 'セミナー申込' },
+    { column: metrics.joined, label: 'セミナー参加' },
+    { column: metrics.product, label: '商品LPタップ' },
+    { column: metrics.purchased, label: 'フロント購入' },
+  ] : JULY_SUMMARY_STEPS;
   const queryParams = { targetStartDate, targetEndDate };
   {
     const client = createBigQueryClient(PROJECT_ID, process.env.LSTEP_BQ_LOCATION);
@@ -244,6 +301,7 @@ async function computePanelAnalysis(
     const metricColumns = [
       ...PANEL_SECTIONS.flatMap((s) => s.items.map((i) => i.column)),
       ...SUMMARY_STEPS.map((s) => s.column).filter((col): col is string => Boolean(col)),
+      metrics.applied,
     ];
     const demographicColumns = DEMOGRAPHIC_GROUPS.flatMap((group) => group.items.map((item) => item.column));
     const allColumns = [...new Set([...metricColumns, ...demographicColumns, SEMINAR_SLOT_COLUMN])];
@@ -267,14 +325,19 @@ async function computePanelAnalysis(
       .filter((col) => col !== 'applied_by_info')
       .filter((col) => !existingColumns.has(col));
 
+    const required = [metrics.answered, metrics.applied, metrics.joined, metrics.purchased];
+    if (required.some((column) => !existingColumns.has(column))) {
+      return { error: '対象ファネルのタグが未取込です。対応するCSVを取り込んでください。', status: 503 };
+    }
+
     // 友だち情報「セミナー申込日」列が無い場合はタグ判定にフォールバック
     const appliedSql = existingColumns.has(SEMINAR_SLOT_COLUMN)
-      ? APPLIED_SQL
-      : 'COALESCE(s7_seminar_applied_total, 0) = 1';
-    const DEMOGRAPHIC_SEGMENTS = buildDemographicSegments(appliedSql);
+      ? (isAuto ? `(COALESCE(${metrics.applied}, 0) = 1 OR TRIM(COALESCE(${SEMINAR_SLOT_COLUMN}, '')) != '')` : `TRIM(COALESCE(${SEMINAR_SLOT_COLUMN}, '')) != ''`)
+      : `COALESCE(${metrics.applied}, 0) = 1`;
+    const DEMOGRAPHIC_SEGMENTS = buildDemographicSegments(appliedSql, metrics.joined, metrics.purchased);
 
     if (queryColumns.length === 0) {
-      return { error: '【2026.7】パネル計測カラム（s7_*）がBigQueryに存在しません。CSV取り込みの設定を確認してください。', status: 404 };
+      return { error: '対象ファネルの計測カラムがBigQueryに存在しません。CSV取り込みの設定を確認してください。', status: 404 };
     }
 
     const sumExprs = queryColumns
@@ -311,11 +374,11 @@ async function computePanelAnalysis(
         COUNT(DISTINCT CASE WHEN blocked = 0 THEN id END) AS active_base,
         COUNT(DISTINCT CASE WHEN blocked = 1 THEN id END) AS blocked_count,
         COUNTIF(${appliedSql}) AS applied_by_info,
-        COUNTIF(blocked = 0 AND COALESCE(s7_front_purchased_total, 0) = 1) AS state_purchased,
-        COUNTIF(blocked = 0 AND COALESCE(s7_front_purchased_total, 0) != 1 AND COALESCE(s7_seminar_joined_total, 0) = 1) AS state_attended_not_purchased,
-        COUNTIF(blocked = 0 AND COALESCE(s7_front_purchased_total, 0) != 1 AND COALESCE(s7_seminar_joined_total, 0) != 1 AND (${appliedSql})) AS state_applied_not_attended,
-        COUNTIF(blocked = 0 AND COALESCE(s7_front_purchased_total, 0) != 1 AND COALESCE(s7_seminar_joined_total, 0) != 1 AND NOT (${appliedSql}) AND COALESCE(survey_completed, 0) = 1) AS state_answered_not_applied,
-        COUNTIF(blocked = 0 AND COALESCE(s7_front_purchased_total, 0) != 1 AND COALESCE(s7_seminar_joined_total, 0) != 1 AND NOT (${appliedSql}) AND COALESCE(survey_completed, 0) != 1) AS state_not_answered,
+        COUNTIF(blocked = 0 AND COALESCE(${metrics.purchased}, 0) = 1) AS state_purchased,
+        COUNTIF(blocked = 0 AND COALESCE(${metrics.purchased}, 0) != 1 AND COALESCE(${metrics.joined}, 0) = 1) AS state_attended_not_purchased,
+        COUNTIF(blocked = 0 AND COALESCE(${metrics.purchased}, 0) != 1 AND COALESCE(${metrics.joined}, 0) != 1 AND (${appliedSql})) AS state_applied_not_attended,
+        COUNTIF(blocked = 0 AND COALESCE(${metrics.purchased}, 0) != 1 AND COALESCE(${metrics.joined}, 0) != 1 AND NOT (${appliedSql}) AND COALESCE(${metrics.answered}, 0) = 1) AS state_answered_not_applied,
+        COUNTIF(blocked = 0 AND COALESCE(${metrics.purchased}, 0) != 1 AND COALESCE(${metrics.joined}, 0) != 1 AND NOT (${appliedSql}) AND COALESCE(${metrics.answered}, 0) != 1) AS state_not_answered,
         ${sumExprs},
         ${segmentTotalExprs}${demographicExprs ? `,
         ${demographicExprs}` : ''}
@@ -338,14 +401,14 @@ async function computePanelAnalysis(
     const blockedCount = toNumber(row.blocked_count);
     const getCount = (col: string) => (existingColumns.has(col) ? toNumber(row[col]) : 0);
 
-    const surveyCompleted = getCount('survey_completed');
+    const surveyCompleted = getCount(metrics.answered);
     const seminarApplied = toNumber(row.applied_by_info);
-    const seminarJoined = getCount('s7_seminar_joined_total');
-    const purchased = getCount('s7_front_purchased_total');
-    const consultTapped = getCount('s7_consult_tap');
-    const consultApplied = getCount('s7_consult_applied');
-    const consultJoined = getCount('s7_consult_joined');
-    const productLpTapped = getCount('s7_product_lp_tap_total');
+    const seminarJoined = getCount(metrics.joined);
+    const purchased = getCount(metrics.purchased);
+    const consultTapped = isAuto ? 0 : getCount('s7_consult_tap');
+    const consultApplied = isAuto ? 0 : getCount('s7_consult_applied');
+    const consultJoined = isAuto ? 0 : getCount('s7_consult_joined');
+    const productLpTapped = getCount(metrics.product);
 
     const sections = PANEL_SECTIONS.map((section) => ({
       title: section.title,
@@ -426,7 +489,7 @@ async function computePanelAnalysis(
         baseCount: Math.max(base - purchased, 0),
         rate: getRate(consultApplied, Math.max(base - purchased, 0)),
       },
-    ];
+    ].filter((item) => !isAuto || item.label !== '個別相談申込');
 
     const slotRows = existingColumns.has(SEMINAR_SLOT_COLUMN)
       ? await client.query({
@@ -445,8 +508,8 @@ async function computePanelAnalysis(
           SELECT
             TRIM(CAST(\`${SEMINAR_SLOT_COLUMN}\` AS STRING)) AS seminar_slot,
             COUNT(DISTINCT id) AS applications,
-            COUNTIF(s7_seminar_joined_total = 1) AS joined,
-            COUNTIF(s7_front_purchased_total = 1) AS purchased
+            COUNTIF(${metrics.joined} = 1) AS joined,
+            COUNTIF(${metrics.purchased} = 1) AS purchased
           FROM target
           WHERE TRIM(CAST(\`${SEMINAR_SLOT_COLUMN}\` AS STRING)) != ''
           GROUP BY seminar_slot
@@ -533,9 +596,9 @@ async function computePanelAnalysis(
 
     const stateMap = [
       { key: 'not_answered', label: '未回答', count: toNumber(row.state_not_answered), next: 'アンケート誘導の継続', alert: 0, alertLabel: '' },
-      { key: 'answered_not_applied', label: '回答済み・未申込', count: toNumber(row.state_answered_not_applied), next: '個別相談誘導 / リマーケ販売', alert: 0, alertLabel: '' },
+      { key: 'answered_not_applied', label: '回答済み・未申込', count: toNumber(row.state_answered_not_applied), next: isAuto ? 'セミナー申込案内' : '個別相談誘導 / リマーケ販売', alert: 0, alertLabel: '' },
       { key: 'applied_not_attended', label: '申込済み・未参加', count: toNumber(row.state_applied_not_attended), next: '後追い配信', alert: expiredNotAttended, alertLabel: '枠日時を過ぎた' },
-      { key: 'attended_not_purchased', label: '参加済み・未購入', count: toNumber(row.state_attended_not_purchased), next: '24時間追撃 / 個別相談誘導', alert: purchaseWindowExpired, alertLabel: '参加から48時間超過' },
+      { key: 'attended_not_purchased', label: '参加済み・未購入', count: toNumber(row.state_attended_not_purchased), next: isAuto ? '講座案内' : '24時間追撃 / 個別相談誘導', alert: purchaseWindowExpired, alertLabel: '参加から48時間超過' },
       { key: 'purchased', label: '購入', count: toNumber(row.state_purchased), next: '', alert: 0, alertLabel: '' },
       { key: 'blocked', label: 'ブロック', count: blockedCount, next: '', alert: 0, alertLabel: '' },
     ];
@@ -616,10 +679,11 @@ async function computePanelAnalysis(
         SELECT
           FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(t.friend_added_at), 'Asia/Tokyo')) AS date,
           COUNT(DISTINCT t.id) AS registered,
-          COUNTIF(COALESCE(t.survey_completed, 0) = 1) AS answered,
-          COUNTIF(${appliedSql.replace(/seminar_application_slot/g, 't.seminar_application_slot').replace(/s7_seminar_applied_total/g, 't.s7_seminar_applied_total')}) AS applied,
-          COUNTIF(COALESCE(t.s7_seminar_joined_total, 0) = 1) AS joined,
-          COUNTIF(COALESCE(t.s7_front_purchased_total, 0) = 1) AS purchased,
+          COUNTIF(COALESCE(t.${metrics.answered}, 0) = 1) AS answered,
+          COUNTIF(${appliedSql}) AS applied,
+          COUNTIF(COALESCE(t.${metrics.joined}, 0) = 1) AS joined,
+          COUNTIF(COALESCE(t.${metrics.product}, 0) = 1) AS product_lp_tapped,
+          COUNTIF(COALESCE(t.${metrics.purchased}, 0) = 1) AS purchased,
           COUNTIF(t.blocked = 1) AS blocked
         FROM \`${PROJECT_ID}.${DEFAULT_DATASET}.${TABLE_NAME}\` t
         JOIN latest l ON t.snapshot_date = l.sd
@@ -638,12 +702,13 @@ async function computePanelAnalysis(
       answered: toNumber(m.answered),
       applied: toNumber(m.applied),
       joined: toNumber(m.joined),
+      productLpTapped: toNumber(m.product_lp_tapped),
       purchased: toNumber(m.purchased),
       blocked: toNumber(m.blocked),
     }));
 
     // リードタイム分析: 登録から回答/申込/参加/購入まで何日かかっているか
-    const leadTimeRows = await client.query({
+    const leadTimeRows = isAuto ? await getAutoLeadTime(client, targetStartDate, targetEndDate) : await client.query({
       query: `
         WITH latest AS (
           SELECT MAX(snapshot_date) AS sd
@@ -699,7 +764,7 @@ async function computePanelAnalysis(
                 CAST(REGEXP_EXTRACT(TRIM(seminar_application_slot), r'^\\d{1,2}[/月](\\d{1,2})') AS INT64)),
               DATE(TIMESTAMP(friend_added_at), 'Asia/Tokyo'), DAY)
           FROM target
-          WHERE COALESCE(s7_seminar_joined_total, 0) = 1
+          WHERE COALESCE(${metrics.joined}, 0) = 1
             AND REGEXP_CONTAINS(TRIM(COALESCE(seminar_application_slot, '')), r'^\\d{1,2}[/月]\\d{1,2}')
 
           UNION ALL
@@ -770,23 +835,36 @@ async function computePanelAnalysis(
           WHERE t.friend_added_at IS NOT NULL
             AND DATE(TIMESTAMP(t.friend_added_at), 'Asia/Tokyo') BETWEEN DATE(@targetStartDate) AND DATE(@targetEndDate)
         )
+        , source_target AS (
+          SELECT t.*, ${SOURCE_LABEL_SQL} AS source_label,
+            CASE
+              WHEN COALESCE(source_threads_post, 0) + COALESCE(source_threads_profile, 0) + COALESCE(source_threads_fixed, 0) > 1 THEN '複数経路'
+              WHEN source_threads_post = 1 THEN 'ポスト'
+              WHEN source_threads_profile = 1 THEN 'プロフ'
+              WHEN source_threads_fixed = 1 THEN '固定'
+              ELSE '内訳不明'
+            END AS threads_detail
+          FROM target t
+        )
         SELECT
-          ${SOURCE_LABEL_SQL} AS label,
+          source_label AS label,
+          IF(GROUPING(threads_detail) = 1, NULL, threads_detail) AS detail,
           COUNT(DISTINCT id) AS base,
-          COUNTIF(survey_completed = 1) AS survey_completed,
+          COUNTIF(${metrics.answered} = 1) AS survey_completed,
           COUNTIF(${appliedSql}) AS seminar_applied,
-          COUNTIF(s7_seminar_joined_total = 1) AS seminar_joined,
-          COUNTIF(s7_front_purchased_total = 1) AS purchased,
+          COUNTIF(${metrics.joined} = 1) AS seminar_joined,
+          COUNTIF(${metrics.purchased} = 1) AS purchased,
           COUNTIF(blocked = 1) AS blocked
-        FROM target
-        GROUP BY label
+        FROM source_target
+        GROUP BY GROUPING SETS ((source_label), (source_label, threads_detail))
+        HAVING GROUPING(threads_detail) = 1 OR source_label = 'Threads'
         ORDER BY base DESC, label
       `,
       params: queryParams,
       useLegacySql: false,
     }).then(([result]) => result as Array<Record<string, unknown>>);
 
-    const sourceAnalysis = sourceRows.map((sourceRow) => {
+    const formatSource = (sourceRow: Record<string, unknown>) => {
       const sourceBase = toNumber(sourceRow.base);
       const sourceSurveyCompleted = toNumber(sourceRow.survey_completed);
       const sourceSeminarApplied = toNumber(sourceRow.seminar_applied);
@@ -806,7 +884,16 @@ async function computePanelAnalysis(
         blocked: sourceBlocked,
         blockedRate: getRate(sourceBlocked, sourceBase),
       };
-    });
+    };
+    const sourceAnalysis = sourceRows.filter((source) => source.detail === null).map((source) => ({
+      ...formatSource(source),
+      ...(source.label === 'Threads' ? {
+        children: ['ポスト', 'プロフ', '固定', '複数経路', '内訳不明'].flatMap((label, index) => {
+          const detail = sourceRows.find((row) => row.label === 'Threads' && row.detail === label);
+          return detail || index < 3 ? [formatSource({ ...detail, label })] : [];
+        }),
+      } : {}),
+    }));
 
     const snapshotDate = toDateString(row.snapshot_date);
 
@@ -833,7 +920,7 @@ async function computePanelAnalysis(
 // 通常表示は5分キャッシュし、画面の更新ボタンでは最新スナップショットを直接取りに行く。
 const computePanelAnalysisCached = unstable_cache(
   computePanelAnalysis,
-  ['line-panel-analysis-v2'],
+  ['line-panel-analysis-v7'],
   { revalidate: 300 },
 );
 
@@ -848,8 +935,13 @@ export async function GET(request: Request) {
   if (!campaign) {
     return NextResponse.json({ error: '指定された月のファネルは存在しません' }, { status: 400 });
   }
-  const targetStartDate = campaign.startDate;
-  const targetEndDate = campaign.endDate ?? '2099-12-31';
+  let dates;
+  try {
+    dates = resolveFunnelQueryDates(campaign, url.searchParams.get('start'), url.searchParams.get('end'));
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+  }
+  const { targetStartDate, targetEndDate } = dates;
   const fresh = url.searchParams.get('fresh') === '1';
 
   try {

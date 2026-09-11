@@ -1,5 +1,6 @@
 import { createBigQueryClient } from '@/lib/bigquery';
 import { randomUUID } from 'crypto';
+import { SEPTEMBER_AUTO_COLUMN_LABELS } from './septemberAutoColumns';
 
 // 型定義とプリセット定数はClient-safeなファイルから再エクスポート
 export type { FunnelStep, FunnelDefinition, FunnelStepResult, FunnelAnalysisResult } from './funnel-types';
@@ -418,5 +419,5 @@ function formatColumnLabel(column: string): string {
     gender_female: '性別：女性',
   };
 
-  return labelMap[column] ?? column;
+  return SEPTEMBER_AUTO_COLUMN_LABELS[column] ?? labelMap[column] ?? column;
 }

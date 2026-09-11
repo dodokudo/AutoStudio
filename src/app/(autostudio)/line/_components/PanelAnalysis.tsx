@@ -4,8 +4,11 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
+import { SEPTEMBER_AUTO_COLUMN_LABELS } from '@/lib/lstep/septemberAutoColumns';
 import { Card } from '@/components/ui/card';
 import { AutomationKpiTargets } from '@/components/launch/AutomationKpiTargets';
+import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
+import { UNIFIED_RANGE_OPTIONS, resolveDateRange, formatDateInput, isUnifiedRangePreset, type UnifiedRangePreset } from '@/lib/dateRangePresets';
 import {
   DEFAULT_FUNNEL_CAMPAIGN_ID,
   FUNNEL_CAMPAIGNS,
@@ -99,6 +102,7 @@ interface BlockTiming {
 }
 
 interface SourceAnalysis {
+  children?: SourceAnalysis[];
   label: string;
   base: number;
   surveyCompleted: number;
@@ -127,6 +131,7 @@ interface DailyMovement {
   answered: number;
   applied: number;
   joined: number;
+  productLpTapped: number;
   purchased: number;
   blocked: number;
 }
@@ -189,13 +194,24 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
     fixedCampaignId ?? DEFAULT_FUNNEL_CAMPAIGN_ID,
   );
   const campaignId = fixedCampaignId ?? selectedCampaignId;
+  const isAuto = campaignId === '2026-09';
   const campaign = getFunnelCampaign(campaignId) ?? getFunnelCampaign(DEFAULT_FUNNEL_CAMPAIGN_ID)!;
-  const { data, error, isLoading } = useSWR<PanelAnalysisResponse>(`/api/line/panel-analysis?campaign=${campaign.id}`, fetcher, {
+  const [rangePreset, setRangePreset] = useState<UnifiedRangePreset | 'campaign'>('campaign');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const range = rangePreset === 'campaign' ? null : resolveDateRange(rangePreset, customStart, customEnd, { includeToday: rangePreset !== '1d' });
+  const query = new URLSearchParams({ campaign: campaign.id });
+  if (range) {
+    query.set('start', formatDateInput(range.start));
+    query.set('end', formatDateInput(range.end));
+  }
+  const { data, error, isLoading } = useSWR<PanelAnalysisResponse>(`/api/line/panel-analysis?${query}`, fetcher, {
     revalidateOnFocus: false,
   });
 
-  const campaignControls = fixedCampaignId ? null : (
-    <div className="flex flex-wrap gap-2" role="tablist" aria-label="ファネル計測月">
+  const campaignControls = (
+    <div className="flex flex-wrap items-start justify-between gap-4">
+    {!fixedCampaignId && <div className="flex flex-wrap gap-2" role="tablist" aria-label="ファネル計測月">
       {FUNNEL_CAMPAIGNS.map((item) => {
         const selected = item.id === campaign.id;
         return (
@@ -204,7 +220,12 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
             type="button"
             role="tab"
             aria-selected={selected}
-            onClick={() => setSelectedCampaignId(item.id)}
+            onClick={() => {
+              setSelectedCampaignId(item.id);
+              setRangePreset('campaign');
+              setCustomStart('');
+              setCustomEnd('');
+            }}
             className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
               selected
                 ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
@@ -215,6 +236,28 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
           </button>
         );
       })}
+    </div>}
+    <DashboardDateRangePicker
+      className="ml-auto"
+      aria-label="ファネルの期間選択"
+      options={[{ value: 'campaign', label: 'ファネルの初期期間' }, ...UNIFIED_RANGE_OPTIONS]}
+      value={rangePreset}
+      onChange={(value) => {
+        if (value === 'custom') {
+          setCustomStart(range ? formatDateInput(range.start) : campaign.startDate);
+          setCustomEnd(range ? formatDateInput(range.end) : campaign.endDate ?? formatDateInput(resolveDateRange('this-month', null, null, { includeToday: true }).end));
+        }
+        setRangePreset(value === 'campaign' || isUnifiedRangePreset(value) ? value : 'campaign');
+      }}
+      customStart={customStart}
+      customEnd={customEnd}
+      onCustomChange={(start, end) => {
+        setCustomStart(start);
+        setCustomEnd(end);
+      }}
+      customApplyMode
+      customApplyLoading={isLoading}
+    />
     </div>
   );
 
@@ -269,6 +312,10 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
   const demographicSegments = data.demographicSegments ?? [];
   const blockTiming = data.blockTiming ?? [];
   const sourceAnalysis = data.sourceAnalysis ?? [];
+  const visibleSources = sourceAnalysis.flatMap((source) => [
+    { ...source, isDetail: false },
+    ...(source.children ?? []).map((child) => ({ ...child, isDetail: true })),
+  ]);
   const leadTime = data.leadTime ?? [];
   const maxBlockTiming = Math.max(...blockTiming.map((item) => item.count), 1);
   const reportCards = [
@@ -292,7 +339,6 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
   const consultTargets = notApplied + notAttended + notPurchased;
 
   const alertNotAttended = stateMap.find((st) => st.key === 'applied_not_attended')?.alert ?? 0;
-  const alertNotPurchased = stateMap.find((st) => st.key === 'attended_not_purchased')?.alert ?? 0;
 
   // ファネル図: ステージ + 各ステージからの離脱（＝回収導線の対象）
   const funnelStages = [
@@ -315,7 +361,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
       drop: {
         label: 'セミナー申込なし',
         count: notApplied,
-        dest: '個別相談誘導 / リマーケ販売',
+        dest: isAuto ? 'セミナー申込案内' : '個別相談誘導 / リマーケ販売',
         alert: 0,
         alertLabel: '',
       },
@@ -327,7 +373,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
       drop: {
         label: 'セミナー未参加',
         count: notAttended,
-        dest: '後追い配信（再申込誘導）',
+        dest: isAuto ? '未参加者フォローは保留中' : '後追い配信（再申込誘導）',
         alert: alertNotAttended,
         alertLabel: '枠日時超過',
       },
@@ -337,17 +383,29 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
       count: report.seminarJoined,
       rate: report.seminarJoinRate,
       drop: {
+        label: '商品LP未タップ',
+        count: Math.max(report.seminarJoined - report.productLpTapped, 0),
+        dest: '講座案内',
+        alert: 0,
+        alertLabel: '',
+      },
+    },
+    {
+      label: '商品LPタップ',
+      count: report.productLpTapped,
+      rate: report.seminarJoined > 0 ? (report.productLpTapped / report.seminarJoined) * 100 : null,
+      drop: {
         label: '未購入',
-        count: notPurchased,
-        dest: '24時間追撃 / 個別相談誘導',
-        alert: alertNotPurchased,
-        alertLabel: '48時間超過',
+        count: Math.max(report.productLpTapped - report.purchased, 0),
+        dest: isAuto ? '講座案内' : '24時間追撃 / 個別相談誘導',
+        alert: 0,
+        alertLabel: '',
       },
     },
     {
       label: '購入',
       count: report.purchased,
-      rate: report.purchaseRate,
+      rate: report.productLpTapped > 0 ? (report.purchased / report.productLpTapped) * 100 : null,
       drop: null,
     },
   ];
@@ -363,7 +421,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
 
   const slotDates = [...new Set(seminarSlots.map((slot) => slot.date))];
   // 開催時刻は固定せず、期間内の実データに出てくる時刻をそのまま列にする
-  const slotTimes = [...new Set(seminarSlots.map((slot) => slot.time))].sort(
+  const slotTimes = [...new Set([...(isAuto ? ['10時', '13時', '20時'] : []), ...seminarSlots.map((slot) => slot.time)])].sort(
     (a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10),
   );
 
@@ -466,6 +524,10 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
           ) : null}
         </div>
 
+        {isAuto && <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+          回答完了は共通の「アンケート：回答完了」タグ、それ以外は9月オートのタグと申込日時で集計します。「参加」は視聴リンクのタップを示し、録画の視聴完了ではありません。
+        </p>}
+
         <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           {reportCards.map((card) => (
             <div key={card.label} className="rounded border border-[color:var(--color-border)] p-3">
@@ -485,7 +547,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
             <span className="text-xs text-[color:var(--color-text-muted)]">上段=前進した人 / 下段=そこで落ちた人と、流れる回収導線</span>
           </div>
           <div className="mt-3 overflow-x-auto pb-1">
-            <div className="grid min-w-[960px] grid-cols-[1fr_56px_1fr_56px_1fr_56px_1fr_56px_1fr] items-stretch gap-y-2">
+            <div className="grid min-w-[1120px] grid-cols-[1fr_56px_1fr_56px_1fr_56px_1fr_56px_1fr_56px_1fr] items-stretch gap-y-2">
               {funnelStages.map((stage, index) => (
                 <div key={stage.label} className="contents">
                   {index > 0 ? (
@@ -539,12 +601,12 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
               ))}
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
+          {!isAuto && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900">
             <span className="font-semibold">回収導線: 個別相談（これから配信開始 / 対象 {formatNumber(consultTargets)}人）</span>
             <span>タップ <b className="tabular-nums">{formatNumber(report.consultTapped)}</b>人</span>
             <span>→ 申込 <b className="tabular-nums">{formatNumber(report.consultApplied)}</b>人</span>
             <span>→ 参加 <b className="tabular-nums">{formatNumber(report.consultJoined)}</b>人</span>
-          </div>
+          </div>}
         </div>
 
         <div className="mt-6">
@@ -587,7 +649,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
             </span>
           </summary>
           <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse">
+            <table className="w-full min-w-[1000px] border-collapse">
               <thead>
                 <tr className="border-b border-[color:var(--color-border)]">
                   <th className="py-2 pr-3 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">登録日</th>
@@ -598,6 +660,8 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
                   <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">申込率</th>
                   <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">参加</th>
                   <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">参加率</th>
+                  <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">LPタップ</th>
+                  <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">LPタップ率</th>
                   <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">購入</th>
                   <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">購入率</th>
                   <th className="py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">ブロック</th>
@@ -614,14 +678,16 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
                     <td className="py-2 pr-3 text-right text-xs tabular-nums text-[color:var(--color-text-secondary)]">{day.answered > 0 ? formatPercent((day.applied / day.answered) * 100) : '-'}</td>
                     <td className="py-2 pr-3 text-right text-sm tabular-nums text-[color:var(--color-text-primary)]">{formatNumber(day.joined)}</td>
                     <td className="py-2 pr-3 text-right text-xs tabular-nums text-[color:var(--color-text-secondary)]">{day.applied > 0 ? formatPercent((day.joined / day.applied) * 100) : '-'}</td>
+                    <td className="py-2 pr-3 text-right text-sm tabular-nums text-[color:var(--color-text-primary)]">{formatNumber(day.productLpTapped)}</td>
+                    <td className="py-2 pr-3 text-right text-xs tabular-nums text-[color:var(--color-text-secondary)]">{day.joined > 0 ? formatPercent((day.productLpTapped / day.joined) * 100) : '-'}</td>
                     <td className="py-2 pr-3 text-right text-sm font-semibold tabular-nums text-emerald-700">{formatNumber(day.purchased)}</td>
-                    <td className="py-2 pr-3 text-right text-xs tabular-nums text-[color:var(--color-text-secondary)]">{day.joined > 0 ? formatPercent((day.purchased / day.joined) * 100) : '-'}</td>
+                    <td className="py-2 pr-3 text-right text-xs tabular-nums text-[color:var(--color-text-secondary)]">{day.productLpTapped > 0 ? formatPercent((day.purchased / day.productLpTapped) * 100) : '-'}</td>
                     <td className="py-2 text-right text-sm tabular-nums text-red-600">{formatNumber(day.blocked)}</td>
                   </tr>
                 ))}
                 {dailyMovements.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-3 text-center text-xs text-[color:var(--color-text-muted)]">データなし</td>
+                    <td colSpan={13} className="py-3 text-center text-xs text-[color:var(--color-text-muted)]">データなし</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -633,7 +699,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
       <Card className="p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="text-base font-semibold text-[color:var(--color-text-primary)]">リードタイム分析（登録から何日で動くか）</h3>
-          <span className="text-xs text-[color:var(--color-text-muted)]">申込のみ推定値（申込枠の開催日と日次データから算出。実際はこれより早い場合あり）</span>
+          <span className="text-xs text-[color:var(--color-text-muted)]">{isAuto ? '回答は友だち情報の「アンケート回答日」から算出。申込・参加・購入は日次CSVでタグを初めて確認した日による推定値です。' : '申込のみ推定値（申込枠の開催日と日次データから算出。実際はこれより早い場合あり）'}</span>
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse">
@@ -646,7 +712,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
                 <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">3日後</th>
                 <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">4〜7日</th>
                 <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">8日以降</th>
-                <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">計測前</th>
+                <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">{isAuto ? '日付不明' : '計測前'}</th>
                 <th className="py-2 pr-3 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">計</th>
                 <th className="py-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">平均</th>
               </tr>
@@ -707,9 +773,11 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
                 </tr>
               </thead>
               <tbody>
-                {sourceAnalysis.map((source) => (
-                  <tr key={source.label} className="border-b border-[color:var(--color-border)] last:border-0">
-                    <td className="py-2 pr-3 text-sm font-medium text-[color:var(--color-text-primary)]">{source.label}</td>
+                {visibleSources.map((source) => (
+                  <tr key={`${source.isDetail ? 'threads-' : ''}${source.label}`} className={`border-b border-[color:var(--color-border)] last:border-0 ${source.isDetail ? 'bg-slate-50' : ''}`}>
+                    <td className={`py-2 pr-3 text-sm font-medium text-[color:var(--color-text-primary)] ${source.isDetail ? 'pl-6' : ''}`}>
+                      {source.label}
+                    </td>
                     <td className="py-2 pr-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <div className="h-2 w-16 overflow-hidden rounded bg-gray-100">
@@ -864,7 +932,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
                 <thead>
                   <tr className="border-b border-[color:var(--color-border)]">
                     <th className="py-2 pr-2 text-left text-xs font-medium text-[color:var(--color-text-secondary)]">項目</th>
-                    <th className="py-2 pr-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">タップ数</th>
+                    <th className="py-2 pr-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">{isAuto ? 'タグ付与人数' : 'タップ数'}</th>
                     <th className="py-2 pr-2 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">全体比</th>
                     <th className="py-2 text-left text-xs font-medium text-[color:var(--color-text-secondary)]" style={{ width: '30%' }} />
                   </tr>
@@ -879,18 +947,18 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
                         ) : null}
                       </td>
                       <td className="py-2 pr-2 text-right text-sm font-semibold tabular-nums text-[color:var(--color-text-primary)]">
-                        {formatNumber(item.count)}
+                        {item.missing ? '—' : formatNumber(item.count)}
                       </td>
                       <td className="py-2 pr-2 text-right text-xs tabular-nums text-[color:var(--color-text-secondary)]">
-                        {formatPercent(item.rate)}
+                        {item.missing ? '—' : formatPercent(item.rate)}
                       </td>
                       <td className="py-2">
-                        <div className="relative h-3 w-full overflow-hidden rounded bg-gray-100">
+                        {!item.missing && <div className="relative h-3 w-full overflow-hidden rounded bg-gray-100">
                           <div
                             className="h-full bg-sky-500"
                             style={{ width: `${(item.count / sectionMax) * 100}%` }}
                           />
-                        </div>
+                        </div>}
                       </td>
                     </tr>
                   ))}
@@ -905,7 +973,7 @@ export function PanelAnalysis({ fixedCampaignId, kpiFunnelId }: PanelAnalysisPro
       {data.missingColumns.length > 0 ? (
         <Card className="p-4">
           <p className="text-xs text-amber-700">
-            未取込カラム（次回のCSV取り込みで反映予定）: {data.missingColumns.join(', ')}
+            CSVに含まれていない計測項目: {data.missingColumns.map((column) => SEPTEMBER_AUTO_COLUMN_LABELS[column] ?? column).join('、')}。表示するには、LSTEPの定期CSV出力項目に追加が必要です。
           </p>
         </Card>
       ) : null}

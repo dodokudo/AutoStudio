@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs';
 import { BigQuery } from '@google-cloud/bigquery';
 import { Storage } from '@google-cloud/storage';
 import iconv from 'iconv-lite';
+import { parse } from 'csv-parse/sync';
+import { getSeptemberAutoColumn } from './septemberAutoColumns';
 
 interface RawCsvLoaderConfig {
   projectId: string;
@@ -20,41 +22,9 @@ export async function loadRawCsvToBigQuery(
   csvPath: string,
   snapshotDate: string,
 ): Promise<void> {
-  // 1. CSVをShift_JISからUTF-8に変換
   const csvBuffer = await fs.readFile(csvPath);
-  const utf8Content = iconv.decode(csvBuffer, 'shift_jis');
-
-  // 2. ヘッダー行を取得して英語カラム名にマッピング
-  const lines = utf8Content.split('\n');
-  const headerLine = lines[1]; // 2行目がヘッダー（1行目は登録ID行）
-  const headers = parseCSVLine(headerLine);
-
-  // 3. snapshot_date列を追加したヘッダーを作成（重複名はサフィックス付与）
-  const normalizedHeaders = deduplicateHeaders(['snapshot_date', ...headers.map(normalizeColumnName)]);
-
-  const dataLines = lines.slice(2).filter((line) => line.trim() !== '');
-
-  // LステップのCSVの日時は既にJSTなので、+09:00を付けてBigQueryに正しく認識させる
-  const normalizedLines = [
-    normalizedHeaders.map((h) => `"${h}"`).join(','),
-    ...dataLines.map((line) => {
-      const values = parseCSVLine(line);
-      const escapedValues = values.map((value, idx) => {
-        // friend_added_at (index 2) と last_msg_at (index 4) に+09:00を付ける
-        const header = normalizedHeaders[idx + 1]; // +1 for snapshot_date prefix
-        if ((header === 'friend_added_at' || header === 'last_msg_at') && value && value !== '-' && value !== '--') {
-          // 既に+09がついていなければ追加
-          if (!value.includes('+')) {
-            return `"${value.replace(/"/g, '""')}+09"`;
-          }
-        }
-        return `"${value.replace(/"/g, '""')}"`;
-      });
-      return `"${snapshotDate}",${escapedValues.join(',')}`;
-    }),
-  ].join('\n');
-
-  console.log(`[rawCsvLoader] CSV行数: ${dataLines.length}行`);
+  const { content: normalizedLines, schema, rowCount } = normalizeRawCsv(csvBuffer, snapshotDate);
+  console.log(`[rawCsvLoader] CSV行数: ${rowCount}行`);
 
   // 5. 正規化したCSVをGCSにアップロード
   const tempCsvPath = csvPath.replace('.csv', '_normalized.csv');
@@ -89,7 +59,9 @@ export async function loadRawCsvToBigQuery(
         sourceFormat: 'CSV',
         skipLeadingRows: 1,
         writeDisposition: 'WRITE_TRUNCATE', // 既存データを削除してから挿入（重複防止）
-        autodetect: true,
+        autodetect: false,
+        schema: { fields: schema },
+        allowQuotedNewlines: true,
       },
     },
   });
@@ -101,31 +73,35 @@ export async function loadRawCsvToBigQuery(
   await fs.unlink(tempCsvPath);
 }
 
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i += 1; // skip escaped quote
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  result.push(current);
-  return result.map((value) => value.replace(/\r$/, ''));
+export function normalizeRawCsv(buffer: Buffer, snapshotDate: string) {
+  const records: string[][] = parse(iconv.decode(buffer, 'shift_jis'), { skip_empty_lines: true });
+  if (records.length < 3) throw new Error('CSVにはヘッダー2行とデータ行が必要です');
+  const [ids, labels, ...rows] = records;
+  if (ids.length !== labels.length || labels[0] !== 'ID') throw new Error('LSTEP CSVのヘッダーが不正です');
+  const headers = deduplicateHeaders(['snapshot_date', ...labels.map((label, i) =>
+    getSeptemberAutoColumn(ids[i]) ?? normalizeColumnName(label),
+  )]);
+  const schema = headers.map((name, i) => {
+    const internalId = ids[i - 1] ?? '';
+    let type = 'STRING';
+    if (name === 'snapshot_date' || name === 'survey_answered_date' || name === 'front_purchased_date') type = 'DATE';
+    else if (name === 'friend_added_at' || name === 'last_msg_at') type = 'TIMESTAMP';
+    else if (internalId.startsWith('タグ_') || name === 'id' || name === 'blocked') type = 'INTEGER';
+    return { name, type, mode: 'NULLABLE', description: i === 0 ? 'CSV取得日（JST）' : `${internalId} ${labels[i - 1]}`.trim() };
+  });
+  const seenIds = new Set<string>();
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const normalized = rows.map((row) => {
+    if (!row[0] || seenIds.has(row[0])) throw new Error('CSVに空のIDまたは重複IDがあります');
+    seenIds.add(row[0]);
+    return [snapshotDate, ...row].map((raw, i) => {
+      let value = raw.trim() === '-' || raw.trim() === '--' ? '' : raw;
+      if (schema[i].type === 'TIMESTAMP' && value && !/(Z|[+-]\d{2}(?::?\d{2})?)$/.test(value)) value += '+09:00';
+      if (schema[i].type === 'DATE') value = value.replace(/\//g, '-');
+      return escape(value);
+    }).join(',');
+  });
+  return { content: [headers.map(escape).join(','), ...normalized].join('\n'), schema, headers, rowCount: rows.length };
 }
 
 // 日本語や記号だけの列名は正規化時に欠落しやすいため、
