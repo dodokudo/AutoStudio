@@ -411,7 +411,9 @@ async function copyLastFormPanel(page: Page, config: SeminarLaunchConfig): Promi
   const before = await panels.count();
   if (!before) throw new Error(`フォーム複製失敗: コピー元がありません URL=${page.url()}`);
   const sourceLabel = await panels.last().locator('input[data-testid="labelInput"]').inputValue().catch(() => '不明');
-  await panels.last().locator('.lvitem-copy').click({ force: true });
+  // 通常クリックでスクロールと遮蔽物の判定を待つ。強制クリックは
+  // 固定フッターに隠れた複製ボタンへ届かず、件数が増えないことがある。
+  await panels.last().locator('.lvitem-copy').click();
   await waitForFormPanelCount(page, before + 1, `複製（コピー元=${sourceLabel}）`, config);
 }
 
@@ -421,7 +423,7 @@ async function removeLastFormPanel(page: Page, config: SeminarLaunchConfig): Pro
   if (!before) throw new Error(`フォーム削除失敗: 削除対象がありません URL=${page.url()}`);
   const target = panels.last();
   const targetLabel = await target.locator('input[data-testid="labelInput"]').inputValue().catch(() => '不明');
-  await target.locator('.lvitem-remove').click({ force: true });
+  await target.locator('.lvitem-remove').click();
   await wait(page, 400);
 
   const dialog = page.locator('[role="dialog"]:visible,.modal:visible').last();
