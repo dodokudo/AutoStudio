@@ -81,6 +81,7 @@ export function choiceLabelWithCapacity(slot: SeminarSlot, memberCount: number, 
 export interface BuildSlotOptions {
   /** 1日に開催する枠の開始時刻（時）。 */
   slotHours?: readonly number[];
+  dateTagPrefix?: string;
   /** リマインダ名の接頭辞。ローンチが変わったら差し替える。 */
   reminderPrefix?: string;
   /** リマインダのゴール時刻（HH:mm）。現行運用は 22:00。 */
@@ -132,7 +133,7 @@ export function buildSlot(date: Date, hour: SlotHour, options: BuildSlotOptions 
     day,
     hour,
     weekday,
-    tagName: `${month}月${day}日${hour}時`,
+    tagName: options.dateTagPrefix ? `${options.dateTagPrefix}${value.replace(') ', ')')}` : `${month}月${day}日${hour}時`,
     applicationValue: value,
     choiceLabel: value,
     reminderName: `${prefix}${hour}時回`,

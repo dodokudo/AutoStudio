@@ -13,7 +13,7 @@ const configPath = inlineConfig ?? (configIndex >= 0 ? process.argv[configIndex 
 const ignoreWindow = process.argv.includes('--preview');
 
 loadSeminarLaunchConfig(configPath ? { localPath: configPath } : {})
-  .then((launchConfig) => runSeminarSchedule({ apply, extraSlots, launchConfig, ignoreWindow }))
+  .then((launchConfig) => runSeminarSchedule({ apply, extraSlots, launchConfig, ignoreWindow, prepareNextSlot: process.argv.includes('--prepare-next-slot') }))
   .then(async (result) => {
     console.log(formatResult(result));
     const performedWork = result.steps.some((step) => step.status !== 'skipped');
@@ -27,6 +27,7 @@ loadSeminarLaunchConfig(configPath ? { localPath: configPath } : {})
       await notifySeminarSchedule({
         ranAt: new Date().toISOString(),
         mode: 'apply',
+        executionId: process.env.CLOUD_RUN_EXECUTION,
         steps: [{ step: '処理中断', status: 'failed', detail: message }],
         issues: [message],
       }).catch((notifyError) => console.error(notifyError));

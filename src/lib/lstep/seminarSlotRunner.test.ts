@@ -3,6 +3,8 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import {
   cloneInputsForDateTag,
+  formActionCorrect,
+  dateTagHour,
   flexRotationPlan,
   replaceReminderDateBlock,
   runSeminarSchedule,
@@ -110,4 +112,30 @@ test('新規アクションの作成時にコピー元を変更せず日付タ�
   assert.deepEqual((source.inputs?.[3].tag_ids), [10242626, 111, 10156329]);
   assert.deepEqual(copied[3].tag_ids, [10242626, 222, 10156329]);
   assert.deepEqual(copied.slice(0, 3), source.inputs?.slice(0, 3));
+});
+
+test('9月の複製では日付と時間帯タグを同時に更新し、配信・条件を保持する', () => {
+  const source: LstepAction = { aid: 1, inputs: [
+    { type: 5, scenario_id: 1276566, member_query_id: 8 },
+    { type: 12, template_id: 280160560, member_query_id: 9 },
+    { type: 13, tag_ids: [10463640, 10463642, 111, 10475319], member_query_id: 9 },
+  ] };
+  const next = cloneInputsForDateTag(source, new Set([111, 222]), 222, { knownIds: [10475319, 10475320, 10475321], nextId: 10475321 });
+  assert.deepEqual(next[2].tag_ids, [10463640, 10463642, 222, 10475321]);
+  assert.deepEqual(next.slice(0,2), source.inputs?.slice(0,2));
+  assert.deepEqual(source.inputs?.[2].tag_ids, [10463640, 10463642, 111, 10475319]);
+  assert.throws(() => cloneInputsForDateTag(source, new Set([111]), 222, { knownIds: [999], nextId: 10475320 }), /時間帯タグが0件/);
+});
+
+
+test('表示タグだけが正しく、友だち情報の代入値が別時間なら検証を通さない', async () => {
+  const config = parseSeminarLaunchConfig(JSON.parse(await readFile('deploy/lstep-seminar/launch-config.september-auto.json', 'utf8')));
+  const { buildSlot } = await import('./seminarSchedule');
+  const slot = buildSlot(new Date(2026, 8, 15), 10, { dateTagPrefix: config.targets.dateTagPrefix });
+  const tag = { name: slot.tagName, href: '/line/tag/setting/1', memberCount: 0, summary: '' };
+  const text = `${slot.tagName} 【2026.9オート】10時回申込`;
+  assert.equal(formActionCorrect(`${text} __APPLICATION_VALUE=9/15(火)20:00~__`, slot, tag, config), false);
+  assert.equal(formActionCorrect(`${text} __APPLICATION_VALUE=9/15(火)10:00~__`, slot, tag, config), true);
+  assert.equal(dateTagHour(slot.tagName), 10);
+  assert.equal(dateTagHour('9月15日13時'), 13);
 });

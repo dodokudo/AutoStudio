@@ -68,3 +68,13 @@ test('ローンチ設定で開催時刻とリマインダ名を差し替えら�
   ]);
   assert.equal(slotToRemoveAt(new Date(2026, 8, 8, 13, 0), options)?.choiceLabel, '9/8(火) 14:00~');
 });
+
+test('9月オートは9時・12時・19時に直前枠を締切り、月末も曜日とタグを一致させる', () => {
+  const options = { slotHours: [10,13,20], dateTagPrefix: '【2026.9オート】', reminderPrefix: '【2026.9オート】' };
+  for (const [runHour,nextHour] of [[9,13],[12,20],[19,10]]) {
+    const slots = upcomingSlots(new Date(2026,8,30,runHour), 13, options);
+    assert.equal(slots[0].hour, nextHour);
+    assert.equal(slots[0].date, runHour === 19 ? '2026-10-01' : '2026-09-30');
+    assert.equal(slots[0].tagName, `【2026.9オート】${slots[0].choiceLabel.replace(') ', ')')}`);
+  }
+});

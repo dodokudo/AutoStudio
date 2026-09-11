@@ -22,7 +22,7 @@ const DATE_LABEL_RE = /^\d{1,2}\/\d{1,2}\([日月火水木金土]\)\s*\d{1,2}:00
 
 const formUrl = (config: SeminarLaunchConfig) => `${BASE}/lvf/edit/${config.targets.form.id}?group=${config.targets.form.groupId}`;
 const dateTemplateUrl = (config: SeminarLaunchConfig) => `${BASE}/line/template/edit_v3/${config.targets.dateTemplateId}?editMessage=1`;
-const reminderTemplateUrl = (config: SeminarLaunchConfig) => `${BASE}/line/template/edit/${config.targets.reminderTemplate.id}?group=${config.targets.reminderTemplate.groupId}`;
+const reminderTemplateUrl = (config: SeminarLaunchConfig) => `${BASE}/line/template/edit/${config.targets.reminderTemplate!.id}?group=${config.targets.reminderTemplate!.groupId}`;
 
 interface DateTag {
   name: string;
@@ -78,6 +78,8 @@ export interface RunOptions {
   ignoreWindow?: boolean;
   /** 本番動作確認用。各表示面の末尾へ追加で保持する枠数。通常運用は0。 */
   extraSlots?: number;
+  /** 再開時に翌回分の日程タグ作成も確認する。表示枠数は変えない。 */
+  prepareNextSlot?: boolean;
 }
 
 export interface StepResult {
@@ -88,6 +90,8 @@ export interface StepResult {
 
 export interface RunResult {
   ranAt: string;
+  launchId?: string;
+  executionId?: string;
   mode: 'apply' | 'dry-run';
   steps: StepResult[];
   issues: string[];
@@ -199,9 +203,15 @@ async function readDateTags(page: Page, config: SeminarLaunchConfig): Promise<Da
       summary,
     };
   })).then((tags) => tags.filter((tag) => {
-    const hour = Number(tag.name.match(/^\d+月\d+日(\d+)(?:時)?$/)?.[1] ?? -1);
+    const hour = dateTagHour(tag.name);
+    if (config.targets.dateTagPrefix && !tag.name.startsWith(config.targets.dateTagPrefix)) return false;
     return allowedHours.has(hour);
   }));
+}
+
+export function dateTagHour(name: string): number {
+  return Number(name.match(/(?:\d+月\d+日)(\d+)(?:時)?$/)?.[1]
+    ?? name.match(/\d+\/\d+\([日月火水木金土]\)\s*(\d+):00~$/)?.[1] ?? -1);
 }
 
 function tagForSlot(tags: DateTag[], slot: SeminarSlot): DateTag | undefined {
@@ -250,11 +260,14 @@ async function chooseTag(dialog: Locator, page: Page, currentName: string | unde
 
 async function createTag(page: Page, slot: SeminarSlot, tags: DateTag[], config: SeminarLaunchConfig): Promise<DateTag> {
   const sortKey = (tag: DateTag): number => {
-    const match = tag.name.match(/^(\d+)月(\d+)日/);
-    return match ? Number(match[1]) * 100 + Number(match[2]) : 0;
+    const match = tag.name.match(/(\d+)(?:月|\/)(\d+)(?:日|\()/);
+    if (!match) return 0;
+    const date = new Date(slot.year, Number(match[1]) - 1, Number(match[2]));
+    if (date.getTime() > new Date(`${slot.date}T23:59:59`).getTime()) date.setFullYear(slot.year - 1);
+    return date.getTime();
   };
   const source = tags
-    .filter((tag) => tag.name.endsWith(`${slot.hour}時`) || tag.name.endsWith(`${slot.hour}`))
+    .filter((tag) => dateTagHour(tag.name) === slot.hour)
     .sort((a, b) => sortKey(b) - sortKey(a))[0];
   if (!source) throw new Error(`${slot.hour}時タグのコピー元がありません`);
 
@@ -315,28 +328,61 @@ async function openFormChoices(page: Page, config: SeminarLaunchConfig): Promise
   return radio.locator('[data-testid^="choice_"]:visible');
 }
 
-async function readFormState(page: Page, config: SeminarLaunchConfig): Promise<Array<{ label: string; action: string }>> {
-  const panels = await openFormChoices(page, config);
-  const choices = await panels.evaluateAll((elements) => elements.map((element) => ({
-    label: (element.querySelector('input[data-testid="labelInput"]') as HTMLInputElement | null)?.value ?? '',
-    action: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
-  })));
-  return choices.filter((choice) => DATE_LABEL_RE.test(choice.label));
-}
-
-async function configureFormPanel(page: Page, panel: Locator, slot: SeminarSlot, tag: DateTag): Promise<void> {
-  await panel.locator('input[data-testid="labelInput"]').fill(slot.choiceLabel);
-  await wait(page, 800);
-  const actionText = await panel.innerText();
-  const currentTag = actionText.match(/タグ\[([^\]]+)\]を追加/)?.[1];
+async function readFormPanelAction(page: Page, panel: Locator): Promise<string> {
   await panel.getByText('アクション設定', { exact: true }).click();
   await wait(page, 1_200);
-  const dialog = page.locator('[role="dialog"],.modal').last();
-  await chooseTag(dialog, page, currentTag, tag.name);
+  const dialog = page.getByRole('dialog').last();
+  const text = await dialog.innerText();
+  const inputs = await dialog.locator('input').evaluateAll((elements) => elements.map((element) => (element as HTMLInputElement).value));
+  await dialog.getByRole('button', { name: 'close', exact: true }).first().click();
+  const applicationValue = inputs.find((value) => /^\d{1,2}\/\d{1,2}\(.\)\s*\d{1,2}:00~$/.test(value)) ?? '';
+  return `${text} __APPLICATION_VALUE=${applicationValue}__`;
+}
+
+async function readFormState(page: Page, config: SeminarLaunchConfig, details = true): Promise<Array<{ label: string; action: string }>> {
+  const panels = await openFormChoices(page, config);
+  const choices = [];
+  for (let index = 0; index < await panels.count(); index += 1) {
+    const panel = panels.nth(index);
+    const label = await panel.locator('input[data-testid="labelInput"]').inputValue();
+    if (DATE_LABEL_RE.test(label)) choices.push({ label, action: details ? await readFormPanelAction(page, panel) : '' });
+  }
+  return choices;
+}
+
+export function formActionCorrect(action: string, slot: SeminarSlot, tag: DateTag, config: SeminarLaunchConfig): boolean {
+  const compact = action.replace(/\s/g, '');
+  const hourTag = config.targets.hourTags?.[String(slot.hour)];
+  return compact.includes(tag.name.replace(/\s/g, ''))
+    && compact.includes(`__APPLICATION_VALUE=${slot.applicationValue.replace(/\s/g, '')}__`)
+    && (!hourTag || compact.includes(hourTag.name))
+    && !Object.values(config.targets.hourTags ?? {}).some((item) => item.id !== hourTag?.id && compact.includes(item.name));
+}
+
+async function configureFormPanel(page: Page, panel: Locator, slot: SeminarSlot, tag: DateTag, tags: DateTag[], config: SeminarLaunchConfig): Promise<void> {
+  await panel.locator('input[data-testid="labelInput"]').fill(slot.choiceLabel.replace(') ', ')'));
+  await panel.getByText('アクション設定', { exact: true }).click();
+  await wait(page, 1_200);
+  const dialog = page.getByRole('dialog').last();
+  const actionText = await dialog.innerText();
+  const oldDateTags = tags.filter((item) => actionText.includes(item.name));
+  if (oldDateTags.length !== 1) throw new Error(`フォームの日付タグが${oldDateTags.length}件（期待1件）`);
+  await chooseTag(dialog, page, oldDateTags[0].name, tag.name);
+  const hourTag = config.targets.hourTags?.[String(slot.hour)];
+  if (hourTag) {
+    const oldHours = Object.values(config.targets.hourTags ?? {}).filter((item) => actionText.includes(item.name));
+    if (oldHours.length !== 1) throw new Error('フォームの時間帯タグを一意に取得できません');
+    await chooseTag(dialog, page, oldHours[0].name, hourTag.name);
+  }
   const friendInput = await inputMatching(dialog, /^\d{1,2}\/\d{1,2}\(.\)\s*\d{1,2}:00~$/);
-  await friendInput.fill(slot.applicationValue);
+  await friendInput.fill(slot.applicationValue.replace(') ', ')'));
+  const nextText = await dialog.innerText();
+  if (tags.filter((item) => nextText.includes(item.name)).length !== 1
+    || !formActionCorrect(`${nextText} __APPLICATION_VALUE=${await friendInput.inputValue()}__`, slot, tag, config)) {
+    throw new Error(`${slot.tagName}: 保存前のフォームアクション検証に失敗しました`);
+  }
   await dialog.getByText('この条件で決定する', { exact: false }).click();
-  await wait(page, 800);
+  await wait(page, 500);
 }
 
 async function formPanelLabels(page: Page, config: SeminarLaunchConfig): Promise<string[]> {
@@ -405,8 +451,11 @@ function formVerificationError(actual: string[], expected: string[], url: string
 async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], apply: boolean, config: SeminarLaunchConfig): Promise<string> {
   const current = await readFormState(page, config);
   const currentLabels = current.map((choice) => choice.label);
-  const desiredLabels = desired.map((slot) => slot.choiceLabel);
-  if (JSON.stringify(currentLabels) === JSON.stringify(desiredLabels)) return '変更なし';
+  const desiredLabels = desired.map((slot) => slot.choiceLabel.replace(') ', ')'));
+  if (JSON.stringify(currentLabels) === JSON.stringify(desiredLabels) && current.every((choice, i) => {
+    const tag = tagForSlot(tags, desired[i]);
+    return tag && formActionCorrect(choice.action, desired[i], tag, config);
+  })) return '変更なし（日時・日付タグ・時間帯タグ検証済み）';
   if (!apply) return `${currentLabels.join(' / ')} -> ${desiredLabels.join(' / ')}`;
 
   // Lステップの「コピー」は複製先が末尾になるとは限らず、差分更新だけでは
@@ -427,7 +476,7 @@ async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], a
     const tag = tagForSlot(tags, slot);
     if (!tag) throw new Error(`${slot.tagName} がないためフォーム${index + 1}件目を設定できません URL=${page.url()}`);
     const panels = page.locator(`${config.targets.form.choiceSelector} [data-testid^="choice_"]:visible`);
-    await configureFormPanel(page, panels.nth(index), slot, tag);
+    await configureFormPanel(page, panels.nth(index), slot, tag, tags, config);
   }
   await page.locator('#lvbuildsave').click();
   await wait(page, 3_000);
@@ -437,7 +486,7 @@ async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], a
   for (let index = 0; index < desired.length; index += 1) {
     const tag = tagForSlot(tags, desired[index]);
     const action = verified[index]?.action ?? '';
-    if (!tag || !action.includes(`タグ[${tag.name}]`) || !action.includes(desired[index].applicationValue)) {
+    if (!tag || !formActionCorrect(action, desired[index], tag, config)) {
       throw new Error(`${desired[index].choiceLabel}: フォームのアクション検証に失敗しました`);
     }
   }
@@ -449,8 +498,9 @@ function flexLabel(slot: SeminarSlot, current: Array<{ label: string }>, index: 
     ?? current[Math.min(index, Math.max(0, current.length - 1))];
   const suffix = source?.label.match(/\(残り\d+名\)$/)?.[0]
     ?? current.at(-1)?.label.match(/\(残り\d+名\)$/)?.[0]
-    ?? '(残り20名)';
-  return `${slot.choiceLabel}${suffix}`;
+    ?? '';
+  const label = source?.label.includes(') ') ? slot.choiceLabel : slot.choiceLabel.replace(') ', ')');
+  return `${label}${suffix}`;
 }
 
 type FlexResource = {
@@ -546,12 +596,11 @@ function assertFullSeminarAction(action: LstepAction, context: string): void {
   const required = [
     { type: 5, label: 'シナリオ停止' },
     { type: 12, label: 'テンプレ送信' },
-    { type: 1, label: 'テキスト送信' },
     { type: 13, label: 'タグ追加' },
   ];
   const missing = required.filter(({ type }) => !inputTypes.has(type)).map(({ label }) => label);
   if (missing.length) {
-    throw new Error(`${context}: 申込アクションの全4動作を確認できません（不足: ${missing.join('・')}）`);
+    throw new Error(`${context}: 申込アクションの必須動作を確認できません（不足: ${missing.join('・')}）`);
   }
 }
 
@@ -560,29 +609,33 @@ async function readAction(page: Page, actionId: number): Promise<LstepAction> {
   return response.json() as Promise<LstepAction>;
 }
 
+const actionIndexes = new WeakMap<Page, Map<string, LstepAction>>();
+
 async function findActionByName(page: Page, name: string): Promise<LstepAction | undefined> {
-  for (let pageNumber = 1; pageNumber <= 50; pageNumber += 1) {
-    const response = await apiGet(page, `${BASE}/api/actions?page=${pageNumber}`, `アクション一覧${pageNumber}ページ目の取得`);
-    const body = await response.json() as { data?: LstepAction[]; last_page?: number };
-    const rows = body.data ?? [];
-    const found = rows.find((action) => actionNameOf(action) === name);
-    if (found) {
-      const detail = await readAction(page, actionIdOf(found));
-      return {
-        ...detail,
-        name: actionNameOf(detail) || actionNameOf(found),
-        description: detail.description ?? found.description,
-      };
+  let index = actionIndexes.get(page);
+  if (!index) {
+    index = new Map();
+    for (let pageNumber = 1; ; pageNumber += 1) {
+      if (pageNumber > 500) throw new Error('アクション一覧が500ページを超えたため確認を中断しました');
+      const response = await apiGet(page, `${BASE}/api/actions?page=${pageNumber}`, `アクション一覧${pageNumber}ページ目の取得`);
+      const body = await response.json() as { data?: LstepAction[]; last_page?: number };
+      const rows = body.data ?? [];
+      rows.forEach((action) => index!.set(actionNameOf(action), action));
+      if (!rows.length || (body.last_page !== undefined && pageNumber >= body.last_page)) break;
     }
-    if (!rows.length || (body.last_page !== undefined && pageNumber >= body.last_page)) return undefined;
+    actionIndexes.set(page, index);
   }
-  throw new Error(`アクション「${name}」を50ページ以内に確認できませんでした`);
+  const found = index.get(name);
+  if (!found) return undefined;
+  const detail = await readAction(page, actionIdOf(found));
+  return { ...detail, name: actionNameOf(detail) || actionNameOf(found), description: detail.description ?? found.description };
 }
 
 export function cloneInputsForDateTag(
   source: LstepAction,
   knownDateTagIds: Set<number>,
   nextDateTagId: number,
+  hourTagChange?: { knownIds: number[]; nextId: number },
 ): Array<Record<string, unknown>> {
   const inputs = structuredClone(source.inputs ?? []);
   let replacementCount = 0;
@@ -597,6 +650,18 @@ export function cloneInputsForDateTag(
   }
   if (replacementCount !== 1) {
     throw new Error(`コピー元アクション${actionIdOf(source)}の日付タグが${replacementCount}件です（期待1件）`);
+  }
+  if (hourTagChange) {
+    let replaced = 0;
+    for (const input of inputs) {
+      if (Number(input.type) !== 13 || !Array.isArray(input.tag_ids)) continue;
+      input.tag_ids = input.tag_ids.map((value) => {
+        if (!hourTagChange.knownIds.includes(Number(value))) return value;
+        replaced += 1;
+        return hourTagChange.nextId;
+      });
+    }
+    if (replaced !== 1) throw new Error(`コピー元の時間帯タグが${replaced}件（期待1件）`);
   }
   return inputs;
 }
@@ -651,7 +716,9 @@ async function createImmutableAction(
   const source = await readAction(page, sourceActionId);
   assertFullSeminarAction(source, `コピー元アクション${sourceActionId}`);
   const nextDateTagId = tagId(dateTag);
-  const inputs = cloneInputsForDateTag(source, new Set(allDateTags.map(tagId)), nextDateTagId);
+  const hourTag = config.targets.hourTags?.[String(slot.hour)];
+  const inputs = cloneInputsForDateTag(source, new Set(allDateTags.map(tagId)), nextDateTagId,
+    hourTag ? { knownIds: Object.values(config.targets.hourTags ?? {}).map((tag) => tag.id), nextId: hourTag.id } : undefined);
   const name = immutableActionName(slot, config);
   const multipart: Record<string, string> = {
     aid: '0',
@@ -671,6 +738,7 @@ async function createImmutableAction(
   const createdId = actionIdOf(createdSummary);
   if (!createdId) throw new Error(`${dateTag.name}: 新規アクションIDを取得できませんでした`);
   const created = await readAction(page, createdId);
+  actionIndexes.get(page)?.set(name, { ...created, name });
   assertFullSeminarAction(created, `新規アクション${createdId}`);
   const createdTagIds = actionTagIds(created);
   const otherDateTags = createdTagIds.filter((id) => id !== nextDateTagId && allDateTags.some((tag) => tagId(tag) === id));
@@ -706,7 +774,8 @@ async function immutableActionForSlot(
     assertFullSeminarAction(existing, `既存アクション「${name}」`);
     const existingIds = actionTagIds(existing);
     const otherDateTags = existingIds.filter((id) => id !== dateTagId && allDateTags.some((tag) => tagId(tag) === id));
-    if (!existingIds.includes(dateTagId) || !existingIds.includes(config.targets.oneTapTagId) || otherDateTags.length) {
+    if (!existingIds.includes(dateTagId) || !existingIds.includes(config.targets.oneTapTagId) || otherDateTags.length
+      || (config.targets.hourTags && !existingIds.includes(config.targets.hourTags[String(slot.hour)].id))) {
       throw new Error(`${name}: 既存の不変アクション設定が一致しません`);
     }
     const action = {
@@ -854,25 +923,6 @@ async function readFlexState(page: Page, id: string): Promise<FlexCardState[]> {
   return cards.map((card, index) => ({ ...card, ...actions[index] }));
 }
 
-async function clickBlockToolbar(page: Page, card: Locator, action: '複製' | '削除'): Promise<void> {
-  await card.click();
-  await wait(page, 400);
-  const toolbar = page.locator('.block_toolbar_component:visible').last();
-  await toolbar.getByText(action, { exact: true }).click();
-  await wait(page, 700);
-  if (action === '削除') {
-    const confirm = page.getByRole('button', { name: /削除|OK|はい/, exact: true }).last();
-    if (await confirm.isVisible().catch(() => false) && await confirm.isEnabled().catch(() => false)) {
-      await confirm.click();
-      await wait(page, 500);
-    }
-  }
-}
-
-function choiceLabelFromFlexLabel(label: string): string {
-  return label.replace(/\(残り\d+名\)$/, '');
-}
-
 export function flexRotationPlan(currentLabels: string[], desiredLabels: string[]): { removeFromTop: number; appendToBottom: number } {
   let overlap = Math.min(currentLabels.length, desiredLabels.length);
   while (overlap > 0) {
@@ -889,35 +939,6 @@ export function flexRotationPlan(currentLabels: string[], desiredLabels: string[
   };
 }
 
-async function reconcileFlexBlocks(page: Page, current: FlexCardState[], desired: SeminarSlot[]): Promise<boolean> {
-  const plan = flexRotationPlan(
-    current.map((card) => choiceLabelFromFlexLabel(card.label)),
-    desired.map((slot) => slot.choiceLabel),
-  );
-  let changed = false;
-
-  for (let index = 0; index < plan.removeFromTop; index += 1) {
-    const cards = await flexCards(page);
-    if (!await cards.count()) throw new Error('削除対象の先頭日程ボタンが見つかりません');
-    await clickBlockToolbar(page, cards.first(), '削除');
-    changed = true;
-  }
-
-  for (let index = 0; index < plan.appendToBottom; index += 1) {
-    const cards = await flexCards(page);
-    const count = await cards.count();
-    if (!count) throw new Error('新規日程ボタンのコピー元がありません');
-    // 最終の日程ボタンを複製し、「それ以降の日程はこちら」の直前へ追加する。
-    // 複製直後はコピー元のアクションIDだが、保存後に必ず新規の不変アクションへ差し替える。
-    await clickBlockToolbar(page, cards.last(), '複製');
-    changed = true;
-  }
-
-  const finalCount = await (await flexCards(page)).count();
-  if (finalCount !== desired.length) throw new Error(`日程ボタンの増減後が${finalCount}件（期待${desired.length}件）`);
-  return changed;
-}
-
 async function updateFlex(
   page: Page,
   id: string,
@@ -927,6 +948,8 @@ async function updateFlex(
   immutableActions: Map<number, ImmutableAction>,
   config: SeminarLaunchConfig,
 ): Promise<string> {
+  config = { ...config, immutableActionPrefix: `${config.immutableActionPrefix}${id}_` };
+  immutableActions = new Map();
   const current = await readFlexState(page, id);
   for (const card of current) {
     if (!card.actionName.startsWith(config.immutableActionPrefix) || !card.actionId) continue;
@@ -947,16 +970,17 @@ async function updateFlex(
       && !!tag
       && card.actionName === immutableActionName(desired[index], config)
       && card.tagIds.includes(tagId(tag))
-      && card.tagIds.includes(config.targets.oneTapTagId);
+      && card.tagIds.includes(config.targets.oneTapTagId)
+      && (!config.targets.hourTags || card.tagIds.includes(config.targets.hourTags[String(desired[index].hour)].id));
   });
   if (correct) return '変更なし';
   if (!apply) return `${current.map((card) => card.label).join(' / ')} -> ${labels.join(' / ')}`;
 
-  const structureChanged = await reconcileFlexBlocks(page, current, desired);
-  if (structureChanged) {
-    await page.getByText('メッセージを保存', { exact: false }).last().click();
-    await wait(page, 2_500);
+  if (current.length !== desired.length) {
+    throw new Error(`テンプレート${id}: 枠数変更は事前準備が必要です（現在${current.length}・設定${desired.length}）`);
   }
+  // 新しいアクションを先に作り、日時と参照を一度の保存で切り替える。
+  // 送信済みメッセージの旧アクションには書き込まない。
 
   const sourceActionId = current.find((card) => card.actionId)?.actionId ?? 0;
   if (!sourceActionId) throw new Error(`テンプレート${id}: 新規アクションのコピー元がありません`);
@@ -984,7 +1008,8 @@ async function updateFlex(
       && card.actionId === assignments[index].actionId
       && card.actionName === immutableActionName(desired[index], config)
       && card.tagIds.includes(tagId(tag))
-      && card.tagIds.includes(config.targets.oneTapTagId);
+      && card.tagIds.includes(config.targets.oneTapTagId)
+      && (!config.targets.hourTags || card.tagIds.includes(config.targets.hourTags[String(desired[index].hour)].id));
   })) throw new Error(`テンプレート${id}: 保存後検証に失敗しました`);
   return `${desired.length}枠を更新・新規アクションID検証済み`;
 }
@@ -1081,14 +1106,14 @@ async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean
 }
 
 async function snapshot(page: Page, config: SeminarLaunchConfig): Promise<SurfaceSnapshot> {
-  const form = (await readFormState(page, config)).map((choice) => choice.label);
+  const form = (await readFormState(page, config, false)).map((choice) => choice.label);
   const flex: SurfaceSnapshot['flex'] = {};
   for (const template of config.targets.flexTemplates) flex[template.id] = await readFlexState(page, String(template.id));
   return {
     form,
     flex,
     dateTemplate: await readDateTemplate(page, config),
-    reminder: await readReminderDates(page, config),
+    reminder: config.targets.reminderTemplate ? await readReminderDates(page, config) : [],
   };
 }
 
@@ -1103,6 +1128,7 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
   const steps: StepResult[] = [];
   const issues: string[] = [];
   const config = options.launchConfig ?? await loadSeminarLaunchConfig();
+  process.env.TZ = config.schedule.timeZone;
   const state = launchRunState(config, now);
   const mayInspectOutsideWindow = !apply && options.ignoreWindow === true;
   if (!state.runnable && !mayInspectOutsideWindow) {
@@ -1121,6 +1147,7 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
   }
   const slotOptions = {
     slotHours: config.schedule.slotHours,
+    dateTagPrefix: config.targets.dateTagPrefix,
     reminderPrefix: config.reminder.prefix,
     reminderGoalTime: config.reminder.goalTime,
   };
@@ -1137,8 +1164,21 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
   try {
     let tags = await readDateTags(page, config);
     steps.push({ step: 'Lステップログイン・日程タグ', status: 'ok', detail: `${tags.length}件を取得` });
+    activeStep = '変更前の全対象確認';
+    console.log(`[seminar] ${activeStep}`);
+    const before = await snapshot(page, config);
+    if (!before.form.length || !before.dateTemplate.length || Object.values(before.flex).some((cards) => !cards.length)) {
+      throw new Error('更新対象のフォームまたはFlexに日程がありません');
+    }
+    steps.push({ step: activeStep, status: 'ok', detail: `フォーム${before.form.length}枠・Flex${config.targets.flexTemplates.length + 1}素材を確認` });
+    activeStep = '日程タグ';
     const desiredForm = upcomingSlots(now, config.counts.form + extraSlots, slotOptions);
-    for (const slot of desiredForm) {
+    const neededSlots = new Map(upcomingSlots(now, Math.max(config.counts.form, config.counts.dateTemplate, config.counts.reminder) + extraSlots + (options.prepareNextSlot ? 1 : 0), slotOptions).map((slot) => [slot.tagName, slot]));
+    for (const template of config.targets.flexTemplates) {
+      const slots = template.startsTomorrow ? slotsFromTomorrow(now, template.count + extraSlots, slotOptions) : upcomingSlots(now, template.count + extraSlots, slotOptions);
+      slots.forEach((slot) => neededSlots.set(slot.tagName, slot));
+    }
+    for (const slot of neededSlots.values()) {
       let tag = tagForSlot(tags, slot);
       if (!tag) {
         if (!apply) {
@@ -1150,6 +1190,13 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
         steps.push({ step: `タグ ${slot.tagName}`, status: 'ok', detail: '作成・アクション検証済み' });
       }
       let tagIssues = assertTagSummary(slot, tag);
+      if (tagIssues.length) {
+        // 一覧の説明文は名称変更前のキャッシュ。詳細画面の現在の参照を優先する。
+        await goto(page, `${BASE}${tag.href}`);
+        tag = { ...tag, summary: (await page.locator('main').innerText()).replace(/\s+/g, '') };
+        tags = tags.map((item) => item.href === tag?.href ? tag : item);
+        tagIssues = assertTagSummary(slot, tag);
+      }
       if (tagIssues.length && apply) {
         tag = await configureTag(page, slot, tag, config);
         tags = tags.map((current) => current.href === tag?.href ? tag : current);
@@ -1161,11 +1208,13 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
     if (issues.length) throw new Error(`タグ設定に異常があります: ${issues.join(' / ')}`);
 
     activeStep = 'セミナー申込フォーム';
+    console.log(`[seminar] ${activeStep}`);
     steps.push({ step: activeStep, status: 'ok', detail: await updateForm(page, desiredForm, tags, apply, config) });
     const immutableActions = new Map<number, ImmutableAction>();
     for (const template of config.targets.flexTemplates) {
       activeStep = `ワンタップ ${template.label}`;
-      const desiredFlex = 'startsTomorrow' in template
+      console.log(`[seminar] ${activeStep}`);
+      const desiredFlex = template.startsTomorrow === true
         ? slotsFromTomorrow(now, template.count + extraSlots, slotOptions)
         : upcomingSlots(now, template.count + extraSlots, slotOptions);
       steps.push({
@@ -1175,6 +1224,7 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
       });
     }
     activeStep = 'セミナー日程選択テンプレート';
+    console.log(`[seminar] ${activeStep}`);
     steps.push({
       step: activeStep,
       status: 'ok',
@@ -1187,12 +1237,15 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
         config,
       ),
     });
+    if (config.targets.reminderTemplate) {
     activeStep = '最終リマインド';
+    console.log(`[seminar] ${activeStep}`);
     steps.push({
       step: activeStep,
       status: 'ok',
       detail: await updateReminder(page, upcomingSlots(now, config.counts.reminder + extraSlots, slotOptions), apply, config),
     });
+    }
 
     if (apply) {
       activeStep = '全画面再読込検証';
@@ -1209,13 +1262,13 @@ export async function runSeminarSchedule(options: RunOptions = {}): Promise<RunR
     steps.push({ step: '処理中断', status: 'failed', detail: message });
     issues.push(message);
   } finally {
-    if (await hasAuthenticatedSession(page)) {
+    if (apply && await hasAuthenticatedSession(page)) {
       await context.storageState({ path: statePath });
       await uploadFileToGcs(storage, bucketName, statePath, objectName, 'application/json');
     }
     await browser.close();
   }
-  return { ranAt: now.toISOString(), mode: apply ? 'apply' : 'dry-run', steps, issues };
+  return { ranAt: now.toISOString(), launchId: config.launchId, executionId: process.env.CLOUD_RUN_EXECUTION, mode: apply ? 'apply' : 'dry-run', steps, issues };
 }
 
 export function formatResult(result: RunResult): string {

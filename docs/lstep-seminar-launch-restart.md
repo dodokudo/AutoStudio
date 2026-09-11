@@ -1,6 +1,6 @@
 # LSTEP セミナー日時更新の再開手順
 
-Cloud Scheduler `autostudio-lstep-seminar` は停止したままにする。新しいローンチを再開するときは、LSTEPで新しい素材をすべて作成した後、この順番で進める。
+9月エバーの対象ID・時刻・通知は [9月用引き継ぎ](lstep-seminar-september-auto.md) を参照。以下は別のローンチへ切り替える場合の手順。対象素材が確定するまでSchedulerを停止し、設定を無効にしてから進める。
 
 ## 1. 設定ファイルを作る
 
@@ -40,9 +40,9 @@ gcloud run jobs execute autostudio-lstep-seminar --region asia-northeast1 --proj
 gcloud scheduler jobs resume autostudio-lstep-seminar --location asia-northeast1 --project mark-454114
 ```
 
-手動実行でLSTEPの各画面が更新・再読込検証済みになったことを確認してから、最後にSchedulerを再開する。Schedulerは毎日12時・20時（JST）の設定を保持している。
+手動実行でLSTEPの各画面が更新・再読込検証済みになったことを確認してから、最後にSchedulerを再開する。9月エバーのSchedulerは毎日9時・12時・19時（JST）。別ローンチへ切り替える場合は、新しい設定のrunHoursと一致させる。
 
-開催時刻を13時・21時以外へ変えた場合だけ、検証結果に出る `scheduler cron` と同じ時刻へSchedulerも更新してから再開する。
+開催時刻を変えた場合は、検証結果に出る `scheduler cron` と同じ時刻へSchedulerも更新してから再開する。
 
 ```sh
 gcloud scheduler jobs update http autostudio-lstep-seminar --schedule='0 <runHoursをカンマ区切り> * * *' --time-zone=Asia/Tokyo --location=asia-northeast1 --project=mark-454114

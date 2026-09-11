@@ -85,3 +85,20 @@ test('gates execution when paused or outside the launch window', () => {
     { runnable: true, reason: 'ready' },
   );
 });
+
+test('エバーは終了日なし・3枠・旧版専用リマインドなしで継続できる', () => {
+  const config = parseSeminarLaunchConfig({ ...validConfig,
+    window: { startDate: '2026-09-08', endDate: null },
+    schedule: { timeZone: 'Asia/Tokyo', slotHours: [10,13,20], runHours: [9,12,19] },
+    targets: { ...validConfig.targets, reminderTemplate: null },
+  });
+  assert.equal(launchRunState(config, new Date('2027-01-01T00:00:00Z')).runnable, true);
+  assert.equal(config.targets.reminderTemplate, null);
+  assert.equal(config.counts.reminder, 0);
+});
+
+test('時間帯タグが1枠でも欠ける設定を拒否する', () => {
+  assert.throws(() => parseSeminarLaunchConfig({ ...validConfig,
+    targets: { ...validConfig.targets, hourTags: { '13': { id: 1, name: '13時' } } },
+  }), /hourTags.21/);
+});

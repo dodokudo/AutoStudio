@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "launchId": "2026-09-auto",
+  "enabled": true,
+  "window": {
+    "startDate": "2026-09-11",
+    "endDate": null
+  },
+  "schedule": {
+    "timeZone": "Asia/Tokyo",
+    "slotHours": [
+      10,
+      13,
+      20
+    ],
+    "runHours": [
+      9,
+      12,
+      19
+    ]
+  },
+  "reminder": {
+    "prefix": "【2026.9オート】",
+    "goalTime": "22:00"
+  },
+  "targets": {
+    "tagGroupName": "【2026.9オート】セミナー日程",
+    "dateTagPrefix": "【2026.9オート】",
+    "hourTags": {
+      "10": {
+        "id": 10475319,
+        "name": "【2026.9オート】10時回申込"
+      },
+      "13": {
+        "id": 10475320,
+        "name": "【2026.9オート】13時回申込"
+      },
+      "20": {
+        "id": 10475321,
+        "name": "【2026.9オート】20時回申込"
+      }
+    },
+    "form": {
+      "id": 1123267,
+      "groupId": 222026,
+      "choiceSelector": "#radio_3"
+    },
+    "dateTemplateId": 280521839,
+    "reminderTemplate": {
+      "id": 280160552,
+      "groupId": 1051991
+    },
+    "flexTemplates": [
+      {
+        "id": 280521249,
+        "label": "2日後07:08",
+        "count": 6
+      },
+      {
+        "id": 280520841,
+        "label": "2日後21:03",
+        "count": 6
+      },
+      {
+        "id": 280520721,
+        "label": "4日後06:58",
+        "count": 6
+      },
+      {
+        "id": 280520632,
+        "label": "4日後23:00",
+        "count": 6
+      }
+    ],
+    "oneTapTagId": 10463640
+  },
+  "counts": {
+    "form": 13,
+    "dateTemplate": 7,
+    "reminder": 15
+  },
+  "immutableActionPrefix": "AUTO_2026_09_"
+}

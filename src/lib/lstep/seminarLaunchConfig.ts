@@ -12,7 +12,7 @@ export interface SeminarLaunchConfig {
   schemaVersion: 1;
   launchId: string;
   enabled: boolean;
-  window: { startDate: string; endDate: string } | null;
+  window: { startDate: string; endDate: string | null } | null;
   schedule: {
     timeZone: string;
     slotHours: number[];
@@ -24,9 +24,11 @@ export interface SeminarLaunchConfig {
   };
   targets: {
     tagGroupName: string;
+    dateTagPrefix?: string;
+    hourTags?: Record<string, { id: number; name: string }>;
     form: { id: number; groupId: number; choiceSelector: string };
     dateTemplateId: number;
-    reminderTemplate: { id: number; groupId: number };
+    reminderTemplate: { id: number; groupId: number } | null;
     flexTemplates: SeminarFlexTemplateConfig[];
     oneTapTagId: number;
   };
@@ -118,8 +120,8 @@ export function parseSeminarLaunchConfig(value: unknown): SeminarLaunchConfig {
   if (root.window !== null && root.window !== undefined) {
     const windowValue = record(root.window, 'window');
     const startDate = dateValue(windowValue.startDate, 'window.startDate');
-    const endDate = dateValue(windowValue.endDate, 'window.endDate');
-    if (startDate > endDate) throw new Error('window.endDate はstartDate以降を指定してください');
+    const endDate = windowValue.endDate === null ? null : dateValue(windowValue.endDate, 'window.endDate');
+    if (endDate && startDate > endDate) throw new Error('window.endDate はstartDate以降を指定してください');
     window = { startDate, endDate };
   }
   if (root.enabled && !window) throw new Error('enabled=true にする前にwindowを設定してください');
@@ -130,7 +132,12 @@ export function parseSeminarLaunchConfig(value: unknown): SeminarLaunchConfig {
 
   const targets = record(root.targets, 'targets');
   const form = record(targets.form, 'targets.form');
-  const reminderTemplate = record(targets.reminderTemplate, 'targets.reminderTemplate');
+  const reminderTemplate = targets.reminderTemplate === null ? null : record(targets.reminderTemplate, 'targets.reminderTemplate');
+  const hourTags = targets.hourTags === undefined ? undefined : record(targets.hourTags, 'targets.hourTags');
+  const parsedHourTags = hourTags ? Object.fromEntries(slotHours.map((hour) => {
+    const item = record(hourTags[String(hour)], `targets.hourTags.${hour}`);
+    return [String(hour), { id: positiveInteger(item.id, `hourTags.${hour}.id`), name: textValue(item.name, `hourTags.${hour}.name`) }];
+  })) : undefined;
   if (!Array.isArray(targets.flexTemplates) || targets.flexTemplates.length === 0) {
     throw new Error('targets.flexTemplates は1件以上指定してください');
   }
@@ -166,23 +173,25 @@ export function parseSeminarLaunchConfig(value: unknown): SeminarLaunchConfig {
     },
     targets: {
       tagGroupName: textValue(targets.tagGroupName, 'targets.tagGroupName'),
+      ...(targets.dateTagPrefix === undefined ? {} : { dateTagPrefix: textValue(targets.dateTagPrefix, 'targets.dateTagPrefix') }),
+      ...(parsedHourTags ? { hourTags: parsedHourTags } : {}),
       form: {
         id: positiveInteger(form.id, 'targets.form.id'),
         groupId: positiveInteger(form.groupId, 'targets.form.groupId'),
         choiceSelector: textValue(form.choiceSelector, 'targets.form.choiceSelector'),
       },
       dateTemplateId: positiveInteger(targets.dateTemplateId, 'targets.dateTemplateId'),
-      reminderTemplate: {
+      reminderTemplate: reminderTemplate ? {
         id: positiveInteger(reminderTemplate.id, 'targets.reminderTemplate.id'),
         groupId: positiveInteger(reminderTemplate.groupId, 'targets.reminderTemplate.groupId'),
-      },
+      } : null,
       flexTemplates,
       oneTapTagId: positiveInteger(targets.oneTapTagId, 'targets.oneTapTagId'),
     },
     counts: {
       form: positiveInteger(counts.form, 'counts.form'),
       dateTemplate: positiveInteger(counts.dateTemplate, 'counts.dateTemplate'),
-      reminder: positiveInteger(counts.reminder, 'counts.reminder'),
+      reminder: reminderTemplate ? positiveInteger(counts.reminder, 'counts.reminder') : 0,
     },
     immutableActionPrefix: textValue(root.immutableActionPrefix, 'immutableActionPrefix'),
   };
@@ -206,7 +215,7 @@ export function launchRunState(config: SeminarLaunchConfig, now: Date): LaunchRu
   if (!config.window) return { runnable: false, reason: 'disabled' };
   const today = dateInTimeZone(now, config.schedule.timeZone);
   if (today < config.window.startDate) return { runnable: false, reason: 'before_window' };
-  if (today > config.window.endDate) return { runnable: false, reason: 'after_window' };
+  if (config.window.endDate && today > config.window.endDate) return { runnable: false, reason: 'after_window' };
   return { runnable: true, reason: 'ready' };
 }
 
@@ -227,7 +236,7 @@ export async function loadSeminarLaunchConfig(
 }
 
 export function formatSeminarLaunchConfigSummary(config: SeminarLaunchConfig): string {
-  const window = config.window ? `${config.window.startDate}〜${config.window.endDate}` : '未設定';
+  const window = config.window ? `${config.window.startDate}〜${config.window.endDate ?? '期限なし'}` : '未設定';
   return [
     `launchId: ${config.launchId}`,
     `enabled: ${config.enabled}`,
@@ -238,6 +247,6 @@ export function formatSeminarLaunchConfigSummary(config: SeminarLaunchConfig): s
     `form: ${config.targets.form.id}`,
     `flex: ${config.targets.flexTemplates.map((item) => item.id).join(',')}`,
     `dateTemplate: ${config.targets.dateTemplateId}`,
-    `reminderTemplate: ${config.targets.reminderTemplate.id}`,
+    `reminderTemplate: ${config.targets.reminderTemplate?.id ?? '対象なし'}`,
   ].join('\n');
 }

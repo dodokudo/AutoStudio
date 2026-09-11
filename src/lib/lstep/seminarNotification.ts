@@ -10,21 +10,18 @@ function retryKeyFor(deliveryKey: string): string {
   return `${hex.slice(0, 8).join('')}-${hex.slice(8, 12).join('')}-${hex.slice(12, 16).join('')}-${hex.slice(16, 20).join('')}-${hex.slice(20).join('')}`;
 }
 
-function executionKey(ranAt: string): string {
-  const jst = new Date(new Date(ranAt).getTime() + 9 * 60 * 60 * 1000);
-  const date = jst.toISOString().slice(0, 10);
-  const hour = jst.getUTCHours();
-  const slot = hour >= 20 ? '20' : hour >= 12 ? '12' : String(hour).padStart(2, '0');
-  return `${date}:${slot}`;
+export function seminarNotificationKey(result: RunResult): string {
+  return `lstep_seminar_schedule:${result.launchId ?? 'legacy'}:${result.executionId ?? result.ranAt}:${result.issues.length ? 'failed' : 'success'}`;
 }
 
-function notificationText(result: RunResult): string {
+export function seminarNotificationText(result: RunResult): string {
   const success = result.issues.length === 0;
-  const title = success ? '✅ Lステップ セミナー日時更新完了' : '❌ Lステップ セミナー日時更新失敗';
+  const title = success ? 'Lステップ セミナー日時更新完了' : 'Lステップ セミナー日時更新失敗';
+  const ranAt = new Date(result.ranAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false });
   const details = result.steps
     .filter((step) => step.step !== 'Lステップログイン・日程タグ')
-    .map((step) => `${step.status === 'failed' ? '❌' : '・'}${step.step}: ${step.detail}`);
-  return [title, `実行枠: ${executionKey(result.ranAt).replace(':', ' ') + ':00'}`, ...details].join('\n').slice(0, 5_000);
+    .map((step) => `${step.status === 'failed' ? '失敗: ' : '・'}${step.step}: ${step.detail}`);
+  return [title, `対象: ${result.launchId ?? '未指定'}`, `実行: ${ranAt} JST`, ...details].join('\n').slice(0, 5_000);
 }
 
 export async function notifySeminarSchedule(result: RunResult): Promise<void> {
@@ -32,7 +29,7 @@ export async function notifySeminarSchedule(result: RunResult): Promise<void> {
   const target = process.env.LSTEP_SEMINAR_REPORT_TARGET_ID;
   if (!token || !target) throw new Error('LINE完了通知の認証情報または送信先がありません');
 
-  const key = `lstep_seminar_schedule:${executionKey(result.ranAt)}:${result.issues.length ? 'failed' : 'success'}`;
+  const key = seminarNotificationKey(result);
   const response = await fetch(LINE_PUSH_URL, {
     method: 'POST',
     headers: {
@@ -42,10 +39,13 @@ export async function notifySeminarSchedule(result: RunResult): Promise<void> {
     },
     body: JSON.stringify({
       to: target,
-      messages: [{ type: 'text', text: notificationText(result) }],
+      messages: [{ type: 'text', text: seminarNotificationText(result) }],
     }),
   });
-  if (response.ok) return;
+  if (response.ok) {
+    console.log(`[LINE] 完了通知受付済み requestId=${response.headers.get('x-line-request-id') ?? 'unknown'}`);
+    return;
+  }
   const responseBody = await response.text();
   // Cloud Run側の再実行などで同一枠の通知が再送された場合、LINEは409を返すが
   // 最初の通知は送信済みなのでエラー扱いにしない。
