@@ -6,6 +6,7 @@ export interface SeminarFlexTemplateConfig {
   label: string;
   count: number;
   startsTomorrow?: boolean;
+  remainingLabels?: string[];
 }
 
 export interface SeminarLaunchConfig {
@@ -54,6 +55,7 @@ export interface LoadSeminarLaunchConfigOptions {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const REMAINING_LABEL_RE = /^\((?:残り|あと)\d+名\)$/;
 export const DEFAULT_SEMINAR_LAUNCH_CONFIG_OBJECT = 'lstep/config/seminar-launch.json';
 
 function record(value: unknown, path: string): Record<string, unknown> {
@@ -146,11 +148,28 @@ export function parseSeminarLaunchConfig(value: unknown): SeminarLaunchConfig {
     if (flex.startsTomorrow !== undefined && typeof flex.startsTomorrow !== 'boolean') {
       throw new Error(`targets.flexTemplates[${index}].startsTomorrow はtrueまたはfalseで指定してください`);
     }
+    let remainingLabels: string[] | undefined;
+    if (flex.remainingLabels !== undefined) {
+      if (!Array.isArray(flex.remainingLabels)) {
+        throw new Error(`targets.flexTemplates[${index}].remainingLabels は配列で指定してください`);
+      }
+      remainingLabels = flex.remainingLabels.map((value, labelIndex) => {
+        const label = textValue(value, `targets.flexTemplates[${index}].remainingLabels[${labelIndex}]`);
+        if (!REMAINING_LABEL_RE.test(label)) {
+          throw new Error(`targets.flexTemplates[${index}].remainingLabels[${labelIndex}] は「(残り7名)」または「(あと1名)」形式で指定してください`);
+        }
+        return label;
+      });
+      if (remainingLabels.length !== Number(flex.count)) {
+        throw new Error(`targets.flexTemplates[${index}].remainingLabels はcountと同じ件数で指定してください`);
+      }
+    }
     return {
       id: positiveInteger(flex.id, `targets.flexTemplates[${index}].id`),
       label: textValue(flex.label, `targets.flexTemplates[${index}].label`),
       count: positiveInteger(flex.count, `targets.flexTemplates[${index}].count`),
       ...(flex.startsTomorrow === true ? { startsTomorrow: true } : {}),
+      ...(remainingLabels ? { remainingLabels } : {}),
     };
   });
   const flexIds = flexTemplates.map((template) => template.id);

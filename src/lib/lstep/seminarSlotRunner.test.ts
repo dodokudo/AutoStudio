@@ -8,6 +8,7 @@ import {
   formActionCorrect,
   dateTagHour,
   flexRotationPlan,
+  flexLabel,
   replaceReminderDateBlock,
   runSeminarSchedule,
   tagIdFromHref,
@@ -97,6 +98,14 @@ test('表示枠が一致している場合はボタンを増減しない', () =>
     flexRotationPlan(labels, labels),
     { removeFromTop: 0, appendToBottom: 0 },
   );
+});
+
+test('素材内の日程ごとに指定した残席表示を設定する', async () => {
+  const { buildSlot } = await import('./seminarSchedule');
+  const slot = buildSlot(new Date(2026, 8, 14), 10);
+  const current = [{ label: '9/13(日) 10:00~(残り6名)' }];
+  assert.equal(flexLabel(slot, current, 0, '(残り7名)'), '9/14(月) 10:00~(残り7名)');
+  assert.equal(flexLabel(slot, current, 0, '(あと1名)'), '9/14(月) 10:00~(あと1名)');
 });
 
 test('新規アクションの作成時にコピー元を変更せず日付タグだけ差し替える', () => {

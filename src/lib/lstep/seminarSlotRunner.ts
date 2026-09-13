@@ -498,11 +498,17 @@ async function updateForm(page: Page, desired: SeminarSlot[], tags: DateTag[], a
   return `${currentLabels.length}件を${desiredLabels.length}件へ更新・検証済み`;
 }
 
-function flexLabel(slot: SeminarSlot, current: Array<{ label: string }>, index: number): string {
+export function flexLabel(
+  slot: SeminarSlot,
+  current: Array<{ label: string }>,
+  index: number,
+  configuredSuffix?: string,
+): string {
   const source = current.find((card) => card.label.startsWith(slot.choiceLabel))
     ?? current[Math.min(index, Math.max(0, current.length - 1))];
-  const suffix = source?.label.match(/\(残り\d+名\)$/)?.[0]
-    ?? current.at(-1)?.label.match(/\(残り\d+名\)$/)?.[0]
+  const suffix = configuredSuffix
+    ?? source?.label.match(/\((?:残り|あと)\d+名\)$/)?.[0]
+    ?? current.at(-1)?.label.match(/\((?:残り|あと)\d+名\)$/)?.[0]
     ?? '';
   const label = source?.label.includes(') ') ? slot.choiceLabel : slot.choiceLabel.replace(') ', ')');
   return `${label}${suffix}`;
@@ -849,7 +855,7 @@ function setFlexAction(block: Record<string, unknown>, assignment: FlexAssignmen
 }
 
 export function dateButtonId(templateId: string, label: string, actionId: number): string {
-  const date = label.replace(/\(残り\d+名\)$/, '').replace(/\s/g, '');
+  const date = label.replace(/\((?:残り|あと)\d+名\)$/, '').replace(/\s/g, '');
   return `blauto${createHash('sha256').update(`${templateId}:${date}:${actionId}`).digest('hex').slice(0, 24)}`;
 }
 
@@ -997,8 +1003,8 @@ async function updateFlex(
       tagIds: card.tagIds,
     });
   }
-  // 「残りN名」はテンプレートごとに意図した並びがあるため、日時だけを差し替えて保持する。
-  const labels = desired.map((slot, index) => flexLabel(slot, current, index));
+  const template = config.targets.flexTemplates.find((item) => String(item.id) === id);
+  const labels = desired.map((slot, index) => flexLabel(slot, current, index, template?.remainingLabels?.[index]));
   const correct = current.length === desired.length && current.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
     return card.label === labels[index]

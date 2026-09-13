@@ -23,7 +23,7 @@ const validConfig: SeminarLaunchConfig = {
     dateTemplateId: 268_609_107,
     reminderTemplate: { id: 268_822_941, groupId: 1_020_108 },
     flexTemplates: [
-      { id: 268_607_623, label: '2日後07:08', count: 6 },
+      { id: 268_607_623, label: '2日後07:08', count: 6, remainingLabels: ['(残り10名)', '(残り9名)', '(残り8名)', '(残り10名)', '(残り7名)', '(残り9名)'] },
       { id: 268_608_656, label: '8日後20:03', count: 2, startsTomorrow: true },
     ],
     oneTapTagId: 10_242_626,
@@ -38,6 +38,33 @@ test('accepts a complete reusable seminar launch config', () => {
   assert.equal(parsed.launchId, '2026-09-seminar');
   assert.deepEqual(parsed.schedule.slotHours, [13, 21]);
   assert.equal(parsed.targets.flexTemplates[1].startsTomorrow, true);
+  assert.deepEqual(parsed.targets.flexTemplates[0].remainingLabels, ['(残り10名)', '(残り9名)', '(残り8名)', '(残り10名)', '(残り7名)', '(残り9名)']);
+});
+
+test('rejects an invalid remaining label', () => {
+  assert.throws(
+    () => parseSeminarLaunchConfig({
+      ...validConfig,
+      targets: {
+        ...validConfig.targets,
+        flexTemplates: [{ id: 1, label: '2日後', count: 1, remainingLabels: ['残り7'] }],
+      },
+    }),
+    /remainingLabels/,
+  );
+});
+
+test('requires one remaining label for each displayed slot', () => {
+  assert.throws(
+    () => parseSeminarLaunchConfig({
+      ...validConfig,
+      targets: {
+        ...validConfig.targets,
+        flexTemplates: [{ id: 1, label: '2日後', count: 2, remainingLabels: ['(残り7名)'] }],
+      },
+    }),
+    /countと同じ件数/,
+  );
 });
 
 test('rejects a scheduler hour that is not one hour before its slot', () => {
