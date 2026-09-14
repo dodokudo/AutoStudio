@@ -1127,7 +1127,9 @@ async function updateReminder(page: Page, desired: SeminarSlot[], apply: boolean
   if (await dateParagraphs.count() !== nextDates.length) {
     throw new Error(`最終リマインドの日程行数が一致しません (現在${await dateParagraphs.count()}件 / 期待${nextDates.length}件)`);
   }
-  for (let index = 0; index < nextDates.length; index += 1) {
+  // Lステップのエディタは入力のたびに段落DOMを再構築することがある。
+  // 後ろから置換し、未更新段落のnth位置が変わらないようにする。
+  for (let index = nextDates.length - 1; index >= 0; index -= 1) {
     const paragraph = dateParagraphs.nth(index);
     await paragraph.evaluate((element) => {
       const selection = window.getSelection();
