@@ -42,6 +42,7 @@ interface SurfaceSnapshot {
 
 interface FlexCardState {
   blockId: string;
+  actionBindingId: number;
   label: string;
   action: string;
   actionId: number;
@@ -833,6 +834,7 @@ function replaceDocText(value: unknown, next: string): void {
 
 type FlexBlockAction = {
   data?: {
+    id?: unknown;
     act?: {
       aid?: unknown;
       description?: unknown;
@@ -856,7 +858,7 @@ function setFlexAction(block: Record<string, unknown>, assignment: FlexAssignmen
 
 export function dateButtonId(templateId: string, label: string, actionId: number): string {
   const date = label.replace(/\((?:残り|あと)\d+名\)$/, '').replace(/\s/g, '');
-  return `blauto${createHash('sha256').update(`${templateId}:${date}:${actionId}`).digest('hex').slice(0, 24)}`;
+  return `blautov2${createHash('sha256').update(`${templateId}:${date}:${actionId}`).digest('hex').slice(0, 22)}`;
 }
 
 /** 終了した日程ボタンを外し、新しい日程は新しいブロックIDで追加する。 */
@@ -875,6 +877,13 @@ export function rebuildDateButtons(
     const existing = dates.find((block) => block.id === id);
     const block = structuredClone(existing ?? dates.find((block) => textFromDoc(block.text) === label) ?? dates.at(-1)!);
     block.id = id;
+    if (!existing) {
+      const action = flexBlockAction(block);
+      if (!action?.data) throw new Error('Flexメッセージの日程ボタンに内部アクションIDがありません');
+      // Lステップの複製処理と同じくnullにする。複製元のIDを残すと、
+      // 複数ボタンが同じ内部アクションとして扱われ、末尾の日時が実行される。
+      action.data.id = null;
+    }
     replaceDocText(block.text, label);
     setFlexAction(block, assignment);
     return block;
@@ -923,8 +932,12 @@ async function patchFlexButtons(
   const verifiedLabels = verifiedBlocks.map((block) => textFromDoc(block.text));
   const actualIds = verifiedBlocks.map((block) => String(block.id));
   if (JSON.stringify(actualIds) !== JSON.stringify(expectedIds)) throw new Error(`Flex ${id}: 新規ボタンIDの保存後検証に失敗しました`);
-  console.log(`[seminar] Flex ${id}: 旧ボタン削除${beforeIds.filter((id) => !actualIds.includes(id)).length}・新規ボタン${actualIds.filter((id) => !beforeIds.includes(id)).length}・ID検証済み`);
+  console.log(`[seminar] Flex ${id}: 旧ボタン削除${beforeIds.filter((id) => !actualIds.includes(id)).length}・新規ボタン${actualIds.filter((id) => !beforeIds.includes(id)).length}・ボタン/アクション/内部結合ID検証済み`);
   const verifiedActionIds = verifiedBlocks.map((block) => Number(flexBlockAction(block)?.data?.act?.aid ?? 0));
+  const verifiedBindingIds = verifiedBlocks.map((block) => Number(flexBlockAction(block)?.data?.id ?? 0));
+  if (verifiedBindingIds.some((bindingId) => bindingId <= 0) || new Set(verifiedBindingIds).size !== verifiedBindingIds.length) {
+    throw new Error(`Flex ${id}: ボタン内部結合IDの新規発行・重複検証に失敗しました (${verifiedBindingIds.join(',')})`);
+  }
   if (JSON.stringify(verifiedLabels) !== JSON.stringify(labels)) throw new Error(`Flex ${id} のAPI保存後検証に失敗しました`);
   if (JSON.stringify(verifiedActionIds) !== JSON.stringify(assignments.map((assignment) => assignment.actionId))) {
     throw new Error(`Flex ${id} の新規アクション紐付け検証に失敗しました`);
@@ -950,10 +963,12 @@ async function readFlexState(page: Page, id: string): Promise<FlexCardState[]> {
   if (dateBlocks.length !== cards.length) throw new Error(`Flex ${id} の表示とアクション件数が一致しません (${cards.length}/${dateBlocks.length})`);
 
   const actions = await Promise.all(dateBlocks.map(async (block) => {
+    const actionBindingId = Number(flexBlockAction(block)?.data?.id ?? 0);
     const actionId = Number(flexBlockAction(block)?.data?.act?.aid ?? 0);
-    if (!actionId) return { actionId: 0, actionName: '', actionDescription: '', tagIds: [] };
+    if (!actionId) return { actionBindingId, actionId: 0, actionName: '', actionDescription: '', tagIds: [] };
     const action = await readAction(page, actionId);
     return {
+      actionBindingId,
       actionId,
       actionName: actionNameOf(action),
       actionDescription: String(action.description ?? flexBlockAction(block)?.data?.act?.description ?? ''),
@@ -1005,6 +1020,9 @@ async function updateFlex(
   }
   const template = config.targets.flexTemplates.find((item) => String(item.id) === id);
   const labels = desired.map((slot, index) => flexLabel(slot, current, index, template?.remainingLabels?.[index]));
+  const bindingIds = current.map((card) => card.actionBindingId);
+  const uniqueBindingIds = bindingIds.every((bindingId) => bindingId > 0)
+    && new Set(bindingIds).size === bindingIds.length;
   const correct = current.length === desired.length && current.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
     return card.label === labels[index]
@@ -1014,7 +1032,7 @@ async function updateFlex(
       && card.tagIds.includes(tagId(tag))
       && card.tagIds.includes(config.targets.oneTapTagId)
       && (!config.targets.hourTags || card.tagIds.includes(config.targets.hourTags[String(desired[index].hour)].id));
-  });
+  }) && uniqueBindingIds;
   if (correct) return '変更なし';
   if (!apply) return `${current.map((card) => card.label).join(' / ')} -> ${labels.join(' / ')}`;
 
@@ -1043,6 +1061,7 @@ async function updateFlex(
   }
   await patchFlexButtons(page, id, labels, assignments);
   const verified = await readFlexState(page, id);
+  const verifiedBindingIds = verified.map((card) => card.actionBindingId);
   if (verified.length !== desired.length || !verified.every((card, index) => {
     const tag = tagForSlot(tags, desired[index]);
     return card.label === labels[index]
@@ -1053,8 +1072,11 @@ async function updateFlex(
       && card.tagIds.includes(tagId(tag))
       && card.tagIds.includes(config.targets.oneTapTagId)
       && (!config.targets.hourTags || card.tagIds.includes(config.targets.hourTags[String(desired[index].hour)].id));
-  })) throw new Error(`テンプレート${id}: 保存後検証に失敗しました`);
-  return `${desired.length}枠を更新・新規アクションID検証済み`;
+  }) || verifiedBindingIds.some((bindingId) => bindingId <= 0)
+    || new Set(verifiedBindingIds).size !== verifiedBindingIds.length) {
+    throw new Error(`テンプレート${id}: 保存後検証に失敗しました`);
+  }
+  return `${desired.length}枠を更新・ボタン/アクション/内部結合ID検証済み`;
 }
 
 async function readDateTemplate(page: Page, config: SeminarLaunchConfig): Promise<string[]> {

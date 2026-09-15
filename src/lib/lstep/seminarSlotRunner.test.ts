@@ -156,7 +156,7 @@ test('期限切れボタンを除外し、新日程は新しいIDで追加、既
   const label = (day: number) => `9/${day}(土)10:00~`;
   const block = (day: number, aid: number) => ({ id: dateButtonId('123', label(day), aid), type: 'button',
     text: { type: 'doc', content: [{ type: 'text', text: label(day) }] },
-    action: { data: { act: { aid, description: 'old' } }, description: 'old' } });
+    action: { data: { id: 5000 + day, act: { aid, description: 'old' } }, description: 'old' } });
   const before = [{ id: 'heading', text: { text: '案内' } }, block(12, 100), block(13, 101), { id: 'form-link', action: { url: 'unchanged' } }];
   const snapshot = structuredClone(before);
   const after = rebuildDateButtons(before, '123', [label(13), label(14)], [{ actionId: 101, actionDescription: 'old' }, { actionId: 102, actionDescription: 'new' }]);
@@ -168,12 +168,15 @@ test('期限切れボタンを除外し、新日程は新しいIDで追加、既
   assert.equal(after[2].id, dateButtonId('123', label(14), 102));
   assert.notEqual(after[2].id, before[2].id);
   assert.equal((after[2].action as {data:{act:{aid:number}}}).data.act.aid, 102);
+  assert.equal((after[1].action as {data:{id:number}}).data.id, 5013);
+  assert.equal((after[2].action as {data:{id:null}}).data.id, null);
   assert.deepEqual(rebuildDateButtons(after, '123', [label(13), label(14)], [{actionId:101,actionDescription:'old'},{actionId:102,actionDescription:'new'}]), after);
 });
 
-test('旧方式のボタンは表示が同じでも新しいボタンIDへ移行する', () => {
-  const before = [{ id: 'bl1234', text: { type: 'doc', content: [{text:'9/12(土)10:00~'}] }, action: { data: {act: {aid:100}} } }];
+test('旧方式のボタンは表示が同じでも新しいボタンIDへ移行し、内部結合IDも新規発行対象にする', () => {
+  const before = [{ id: 'bl1234', text: { type: 'doc', content: [{text:'9/12(土)10:00~'}] }, action: { data: {id:12329386,act: {aid:100}} } }];
   const next = rebuildDateButtons(before, '123', ['9/12(土)10:00~'], [{actionId:100,actionDescription:'same action'}]);
   assert.notEqual(next[0].id, before[0].id);
   assert.equal((next[0].action as {data:{act:{aid:number}}}).data.act.aid, 100);
+  assert.equal((next[0].action as {data:{id:null}}).data.id, null);
 });
