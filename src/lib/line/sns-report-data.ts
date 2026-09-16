@@ -2,6 +2,7 @@ import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import { getDailyPostStats } from '@/lib/threadsInsightsData';
 import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
 import { getThreadsLinkClicksByRange } from '@/lib/links/analytics';
+import { getBankBalances, type BankBalance } from './bank-balances';
 
 const PROJECT_ID = resolveProjectId();
 const THREADS_DATASET = 'autostudio_threads';
@@ -42,6 +43,7 @@ export interface DailyReportData {
 
   // MoneyForward 支出
   mfExpense: number;
+  mfBankBalances: BankBalance[] | null;
 }
 
 export interface WeeklyReportData {
@@ -358,6 +360,7 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     lineFromThreads,
     lineFromIg,
     mfExpense,
+    mfBankBalances,
   ] = await Promise.all([
     fetchThreadsMetrics(date),
     fetchThreadsMetrics(prevDate),
@@ -370,6 +373,10 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     countLineSourceRegistrations(PROJECT_ID, { startDate: date, endDate: date, sourceName: 'Threads' }),
     countLineSourceRegistrations(PROJECT_ID, { startDate: date, endDate: date, sourceName: 'Instagram' }),
     fetchDailyExpense(date),
+    getBankBalances().catch((error) => {
+      console.error('[line-report] Failed to fetch bank balances:', error);
+      return null;
+    }),
   ]);
 
   const thPost = thPostStats[0];
@@ -402,6 +409,7 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     igStoryViewRate,
 
     mfExpense,
+    mfBankBalances,
   };
 }
 

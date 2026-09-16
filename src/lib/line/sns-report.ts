@@ -64,6 +64,23 @@ export function formatDailyReport(d: DailyReportData): string {
   lines.push(`- 合計：${yen(d.mfExpense)}`);
   lines.push('');
 
+  lines.push('🏦 口座残高（最新の連携データ）');
+  if (!d.mfBankBalances?.length) {
+    lines.push('- 残高を取得できませんでした');
+  } else {
+    for (const balance of d.mfBankBalances) {
+      lines.push(`- ${balance.bank}：${balance.amount == null ? '未取得' : yen(balance.amount)}`);
+      const updatedAt = balance.updatedAt?.replace('T', ' ').slice(0, 16).replace(/-/g, '/');
+      lines.push(`  更新：${updatedAt ? `${updatedAt}（日本時間）` : '日時不明'}${balance.status !== 'ok' ? '／連携エラー・要確認' : ''}`);
+    }
+    if (d.mfBankBalances.every((balance) => balance.amount != null)) {
+      lines.push(`- 合計：${yen(d.mfBankBalances.reduce((sum, balance) => sum + balance.amount!, 0))}`);
+    } else {
+      lines.push('- 合計：一部の口座残高が未取得のため集計できません');
+    }
+  }
+  lines.push('');
+
   // Auto comments
   const comments = generateAutoComments(d);
   if (comments.length > 0) {
