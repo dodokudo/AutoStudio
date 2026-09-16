@@ -23,6 +23,7 @@ import {
   type NodeRow,
   type PostRow,
 } from '@/lib/threadsResearch';
+import { THREADS_RESEARCH_TARGET_USERNAMES } from '@/lib/threadsResearchTargets';
 
 /** Meta's own accounts - the only ones readable before Advanced Access is granted. */
 export const STANDARD_ACCESS_USERNAMES = ['meta', 'threads', 'instagram', 'facebook'];
@@ -237,6 +238,41 @@ export async function collectAll(
   const results: AccountResult[] = [];
   for (const entry of targets) {
     results.push(await collectAccount(userId, accessToken, entry.username, options));
+  }
+
+  return { results, collectedAt: new Date().toISOString() };
+}
+
+/**
+ * Daily bounded refresh for the eight approved research targets.
+ * A three-day overlap catches newly published posts and late self-replies while
+ * keeping the cron well below the serverless timeout. Older archive rows remain.
+ */
+export async function collectDailyResearchTargets(
+  userId: string,
+  accessToken: string
+): Promise<CollectResult> {
+  const until = new Date();
+  const since = new Date(until.getTime() - 3 * 24 * 60 * 60 * 1000);
+  const results: AccountResult[] = [];
+  const ACCOUNT_CONCURRENCY = 2;
+  for (
+    let start = 0;
+    start < THREADS_RESEARCH_TARGET_USERNAMES.length;
+    start += ACCOUNT_CONCURRENCY
+  ) {
+    const batch = await Promise.all(
+      THREADS_RESEARCH_TARGET_USERNAMES.slice(start, start + ACCOUNT_CONCURRENCY).map(
+        (username) =>
+          collectAccount(userId, accessToken, username, {
+            since: since.toISOString(),
+            until: until.toISOString(),
+            maxPosts: 500,
+            includeConversations: true,
+          })
+      )
+    );
+    results.push(...batch);
   }
 
   return { results, collectedAt: new Date().toISOString() };

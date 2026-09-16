@@ -268,7 +268,9 @@ export async function saveProfileSnapshot(
   await executeDML({
     query: `
       DELETE FROM ${T_PROFILES}
-      WHERE user_id = @userId AND username = @username AND snapshot_date = CURRENT_DATE()
+      WHERE user_id = @userId
+        AND username = @username
+        AND snapshot_date = CURRENT_DATE('Asia/Tokyo')
     `,
     params: { userId, username },
   });
@@ -281,7 +283,7 @@ export async function saveProfileSnapshot(
         quotes_count, views_count, collected_at
       )
       VALUES (
-        @userId, @username, CURRENT_DATE(), @name, @biography, @pictureUrl,
+        @userId, @username, CURRENT_DATE('Asia/Tokyo'), @name, @biography, @pictureUrl,
         @isVerified, @followerCount, @likesCount, @repliesCount, @repostsCount,
         @quotesCount, @viewsCount, CURRENT_TIMESTAMP()
       )
@@ -516,6 +518,65 @@ export interface AccountSummary {
   avgSelfReplies: number | null;
   avgTextLength: number | null;
   latestPostAt: string | null;
+}
+
+export interface ProfileHistoryPoint {
+  username: string;
+  snapshotDate: string;
+  collectedAt: string | null;
+  followerCount: number | null;
+  viewsCount: number | null;
+  likesCount: number | null;
+  repliesCount: number | null;
+  repostsCount: number | null;
+  quotesCount: number | null;
+}
+
+/** Daily rolling-seven-day profile snapshots, oldest first for charting. */
+export async function getProfileHistory(
+  userId: string,
+  days = 90
+): Promise<ProfileHistoryPoint[]> {
+  await ensureResearchTables();
+  const safeDays = Math.max(1, Math.min(365, Math.floor(days)));
+  const [rows] = await bigquery.query({
+    query: `
+      SELECT
+        username,
+        CAST(snapshot_date AS STRING) AS snapshot_date,
+        collected_at,
+        follower_count,
+        views_count,
+        likes_count,
+        replies_count,
+        reposts_count,
+        quotes_count
+      FROM ${T_PROFILES}
+      WHERE user_id = @userId
+        AND snapshot_date >= DATE_SUB(
+          CURRENT_DATE('Asia/Tokyo'),
+          INTERVAL ${safeDays - 1} DAY
+        )
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY username, snapshot_date
+        ORDER BY collected_at DESC
+      ) = 1
+      ORDER BY snapshot_date, username
+    `,
+    params: { userId },
+  });
+
+  return (rows as Record<string, unknown>[]).map((row) => ({
+    username: String(row.username),
+    snapshotDate: String(row.snapshot_date),
+    collectedAt: toIso(row.collected_at),
+    followerCount: row.follower_count === null ? null : Number(row.follower_count),
+    viewsCount: row.views_count === null ? null : Number(row.views_count),
+    likesCount: row.likes_count === null ? null : Number(row.likes_count),
+    repliesCount: row.replies_count === null ? null : Number(row.replies_count),
+    repostsCount: row.reposts_count === null ? null : Number(row.reposts_count),
+    quotesCount: row.quotes_count === null ? null : Number(row.quotes_count),
+  }));
 }
 
 /** One row per watched account, joining the latest profile snapshot to post aggregates. */

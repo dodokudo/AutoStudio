@@ -2,6 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { THREADS_RESEARCH_TARGET_USERNAMES } from '@/lib/threadsResearchTargets';
+import {
+  CompetitorHistoryChart,
+  type CompetitorHistoryPoint,
+} from './competitor-history-chart';
+
 /**
  * Operational competitor research workspace.
  *
@@ -92,6 +98,7 @@ interface AccountSummary {
 interface WatchlistResult {
   watchlist: WatchlistEntry[];
   summaries: AccountSummary[];
+  history: CompetitorHistoryPoint[];
 }
 
 interface CollectedPost {
@@ -254,18 +261,8 @@ function InlineError({ children }: { children: string }) {
 }
 
 const WORKSPACE_ID = 'autostudio';
-const TARGET_USERNAMES = [
-  'mon_guchi',
-  'wakabayashi_015',
-  'soda_noter',
-  'threads_shukyaku',
-  'ochi__threads',
-  'satoru_obento',
-  'yama_threads',
-  'reborn_rhino_mama',
-] as const;
 const TARGET_USERNAME_ORDER = new Map<string, number>(
-  TARGET_USERNAMES.map((target, index) => [target, index])
+  THREADS_RESEARCH_TARGET_USERNAMES.map((target, index) => [target, index])
 );
 
 export function CompetitorResearchTab() {
@@ -289,6 +286,10 @@ export function CompetitorResearchTab() {
 
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
   const [summaries, setSummaries] = useState<AccountSummary[]>([]);
+  const [history, setHistory] = useState<CompetitorHistoryPoint[]>([]);
+  const [historyUsername, setHistoryUsername] = useState<string>(
+    THREADS_RESEARCH_TARGET_USERNAMES[0]
+  );
   const [loadingWatchlist, setLoadingWatchlist] = useState(true);
   const [watchlistError, setWatchlistError] = useState<string | null>(null);
   const [collectingUsername, setCollectingUsername] = useState<string | null>(null);
@@ -319,6 +320,11 @@ export function CompetitorResearchTab() {
     [summaries]
   );
 
+  const selectedHistory = useMemo(
+    () => history.filter((point) => point.username === historyUsername),
+    [history, historyUsername]
+  );
+
   const loadWatchlist = useCallback(async () => {
     setLoadingWatchlist(true);
     setWatchlistError(null);
@@ -329,6 +335,7 @@ export function CompetitorResearchTab() {
       );
       setWatchlist(result.watchlist);
       setSummaries(result.summaries);
+      setHistory(result.history ?? []);
     } catch (error) {
       setWatchlistError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -983,6 +990,48 @@ export function CompetitorResearchTab() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="font-bold text-[color:var(--color-text-primary)]">7日間集計の推移</h3>
+            <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
+              各収集日時点の「直近7日間合計」です。投稿別・1日単位の閲覧実績ではありません。
+            </p>
+          </div>
+          <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
+        </div>
+
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+          {THREADS_RESEARCH_TARGET_USERNAMES.map((target) => {
+            const summary = targetSummaries.find((account) => account.username === target);
+            const selected = historyUsername === target;
+            return (
+              <button
+                key={target}
+                type="button"
+                onClick={() => setHistoryUsername(target)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selected
+                    ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-white'
+                    : 'border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                {summary?.name || `@${target}`}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3">
+          <CompetitorHistoryChart data={selectedHistory} />
+        </div>
+        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
+          {selectedHistory.length <= 1
+            ? '履歴は本日分から蓄積します。2回目の自動収集後から変化が線で表示されます。'
+            : `${selectedHistory.length}日分のスナップショットを表示しています。`}
+        </p>
       </section>
 
       {selectedSavedUsername && (

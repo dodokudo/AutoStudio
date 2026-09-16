@@ -4,6 +4,7 @@ import {
   THREADS_RESEARCH_OWNER_ID,
   addToWatchlist,
   getAccountSummaries,
+  getProfileHistory,
   listWatchlist,
   normalizeUsername,
   removeFromWatchlist,
@@ -13,11 +14,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const [watchlist, summaries] = await Promise.all([
+    const [watchlist, summaries, history] = await Promise.all([
       listWatchlist(THREADS_RESEARCH_OWNER_ID),
       getAccountSummaries(THREADS_RESEARCH_OWNER_ID),
+      getProfileHistory(THREADS_RESEARCH_OWNER_ID, 90),
     ]);
-    return NextResponse.json({ watchlist, summaries });
+    return NextResponse.json({ watchlist, summaries, history });
   } catch (error) {
     console.error('[threads/research/watchlist] list failed', error);
     return NextResponse.json(
