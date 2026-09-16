@@ -31,7 +31,7 @@ function resolveThreadsUserId(accountKey?: ThreadsAccountKey): string {
   return getThreadsAccount(resolveThreadsAccountKey(accountKey)).threadsUserId;
 }
 
-async function getThreadsToken(accountKey?: ThreadsAccountKey): Promise<string | null> {
+export async function getThreadsAccessToken(accountKey?: ThreadsAccountKey): Promise<string | null> {
   // 環境変数にあればそれを使う（フォールバック）
   const envToken = process.env.THREADS_TOKEN?.trim();
   const userId = resolveThreadsUserId(accountKey);
@@ -70,7 +70,7 @@ async function request(
   path: string,
   options: RequestInit & { params?: Record<string, string>; accountKey?: ThreadsAccountKey } = {},
 ) {
-  const token = await getThreadsToken(options.accountKey);
+  const token = await getThreadsAccessToken(options.accountKey);
   const url = new URL(`${GRAPH_BASE}/${path}`);
   if (options.params) {
     Object.entries(options.params).forEach(([key, value]) => url.searchParams.append(key, value));
@@ -203,7 +203,7 @@ export async function postThread(
     return mockId;
   }
 
-  const token = await getThreadsToken(accountKey);
+  const token = await getThreadsAccessToken(accountKey);
   const userId = resolveThreadsUserId(accountKey);
   if (!token || !userId) {
     const credentialError = new Error('Threads API credentials are not configured');
@@ -271,7 +271,7 @@ export interface ThreadInsights {
 }
 
 export async function getThreadInsights(threadId: string, accountKey?: ThreadsAccountKey): Promise<ThreadInsights> {
-  const token = await getThreadsToken(accountKey);
+  const token = await getThreadsAccessToken(accountKey);
   const userId = resolveThreadsUserId(accountKey);
   if (!token || !userId) {
     throw new Error('Threads API credentials are not configured');

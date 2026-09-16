@@ -10,6 +10,7 @@ import { resolveProjectId } from "@/lib/bigquery";
 import { PostTab } from "./_components/post-tab";
 import { InsightsTab } from "./_components/insights-tab";
 import { CompetitorTabLight } from "./_components/competitor-tab-light";
+import { CompetitorResearchTab } from "./_components/competitor-research-tab";
 import { ReportTab } from "./_components/report-tab";
 import { ScheduleTab } from "./_components/schedule-tab";
 import { InsightsRangeSelector } from "./_components/insights-range-selector";
@@ -157,7 +158,7 @@ export default async function ThreadsHome({
 
   const tabParamRaw = typeof resolvedSearchParams?.tab === "string" ? resolvedSearchParams.tab : undefined;
   const normalizedTabParam = tabParamRaw === 'overview' ? 'insights' : tabParamRaw;
-  const allowedTabs = ['insights', 'post', 'schedule', 'competitor', 'report'] as const;
+  const allowedTabs = ['insights', 'post', 'schedule', 'competitor', 'research', 'report'] as const;
   const activeTab: ThreadsTabKey = allowedTabs.find((tab) => tab === normalizedTabParam) ?? 'insights';
 
   const rangeSelectorOptions = RANGE_SELECT_OPTIONS;
@@ -176,6 +177,7 @@ export default async function ThreadsHome({
       { id: 'schedule' as const, label: '予約投稿' },
       { id: 'post' as const, label: '投稿' },
       { id: 'competitor' as const, label: '競合インサイト' },
+      { id: 'research' as const, label: '競合リサーチ' },
       { id: 'report' as const, label: 'レポート' },
     ] satisfies Array<{ id: ThreadsTabKey; label: string }>
     ).map((item) => {
@@ -220,14 +222,16 @@ export default async function ThreadsHome({
     <ThreadsTabShell
       tabItems={tabItems}
       activeTab={activeTab}
-      accountSelector={accountSelector}
+      accountSelector={activeTab === 'research' ? undefined : accountSelector}
       rangeSelector={
-        <InsightsRangeSelector
-          options={rangeSelectorOptions}
-          value={rangeValueForUi}
-          customStart={customStart}
-          customEnd={customEnd}
-        />
+        activeTab === 'research' ? undefined : (
+          <InsightsRangeSelector
+            options={rangeSelectorOptions}
+            value={rangeValueForUi}
+            customStart={customStart}
+            customEnd={customEnd}
+          />
+        )
       }
     >
       {children}
@@ -263,6 +267,10 @@ export default async function ThreadsHome({
           endDate={formatDateInput(resolvedRange.end)}
         />,
       );
+    }
+
+    if (activeTab === 'research') {
+      return renderTabShell(<CompetitorResearchTab />);
     }
 
     if (activeTab === 'report') {
