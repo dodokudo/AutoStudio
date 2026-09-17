@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import { sendAlertEmail } from '@/lib/notifications';
-import { isTokutenGuidePlaceholderComment, TOKUTEN_GUIDE_URL } from '@/lib/threadsText';
+import { isTokutenGuidePlaceholderComment, getTokutenGuideUrl } from '@/lib/threadsText';
 
 const PROJECT_ID = resolveProjectId();
 const DATASET = 'autostudio_threads';
 
 // 特典誘導テンプレート（文言・URLは必要に応じて変更）
-const TOKUTEN_GUIDE_TEMPLATE = `2500人以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
-${TOKUTEN_GUIDE_URL}`;
+const buildTokutenGuideTemplate = (accountKey: string) => `2500人以上が受け取っている2026年最新版のAI×Threadsノウハウはこちら▼
+${getTokutenGuideUrl(accountKey)}`;
 
 // 投稿の伸び検知条件
 const IMPRESSIONS_THRESHOLD = 1000; // インプレッション閾値
@@ -291,7 +291,7 @@ export async function POST() {
       // 3. 特典誘導がない場合は追加（コメント欄2の下 = depth=2に追加）
       if (!tokutenCheck.has_tokuten_guide) {
         console.log(`  Adding tokuten guide comment to comment3 (depth=2)...`);
-        const scheduleId = await scheduleComment(client, candidate.post_id, TOKUTEN_GUIDE_TEMPLATE, candidate.account_key);
+        const scheduleId = await scheduleComment(client, candidate.post_id, buildTokutenGuideTemplate(candidate.account_key), candidate.account_key);
         if (scheduleId) {
           tokutenCommentAdded = true;
           addedCount++;

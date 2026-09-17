@@ -204,7 +204,7 @@ async function executeScheduledPost(post: ScheduledPostRow): Promise<{
     }
 
     const normalizedText = comment.index >= 3
-      ? normalizeTokutenGuideComment(comment.text)
+      ? normalizeTokutenGuideComment(comment.text, post.target_account_key ?? post.source_account_key)
       : comment.text;
 
     if (normalizedText !== comment.text) {

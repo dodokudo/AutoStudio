@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       comment2MediaUrls: serializedComment2Media.urls,
       comment2MediaTypes: serializedComment2Media.types,
       comment2MediaAltTexts: serializedComment2Media.altTexts,
-      comment3: normalizeTokutenGuideComment(typeof comment3 === 'string' ? comment3 : ''),
+      comment3: normalizeTokutenGuideComment(typeof comment3 === 'string' ? comment3 : '', targetAccountKey),
       comment4: typeof comment4 === 'string' ? comment4 : '',
       comment5: typeof comment5 === 'string' ? comment5 : '',
       comment6: typeof comment6 === 'string' ? comment6 : '',

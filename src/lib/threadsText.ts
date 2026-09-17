@@ -64,7 +64,18 @@ export function sanitizeThreadsComment(value: string): string {
   return stripWithPatterns(value, COMMENT_LABEL_PATTERNS);
 }
 
-export const TOKUTEN_GUIDE_URL = 'https://lkit.jp/8mpo';
+// 特典誘導URLはアカウント別（末尾1あり＝本垢、なし＝サブ垢）。計測もこのslugで振り分けられる
+export const TOKUTEN_GUIDE_URL_BY_ACCOUNT: Record<'main' | 'sub', string> = {
+  main: 'https://lkit.jp/8mpo1',
+  sub: 'https://lkit.jp/8mpo',
+};
+
+export function getTokutenGuideUrl(accountKey?: string | null): string {
+  return accountKey === 'sub' ? TOKUTEN_GUIDE_URL_BY_ACCOUNT.sub : TOKUTEN_GUIDE_URL_BY_ACCOUNT.main;
+}
+
+/** @deprecated アカウント別に getTokutenGuideUrl を使う */
+export const TOKUTEN_GUIDE_URL = TOKUTEN_GUIDE_URL_BY_ACCOUNT.main;
 
 const TOKUTEN_GUIDE_PATTERNS = [
   /\d+(名|人)以上が受け取っている.*Threadsノウハウはこちら/u,
@@ -82,9 +93,9 @@ export function isTokutenGuidePlaceholderComment(value?: string | null): boolean
   return TOKUTEN_GUIDE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-export function normalizeTokutenGuideComment(value?: string | null): string {
+export function normalizeTokutenGuideComment(value?: string | null, accountKey?: string | null): string {
   const text = value?.trim() ?? '';
   if (!text) return '';
   if (!isTokutenGuidePlaceholderComment(text)) return text;
-  return `${text}\n${TOKUTEN_GUIDE_URL}`;
+  return `${text}\n${getTokutenGuideUrl(accountKey)}`;
 }

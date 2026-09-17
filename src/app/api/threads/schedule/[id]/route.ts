@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       comment2MediaUrls: serializedComment2Media?.urls,
       comment2MediaTypes: serializedComment2Media?.types,
       comment2MediaAltTexts: serializedComment2Media?.altTexts,
-      comment3: typeof comment3 === 'string' ? normalizeTokutenGuideComment(comment3) : undefined,
+      comment3: typeof comment3 === 'string' ? normalizeTokutenGuideComment(comment3, targetAccountKey) : undefined,
       comment4: typeof comment4 === 'string' ? comment4 : undefined,
       comment5: typeof comment5 === 'string' ? comment5 : undefined,
       comment6: typeof comment6 === 'string' ? comment6 : undefined,
