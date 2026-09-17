@@ -1,12 +1,14 @@
 import type { DailyReportData, WeeklyReportData } from './sns-report-data';
 
-function sign(n: number): string {
+function sign(n: number | null): string {
+  if (n == null) return '未取得';
   if (n > 0) return `+${n}`;
   if (n < 0) return `${n}`;
   return '±0';
 }
 
-function num(n: number): string {
+function num(n: number | null): string {
+  if (n == null) return '未取得';
   return n.toLocaleString('ja-JP');
 }
 
@@ -34,29 +36,30 @@ export function formatDailyReport(d: DailyReportData): string {
   lines.push('');
 
   // Threads
-  lines.push('💻 Threads');
+  lines.push('💻 Threads（メイン）');
   lines.push(`- フォロワー数：${num(d.thFollowers)}（${sign(d.thFollowerDelta)}）`);
   lines.push(`- 投稿数：${d.thPostCount}`);
-  lines.push(`- インプレッション：${num(d.thImpressions)}`);
-  lines.push(`- プロフクリック：${d.thProfileClicks}`);
-  lines.push(`- リンククリック：${d.thLinkClicks}`);
-  lines.push(`- LINE登録数：${d.thLineRegistrations}`);
+  lines.push(`- 閲覧数：${num(d.thImpressions)}`);
+  lines.push(`- LPアクセス：${d.thLinkClicks}`);
+  lines.push(`- LINE登録数：${d.thLineRegistrations == null ? '未判別（メイン専用の流入データなし）' : d.thLineRegistrations}`);
   lines.push('');
 
   // Instagram
   lines.push('📱 Instagram');
   lines.push(`- フォロワー数：${num(d.igFollowers)}（${sign(d.igFollowerDelta)}）`);
-  lines.push(`- 投稿数：${d.igPostCount}`);
+  lines.push(`- 投稿総数の増減：${sign(d.igPostCount)}`);
   lines.push(`- リーチ：${num(d.igReach)}`);
-  lines.push(`- リンククリック：${d.igLinkClicks}`);
+  lines.push(`- プロフィールリンクタップ：${num(d.igLinkClicks)}`);
   lines.push(`- LINE登録数：${d.igLineRegistrations}`);
+  lines.push('※リーチ・リンクタップはAPI取得時点の直近24時間');
+  lines.push(`- 取得日時：${d.igCollectedAt ? new Date(d.igCollectedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false }) + ' JST' : '未取得'}`);
   lines.push('');
 
   // Story
-  lines.push('ストーリー');
-  lines.push(`- 投稿数：${d.igStoryCount}`);
-  lines.push(`- 閲覧数：${num(d.igStoryViews)}`);
-  lines.push(`- 閲覧率：${d.igStoryViewRate}%`);
+  lines.push('ストーリー（保存済み投稿）');
+  lines.push(`- 投稿数：${d.igStoryCount > 0 ? d.igStoryCount : '取得記録なし'}`);
+  lines.push(`- 累積閲覧数の合計：${num(d.igStoryViews)}`);
+  lines.push(`- 1投稿平均閲覧数／フォロワー数：${d.igStoryViewRate == null ? '未取得' : `${d.igStoryViewRate}%`}`);
   lines.push('');
 
   // MoneyForward 支出
@@ -102,9 +105,6 @@ function generateAutoComments(d: DailyReportData): string[] {
   if (d.thPostCount === 0) {
     comments.push('Threads昨日投稿してないぞ。今日は投稿！');
   }
-  if (d.igStoryCount === 0) {
-    comments.push('ストーリー投稿がありません');
-  }
 
   return comments;
 }
@@ -125,28 +125,28 @@ export function formatWeeklyReport(w: WeeklyReportData): string {
   lines.push('');
 
   // Threads
-  lines.push('💻 Threads');
+  lines.push('💻 Threads（メイン）');
   lines.push(`- フォロワー数：${num(w.thFollowersWeekEnd)}（${sign(w.thFollowerDelta)}）`);
   lines.push(`- 投稿数：${w.thPostCount}`);
-  lines.push(`- インプレッション：${num(w.thImpressions)}`);
-  lines.push(`- プロフクリック：${w.thProfileClicks}`);
-  lines.push(`- リンククリック：${w.thLinkClicks}`);
-  lines.push(`- LINE登録数：${w.thLineRegistrations}`);
+  lines.push(`- 閲覧数：${num(w.thImpressions)}`);
+  lines.push(`- LPアクセス：${w.thLinkClicks}`);
+  lines.push(`- LINE登録数：${w.thLineRegistrations == null ? '未判別（メイン専用の流入データなし）' : w.thLineRegistrations}`);
   lines.push('');
 
   // Instagram
   lines.push('📱 Instagram');
   lines.push(`- フォロワー数：${num(w.igFollowersWeekEnd)}（${sign(w.igFollowerDelta)}）`);
-  lines.push(`- 投稿数：${w.igPostCount}`);
+  lines.push(`- 投稿総数の増減：${sign(w.igPostCount)}`);
   lines.push(`- リーチ：${num(w.igReach)}`);
-  lines.push(`- リンククリック：${w.igLinkClicks}`);
+  lines.push(`- プロフィールリンクタップ：${num(w.igLinkClicks)}`);
   lines.push(`- LINE登録数：${w.igLineRegistrations}`);
+  lines.push('※リーチ・リンクタップは各日の直近24時間値の合計（リーチは日をまたぐ重複あり）');
   lines.push('');
 
   // Story
-  lines.push('ストーリー');
-  lines.push(`- 投稿数：${w.igStoryCount}`);
-  lines.push(`- 閲覧数：${num(w.igStoryViews)}`);
+  lines.push('ストーリー（保存済み投稿）');
+  lines.push(`- 投稿数：${w.igStoryCount > 0 ? w.igStoryCount : '取得記録なし'}`);
+  lines.push(`- 累積閲覧数の合計：${num(w.igStoryViews)}`);
   lines.push('');
 
   // Weekly spending
@@ -159,10 +159,10 @@ export function formatWeeklyReport(w: WeeklyReportData): string {
   lines.push('');
   lines.push(`🟢 LINE：${w.monthLineDelta}人（先月同時点：${w.lastMonthLineDelta}人）`);
   lines.push('');
-  lines.push('💻 Threads');
+  lines.push('💻 Threads（メイン）');
   lines.push(`- フォロワー増：${sign(w.monthThFollowerDelta)}（先月：${sign(w.lastMonthThFollowerDelta)}）`);
   lines.push(`- 投稿数：${w.monthThPostCount}`);
-  lines.push(`- インプレッション：${num(w.monthThImpressions)}`);
+  lines.push(`- 閲覧数：${num(w.monthThImpressions)}`);
   lines.push('');
   lines.push('📱 Instagram');
   lines.push(`- フォロワー増：${sign(w.monthIgFollowerDelta)}（先月：${sign(w.lastMonthIgFollowerDelta)}）`);

@@ -6,10 +6,10 @@ import type { DailyReportData } from './sns-report-data';
 const report: DailyReportData = {
   reportDate: '2026-09-16', lineDelta: 4,
   thFollowers: 100, thFollowerDelta: 1, thPostCount: 1, thImpressions: 100,
-  thProfileClicks: 1, thLinkClicks: 1, thLineRegistrations: 1,
+  thLinkClicks: 1, thLineRegistrations: 1,
   igFollowers: 100, igFollowerDelta: 1, igPostCount: 1, igReach: 100,
   igLinkClicks: 1, igLineRegistrations: 1, igStoryCount: 1,
-  igStoryViews: 10, igStoryViewRate: 10, mfExpense: 1234,
+  igCollectedAt: '2026-09-16T15:05:00Z', igStoryViews: 10, igStoryViewRate: 10, mfExpense: 1234,
   mfBankBalances: [
     { bank: 'GMOあおぞらネット銀行', amount: 20000, updatedAt: '2026-09-17T03:53:00', status: 'ok' },
     { bank: '楽天銀行', amount: 0, updatedAt: '2026-09-16T03:53:00', status: 'ok' },
@@ -49,4 +49,35 @@ test('a balance query failure preserves spending and the rest of the report', ()
     assert.match(message, /💰 支出\n- 合計：¥1,234/);
     assert.match(message, /💻 Threads/);
   }
+});
+
+test('missing Instagram values remain unknown and never trigger a false story warning', () => {
+  const message = formatDailyReport({ ...report,
+    igFollowers: null, igFollowerDelta: null, igPostCount: null, igReach: null,
+    igLinkClicks: null, igStoryCount: 0, igStoryViews: null, igStoryViewRate: null, igCollectedAt: null,
+  });
+  assert.match(message, /フォロワー数：未取得（未取得）/);
+  assert.match(message, /リーチ：未取得/);
+  assert.match(message, /プロフィールリンクタップ：未取得/);
+  assert.match(message, /投稿数：取得記録なし/);
+  assert.doesNotMatch(message, /ストーリー投稿がありません|未取得%|null|NaN/);
+});
+
+test('uses main-account views and names each measurement accurately', () => {
+  const message = formatDailyReport({ ...report, thFollowers: 6955, thFollowerDelta: 21,
+    thImpressions: 12383, igFollowers: 1082, igFollowerDelta: -2, igLinkClicks: 0,
+  });
+  assert.match(message, /Threads（メイン）/);
+  assert.match(message, /6,955（\+21）/);
+  assert.match(message, /閲覧数：12,383/);
+  assert.match(message, /1,082（-2）/);
+  assert.match(message, /プロフィールリンクタップ：0/);
+  assert.match(message, /直近24時間/);
+  assert.match(message, /2026\/9\/17 0:05:00 JST/);
+  assert.doesNotMatch(message, /プロフクリック|インプレッション/);
+});
+
+test('does not report unclassified main-account LINE registrations as zero', () => {
+  const message = formatDailyReport({ ...report, thLineRegistrations: null });
+  assert.match(message, /LINE登録数：未判別（メイン専用の流入データなし）/);
 });
