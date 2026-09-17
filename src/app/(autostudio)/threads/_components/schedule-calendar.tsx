@@ -58,7 +58,7 @@ export function ScheduleCalendar({
   onDeleteItem,
 }: ScheduleCalendarProps) {
   const [detailItem, setDetailItem] = useState<ScheduledPost | null>(null);
-  const [listFilter, setListFilter] = useState<'all' | 'scheduled' | 'posted'>('scheduled');
+  const [listFilter, setListFilter] = useState<'all' | 'scheduled' | 'draft' | 'posted'>('scheduled');
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -80,6 +80,7 @@ export function ScheduleCalendar({
     .filter((item) => item.scheduledDate === selectedDate)
     .filter((item) => {
       if (listFilter === 'scheduled') return item.status === 'scheduled';
+      if (listFilter === 'draft') return item.status === 'draft';
       if (listFilter === 'posted') return item.status === 'posted';
       return true;
     })
@@ -169,6 +170,7 @@ export function ScheduleCalendar({
             {([
               { key: 'all', label: '一覧' },
               { key: 'scheduled', label: '予約済み' },
+              { key: 'draft', label: '下書き' },
               { key: 'posted', label: '投稿完了' },
             ] as const).map(({ key, label }) => (
               <button
@@ -190,7 +192,7 @@ export function ScheduleCalendar({
 
         {selectedItems.length === 0 ? (
           <div className="rounded-[var(--radius-lg)] border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] px-4 py-6 text-center text-xs text-[color:var(--color-text-muted)]">
-            予約がありません
+            {listFilter === 'draft' ? '下書きがありません' : '予約がありません'}
           </div>
         ) : (
           <div className="space-y-3">
