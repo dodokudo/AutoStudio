@@ -64,14 +64,14 @@ export function formatDailyReport(d: DailyReportData): string {
   lines.push(`- 合計：${yen(d.mfExpense)}`);
   lines.push('');
 
-  lines.push('🏦 口座残高（最新の連携データ）');
+  lines.push('🏦 口座残高');
   if (!d.mfBankBalances?.length) {
     lines.push('- 残高を取得できませんでした');
   } else {
     for (const balance of d.mfBankBalances) {
-      lines.push(`- ${balance.bank}：${balance.amount == null ? '未取得' : yen(balance.amount)}`);
-      const updatedAt = balance.updatedAt?.replace('T', ' ').slice(0, 16).replace(/-/g, '/');
-      lines.push(`  更新：${updatedAt ? `${updatedAt}（日本時間）` : '日時不明'}${balance.status !== 'ok' ? '／連携エラー・要確認' : ''}`);
+      const bank = ({ 'GMOあおぞらネット銀行': 'GMO', '楽天銀行': '楽天' } as Record<string, string>)[balance.bank] ?? balance.bank;
+      const warning = balance.amount != null && balance.status !== 'ok' ? '（連携エラー）' : '';
+      lines.push(`- ${bank}：${balance.amount == null ? '未取得' : yen(balance.amount)}${warning}`);
     }
     if (d.mfBankBalances.every((balance) => balance.amount != null)) {
       lines.push(`- 合計：${yen(d.mfBankBalances.reduce((sum, balance) => sum + balance.amount!, 0))}`);

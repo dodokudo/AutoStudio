@@ -16,11 +16,12 @@ const report: DailyReportData = {
   ],
 };
 
-test('keeps daily spending and shows each bank including zero with its own update time', () => {
+test('keeps daily spending and shows short bank names without update timestamps', () => {
   const message = formatDailyReport(report);
   assert.match(message, /💰 支出\n- 合計：¥1,234/);
-  assert.match(message, /GMOあおぞらネット銀行：¥20,000\n  更新：2026\/09\/17 03:53/);
-  assert.match(message, /楽天銀行：¥0\n  更新：2026\/09\/16 03:53/);
+  assert.match(message, /GMO：¥20,000/);
+  assert.match(message, /楽天：¥0/);
+  assert.doesNotMatch(message, /更新：|日本時間|GMOあおぞらネット銀行|楽天銀行|最新の連携データ/);
   assert.match(message, /- 合計：¥20,000/);
 });
 
@@ -29,8 +30,7 @@ test('does not present missing balances as zero or calculate an incomplete total
     report.mfBankBalances![0],
     { bank: '楽天銀行', amount: null, updatedAt: null, status: null },
   ] });
-  assert.match(message, /楽天銀行：未取得/);
-  assert.match(message, /日時不明／連携エラー・要確認/);
+  assert.match(message, /楽天：未取得/);
   assert.match(message, /合計：一部の口座残高が未取得/);
   assert.doesNotMatch(message, /- 合計：¥20,000/);
 });
@@ -39,7 +39,7 @@ test('flags cached balances when bank synchronization failed', () => {
   const message = formatDailyReport({ ...report, mfBankBalances: [
     { ...report.mfBankBalances![0], status: 'error' },
   ] });
-  assert.match(message, /更新：2026\/09\/17 03:53（日本時間）／連携エラー・要確認/);
+  assert.match(message, /GMO：¥20,000（連携エラー）/);
 });
 
 test('a balance query failure preserves spending and the rest of the report', () => {
