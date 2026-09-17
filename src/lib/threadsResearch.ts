@@ -11,6 +11,7 @@
  */
 
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
+import { selectSelfReplyTreeNodeIds } from '@/lib/threadsReplyTree';
 
 const projectId = resolveProjectId();
 const bigquery = createBigQueryClient(projectId);
@@ -420,6 +421,25 @@ export async function upsertAccountData(
       types: deletePostTypes,
     });
 
+    const scannedPosts = batch.filter((post) => post.conversationScanned);
+    if (scannedPosts.length > 0) {
+      const deleteNodeParams: Record<string, unknown> = { userId, username: clean };
+      const deleteNodeTypes: Record<string, string> = { userId: 'STRING', username: 'STRING' };
+      scannedPosts.forEach((post, idx) => {
+        deleteNodeParams[`rootPostId_${idx}`] = post.postId;
+        deleteNodeTypes[`rootPostId_${idx}`] = 'STRING';
+      });
+      await executeDML({
+        query: `
+          DELETE FROM ${T_NODES}
+          WHERE user_id = @userId AND username = @username
+            AND root_post_id IN (${scannedPosts.map((_, idx) => `@rootPostId_${idx}`).join(', ')})
+        `,
+        params: deleteNodeParams,
+        types: deleteNodeTypes,
+      });
+    }
+
     await executeDML({
       query: `
         INSERT INTO ${T_POSTS} (
@@ -584,7 +604,28 @@ export async function getAccountSummaries(userId: string): Promise<AccountSummar
   await ensureResearchTables();
   const [rows] = await bigquery.query({
     query: `
-      WITH latest_profile AS (
+      WITH RECURSIVE self_reply_tree AS (
+        SELECT user_id, username, root_post_id, node_id, parent_id, depth
+        FROM ${T_NODES}
+        WHERE user_id = @userId
+          AND is_self_reply IS TRUE
+          AND parent_id = root_post_id
+        UNION ALL
+        SELECT n.user_id, n.username, n.root_post_id, n.node_id, n.parent_id, n.depth
+        FROM ${T_NODES} n
+        JOIN self_reply_tree tree
+          ON n.user_id = tree.user_id
+          AND n.username = tree.username
+          AND n.root_post_id = tree.root_post_id
+          AND n.parent_id = tree.node_id
+        WHERE n.is_self_reply IS TRUE
+      ),
+      tree_stats AS (
+        SELECT username, root_post_id, COUNT(*) AS reply_count, MAX(depth) AS max_depth
+        FROM self_reply_tree
+        GROUP BY username, root_post_id
+      ),
+      latest_profile AS (
         SELECT * EXCEPT(rn) FROM (
           SELECT *, ROW_NUMBER() OVER (PARTITION BY username ORDER BY snapshot_date DESC) AS rn
           FROM ${T_PROFILES}
@@ -593,16 +634,18 @@ export async function getAccountSummaries(userId: string): Promise<AccountSummar
       ),
       post_stats AS (
         SELECT
-          username,
+          p.username,
           COUNT(*) AS post_count,
-          COUNTIF(self_reply_count > 0) AS tree_post_count,
-          COUNTIF(conversation_scanned IS TRUE) AS scanned_post_count,
-          AVG(self_reply_count) AS avg_self_replies,
-          AVG(text_length) AS avg_text_length,
-          MAX(posted_at) AS latest_post_at
-        FROM ${T_POSTS}
-        WHERE user_id = @userId
-        GROUP BY username
+          COUNTIF(IFNULL(t.reply_count, 0) > 0) AS tree_post_count,
+          COUNTIF(p.conversation_scanned IS TRUE) AS scanned_post_count,
+          AVG(IFNULL(t.reply_count, 0)) AS avg_self_replies,
+          AVG(p.text_length) AS avg_text_length,
+          MAX(p.posted_at) AS latest_post_at
+        FROM ${T_POSTS} p
+        LEFT JOIN tree_stats t
+          ON t.username = p.username AND t.root_post_id = p.post_id
+        WHERE p.user_id = @userId
+        GROUP BY p.username
       )
       SELECT
         w.username,
@@ -665,16 +708,42 @@ export async function getPosts(
   await ensureResearchTables();
   const [rows] = await bigquery.query({
     query: `
-      SELECT username, post_id, text, posted_at, permalink, media_type, is_quote_post,
-             has_replies, self_reply_count, max_depth, other_reply_count,
-             conversation_scanned
-      FROM ${T_POSTS}
-      WHERE user_id = @userId
-        AND (@username IS NULL OR username = @username)
-        AND (NOT @treeOnly OR self_reply_count > 0)
-        AND (@since IS NULL OR posted_at >= TIMESTAMP(@since))
-        AND (@until IS NULL OR posted_at <= TIMESTAMP(@until))
-      ORDER BY posted_at DESC
+      WITH RECURSIVE self_reply_tree AS (
+        SELECT user_id, username, root_post_id, node_id, parent_id, depth
+        FROM ${T_NODES}
+        WHERE user_id = @userId
+          AND (@username IS NULL OR username = @username)
+          AND is_self_reply IS TRUE
+          AND parent_id = root_post_id
+        UNION ALL
+        SELECT n.user_id, n.username, n.root_post_id, n.node_id, n.parent_id, n.depth
+        FROM ${T_NODES} n
+        JOIN self_reply_tree tree
+          ON n.user_id = tree.user_id
+          AND n.username = tree.username
+          AND n.root_post_id = tree.root_post_id
+          AND n.parent_id = tree.node_id
+        WHERE n.is_self_reply IS TRUE
+      ),
+      tree_stats AS (
+        SELECT username, root_post_id, COUNT(*) AS reply_count, MAX(depth) AS max_depth
+        FROM self_reply_tree
+        GROUP BY username, root_post_id
+      )
+      SELECT p.username, p.post_id, p.text, p.posted_at, p.permalink, p.media_type,
+             p.is_quote_post, p.has_replies,
+             IFNULL(t.reply_count, 0) AS self_reply_count,
+             IFNULL(t.max_depth, 0) AS max_depth,
+             p.other_reply_count, p.conversation_scanned
+      FROM ${T_POSTS} p
+      LEFT JOIN tree_stats t
+        ON t.username = p.username AND t.root_post_id = p.post_id
+      WHERE p.user_id = @userId
+        AND (@username IS NULL OR p.username = @username)
+        AND (NOT @treeOnly OR IFNULL(t.reply_count, 0) > 0)
+        AND (@since IS NULL OR p.posted_at >= TIMESTAMP(@since))
+        AND (@until IS NULL OR p.posted_at <= TIMESTAMP(@until))
+      ORDER BY p.posted_at DESC
       LIMIT @limit
     `,
     params: {
@@ -715,6 +784,31 @@ export interface ResearchNode extends NodeRow {
   username: string;
 }
 
+function markTrueSelfReplyTree(nodes: ResearchNode[]): ResearchNode[] {
+  const grouped = new Map<string, ResearchNode[]>();
+  for (const node of nodes) {
+    const siblings = grouped.get(node.rootPostId) ?? [];
+    siblings.push(node);
+    grouped.set(node.rootPostId, siblings);
+  }
+
+  const treeNodeIds = new Set<string>();
+  for (const [rootPostId, rootNodes] of grouped) {
+    const selected = selectSelfReplyTreeNodeIds(
+      rootPostId,
+      rootNodes[0]?.username ?? '',
+      rootNodes.map((node) => ({
+        id: node.nodeId,
+        username: node.nodeUsername,
+        parentId: node.parentId,
+      }))
+    );
+    for (const nodeId of selected) treeNodeIds.add(nodeId);
+  }
+
+  return nodes.map((node) => ({ ...node, isSelfReply: treeNodeIds.has(node.nodeId) }));
+}
+
 /** The self-reply chain under one post, oldest first - reading order. */
 export async function getThreadNodes(
   userId: string,
@@ -732,7 +826,7 @@ export async function getThreadNodes(
     params: { userId, rootPostId },
   });
 
-  return (rows as Record<string, unknown>[]).map((row) => ({
+  return markTrueSelfReplyTree((rows as Record<string, unknown>[]).map((row) => ({
     username: String(row.username),
     rootPostId: String(row.root_post_id),
     nodeId: String(row.node_id),
@@ -745,7 +839,7 @@ export async function getThreadNodes(
     isSelfReply: Boolean(row.is_self_reply),
     secondsAfterRoot:
       row.seconds_after_root === null ? null : Number(row.seconds_after_root),
-  }));
+  })));
 }
 
 /** All saved nodes for one account, grouped by root post on the client or in analysis. */
@@ -765,7 +859,7 @@ export async function getAccountThreadNodes(
     params: { userId, username: normalizeUsername(username) },
   });
 
-  return (rows as Record<string, unknown>[]).map((row) => ({
+  return markTrueSelfReplyTree((rows as Record<string, unknown>[]).map((row) => ({
     username: String(row.username),
     rootPostId: String(row.root_post_id),
     nodeId: String(row.node_id),
@@ -778,7 +872,7 @@ export async function getAccountThreadNodes(
     isSelfReply: Boolean(row.is_self_reply),
     secondsAfterRoot:
       row.seconds_after_root === null ? null : Number(row.seconds_after_root),
-  }));
+  })));
 }
 
 export interface ResearchInsights {
@@ -812,9 +906,33 @@ export async function getInsights(
 
   const [depthRows] = await bigquery.query({
     query: `
-      SELECT self_reply_count AS depth, COUNT(*) AS post_count
-      FROM ${T_POSTS}
-      WHERE user_id = @userId AND (@username IS NULL OR username = @username)
+      WITH RECURSIVE self_reply_tree AS (
+        SELECT user_id, username, root_post_id, node_id, parent_id, depth
+        FROM ${T_NODES}
+        WHERE user_id = @userId
+          AND (@username IS NULL OR username = @username)
+          AND is_self_reply IS TRUE
+          AND parent_id = root_post_id
+        UNION ALL
+        SELECT n.user_id, n.username, n.root_post_id, n.node_id, n.parent_id, n.depth
+        FROM ${T_NODES} n
+        JOIN self_reply_tree tree
+          ON n.user_id = tree.user_id
+          AND n.username = tree.username
+          AND n.root_post_id = tree.root_post_id
+          AND n.parent_id = tree.node_id
+        WHERE n.is_self_reply IS TRUE
+      ),
+      tree_stats AS (
+        SELECT username, root_post_id, COUNT(*) AS reply_count
+        FROM self_reply_tree
+        GROUP BY username, root_post_id
+      )
+      SELECT IFNULL(t.reply_count, 0) AS depth, COUNT(*) AS post_count
+      FROM ${T_POSTS} p
+      LEFT JOIN tree_stats t
+        ON t.username = p.username AND t.root_post_id = p.post_id
+      WHERE p.user_id = @userId AND (@username IS NULL OR p.username = @username)
       GROUP BY depth ORDER BY depth
     `,
     params,

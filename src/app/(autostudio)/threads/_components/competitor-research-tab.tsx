@@ -17,6 +17,7 @@ import {
  */
 
 type PeriodDays = 7 | 30 | 90 | 180;
+type AccountView = 'overview' | 'posts' | 'structure';
 
 interface SearchPost {
   id: string;
@@ -30,6 +31,26 @@ interface SearchResult {
   keyword: string;
   posts: SearchPost[];
   authors: { username: string; postCount: number }[];
+  evaluatedAt: string;
+  maxEvaluatedCandidates: number;
+  candidates: CandidateEvaluation[];
+}
+
+type CandidateStatus = 'strong' | 'watch' | 'review' | 'unavailable';
+
+interface CandidateEvaluation {
+  username: string;
+  postCount: number;
+  relevantPostCount: number;
+  relevanceScore: number;
+  latestPostAt: string | null;
+  profile: Profile | null;
+  viewEfficiency: number | null;
+  reactionRate: number | null;
+  reactionCount: number | null;
+  strengthScore: number | null;
+  status: CandidateStatus;
+  error: string | null;
 }
 
 interface Profile {
@@ -179,6 +200,38 @@ function formatMetric(value: number | null | undefined): string {
   return value === null || value === undefined ? '—' : numberFormat.format(value);
 }
 
+function formatRatio(value: number | null | undefined, maximumFractionDigits = 1): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return value.toLocaleString('ja-JP', { maximumFractionDigits });
+}
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return `${(value * 100).toLocaleString('ja-JP', { maximumFractionDigits: 1 })}%`;
+}
+
+const candidateStatus: Record<
+  CandidateStatus,
+  { label: string; className: string }
+> = {
+  strong: {
+    label: '現在強い',
+    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  watch: {
+    label: '追跡候補',
+    className: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+  review: {
+    label: '要確認',
+    className: 'border-amber-200 bg-amber-50 text-amber-700',
+  },
+  unavailable: {
+    label: '取得不可',
+    className: 'border-gray-200 bg-gray-50 text-gray-500',
+  },
+};
+
 function formatGap(seconds: number | null): string {
   if (seconds === null) return '';
   if (seconds < 60) return `${seconds}秒後`;
@@ -280,6 +333,7 @@ export function CompetitorResearchTab() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileResult, setProfileResult] = useState<ProfileResult | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [accountView, setAccountView] = useState<AccountView>('overview');
   const [openLivePostId, setOpenLivePostId] = useState<string | null>(null);
   const [liveReplies, setLiveReplies] = useState<Record<string, SelfReply[]>>({});
   const [loadingLiveReplyId, setLoadingLiveReplyId] = useState<string | null>(null);
@@ -379,9 +433,10 @@ export function CompetitorResearchTab() {
     [collectFromDate, collectToDate, userId]
   );
 
-  const lookupProfile = async (target: string) => {
+  const lookupProfile = async (target: string, nextView: AccountView = 'overview') => {
     const clean = normalizeUsername(target);
     if (!clean) return;
+    setAccountView(nextView);
     setUsername(clean);
     setLoadingProfile(true);
     setProfileError(null);
@@ -414,8 +469,14 @@ export function CompetitorResearchTab() {
     setSearchResult(null);
     setProfileResult(null);
     setUsername('');
+    setAccountView('overview');
     try {
-      const params = new URLSearchParams({ userId, q: keyword.trim(), mode: searchMode });
+      const params = new URLSearchParams({
+        userId,
+        q: keyword.trim(),
+        mode: searchMode,
+        days: String(periodDays),
+      });
       const result = await responseJson<SearchResult>(
         await fetch(`/api/threads/research/search?${params.toString()}`)
       );
@@ -495,7 +556,7 @@ export function CompetitorResearchTab() {
       const account = result.results.find((item) => item.username === clean);
       if (!account?.ok) throw new Error(account?.error || '収集に失敗しました');
       setCollectionMessage(
-        `${account.postCount}件の投稿と${account.selfReplyCount}件のセルフリプを保存しました（${formatDateTime(account.oldestPostAt)}〜${formatDateTime(account.latestPostAt)}）`
+        `${account.postCount}件の投稿と${account.selfReplyCount}件のツリー返信を保存しました（${formatDateTime(account.oldestPostAt)}〜${formatDateTime(account.latestPostAt)}）`
       );
       await Promise.all([loadWatchlist(), loadCollectedAccount(clean)]);
     } catch (error) {
@@ -506,7 +567,7 @@ export function CompetitorResearchTab() {
   };
 
   const selectSavedAccount = async (target: string) => {
-    await Promise.all([lookupProfile(target), loadCollectedAccount(target)]);
+    await Promise.all([lookupProfile(target, 'structure'), loadCollectedAccount(target)]);
   };
 
   const toggleSavedReplies = async (post: CollectedPost) => {
@@ -560,15 +621,8 @@ export function CompetitorResearchTab() {
   );
 
   const candidateAuthors = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const post of filteredSearchPosts) {
-      const author = normalizeUsername(post.username ?? '');
-      if (author) counts.set(author, (counts.get(author) ?? 0) + 1);
-    }
-    return Array.from(counts, ([candidate, postCount]) => ({ username: candidate, postCount })).sort(
-      (left, right) => right.postCount - left.postCount || left.username.localeCompare(right.username)
-    );
-  }, [filteredSearchPosts]);
+    return searchResult?.candidates ?? [];
+  }, [searchResult]);
 
   const profile = profileResult?.profile;
   const profilePosts = useMemo(
@@ -609,6 +663,173 @@ export function CompetitorResearchTab() {
     [collectedPosts]
   );
 
+  const structurePanel = selectedSavedUsername ? (
+    <div>
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
+            保存済み投稿の構成
+          </h5>
+          <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
+            過去{periodDays}日・保存済みデータ
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void runAnalysis()}
+          disabled={analyzing || visibleCollectedPosts.length === 0}
+          className={primaryButton}
+        >
+          {analyzing ? 'AI分析中…' : 'AIで構成を分析'}
+        </button>
+      </div>
+
+      {loadingCollected && (
+        <p className="mt-6 text-sm text-[color:var(--color-text-secondary)]">
+          保存済み投稿を読み込んでいます…
+        </p>
+      )}
+      {collectedError && <div className="mt-5"><InlineError>{collectedError}</InlineError></div>}
+      {!loadingCollected && !collectedError && visibleCollectedPosts.length === 0 && (
+        <p className="mt-5 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] px-4 py-6 text-sm text-[color:var(--color-text-secondary)]">
+          この期間の保存済み投稿がありません。概要から最新データを収集してください。
+        </p>
+      )}
+      {structureSummary && (
+        <div className="mt-5 grid grid-cols-2 gap-y-4 border-y border-[color:var(--color-border)] py-4 sm:grid-cols-5">
+          <Metric label="分析対象" value={`${structureSummary.postCount}件`} accent />
+          <Metric label="ツリー投稿率" value={`${structureSummary.treeRate}%`} />
+          <Metric label="平均ツリー返信" value={`${structureSummary.avgReplies}件`} />
+          <Metric label="平均本文文字数" value={`${structureSummary.avgLength}字`} />
+          <Metric label="最多投稿時間" value={structureSummary.topHour === undefined ? '—' : `${structureSummary.topHour}時台`} />
+        </div>
+      )}
+
+      {analysisError && <div className="mt-5"><InlineError>{analysisError}</InlineError></div>}
+      {analysis && (
+        <div className="mt-6 border-l-4 border-[color:var(--color-accent)] pl-4 sm:pl-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-bold text-[color:var(--color-text-primary)]">AI構成分析</h4>
+            <span className="text-xs text-[color:var(--color-text-secondary)]">{analysis.postCount}件を分析</span>
+          </div>
+          <p className="mt-2 max-w-4xl text-sm leading-7 text-[color:var(--color-text-primary)]">{analysis.summary}</p>
+
+          <div className="mt-5 grid gap-6 lg:grid-cols-2">
+            <div>
+              <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">よく扱うテーマ</h5>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {analysis.themes.map((theme) => <span key={theme} className="rounded-full bg-[color:var(--color-surface-muted)] px-3 py-1 text-xs text-[color:var(--color-text-primary)]">{theme}</span>)}
+              </div>
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">繰り返している型</h5>
+              <ul className="mt-2 space-y-2 text-sm leading-6 text-[color:var(--color-text-primary)]">
+                {analysis.recurringPatterns.map((pattern) => <li key={pattern} className="flex gap-2"><span aria-hidden="true" className="text-[color:var(--color-accent)]">—</span><span>{pattern}</span></li>)}
+              </ul>
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">冒頭のパターン</h5>
+              <div className="mt-2 space-y-3">
+                {analysis.hookPatterns.map((item) => (
+                  <div key={`${item.pattern}-${item.evidence}`}>
+                    <p className="text-sm font-medium text-[color:var(--color-text-primary)]">{item.pattern}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-[color:var(--color-text-secondary)]">{item.evidence}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">CTAの置き方</h5>
+              <div className="mt-2 space-y-3">
+                {analysis.ctaPatterns.map((item) => (
+                  <div key={`${item.pattern}-${item.position}`}>
+                    <p className="text-sm font-medium text-[color:var(--color-text-primary)]">{item.pattern}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-[color:var(--color-text-secondary)]">{item.position}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">自分の投稿に使える企画</h5>
+            <div className="mt-2 divide-y divide-[color:var(--color-border)] border-y border-[color:var(--color-border)]">
+              {analysis.contentIdeas.map((idea) => (
+                <div key={idea.title} className="py-3 sm:grid sm:grid-cols-[220px_1fr] sm:gap-4">
+                  <p className="text-sm font-semibold text-[color:var(--color-text-primary)]">{idea.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-[color:var(--color-text-secondary)] sm:mt-0">{idea.angle}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {analysis.referencePosts.length > 0 && (
+            <div className="mt-6">
+              <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">参考にする投稿</h5>
+              <div className="mt-2 space-y-2">
+                {analysis.referencePosts.map((item) => {
+                  const post = referencePostMap.get(item.postId);
+                  return (
+                    <div key={item.postId} className="rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] px-3 py-3">
+                      <p className="line-clamp-2 text-sm text-[color:var(--color-text-primary)]">{post?.text || item.postId}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[color:var(--color-text-secondary)]">
+                        <span>{item.reason}</span>
+                        {post?.permalink && <a href={post.permalink} target="_blank" rel="noopener noreferrer" className="font-medium text-[color:var(--color-accent)] hover:underline">Threadsで開く</a>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {analysis.limitations.length > 0 && (
+            <p className="mt-5 text-xs leading-5 text-[color:var(--color-text-secondary)]">分析上の注意：{analysis.limitations.join(' / ')}</p>
+          )}
+        </div>
+      )}
+
+      {visibleCollectedPosts.length > 0 && (
+        <div className="mt-7">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h4 className="text-sm font-semibold text-[color:var(--color-text-primary)]">保存済み投稿</h4>
+            <span className="text-xs text-[color:var(--color-text-secondary)]">{visibleCollectedPosts.length}件</span>
+          </div>
+          <div className="max-h-[720px] divide-y divide-[color:var(--color-border)] overflow-y-auto border-y border-[color:var(--color-border)]">
+            {visibleCollectedPosts.map((post) => (
+              <article key={post.postId} className="py-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-text-secondary)]">
+                  <span>{formatDateTime(post.postedAt)}</span>
+                  <span>{[...post.text].length}字</span>
+                  {post.selfReplyCount > 0 && <span className="font-medium text-[color:var(--color-accent)]">ツリー返信 {post.selfReplyCount}件・最大{post.maxDepth}段</span>}
+                  <a href={post.permalink} target="_blank" rel="noopener noreferrer" className="text-[color:var(--color-accent)] hover:underline">Threadsで開く</a>
+                </div>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-[color:var(--color-text-primary)]">{post.text || '（本文なし）'}</p>
+                {post.selfReplyCount > 0 && (
+                  <button type="button" onClick={() => void toggleSavedReplies(post)} className="mt-2 text-xs font-medium text-[color:var(--color-accent)] hover:underline">
+                    {openSavedPostId === post.postId ? 'ツリーを閉じる' : '保存したツリーを読む'}
+                  </button>
+                )}
+                {openSavedPostId === post.postId && (
+                  <div className="mt-3 space-y-3 border-l-2 border-[color:var(--color-border)] pl-4">
+                    {loadingSavedPostId === post.postId && <p className="text-xs text-[color:var(--color-text-secondary)]">読み込み中…</p>}
+                    {loadingSavedPostId !== post.postId && !savedNodes[post.postId]?.length && <p className="text-xs text-[color:var(--color-text-secondary)]">保存済みのツリー返信はありません。</p>}
+                    {savedNodes[post.postId]?.map((node) => (
+                      <div key={node.nodeId}>
+                        <div className="text-xs font-medium text-[color:var(--color-text-secondary)]">{node.depth}段目・{formatGap(node.secondsAfterRoot)}</div>
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[color:var(--color-text-primary)]">{node.text || '（本文なし）'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-6 pb-8">
       <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
@@ -617,7 +838,7 @@ export function CompetitorResearchTab() {
             競合リサーチ
           </h2>
           <p className="mt-1 text-sm leading-6 text-[color:var(--color-text-secondary)]">
-            テーマから参考アカウントを見つけ、公開投稿とセルフリプの作り方を調べます。
+            テーマから参考アカウントを見つけ、公開投稿とツリー投稿の作り方を調べます。
           </p>
         </div>
 
@@ -662,7 +883,7 @@ export function CompetitorResearchTab() {
             </select>
           </label>
           <button type="submit" disabled={searching || !keyword.trim()} className={`${primaryButton} h-11`}>
-            {searching ? '検索中…' : '競合を探す'}
+            {searching ? '候補を評価中…' : '競合を探す'}
           </button>
         </form>
 
@@ -673,6 +894,8 @@ export function CompetitorResearchTab() {
           <form
             onSubmit={(event) => {
               event.preventDefault();
+              setSearchResult(null);
+              setSearchError(null);
               void lookupProfile(username);
             }}
             className="mt-3 flex max-w-xl flex-col gap-2 sm:flex-row"
@@ -695,15 +918,23 @@ export function CompetitorResearchTab() {
       {(searchResult || loadingProfile || profileResult || profileError) && (
         <section className="overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
           <div className="border-b border-[color:var(--color-border)] px-5 py-4">
-            <h3 className="font-bold text-[color:var(--color-text-primary)]">調査結果</h3>
+            <h3 className="font-bold text-[color:var(--color-text-primary)]">
+              {searchResult ? '調査結果' : 'アカウント分析'}
+            </h3>
             {searchResult && (
-              <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">
-                「{searchResult.keyword}」・過去{periodDays}日：候補 {candidateAuthors.length}アカウント / 該当投稿 {filteredSearchPosts.length}件
-              </p>
+              <div className="mt-1 space-y-1 text-xs text-[color:var(--color-text-secondary)]">
+                <p>
+                  「{searchResult.keyword}」・過去{periodDays}日：候補 {candidateAuthors.length}アカウント / 該当投稿 {filteredSearchPosts.length}件
+                </p>
+                <p>
+                  上位{searchResult.maxEvaluatedCandidates}件まで、7日閲覧・フォロワー効率・反応率・関連性で自動評価。数値取得 {formatDateTime(searchResult.evaluatedAt)}
+                </p>
+              </div>
             )}
           </div>
 
-          <div className="grid min-h-[360px] lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className={searchResult ? 'grid min-h-[360px] lg:grid-cols-[360px_minmax(0,1fr)]' : 'min-h-[360px]'}>
+            {searchResult && (
             <div className="border-b border-[color:var(--color-border)] lg:border-b-0 lg:border-r">
               <div className="border-b border-[color:var(--color-border)] px-4 py-3 text-xs font-medium text-[color:var(--color-text-secondary)]">
                 参考アカウント候補
@@ -711,11 +942,6 @@ export function CompetitorResearchTab() {
               {searchResult && candidateAuthors.length === 0 && (
                 <p className="px-4 py-8 text-sm leading-6 text-[color:var(--color-text-secondary)]">
                   この期間に該当する公開投稿がありません。期間を広げるか、別のキーワードを試してください。
-                </p>
-              )}
-              {!searchResult && (
-                <p className="px-4 py-8 text-sm leading-6 text-[color:var(--color-text-secondary)]">
-                  usernameを直接指定して調査しています。
                 </p>
               )}
               <div className="max-h-[560px] divide-y divide-[color:var(--color-border)] overflow-y-auto">
@@ -728,36 +954,85 @@ export function CompetitorResearchTab() {
                     <button
                       key={candidate.username}
                       type="button"
+                      disabled={candidate.status === 'unavailable'}
                       onClick={() => void lookupProfile(candidate.username)}
-                      className={`w-full px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--color-accent)] ${
+                      className={`w-full px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
                         selected
                           ? 'bg-[color:rgba(10,122,255,0.08)]'
-                          : 'hover:bg-[color:var(--color-surface-muted)]'
+                          : 'enabled:hover:bg-[color:var(--color-surface-muted)]'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-semibold text-[color:var(--color-text-primary)]">
-                          @{candidate.username}
-                        </span>
-                        <span className="shrink-0 rounded-full bg-[color:var(--color-surface-muted)] px-2 py-0.5 text-xs tabular-nums text-[color:var(--color-text-secondary)]">
-                          {candidate.postCount}件
-                        </span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 shrink-0 text-xs font-semibold tabular-nums text-[color:var(--color-text-secondary)]">
+                              {index + 1}
+                            </span>
+                            <span className="min-w-0 truncate text-sm font-semibold text-[color:var(--color-text-primary)]">
+                              @{candidate.username}
+                            </span>
+                          </div>
+                          {candidate.profile?.name && (
+                            <p className="mt-0.5 truncate pl-7 text-xs text-[color:var(--color-text-secondary)]">
+                              {candidate.profile.name}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${candidateStatus[candidate.status].className}`}
+                          >
+                            {candidateStatus[candidate.status].label}
+                          </span>
+                          {candidate.strengthScore !== null && (
+                            <span className="w-8 text-right text-sm font-bold tabular-nums text-[color:var(--color-text-primary)]">
+                              {candidate.strengthScore}
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      {candidate.profile ? (
+                        <div className="mt-3 grid grid-cols-3 gap-2 pl-7">
+                          <div>
+                            <div className="text-[10px] text-[color:var(--color-text-secondary)]">7日閲覧</div>
+                            <div className="mt-0.5 text-xs font-semibold tabular-nums text-[color:var(--color-text-primary)]">
+                              {formatMetric(candidate.profile.views_count)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-[color:var(--color-text-secondary)]">閲覧 / F</div>
+                            <div className="mt-0.5 text-xs font-semibold tabular-nums text-[color:var(--color-text-primary)]">
+                              {formatRatio(candidate.viewEfficiency)}倍
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-[color:var(--color-text-secondary)]">反応 / 閲覧</div>
+                            <div className="mt-0.5 text-xs font-semibold tabular-nums text-[color:var(--color-text-primary)]">
+                              {formatPercent(candidate.reactionRate)}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-2 pl-7 text-xs text-[color:var(--color-text-secondary)]">
+                          公開プロフィールの数値を取得できませんでした
+                        </p>
+                      )}
                       {matchingPost?.text && (
-                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-[color:var(--color-text-secondary)]">
+                        <p className="mt-2 line-clamp-2 pl-7 text-xs leading-5 text-[color:var(--color-text-secondary)]">
                           {matchingPost.text}
                         </p>
                       )}
-                      {index === 0 && candidateAuthors.length > 1 && (
-                        <span className="mt-2 inline-block text-[11px] font-medium text-[color:var(--color-accent)]">
-                          該当投稿が最多
-                        </span>
-                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-[10px] text-[color:var(--color-text-secondary)]">
+                        <span>該当 {candidate.postCount}件</span>
+                        <span>関連性 {candidate.relevanceScore}</span>
+                        {candidate.latestPostAt && <span>最新 {formatDateTime(candidate.latestPostAt)}</span>}
+                      </div>
                     </button>
                   );
                 })}
               </div>
             </div>
+            )}
 
             <div className="min-w-0 p-5 sm:p-6">
               {loadingProfile && (
@@ -771,7 +1046,10 @@ export function CompetitorResearchTab() {
                   <div>
                     <p className="font-medium text-[color:var(--color-text-primary)]">候補を選んで詳細を見る</p>
                     <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-                      プロフィール、7日間の数値、公開投稿を確認できます。
+                      ランキングは現在の強さです。候補を選ぶと公開投稿と詳細を確認できます。
+                    </p>
+                    <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
+                      過去7日間はMetaが取得時点で返す集計値です。境界時刻と反映遅延は公表されていません。
                     </p>
                   </div>
                 </div>
@@ -824,42 +1102,84 @@ export function CompetitorResearchTab() {
                     <Metric label="フォロワー" value={formatMetric(profile.follower_count)} note="現在値" />
                   </div>
 
-                  <div className="flex flex-wrap items-end justify-between gap-3">
-                    <p className="text-xs text-[color:var(--color-text-secondary)]">
-                      投稿別の閲覧・反応数ではなく、アカウント全体の過去7日間合計です。
-                    </p>
-                    <div className="flex flex-wrap items-end gap-2">
-                      <label className="text-xs text-[color:var(--color-text-secondary)]">
-                        <span className="mb-1 block">収集開始日</span>
-                        <input
-                          type="date"
-                          value={collectFromDate}
-                          max={collectToDate}
-                          onChange={(event) => setCollectFromDate(event.target.value)}
-                          className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2 text-xs text-[color:var(--color-text-primary)]"
-                        />
-                      </label>
-                      <label className="text-xs text-[color:var(--color-text-secondary)]">
-                        <span className="mb-1 block">収集終了日</span>
-                        <input
-                          type="date"
-                          value={collectToDate}
-                          min={collectFromDate}
-                          onChange={(event) => setCollectToDate(event.target.value)}
-                          className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2 text-xs text-[color:var(--color-text-primary)]"
-                        />
-                      </label>
-                    </div>
+                  <div
+                    role="tablist"
+                    aria-label="アカウント分析の表示内容"
+                    className="flex gap-6 border-b border-[color:var(--color-border)]"
+                  >
+                    {([
+                      { key: 'overview' as const, label: '概要' },
+                      { key: 'posts' as const, label: `公開投稿 ${profilePosts.length}` },
+                      { key: 'structure' as const, label: '投稿構成', disabled: !isProfileSaved },
+                    ]).map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={accountView === tab.key}
+                        disabled={tab.disabled}
+                        title={tab.disabled ? '保存して期間収集すると確認できます' : undefined}
+                        onClick={() => setAccountView(tab.key)}
+                        className={`-mb-px border-b-2 px-0.5 pb-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-35 ${
+                          accountView === tab.key
+                            ? 'border-[color:var(--color-accent)] text-[color:var(--color-text-primary)]'
+                            : 'border-transparent text-[color:var(--color-text-secondary)] hover:text-[color:var(--color-text-primary)]'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
                   </div>
 
-                  {selectedHitCount > 0 && (
-                    <div className="rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]">
-                      「{searchResult?.keyword}」に該当する投稿が過去{periodDays}日で {selectedHitCount}件見つかりました。
+                  {accountView === 'overview' && (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-end justify-between gap-4 rounded-[var(--radius-sm)] bg-[color:var(--color-surface-muted)] px-4 py-4">
+                        <div className="max-w-xl">
+                          <p className="text-sm font-medium text-[color:var(--color-text-primary)]">収集する期間</p>
+                          <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
+                            上の数値はアカウント全体の過去7日間合計です。投稿別の閲覧・反応数ではありません。
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className="text-xs text-[color:var(--color-text-secondary)]">
+                            <span className="mb-1 block">開始日</span>
+                            <input
+                              type="date"
+                              value={collectFromDate}
+                              max={collectToDate}
+                              onChange={(event) => setCollectFromDate(event.target.value)}
+                              className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2 text-xs text-[color:var(--color-text-primary)]"
+                            />
+                          </label>
+                          <label className="text-xs text-[color:var(--color-text-secondary)]">
+                            <span className="mb-1 block">終了日</span>
+                            <input
+                              type="date"
+                              value={collectToDate}
+                              min={collectFromDate}
+                              onChange={(event) => setCollectToDate(event.target.value)}
+                              className="h-9 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2 text-xs text-[color:var(--color-text-primary)]"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {selectedHitCount > 0 && (
+                        <div className="rounded-[var(--radius-sm)] border-l-2 border-[color:var(--color-accent)] bg-[color:var(--color-surface-muted)] px-3 py-2 text-sm text-[color:var(--color-text-primary)]">
+                          「{searchResult?.keyword}」に該当する投稿が過去{periodDays}日で {selectedHitCount}件見つかりました。
+                        </div>
+                      )}
+                      {!isProfileSaved && (
+                        <p className="text-xs leading-5 text-[color:var(--color-text-secondary)]">
+                          「保存して期間収集」を実行すると、投稿構成とツリー返信を同じ画面で分析できます。
+                        </p>
+                      )}
+                      {collectionMessage && <p className="text-sm font-medium text-emerald-700">{collectionMessage}</p>}
+                      {collectionError && <InlineError>{collectionError}</InlineError>}
                     </div>
                   )}
-                  {collectionMessage && <p className="text-sm font-medium text-emerald-700">{collectionMessage}</p>}
-                  {collectionError && <InlineError>{collectionError}</InlineError>}
 
+                  {accountView === 'posts' && (
                   <div>
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <h5 className="text-sm font-semibold text-[color:var(--color-text-primary)]">
@@ -888,13 +1208,13 @@ export function CompetitorResearchTab() {
                             </p>
                             {post.hasReplies && (
                               <button type="button" onClick={() => void toggleLiveReplies(post)} className="mt-2 text-xs font-medium text-[color:var(--color-accent)] hover:underline">
-                                {openLivePostId === post.id ? 'セルフリプを閉じる' : 'セルフリプを読む'}
+                                {openLivePostId === post.id ? 'ツリーを閉じる' : 'ツリーを読む'}
                               </button>
                             )}
                             {openLivePostId === post.id && (
                               <div className="mt-3 space-y-3 border-l-2 border-[color:var(--color-border)] pl-4">
                                 {loadingLiveReplyId === post.id && <p className="text-xs text-[color:var(--color-text-secondary)]">読み込み中…</p>}
-                                {loadingLiveReplyId !== post.id && !liveReplies[post.id]?.length && <p className="text-xs text-[color:var(--color-text-secondary)]">本人のセルフリプはありません。</p>}
+                                {loadingLiveReplyId !== post.id && !liveReplies[post.id]?.length && <p className="text-xs text-[color:var(--color-text-secondary)]">本人がつないだツリー返信はありません。</p>}
                                 {liveReplies[post.id]?.map((reply, index) => (
                                   <div key={`${reply.permalink}-${index}`}>
                                     <div className="text-xs font-medium text-[color:var(--color-text-secondary)]">{reply.depth}段目・{formatGap(reply.secondsAfterRoot)}</div>
@@ -908,6 +1228,9 @@ export function CompetitorResearchTab() {
                       </div>
                     )}
                   </div>
+                  )}
+
+                  {accountView === 'structure' && structurePanel}
                 </div>
               )}
             </div>
@@ -942,7 +1265,7 @@ export function CompetitorResearchTab() {
                   <th className="px-3 py-3 text-right font-medium">7日間閲覧</th>
                   <th className="px-3 py-3 text-right font-medium">7日間反応</th>
                   <th className="px-3 py-3 text-right font-medium">保存投稿</th>
-                  <th className="px-3 py-3 text-right font-medium">セルフリプ確認</th>
+                  <th className="px-3 py-3 text-right font-medium">ツリー確認</th>
                   <th className="px-3 py-3 font-medium">最終収集</th>
                   <th className="px-5 py-3"><span className="sr-only">操作</span></th>
                 </tr>
@@ -1034,7 +1357,7 @@ export function CompetitorResearchTab() {
         </p>
       </section>
 
-      {selectedSavedUsername && (
+      {selectedSavedUsername && profileError && !loadingProfile && (
         <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>
@@ -1057,7 +1380,7 @@ export function CompetitorResearchTab() {
             <div className="mt-5 grid grid-cols-2 gap-y-4 border-y border-[color:var(--color-border)] py-4 sm:grid-cols-5">
               <Metric label="分析対象" value={`${structureSummary.postCount}件`} accent />
               <Metric label="ツリー投稿率" value={`${structureSummary.treeRate}%`} />
-              <Metric label="平均セルフリプ" value={`${structureSummary.avgReplies}件`} />
+              <Metric label="平均ツリー返信" value={`${structureSummary.avgReplies}件`} />
               <Metric label="平均本文文字数" value={`${structureSummary.avgLength}字`} />
               <Metric label="最多投稿時間" value={structureSummary.topHour === undefined ? '—' : `${structureSummary.topHour}時台`} />
             </div>
@@ -1159,19 +1482,19 @@ export function CompetitorResearchTab() {
                     <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-text-secondary)]">
                       <span>{formatDateTime(post.postedAt)}</span>
                       <span>{[...post.text].length}字</span>
-                      {post.selfReplyCount > 0 && <span className="font-medium text-[color:var(--color-accent)]">セルフリプ {post.selfReplyCount}件・最大{post.maxDepth}段</span>}
+                      {post.selfReplyCount > 0 && <span className="font-medium text-[color:var(--color-accent)]">ツリー返信 {post.selfReplyCount}件・最大{post.maxDepth}段</span>}
                       <a href={post.permalink} target="_blank" rel="noopener noreferrer" className="text-[color:var(--color-accent)] hover:underline">Threadsで開く</a>
                     </div>
                     <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-[color:var(--color-text-primary)]">{post.text || '（本文なし）'}</p>
                     {post.selfReplyCount > 0 && (
                       <button type="button" onClick={() => void toggleSavedReplies(post)} className="mt-2 text-xs font-medium text-[color:var(--color-accent)] hover:underline">
-                        {openSavedPostId === post.postId ? 'セルフリプを閉じる' : '保存したセルフリプを読む'}
+                        {openSavedPostId === post.postId ? 'ツリーを閉じる' : '保存したツリーを読む'}
                       </button>
                     )}
                     {openSavedPostId === post.postId && (
                       <div className="mt-3 space-y-3 border-l-2 border-[color:var(--color-border)] pl-4">
                         {loadingSavedPostId === post.postId && <p className="text-xs text-[color:var(--color-text-secondary)]">読み込み中…</p>}
-                        {loadingSavedPostId !== post.postId && !savedNodes[post.postId]?.length && <p className="text-xs text-[color:var(--color-text-secondary)]">保存済みのセルフリプはありません。</p>}
+                        {loadingSavedPostId !== post.postId && !savedNodes[post.postId]?.length && <p className="text-xs text-[color:var(--color-text-secondary)]">保存済みのツリー返信はありません。</p>}
                         {savedNodes[post.postId]?.map((node) => (
                           <div key={node.nodeId}>
                             <div className="text-xs font-medium text-[color:var(--color-text-secondary)]">{node.depth}段目・{formatGap(node.secondsAfterRoot)}</div>

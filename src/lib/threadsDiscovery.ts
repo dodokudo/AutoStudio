@@ -19,6 +19,8 @@
  * are not counted). profile_lookup + profile_posts share 1,000 requests / rolling 24h.
  */
 
+import { selectSelfReplyTreeNodeIds } from '@/lib/threadsReplyTree';
+
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
 
 /** Fields returned for a discovered post. `owner` is never returned by these endpoints. */
@@ -32,6 +34,7 @@ const POST_FIELDS = [
   'media_url',
   'thumbnail_url',
   'shortcode',
+  'topic_tag',
   'is_quote_post',
   'has_replies',
 ].join(',');
@@ -64,6 +67,7 @@ export interface DiscoveredPost {
   media_url?: string;
   thumbnail_url?: string;
   shortcode?: string;
+  topic_tag?: string;
   is_quote_post?: boolean;
   has_replies?: boolean;
 }
@@ -371,11 +375,19 @@ export class ThreadsConversationAPI {
     authorUsername: string,
     maxNodes = 500
   ): Promise<ConversationNode[]> {
-    const clean = authorUsername.replace(/^@/, '').toLowerCase();
     const conversation = await this.getConversation(postId, maxNodes);
+    const treeNodeIds = selectSelfReplyTreeNodeIds(
+      postId,
+      authorUsername,
+      conversation.map((node) => ({
+        id: node.id,
+        username: node.username,
+        parentId: node.replied_to?.id ?? null,
+      }))
+    );
 
     return conversation
-      .filter((node) => node.username?.toLowerCase() === clean)
+      .filter((node) => treeNodeIds.has(node.id))
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
 }

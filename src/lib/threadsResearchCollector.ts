@@ -12,6 +12,7 @@
  */
 
 import { ThreadsDiscoveryAPI, ThreadsConversationAPI } from '@/lib/threadsDiscovery';
+import { selectSelfReplyTreeNodeIds } from '@/lib/threadsReplyTree';
 import {
   addToWatchlist,
   getAccountSummaries,
@@ -121,9 +122,18 @@ export async function collectAccount(
               const conversation = await conversations.getConversation(post.id);
               conversationScanned = true;
               const rootTime = new Date(post.timestamp).getTime();
+              const treeNodeIds = selectSelfReplyTreeNodeIds(
+                post.id,
+                clean,
+                conversation.map((node) => ({
+                  id: node.id,
+                  username: node.username,
+                  parentId: node.replied_to?.id ?? null,
+                }))
+              );
 
               for (const node of conversation) {
-                const isSelf = node.username?.toLowerCase() === clean;
+                const isSelf = treeNodeIds.has(node.id);
                 if (isSelf) {
                   selfReplies += 1;
                   maxDepth = Math.max(maxDepth, node.depth);
