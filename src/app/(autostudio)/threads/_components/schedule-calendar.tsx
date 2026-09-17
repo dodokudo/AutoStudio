@@ -76,8 +76,15 @@ export function ScheduleCalendar({
     return acc;
   }, {});
 
-  const selectedItems = items
-    .filter((item) => item.scheduledDate === selectedDate)
+  const dateItems = items.filter((item) => item.scheduledDate === selectedDate);
+  const filterCounts = {
+    all: dateItems.length,
+    scheduled: dateItems.filter((item) => item.status === 'scheduled').length,
+    draft: dateItems.filter((item) => item.status === 'draft').length,
+    posted: dateItems.filter((item) => item.status === 'posted').length,
+  };
+
+  const selectedItems = dateItems
     .filter((item) => {
       if (listFilter === 'scheduled') return item.status === 'scheduled';
       if (listFilter === 'draft') return item.status === 'draft';
@@ -178,13 +185,14 @@ export function ScheduleCalendar({
                 type="button"
                 onClick={() => setListFilter(key)}
                 className={classNames(
-                  'rounded-full px-3 py-1 text-xs font-medium transition',
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition',
                   listFilter === key
                     ? 'bg-[color:var(--color-accent)] text-white'
                     : 'bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-border)]',
                 )}
               >
                 {label}
+                <span className="tabular-nums opacity-80">{isLoading ? '…' : filterCounts[key]}</span>
               </button>
             ))}
           </div>
