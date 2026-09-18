@@ -56,7 +56,7 @@ export function formatDailyReport(d: DailyReportData): string {
   // Story
   lines.push('ストーリー');
   lines.push(`- 投稿数：${d.igStoryCount > 0 ? d.igStoryCount : '取得記録なし'}`);
-  lines.push(`- 閲覧数：${num(d.igStoryViews)}`);
+  lines.push(`- リーチ：${num(d.igStoryReach)}`);
   lines.push(`- 閲覧率：${d.igStoryViewRate == null ? '未取得' : `${d.igStoryViewRate}%`}`);
   lines.push('');
 
@@ -138,13 +138,13 @@ export function formatWeeklyReport(w: WeeklyReportData): string {
   lines.push(`- リーチ：${num(w.igReach)}`);
   lines.push(`- プロフィールリンクタップ：${num(w.igLinkClicks)}`);
   lines.push(`- LINE登録数：${w.igLineRegistrations}`);
-  lines.push('※リーチ・リンクタップは各日の直近24時間値の合計（リーチは日をまたぐ重複あり）');
   lines.push('');
 
   // Story
   lines.push('ストーリー');
   lines.push(`- 投稿数：${w.igStoryCount > 0 ? w.igStoryCount : '取得記録なし'}`);
-  lines.push(`- 累積閲覧数の合計：${num(w.igStoryViews)}`);
+  lines.push(`- リーチ：${num(w.igStoryReach)}`);
+  lines.push(`- 閲覧率：${w.igStoryViewRate == null ? '未取得' : `${w.igStoryViewRate}%`}`);
   lines.push('');
 
   // Weekly spending

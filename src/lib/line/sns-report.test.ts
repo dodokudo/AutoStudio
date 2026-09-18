@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatDailyReport } from './sns-report';
-import type { DailyReportData } from './sns-report-data';
+import { formatDailyReport, formatWeeklyReport } from './sns-report';
+import type { DailyReportData, WeeklyReportData } from './sns-report-data';
 
 const report: DailyReportData = {
   reportDate: '2026-09-16', lineDelta: 4,
@@ -9,7 +9,7 @@ const report: DailyReportData = {
   thLinkClicks: 1, thLineRegistrations: 1,
   igFollowers: 100, igFollowerDelta: 1, igPostCount: 1, igReach: 100,
   igLinkClicks: 1, igLineRegistrations: 1, igStoryCount: 1,
-  igCollectedAt: '2026-09-16T15:05:00Z', igStoryViews: 10, igStoryViewRate: 10, mfExpense: 1234,
+  igCollectedAt: '2026-09-16T15:05:00Z', igStoryReach: 10, igStoryViewRate: 10, mfExpense: 1234,
   mfBankBalances: [
     { bank: 'GMOあおぞらネット銀行', amount: 20000, updatedAt: '2026-09-17T03:53:00', status: 'ok' },
     { bank: '楽天銀行', amount: 0, updatedAt: '2026-09-16T03:53:00', status: 'ok' },
@@ -54,7 +54,7 @@ test('a balance query failure preserves spending and the rest of the report', ()
 test('missing Instagram values remain unknown and never trigger a false story warning', () => {
   const message = formatDailyReport({ ...report,
     igFollowers: null, igFollowerDelta: null, igPostCount: null, igReach: null,
-    igLinkClicks: null, igStoryCount: 0, igStoryViews: null, igStoryViewRate: null, igCollectedAt: null,
+    igLinkClicks: null, igStoryCount: 0, igStoryReach: null, igStoryViewRate: null, igCollectedAt: null,
   });
   assert.match(message, /フォロワー数：未取得（未取得）/);
   assert.match(message, /リーチ：未取得/);
@@ -73,7 +73,7 @@ test('uses main-account views and names each measurement accurately', () => {
   assert.match(message, /1,082（-2）/);
   assert.match(message, /プロフィールリンクタップ：0/);
   assert.doesNotMatch(message, /直近24時間|取得日時|保存済み投稿|1投稿平均/);
-  assert.match(message, /ストーリー\n- 投稿数：1\n- 閲覧数：10\n- 閲覧率：10%/);
+  assert.match(message, /ストーリー\n- 投稿数：1\n- リーチ：10\n- 閲覧率：10%/);
   assert.doesNotMatch(message, /プロフクリック|インプレッション/);
 });
 
@@ -81,4 +81,23 @@ test('shows combined Threads LINE registrations independently of main-account me
   const message = formatDailyReport({ ...report, thLineRegistrations: 7 });
   assert.match(message, /Threads（メイン）[\s\S]*?LINE登録数：7/);
   assert.doesNotMatch(message, /未判別|メイン専用/);
+});
+
+const weekly: WeeklyReportData = {
+  ...report, weekStart: '2026-09-07', weekEnd: '2026-09-13',
+  thFollowersWeekEnd: 100, igFollowersWeekEnd: 100, mfWeekExpense: 1234,
+  monthLabel: '2026-09', monthLineDelta: 4, monthThFollowerDelta: 1,
+  monthThPostCount: 1, monthThImpressions: 100, monthIgFollowerDelta: 1,
+  monthIgReach: 100, monthMfExpense: 1234, lastMonthLabel: '2026-08',
+  lastMonthLineDelta: 4, lastMonthThFollowerDelta: 1, lastMonthIgFollowerDelta: 1,
+  lastMonthMfExpense: 1234,
+};
+
+test('weekly story labels match daily and omit removed annotations', () => {
+  const message = formatWeeklyReport(weekly);
+  assert.match(message, /ストーリー\n- 投稿数：1\n- リーチ：10\n- 閲覧率：10%/);
+  assert.doesNotMatch(message, /直近24時間|取得日時|保存済み投稿|累積閲覧数|1投稿平均/);
+  const missing = formatWeeklyReport({ ...weekly, igStoryReach: null, igStoryViewRate: null });
+  assert.match(missing, /閲覧率：未取得/);
+  assert.doesNotMatch(missing, /null|NaN|未取得%/);
 });

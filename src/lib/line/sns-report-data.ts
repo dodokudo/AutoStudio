@@ -36,7 +36,7 @@ export interface DailyReportData {
   igLinkClicks: number | null;
   igLineRegistrations: number;
   igStoryCount: number;
-  igStoryViews: number | null;
+  igStoryReach: number | null;
   igStoryViewRate: number | null;
 
   igCollectedAt: string | null;
@@ -69,7 +69,9 @@ export interface WeeklyReportData {
   igLinkClicks: number | null;
   igLineRegistrations: number;
   igStoryCount: number;
-  igStoryViews: number | null;
+  igStoryReach: number | null;
+
+  igStoryViewRate: number | null;
 
   // Weekly spending
   mfWeekExpense: number;
@@ -229,16 +231,14 @@ async function fetchIgStorySummaryRange(startDate: string, endDate: string) {
   const client = createBigQueryClient(PROJECT_ID, IG_LOCATION);
   const [rows] = await client.query({
     query: `WITH stories AS (
-      SELECT instagram_id, MAX(views) views
+      SELECT instagram_id, MAX(reach) reach
       FROM \`${PROJECT_ID}.${IG_DATASET}.instagram_story_metric_snapshots\`
       WHERE user_id = @userId AND DATE(timestamp, 'Asia/Tokyo') BETWEEN @startDate AND @endDate
       GROUP BY instagram_id
-    ) SELECT COUNT(*) story_count,
-      IF(COUNT(*) > 0 AND COUNT(views) = COUNT(*), SUM(views), NULL) total_views,
-      MAX(views) max_views FROM stories`,
+    ) SELECT COUNT(*) story_count, MAX(reach) max_reach FROM stories`,
     params: { userId: IG_USER_ID, startDate, endDate }, location: IG_LOCATION,
   });
-  return { storyCount: Number(rows[0]?.story_count ?? 0), totalViews: nullableNumber(rows[0]?.total_views), maxViews: nullableNumber(rows[0]?.max_views) };
+  return { storyCount: Number(rows[0]?.story_count ?? 0), maxReach: nullableNumber(rows[0]?.max_reach) };
 }
 
 async function fetchIgStorySummary(date: string) {
@@ -347,8 +347,8 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
   const thPost = thPostStats[0];
   const thLinkTotal = thLinkClicks.reduce((sum, c) => sum + c.clicks, 0);
   const igPostCount = metricDelta(igToday.postsCount, igPrev.postsCount);
-  const igStoryViewRate = igToday.followers != null && igToday.followers > 0 && igStory.maxViews != null
-    ? Math.round((igStory.maxViews / igToday.followers) * 1000) / 10
+  const igStoryViewRate = igToday.followers != null && igToday.followers > 0 && igStory.maxReach != null
+    ? Math.round((igStory.maxReach / igToday.followers) * 1000) / 10
     : null;
 
   return {
@@ -369,7 +369,7 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     igLinkClicks: igToday.websiteClicks,
     igLineRegistrations: lineFromIg,
     igStoryCount: igStory.storyCount,
-    igStoryViews: igStory.maxViews,
+    igStoryReach: igStory.maxReach,
     igStoryViewRate,
 
     igCollectedAt: igToday.collectedAt,
@@ -466,7 +466,10 @@ export async function getWeeklyReportData(weekStart: string, weekEnd: string): P
     igLinkClicks: igWeek.totalWebsiteClicks,
     igLineRegistrations: lineFromIgWeek,
     igStoryCount: igStoryWeek.storyCount,
-    igStoryViews: igStoryWeek.totalViews,
+    igStoryReach: igStoryWeek.maxReach,
+    igStoryViewRate: igWeek.endFollowers != null && igWeek.endFollowers > 0 && igStoryWeek.maxReach != null
+      ? Math.round(igStoryWeek.maxReach / igWeek.endFollowers * 1000) / 10
+      : null,
 
     mfWeekExpense,
 

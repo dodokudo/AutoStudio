@@ -9,7 +9,13 @@ export const maxDuration = 60;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '';
 const LINE_REPORT_USER_ID = process.env.LINE_REPORT_USER_ID ?? 'U37911e372e72aa50ca3a53f1c491fde6';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const dryRun = new URL(request.url).searchParams.get('dryRun') === 'true';
+  const previewAuthorized = [process.env.CRON_SECRET, process.env.AUTH_PASSWORD]
+    .some((secret) => Boolean(secret) && request.headers.get('authorization') === `Bearer ${secret}`);
+  if (dryRun && !previewAuthorized) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   const startTime = Date.now();
 
   try {
@@ -32,6 +38,12 @@ export async function GET() {
 
     const data = await getWeeklyReportData(weekStart, weekEnd);
     const message = formatWeeklyReport(data);
+
+    if (dryRun) {
+      return NextResponse.json({ success: true, dryRun: true, weekStart, weekEnd, message }, {
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
 
     const messages = splitMessage(message).map((text) => ({
       type: 'text' as const,
