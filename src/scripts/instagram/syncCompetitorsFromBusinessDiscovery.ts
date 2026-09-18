@@ -106,6 +106,12 @@ const DOWNLOAD_MIN_PER_ACCOUNT = Number(process.env.IG_COMPETITOR_DOWNLOAD_MIN_P
 const DOWNLOAD_CONCURRENCY = Number(process.env.IG_COMPETITOR_DOWNLOAD_CONCURRENCY ?? '3');
 const DOWNLOAD_FROM_DATE = process.env.IG_COMPETITOR_FROM_DATE?.trim() || null;
 const DOWNLOAD_TO_DATE = process.env.IG_COMPETITOR_TO_DATE?.trim() || null;
+const TARGET_USERNAMES = new Set(
+  (process.env.IG_COMPETITOR_USERNAMES ?? '')
+    .split(',')
+    .map((username) => username.trim().replace(/^@/, ''))
+    .filter(Boolean),
+);
 
 function isWithinDownloadRange(postedAt: string | null): boolean {
   if (!postedAt) return false;
@@ -220,7 +226,14 @@ async function main() {
   const [competitors] = await bigquery.query({
     query: `SELECT username FROM \`${projectId}.${dataset}.instagram_competitors_private\` WHERE active = TRUE OR active IS NULL`,
   });
-  const usernames = (competitors as Array<{ username: string }>).map((r) => r.username).filter(Boolean);
+  const activeUsernames = (competitors as Array<{ username: string }>).map((r) => r.username).filter(Boolean);
+  const usernames = TARGET_USERNAMES.size
+    ? activeUsernames.filter((username) => TARGET_USERNAMES.has(username))
+    : activeUsernames;
+  if (TARGET_USERNAMES.size && usernames.length !== TARGET_USERNAMES.size) {
+    const missing = [...TARGET_USERNAMES].filter((username) => !activeUsernames.includes(username));
+    throw new Error(`Target competitors are not active or registered: ${missing.join(', ')}`);
+  }
   console.log(`[sync-competitors-bd] ${usernames.length} competitors to fetch`);
 
   const today = new Date().toISOString().slice(0, 10);

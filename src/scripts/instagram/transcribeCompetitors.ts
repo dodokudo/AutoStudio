@@ -179,6 +179,7 @@ async function loadTargets(
   minimumPerAccount: number,
   fromDate: string | null,
   toDate: string | null,
+  username: string | null,
 ): Promise<CompetitorReel[]> {
   const bigquery = createInstagramBigQuery();
   const { projectId, dataset, location } = getInstagramStorageConfig();
@@ -203,13 +204,14 @@ async function loadTargets(
         JOIN active_competitors a USING (username)
         WHERE DATE(r.posted_at, 'Asia/Tokyo') >= COALESCE(DATE(@from_date), DATE_SUB(CURRENT_DATE('Asia/Tokyo'), INTERVAL 120 DAY))
           AND DATE(r.posted_at, 'Asia/Tokyo') <= COALESCE(DATE(@to_date), CURRENT_DATE('Asia/Tokyo'))
+          AND (@username IS NULL OR r.username = @username)
           AND r.drive_file_url LIKE '%storage.googleapis.com%'
         GROUP BY r.username, r.instagram_media_id
       )
       SELECT * FROM unique_reels
     `,
     location,
-    params: { from_date: fromDate, to_date: toDate },
+    params: { from_date: fromDate, to_date: toDate, username },
   });
   const candidates = (rows as Array<Record<string, unknown>>).map((row) => ({
     username: String(row.username),
@@ -437,10 +439,11 @@ async function main(): Promise<void> {
   const mediaIds = new Set((parseStringFlag('--media-ids') ?? '').split(',').filter(Boolean));
   const fromDate = parseStringFlag('--from-date');
   const toDate = parseStringFlag('--to-date');
+  const username = parseStringFlag('--username')?.replace(/^@/, '') ?? null;
   const bigquery = createInstagramBigQuery();
   if (!skipEnsure) await ensureInstagramTables(bigquery);
   const { projectId, dataset, location } = getInstagramStorageConfig();
-  const selected = (await loadTargets(limit, minimumPerAccount, fromDate, toDate))
+  const selected = (await loadTargets(limit, minimumPerAccount, fromDate, toDate, username))
     .filter((reel) => (
       (!mediaId && mediaIds.size === 0)
       || reel.instagramMediaId === mediaId
