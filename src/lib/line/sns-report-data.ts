@@ -1,5 +1,4 @@
 import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
-import { getLineSourceNamesForAccount } from '@/lib/threadsAccounts';
 import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
 import { getThreadsLinkClicksByRange } from '@/lib/links/analytics';
 import { getBankBalances, type BankBalance } from './bank-balances';
@@ -27,7 +26,7 @@ export interface DailyReportData {
   thPostCount: number;
   thImpressions: number | null;
   thLinkClicks: number;
-  thLineRegistrations: number | null;
+  thLineRegistrations: number;
 
   // Instagram
   igFollowers: number | null;
@@ -60,7 +59,7 @@ export interface WeeklyReportData {
   thPostCount: number;
   thImpressions: number | null;
   thLinkClicks: number;
-  thLineRegistrations: number | null;
+  thLineRegistrations: number;
 
   // Instagram
   igFollowersWeekEnd: number | null;
@@ -235,10 +234,11 @@ async function fetchIgStorySummaryRange(startDate: string, endDate: string) {
       WHERE user_id = @userId AND DATE(timestamp, 'Asia/Tokyo') BETWEEN @startDate AND @endDate
       GROUP BY instagram_id
     ) SELECT COUNT(*) story_count,
-      IF(COUNT(*) > 0 AND COUNT(views) = COUNT(*), SUM(views), NULL) total_views FROM stories`,
+      IF(COUNT(*) > 0 AND COUNT(views) = COUNT(*), SUM(views), NULL) total_views,
+      MAX(views) max_views FROM stories`,
     params: { userId: IG_USER_ID, startDate, endDate }, location: IG_LOCATION,
   });
-  return { storyCount: Number(rows[0]?.story_count ?? 0), totalViews: nullableNumber(rows[0]?.total_views) };
+  return { storyCount: Number(rows[0]?.story_count ?? 0), totalViews: nullableNumber(rows[0]?.total_views), maxViews: nullableNumber(rows[0]?.max_views) };
 }
 
 async function fetchIgStorySummary(date: string) {
@@ -248,20 +248,6 @@ async function fetchIgStorySummary(date: string) {
 // ---------------------------------------------------------------------------
 // LINE registrations
 // ---------------------------------------------------------------------------
-
-// Older source snapshots do not identify the main account. Do not call that zero.
-async function fetchMainLineRegistrations(startDate: string, endDate: string): Promise<number | null> {
-  const client = createBigQueryClient(PROJECT_ID, process.env.LSTEP_BQ_LOCATION);
-  const dataset = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
-  const sourceNames = getLineSourceNamesForAccount('main');
-  const [rows] = await client.query({
-    query: `SELECT COUNT(*) AS source_rows FROM \`${PROJECT_ID}.${dataset}.user_sources\` s
-      WHERE EXISTS (SELECT 1 FROM UNNEST(@sourceNames) name WHERE s.source_name LIKE CONCAT(name, '%'))`,
-    params: { sourceNames }, location: process.env.LSTEP_BQ_LOCATION,
-  });
-  if (!Number(rows[0]?.source_rows)) return null;
-  return countLineSourceRegistrations(PROJECT_ID, { startDate, endDate, sourceNames });
-}
 
 /** LINE全体の新規登録数（ソース問わず） */
 async function fetchLineTotalRegistrations(startDate: string, endDate: string): Promise<number> {
@@ -349,7 +335,7 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     fetchIgInsights(prevDate),
     fetchIgStorySummary(date),
     fetchLineTotalRegistrations(date, date),
-    fetchMainLineRegistrations(date, date),
+    countLineSourceRegistrations(PROJECT_ID, { startDate: date, endDate: date, sourceName: 'Threads' }),
     countLineSourceRegistrations(PROJECT_ID, { startDate: date, endDate: date, sourceName: 'Instagram' }),
     fetchDailyExpense(date),
     getBankBalances().catch((error) => {
@@ -361,8 +347,8 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
   const thPost = thPostStats[0];
   const thLinkTotal = thLinkClicks.reduce((sum, c) => sum + c.clicks, 0);
   const igPostCount = metricDelta(igToday.postsCount, igPrev.postsCount);
-  const igStoryViewRate = igToday.followers != null && igToday.followers > 0 && igStory.totalViews != null
-    ? Math.round((igStory.totalViews / igStory.storyCount / igToday.followers) * 1000) / 10
+  const igStoryViewRate = igToday.followers != null && igToday.followers > 0 && igStory.maxViews != null
+    ? Math.round((igStory.maxViews / igToday.followers) * 1000) / 10
     : null;
 
   return {
@@ -383,7 +369,7 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     igLinkClicks: igToday.websiteClicks,
     igLineRegistrations: lineFromIg,
     igStoryCount: igStory.storyCount,
-    igStoryViews: igStory.totalViews,
+    igStoryViews: igStory.maxViews,
     igStoryViewRate,
 
     igCollectedAt: igToday.collectedAt,
@@ -438,7 +424,7 @@ export async function getWeeklyReportData(weekStart: string, weekEnd: string): P
     fetchIgInsightsRange(weekStart, weekEnd),
     fetchIgStorySummaryRange(weekStart, weekEnd),
     fetchLineTotalRegistrations(weekStart, weekEnd),
-    fetchMainLineRegistrations(weekStart, weekEnd),
+    countLineSourceRegistrations(PROJECT_ID, { startDate: weekStart, endDate: weekEnd, sourceName: 'Threads' }),
     countLineSourceRegistrations(PROJECT_ID, { startDate: weekStart, endDate: weekEnd, sourceName: 'Instagram' }),
     fetchExpenseRange(weekStart, weekEnd),
 

@@ -41,7 +41,7 @@ export function formatDailyReport(d: DailyReportData): string {
   lines.push(`- 投稿数：${d.thPostCount}`);
   lines.push(`- 閲覧数：${num(d.thImpressions)}`);
   lines.push(`- LPアクセス：${d.thLinkClicks}`);
-  lines.push(`- LINE登録数：${d.thLineRegistrations == null ? '未判別（メイン専用の流入データなし）' : d.thLineRegistrations}`);
+  lines.push(`- LINE登録数：${d.thLineRegistrations}`);
   lines.push('');
 
   // Instagram
@@ -51,15 +51,13 @@ export function formatDailyReport(d: DailyReportData): string {
   lines.push(`- リーチ：${num(d.igReach)}`);
   lines.push(`- プロフィールリンクタップ：${num(d.igLinkClicks)}`);
   lines.push(`- LINE登録数：${d.igLineRegistrations}`);
-  lines.push('※リーチ・リンクタップはAPI取得時点の直近24時間');
-  lines.push(`- 取得日時：${d.igCollectedAt ? new Date(d.igCollectedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false }) + ' JST' : '未取得'}`);
   lines.push('');
 
   // Story
-  lines.push('ストーリー（保存済み投稿）');
+  lines.push('ストーリー');
   lines.push(`- 投稿数：${d.igStoryCount > 0 ? d.igStoryCount : '取得記録なし'}`);
-  lines.push(`- 累積閲覧数の合計：${num(d.igStoryViews)}`);
-  lines.push(`- 1投稿平均閲覧数／フォロワー数：${d.igStoryViewRate == null ? '未取得' : `${d.igStoryViewRate}%`}`);
+  lines.push(`- 閲覧数：${num(d.igStoryViews)}`);
+  lines.push(`- 閲覧率：${d.igStoryViewRate == null ? '未取得' : `${d.igStoryViewRate}%`}`);
   lines.push('');
 
   // MoneyForward 支出
@@ -130,7 +128,7 @@ export function formatWeeklyReport(w: WeeklyReportData): string {
   lines.push(`- 投稿数：${w.thPostCount}`);
   lines.push(`- 閲覧数：${num(w.thImpressions)}`);
   lines.push(`- LPアクセス：${w.thLinkClicks}`);
-  lines.push(`- LINE登録数：${w.thLineRegistrations == null ? '未判別（メイン専用の流入データなし）' : w.thLineRegistrations}`);
+  lines.push(`- LINE登録数：${w.thLineRegistrations}`);
   lines.push('');
 
   // Instagram
@@ -144,7 +142,7 @@ export function formatWeeklyReport(w: WeeklyReportData): string {
   lines.push('');
 
   // Story
-  lines.push('ストーリー（保存済み投稿）');
+  lines.push('ストーリー');
   lines.push(`- 投稿数：${w.igStoryCount > 0 ? w.igStoryCount : '取得記録なし'}`);
   lines.push(`- 累積閲覧数の合計：${num(w.igStoryViews)}`);
   lines.push('');

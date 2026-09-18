@@ -72,12 +72,13 @@ test('uses main-account views and names each measurement accurately', () => {
   assert.match(message, /閲覧数：12,383/);
   assert.match(message, /1,082（-2）/);
   assert.match(message, /プロフィールリンクタップ：0/);
-  assert.match(message, /直近24時間/);
-  assert.match(message, /2026\/9\/17 0:05:00 JST/);
+  assert.doesNotMatch(message, /直近24時間|取得日時|保存済み投稿|1投稿平均/);
+  assert.match(message, /ストーリー\n- 投稿数：1\n- 閲覧数：10\n- 閲覧率：10%/);
   assert.doesNotMatch(message, /プロフクリック|インプレッション/);
 });
 
-test('does not report unclassified main-account LINE registrations as zero', () => {
-  const message = formatDailyReport({ ...report, thLineRegistrations: null });
-  assert.match(message, /LINE登録数：未判別（メイン専用の流入データなし）/);
+test('shows combined Threads LINE registrations independently of main-account metrics', () => {
+  const message = formatDailyReport({ ...report, thLineRegistrations: 7 });
+  assert.match(message, /Threads（メイン）[\s\S]*?LINE登録数：7/);
+  assert.doesNotMatch(message, /未判別|メイン専用/);
 });
