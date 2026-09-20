@@ -63,6 +63,7 @@ async function main(): Promise<void> {
 
     const rawBuffer = await fs.readFile(downloadOutcome.csvPath);
     const normalized = transformCsvWithGuard(rawBuffer, snapshotDate);
+    validateRequiredTags(normalized, config.requiredTagNames);
 
     const processedObjects = await persistProcessedFiles(
       storage,
@@ -153,6 +154,16 @@ function transformCsvWithGuard(buffer: Buffer, snapshotDate: string): Normalized
     return transformLstepCsv(buffer, snapshotDate);
   } catch (error) {
     throw new ProcessingFailedError('CSV整形中にエラーが発生しました', { cause: error });
+  }
+}
+
+export function validateRequiredTags(data: NormalizedLstepData, requiredTagNames: string[]): void {
+  if (requiredTagNames.length === 0) return;
+
+  const availableTags = new Set(data.userTags.map((row) => row.tag_name));
+  const missingTags = requiredTagNames.filter((tagName) => !availableTags.has(tagName));
+  if (missingTags.length > 0) {
+    throw new ProcessingFailedError(`必須タグがCSVに含まれていません: ${missingTags.join(', ')}`);
   }
 }
 

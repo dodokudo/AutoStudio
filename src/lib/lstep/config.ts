@@ -21,6 +21,8 @@ export interface LstepConfig {
   downloadTimeoutMs: number;
   retryDelaysMs: number[];
   timeZone: string;
+  exportFavoriteName: string | null;
+  requiredTagNames: string[];
 }
 
 function requireEnv(key: string): string {
@@ -67,6 +69,11 @@ export function loadLstepConfig(): LstepConfig {
     downloadTimeoutMs: process.env.LSTEP_DOWNLOAD_TIMEOUT_MS ? Number.parseInt(process.env.LSTEP_DOWNLOAD_TIMEOUT_MS, 10) : 120000,
     retryDelaysMs: retryDelaysMs.length > 0 ? retryDelaysMs : [5000, 10000, 30000],
     timeZone: process.env.LSTEP_TIMEZONE ?? 'Asia/Tokyo',
+    exportFavoriteName: process.env.LSTEP_EXPORT_FAVORITE_NAME?.trim() || null,
+    requiredTagNames: (process.env.LSTEP_REQUIRED_TAG_NAMES ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0),
   };
 }
 

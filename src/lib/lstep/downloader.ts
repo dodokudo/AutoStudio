@@ -227,12 +227,8 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
   const existingDownloadHrefs = await collectDownloadHrefs(page);
   console.log(`既存のダウンロードリンク数: ${existingDownloadHrefs.length}`);
 
-  // 6. お気に入りの1番上（「表示項目をコピーして利用」リンク or ボタン）をクリック
-  console.log('お気に入りの1番上（表示項目をコピーして利用）をクリック...');
-  const copyClicked = await tryClickByRoles(page, '表示項目をコピーして利用', ['link', 'button']);
-  if (!copyClicked) {
-    await page.locator('text=表示項目をコピーして利用').first().click({ timeout: 10000 });
-  }
+  // 6. 指定されたお気に入りを名前で選ぶ。名前未指定の既存ジョブだけ先頭へフォールバックする。
+  await selectExportFavorite(page, config.exportFavoriteName);
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
   console.log('CSVエクスポート設定ページに戻りました:', page.url());
@@ -287,6 +283,32 @@ async function performDownloadFlow(page: Page, config: LstepConfig): Promise<Dow
 
   console.log('ダウンロード開始...');
   return downloadPromise;
+}
+
+export async function selectExportFavorite(page: Page, favoriteName: string | null): Promise<void> {
+  if (!favoriteName) {
+    console.log('お気に入りの1番上（表示項目をコピーして利用）をクリック...');
+    const copyClicked = await tryClickByRoles(page, '表示項目をコピーして利用', ['link', 'button']);
+    if (!copyClicked) {
+      await page.locator('text=表示項目をコピーして利用').first().click({ timeout: 10000 });
+    }
+    return;
+  }
+
+  console.log(`お気に入り「${favoriteName}」を選択...`);
+  const favoriteRow = page
+    .locator('tr')
+    .filter({ has: page.getByText(favoriteName, { exact: true }) })
+    .filter({ has: page.getByRole('link', { name: '表示項目をコピーして利用', exact: true }) })
+    .first();
+
+  if (!await favoriteRow.count()) {
+    throw new Error(`CSVエクスポートのお気に入り「${favoriteName}」が見つかりませんでした`);
+  }
+
+  await favoriteRow
+    .getByRole('link', { name: '表示項目をコピーして利用', exact: true })
+    .click({ timeout: 10_000 });
 }
 
 async function collectDownloadHrefs(page: Page): Promise<string[]> {
