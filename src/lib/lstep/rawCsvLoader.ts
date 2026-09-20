@@ -170,7 +170,6 @@ const EXACT_COLUMN_NAMES: Record<string, string> = {
   '【2026.7】購入ボタン': 's7_purchase_button',
   '【2026.7】銀振希望者': 's7_bank_transfer',
   '【2026.7】フロント購入者総数': 's7_front_purchased_total',
-  '【流入経路】Threads': 'source_threads',
   '【2026.7】セミナーフォーム遷移': 's7_seminar_form',
   // 友だち情報（従来 unnamed_* に潰れていた列）
   'アンケート回答日': 'survey_answered_date',

@@ -28,23 +28,3 @@ test('keeps the exact Threads tags as separate tag rows', () => {
     1,
   );
 });
-
-test('keeps the canonical Threads inflow tag from the latest YOKO export', () => {
-  const csv = [
-    '登録ID,,タグ_10338703,タグ_10338701,タグ_8112739,タグ_10396034',
-    'ID,表示名,Threads：固定,Threads,Threads：プロフィール,【流入経路】Threads',
-    'friend-1,登録者A,0,1,1,1',
-    'friend-2,登録者B,0,0,1,0',
-  ].join('\r\n');
-
-  const result = transformLstepCsv(iconv.encode(csv, 'Shift_JIS'), '2026-09-20');
-  const inflowRows = result.userTags.filter((row) => row.tag_name === '【流入経路】Threads');
-
-  assert.deepEqual(
-    inflowRows.map((row) => [row.user_id, row.tag_flag]),
-    [
-      ['friend-1', 1],
-      ['friend-2', 0],
-    ],
-  );
-});

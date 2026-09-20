@@ -33,21 +33,3 @@ test('CSV dates retain Japan timezone and optional timestamp placeholders become
 test('duplicate IDs fail before any BigQuery replacement', () => {
   assert.throws(() => normalizeRawCsv(iconv.encode('登録ID\nID\n1\n1', 'shift_jis'), '2026-09-11'), /重複ID/);
 });
-
-test('maps the latest YOKO Threads inflow tag to a stable raw column', () => {
-  const csv = [
-    '登録ID,,タグ_10338701,タグ_10396034',
-    'ID,表示名,Threads,【流入経路】Threads',
-    '1,登録者A,1,1',
-  ].join('\r\n');
-  const result = normalizeRawCsv(iconv.encode(csv, 'Shift_JIS'), '2026-09-20');
-
-  assert.deepEqual(result.headers, [
-    'snapshot_date',
-    'id',
-    'display_name',
-    'threads',
-    'source_threads',
-  ]);
-  assert.deepEqual(parse(result.content)[1], ['2026-09-20', '1', '登録者A', '1', '1']);
-});

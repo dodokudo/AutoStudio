@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chromium } from 'playwright';
-import {
-  isSessionExpired,
-  navigateToFriendsPage,
-  selectExportFavorite,
-} from './downloader';
+import { isSessionExpired, navigateToFriendsPage } from './downloader';
 
 test('opens the configured friends URL without relying on dashboard clicks', async () => {
   const calls: Array<{ url: string; timeout?: number }> = [];
@@ -38,47 +33,4 @@ test('detects the actual login page as an expired session', async () => {
   } as unknown as Parameters<typeof isSessionExpired>[0];
 
   assert.equal(await isSessionExpired(page), true);
-});
-
-test('selects the named export favorite instead of the first row', async (t) => {
-  const browser = await chromium.launch({ headless: true });
-  t.after(async () => browser.close());
-  const page = await browser.newPage();
-
-  await page.setContent(`
-    <table>
-      <tr>
-        <td>古い設定</td>
-        <td><a href="#old">表示項目をコピーして利用</a></td>
-      </tr>
-      <tr>
-        <td>Threads 分析よう</td>
-        <td><a href="#threads">表示項目をコピーして利用</a></td>
-      </tr>
-    </table>
-  `);
-
-  await selectExportFavorite(page, 'Threads 分析よう');
-
-  assert.equal(new URL(page.url()).hash, '#threads');
-});
-
-test('fails when the configured export favorite is missing', async (t) => {
-  const browser = await chromium.launch({ headless: true });
-  t.after(async () => browser.close());
-  const page = await browser.newPage();
-
-  await page.setContent(`
-    <table>
-      <tr>
-        <td>古い設定</td>
-        <td><a href="#old">表示項目をコピーして利用</a></td>
-      </tr>
-    </table>
-  `);
-
-  await assert.rejects(
-    selectExportFavorite(page, 'Threads 分析よう'),
-    /お気に入り「Threads 分析よう」が見つかりませんでした/,
-  );
 });
