@@ -36,9 +36,9 @@ interface YoutubeDashboardShellProps {
 }
 
 const TABS: { id: TabKey; label: string }[] = [
-  { id: 'scripts', label: '台本作成' },
   { id: 'own', label: '自社データ' },
   { id: 'competitors', label: '競合データ' },
+  { id: 'scripts', label: '台本作成' },
 ];
 
 const numberFormatter = new Intl.NumberFormat('ja-JP');
