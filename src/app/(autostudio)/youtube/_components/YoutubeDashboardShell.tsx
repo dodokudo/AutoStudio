@@ -408,15 +408,13 @@ export function YoutubeDashboardShell({
   const scriptTabContent = (
     <div className="space-y-6">
       <Card className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">台本作成ワークスペース</h2>
-            <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              最新のYouTube分析結果をもとに、AIがドラフト台本を生成します。Notionの台本DBと連携しています。
-            </p>
-          </div>
-          <ScriptGenerateButton themeKeyword="YouTube動画" />
+        <div>
+          <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">構造化台本ワークスペース</h2>
+          <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
+            Threads競合台本から整理した8つの勝ちパターンを選び、章構造・完成原稿・演出・必要素材まで生成します。
+          </p>
         </div>
+        <ScriptGenerateButton themeKeyword="Threads運用" expanded />
         {scripts.length ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {scripts.map((script) => (

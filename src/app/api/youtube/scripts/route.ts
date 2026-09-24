@@ -7,6 +7,12 @@ import { getYoutubeDashboardData } from '@/lib/youtube/dashboard';
 import { requestClaudeYoutubeScript } from '@/lib/youtube/claude';
 import { buildYoutubeScriptPrompt, parseClaudeYoutubeScriptResponse } from '@/lib/youtube/prompt';
 import {
+  DEFAULT_YOUTUBE_SCRIPT_TEMPLATE_ID,
+  getYoutubeScriptTemplate,
+  isYoutubeScriptTemplateId,
+  type YoutubeScriptTemplateId,
+} from '@/lib/youtube/scriptTemplates';
+import {
   createYoutubeBigQueryContext,
   ensureYoutubeTables,
   insertContentScript,
@@ -14,6 +20,17 @@ import {
 } from '@/lib/youtube/bigquery';
 
 const DATASET_ID = process.env.YOUTUBE_BQ_DATASET_ID ?? 'autostudio_media';
+
+const LEGACY_TEMPLATE_MAP: Record<string, YoutubeScriptTemplateId> = {
+  A: 'live-demo',
+  '機能紹介系': 'live-demo',
+  B: 'roadmap',
+  'ノウハウ系': 'roadmap',
+  C: 'list-ranking',
+  '比較検証系': 'list-ranking',
+  D: 'case-study',
+  'ストーリー系': 'case-study',
+};
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -36,8 +53,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   let payload: {
     themeKeyword?: string;
+    templateId?: string;
     videoType?: string;
+    durationMinutes?: number;
     targetPersona?: string;
+    evidenceNotes?: string;
     notes?: string;
   };
 
@@ -51,17 +71,21 @@ export async function POST(request: Request) {
   if (!themeKeyword) {
     return NextResponse.json({ error: 'themeKeyword は必須です' }, { status: 400 });
   }
+  if (payload.templateId && !isYoutubeScriptTemplateId(payload.templateId)) {
+    return NextResponse.json({ error: 'templateId が不正です' }, { status: 400 });
+  }
 
-  const videoType = (payload.videoType ?? 'B') as
-    | 'A'
-    | 'B'
-    | 'C'
-    | 'D'
-    | '機能紹介系'
-    | 'ノウハウ系'
-    | '比較検証系'
-    | 'ストーリー系';
+  const requestedTemplate = payload.templateId ?? payload.videoType;
+  const templateId = isYoutubeScriptTemplateId(requestedTemplate)
+    ? requestedTemplate
+    : LEGACY_TEMPLATE_MAP[requestedTemplate ?? ''] ?? DEFAULT_YOUTUBE_SCRIPT_TEMPLATE_ID;
+  const template = getYoutubeScriptTemplate(templateId);
+  const requestedDuration = Number(payload.durationMinutes ?? template.defaultDurationMinutes);
+  const durationMinutes = Number.isFinite(requestedDuration)
+    ? Math.min(Math.max(Math.round(requestedDuration), 10), 60)
+    : template.defaultDurationMinutes;
   const targetPersona = payload.targetPersona?.trim();
+  const evidenceNotes = payload.evidenceNotes?.trim();
   const additionalNotes = payload.notes?.trim();
 
   try {
@@ -74,8 +98,10 @@ export async function POST(request: Request) {
 
     const prompt = buildYoutubeScriptPrompt({
       themeKeyword,
-      videoType,
+      templateId,
+      durationMinutes,
       targetPersona,
+      evidenceNotes,
       analytics: {
         totalViews30d: dashboard.overview.totalViews30d,
         avgViewDuration: dashboard.overview.avgViewDuration,
@@ -88,7 +114,21 @@ export async function POST(request: Request) {
     console.log('[youtube/scripts] Requesting Claude script generation...');
     const claudeRaw = await requestClaudeYoutubeScript(prompt);
     console.log('[youtube/scripts] Claude response received, parsing...');
-    const claudeScript = parseClaudeYoutubeScriptResponse(claudeRaw);
+    const parsedScript = parseClaudeYoutubeScriptResponse(claudeRaw);
+    const sectionsById = new Map(parsedScript.scriptSections.map((section) => [section.id, section]));
+    const missingSectionIds = template.sections
+      .map((section) => section.id)
+      .filter((sectionId) => !sectionsById.has(sectionId));
+    if (missingSectionIds.length) {
+      throw new Error(`生成台本に必須セクションがありません: ${missingSectionIds.join(', ')}`);
+    }
+    const claudeScript = {
+      ...parsedScript,
+      scriptSections: template.sections.map((section) => ({
+        ...sectionsById.get(section.id)!,
+        label: section.label,
+      })),
+    };
 
     const contentId = `yt-script-${randomUUID()}`;
     const now = new Date().toISOString();
@@ -97,7 +137,21 @@ export async function POST(request: Request) {
     scriptBodyLines.push(`【動画タイトル案】\n${claudeScript.videoTitle}`);
     scriptBodyLines.push('');
     for (const section of claudeScript.scriptSections) {
-      scriptBodyLines.push(`【${section.label}】`);
+      const durationLabel = section.targetMinutes ? ` / ${section.targetMinutes}分` : '';
+      scriptBodyLines.push(`【${section.label}${durationLabel}】`);
+      if (section.purpose) {
+        scriptBodyLines.push(`目的: ${section.purpose}`);
+      }
+      if (section.visualDirection) {
+        scriptBodyLines.push(`画面・演出: ${section.visualDirection}`);
+      }
+      if (section.keyPoints.length) {
+        scriptBodyLines.push(`要点:\n${section.keyPoints.map((point) => `- ${point}`).join('\n')}`);
+      }
+      if (section.evidenceNeeded.length) {
+        scriptBodyLines.push(`必要素材:\n${section.evidenceNeeded.map((item) => `- ${item}`).join('\n')}`);
+      }
+      scriptBodyLines.push('');
       scriptBodyLines.push(section.script);
       scriptBodyLines.push('');
     }
@@ -124,7 +178,7 @@ export async function POST(request: Request) {
       targetPersona: targetPersona ? [targetPersona] : undefined,
       themeKeyword,
       generatedAt: now,
-      templateName: videoType,
+      templateName: template.label,
       sourceUrls: supportingVideos
         .map((video) => (video.videoId ? `https://www.youtube.com/watch?v=${video.videoId}` : undefined))
         .filter((url): url is string => Boolean(url)),
@@ -140,7 +194,7 @@ export async function POST(request: Request) {
       contentId,
       themeKeyword,
       targetPersona: targetPersona ? [targetPersona] : undefined,
-      videoType,
+      videoType: templateId,
       status: 'draft',
       notionPageId,
       generatedAt: now,
@@ -155,6 +209,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       contentId,
       videoTitle: claudeScript.videoTitle,
+      templateId,
+      templateLabel: template.label,
+      durationMinutes,
       notionPageId,
       lineKeyword: claudeScript.lineKeyword,
       thumbnailIdeas: claudeScript.thumbnailIdeas,

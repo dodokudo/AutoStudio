@@ -4,6 +4,10 @@ const CLAUDE_SCRIPT_MODEL =
   process.env.CLAUDE_SCRIPT_MODEL?.trim()
   ?? process.env.CLAUDE_MODEL?.trim()
   ?? 'claude-3-5-sonnet-latest';
+const CLAUDE_SCRIPT_MAX_TOKENS = Math.min(
+  Math.max(Number(process.env.CLAUDE_SCRIPT_MAX_TOKENS) || 12000, 4000),
+  16000,
+);
 
 export async function requestClaudeYoutubeScript(prompt: string) {
   if (!CLAUDE_API_KEY) {
@@ -15,7 +19,7 @@ export async function requestClaudeYoutubeScript(prompt: string) {
 
   const requestBody = {
     model: CLAUDE_SCRIPT_MODEL,
-    max_tokens: 6000,
+    max_tokens: CLAUDE_SCRIPT_MAX_TOKENS,
     temperature: 0.6,
     system:
       'You are a professional Japanese YouTube script writer. Always respond with pure JSON (no Markdown code fences, no explanations).',

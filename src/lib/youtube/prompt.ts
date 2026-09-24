@@ -1,9 +1,16 @@
 import type { YoutubeVideoSummary } from './dashboard';
+import {
+  getSectionTargetMinutes,
+  getYoutubeScriptTemplate,
+  type YoutubeScriptTemplateId,
+} from './scriptTemplates';
 
 export interface YoutubeScriptPromptInput {
   themeKeyword: string;
-  videoType: 'A' | 'B' | 'C' | 'D' | '機能紹介系' | 'ノウハウ系' | '比較検証系' | 'ストーリー系';
+  templateId: YoutubeScriptTemplateId;
+  durationMinutes: number;
   targetPersona?: string;
+  evidenceNotes?: string;
   analytics: {
     totalViews30d: number;
     avgViewDuration: number;
@@ -13,27 +20,9 @@ export interface YoutubeScriptPromptInput {
   additionalNotes?: string;
 }
 
-function normalizeVideoType(value: YoutubeScriptPromptInput['videoType']): {
-  code: 'A' | 'B' | 'C' | 'D';
-  label: '機能紹介系' | 'ノウハウ系' | '比較検証系' | 'ストーリー系';
-} {
-  const map: Record<string, { code: 'A' | 'B' | 'C' | 'D'; label: '機能紹介系' | 'ノウハウ系' | '比較検証系' | 'ストーリー系' }> = {
-    A: { code: 'A', label: '機能紹介系' },
-    '機能紹介系': { code: 'A', label: '機能紹介系' },
-    B: { code: 'B', label: 'ノウハウ系' },
-    'ノウハウ系': { code: 'B', label: 'ノウハウ系' },
-    C: { code: 'C', label: '比較検証系' },
-    '比較検証系': { code: 'C', label: '比較検証系' },
-    D: { code: 'D', label: 'ストーリー系' },
-    'ストーリー系': { code: 'D', label: 'ストーリー系' },
-  };
-
-  return map[value] ?? map.B;
-}
-
 function renderSupportingVideos(videos: YoutubeVideoSummary[]): string {
   if (!videos.length) {
-    return '該当する競合動画は見つかりませんでした。';
+    return '該当する参考動画はありません。タイトルや数値を推測で補わないでください。';
   }
 
   return videos
@@ -55,93 +44,103 @@ function renderSupportingVideos(videos: YoutubeVideoSummary[]): string {
     .join('\n');
 }
 
+function renderTemplateStructure(templateId: YoutubeScriptTemplateId, durationMinutes: number): string {
+  const template = getYoutubeScriptTemplate(templateId);
+
+  return template.sections
+    .map((section, index) => {
+      const targetMinutes = getSectionTargetMinutes(template, durationMinutes, section.weight);
+      const requirements = section.requirements.map((requirement) => `   - ${requirement}`).join('\n');
+      return `${index + 1}. ${section.label} [id: ${section.id}]（目安 ${targetMinutes}分）\n   目的: ${section.purpose}\n${requirements}`;
+    })
+    .join('\n');
+}
+
 export function buildYoutubeScriptPrompt(input: YoutubeScriptPromptInput): string {
-  const videoType = normalizeVideoType(input.videoType);
-  const personaText = input.targetPersona ?? 'AI活用に関心のあるビジネスパーソン';
+  const template = getYoutubeScriptTemplate(input.templateId);
+  const personaText = input.targetPersona ?? 'Threads運用をこれから伸ばしたい個人事業主・経営者';
   const analyticsSummary = `直近30日視聴回数: ${Math.round(input.analytics.totalViews30d).toLocaleString()}回 / 平均視聴時間: ${(input.analytics.avgViewDuration / 60).toFixed(1)}分 / 純増登録者: ${Math.round(input.analytics.subscriberDelta30d).toLocaleString()}人`;
   const supporting = renderSupportingVideos(input.supportingVideos);
-  const notes = input.additionalNotes ? `\n## 追加メモ\n${input.additionalNotes}` : '';
+  const evidence = input.evidenceNotes?.trim() || '提供なし。実績・数値・固有の体験は創作せず、必要箇所を「[要確認: 必要な証拠]」と明示すること。';
+  const notes = input.additionalNotes?.trim() || '特になし';
+  const structure = renderTemplateStructure(input.templateId, input.durationMinutes);
 
   return `# YouTube動画台本作成依頼
 
-あなたはYouTube台本作成の専門家です。以下の条件に従って、高品質な動画台本を作成してください。
+あなたは日本語YouTube動画の構成作家です。競合動画の表面表現をコピーせず、勝ちパターンの構造を使って、撮影できるレベルの詳細な台本を作成してください。
 
-## 【基本情報】
+## 基本情報
 - チャンネル名：工藤のAI活用チャンネル
-- 発信者：工藤（AI活用で人生変化、2年前に600名集客・700万円売上・100時間→5時間効率化の実績）
+- 発信者：工藤
 - 動画テーマ：${input.themeKeyword}
-- 動画の長さ：約20分
+- 目標尺：約${input.durationMinutes}分
 - ターゲット：${personaText}
-- 動画タイプ：${videoType.label}
+- 採用テンプレート：${template.label}
+- この型が向く企画：${template.bestFor}
+- 型の狙い：${template.description}
 
-## 【参考インサイト】
+## 利用できる事実・証拠
+${evidence}
+
+## 参考インサイト
 - 自チャンネル実績: ${analyticsSummary}
-- 競合の代表的な動画:
+- 参考動画（内容や因果関係はタイトルと数値だけから断定しない）:
 ${supporting}
+
+## 追加指示
 ${notes}
 
-${getStructureTemplate(videoType.code)}
+## 必須の章構造
+次の章を同じID・順序で必ず出力してください。各章の目的と必須要素を満たし、章同士で同じ話を繰り返さないでください。
 
-## 【共通要素】
-- オープニングでは工藤の自己紹介と視聴メリットを30秒以内で明示
-- エンディングは指定されたLINE誘導キーワードを必ず含めること
-- 工藤らしさ（せっかち/コスト意識/実験精神/効率重視/親近感）を自然に織り交ぜる
+${structure}
 
-## 【出力フォーマット】
-以下のJSON構造で、追加の説明文やマークダウンは一切書かずに返してください。
+## 台本作成ルール
+- 冒頭30秒以内に「誰の、どんな悩みを、どこまで解決する動画か」を明示する。
+- 抽象論で終わらせず、判断基準、具体例、画面または図解の指示を入れる。
+- script は箇条書きの構成案ではなく、工藤がそのまま話せる自然な口語の完成原稿にする。
+- 工藤らしさ（せっかち、コスト意識、実験精神、効率重視、親近感）は、決め台詞ではなく判断や具体例に自然に反映する。
+- 提供されていない実績、売上、人数、期間、コメント、体験談は絶対に創作しない。必要なら evidenceNeeded に不足素材を書く。
+- 参考動画のタイトル、言い回し、固有事例を転載しない。構造と視聴者心理だけを参考にする。
+- targetMinutes の合計が約${input.durationMinutes}分になるようにし、章ごとの密度を調整する。
+- visualDirection には、収録時に必要な画面、テロップ、図解、証拠映像を具体的に書く。
+- エンディングでは本編の内容と自然につながるLINE特典を提案し、lineKeyword を案内する。
+
+## 出力フォーマット
+以下のJSON構造で、追加説明やMarkdownを一切書かずに返してください。
 {
-  "videoTitle": "...",
-  "lineKeyword": "...",
-  "summary": "...",
-  "thumbnailIdeas": ["...", "..."],
+  "videoTitle": "検索意図と視聴メリットが伝わるタイトル",
+  "lineKeyword": "短い日本語キーワード",
+  "summary": "動画の狙いと内容を120字以内で要約",
+  "thumbnailIdeas": ["文字案｜画面構成案", "文字案｜画面構成案", "文字案｜画面構成案"],
   "scriptSections": [
-    { "id": "opening", "label": "オープニング", "script": "..." },
-    { "id": "section1", "label": "...", "script": "..." }
+    {
+      "id": "指定された章ID",
+      "label": "指定された章名",
+      "purpose": "この章で視聴者に起こす変化",
+      "targetMinutes": 1.5,
+      "visualDirection": "画面・テロップ・図解・証拠素材の指示",
+      "keyPoints": ["要点1", "要点2"],
+      "evidenceNeeded": ["撮影前に用意する実績画面や数値。不要なら空配列"],
+      "script": "そのまま話せる完成原稿"
+    }
   ],
-  "notes": "制作メモや注意点"
+  "notes": "撮影順、必要素材、要確認事項をまとめた制作メモ"
 }
 
-- scriptSections はオープニングからエンディングまで、選択した構成パターンに沿うこと。
-- 各 script の文量は 250〜400 日本語トークン程度で自然な口語。
+- scriptSections は上記「必須の章構造」と同じ件数・ID・順序にする。
 - JSON以外の文字列は絶対に出力しない。`;
 }
 
-function getStructureTemplate(videoTypeCode: 'A' | 'B' | 'C' | 'D'): string {
-  const base = `## 【構成パターン】（動画タイプに応じて選択）
-
-### A. 機能紹介系（新機能・新ツールの解説）
-1. オープニング：問題提起
-2. PASTERフォーミュラ：機能の必要性を訴求
-3. 本編：機能説明→実演→応用例→注意点
-4. エンディング：実体験とCTA
-
-### B. ノウハウ系（手法・テクニックの紹介）
-1. オープニング：実績・結果を先出し
-2. 信頼性構築：失敗体験→成功体験
-3. 本編：メソッド解説→段階的実践→結果検証
-4. エンディング：再現性とCTA
-
-### C. 比較検証系（ツール・手法の比較）
-1. オープニング：疑問・論争の提示
-2. 仮説設定：何を比較するか明確化
-3. 本編：条件設定→検証実施→結果分析→結論
-4. エンディング：推奨事項とCTA
-
-### D. ストーリー系（体験談・事例紹介）
-1. オープニング：衝撃的な変化を予告
-2. ストーリー展開：過去の状況→転機→変化過程
-3. 本編：学びの抽出→再現可能な方法論化
-4. エンディング：視聴者への適用とCTA
-`;
-
-  const emphasis = {
-    A: '採用する構成パターン: 機能紹介系 (A)。',
-    B: '採用する構成パターン: ノウハウ系 (B)。',
-    C: '採用する構成パターン: 比較検証系 (C)。',
-    D: '採用する構成パターン: ストーリー系 (D)。',
-  }[videoTypeCode];
-
-  return `${base}\n必ず${emphasis}`;
+export interface ClaudeYoutubeScriptSection {
+  id: string;
+  label: string;
+  purpose: string | undefined;
+  targetMinutes: number | undefined;
+  visualDirection: string | undefined;
+  keyPoints: string[];
+  evidenceNeeded: string[];
+  script: string;
 }
 
 export interface ClaudeYoutubeScriptResponse {
@@ -149,8 +148,12 @@ export interface ClaudeYoutubeScriptResponse {
   lineKeyword: string;
   summary: string;
   thumbnailIdeas: string[];
-  scriptSections: Array<{ id: string; label: string; script: string }>;
+  scriptSections: ClaudeYoutubeScriptSection[];
   notes?: string;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
 export function parseClaudeYoutubeScriptResponse(content: unknown): ClaudeYoutubeScriptResponse {
@@ -163,9 +166,7 @@ export function parseClaudeYoutubeScriptResponse(content: unknown): ClaudeYoutub
   const lineKeyword = typeof data.lineKeyword === 'string' ? data.lineKeyword : undefined;
   const summary = typeof data.summary === 'string' ? data.summary : undefined;
   const notes = typeof data.notes === 'string' ? data.notes : undefined;
-  const thumbnailIdeas = Array.isArray(data.thumbnailIdeas)
-    ? data.thumbnailIdeas.filter((item): item is string => typeof item === 'string')
-    : [];
+  const thumbnailIdeas = stringArray(data.thumbnailIdeas);
   const sectionsRaw = Array.isArray(data.scriptSections) ? data.scriptSections : [];
   const scriptSections = sectionsRaw
     .map((section) => {
@@ -175,9 +176,19 @@ export function parseClaudeYoutubeScriptResponse(content: unknown): ClaudeYoutub
       const label = typeof value.label === 'string' ? value.label : undefined;
       const script = typeof value.script === 'string' ? value.script : undefined;
       if (!id || !label || !script) return null;
-      return { id, label, script };
+
+      return {
+        id,
+        label,
+        script,
+        purpose: typeof value.purpose === 'string' ? value.purpose : undefined,
+        targetMinutes: typeof value.targetMinutes === 'number' ? value.targetMinutes : undefined,
+        visualDirection: typeof value.visualDirection === 'string' ? value.visualDirection : undefined,
+        keyPoints: stringArray(value.keyPoints),
+        evidenceNeeded: stringArray(value.evidenceNeeded),
+      };
     })
-    .filter((section): section is { id: string; label: string; script: string } => section !== null);
+    .filter((section): section is ClaudeYoutubeScriptSection => section !== null);
 
   if (!videoTitle || !lineKeyword || !summary || scriptSections.length === 0) {
     throw new Error('Claude応答の必須フィールドが不足しています');
