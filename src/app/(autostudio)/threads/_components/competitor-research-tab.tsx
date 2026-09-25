@@ -481,7 +481,7 @@ export function CompetitorResearchTab() {
     const spikes = dailySeries
       .filter((entry) => dayViews(entry) >= DAILY_SPIKE_THRESHOLD)
       .sort((left, right) => dayViews(right) - dayViews(left))
-      .slice(0, 10);
+      .slice(0, 30);
     return { dates, rows, spikes };
   }, [dailySeries]);
 
@@ -1541,27 +1541,32 @@ export function CompetitorResearchTab() {
             </p>
             {dailyEstimateTable.spikes.length > 0 && (
               <div className="mt-4">
-                <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">跳ねた日（1万以上）</h4>
-                <ul className="mt-2 space-y-1 text-sm text-[color:var(--color-text-primary)]">
-              {dailyEstimateTable.spikes.map((point) => (
-                    <li key={`${point.username}-${point.postDate}`} className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="tabular-nums font-bold">{numberFormat.format(dayViews(point))}</span>
-                      {point.actualViews === null && <span className="text-[10px] text-[color:var(--color-text-secondary)]">推定</span>}
-                      <span>@{point.username}</span>
-                      <span className="text-xs text-[color:var(--color-text-secondary)]">{shortDate(point.postDate)}の投稿</span>
-                      <button
-                        type="button"
-                        className="text-xs text-[color:var(--color-accent)] underline-offset-2 hover:underline"
-                        onClick={() => {
-                          setHistoryUsername(point.username);
-                          showPostsFor(point.username, point.postDate);
-                        }}
-                      >
-                        投稿を見る
-                      </button>
-                    </li>
+                <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">跳ねた日（1万以上・上位30）</h4>
+                <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 md:grid-cols-3">
+                  {[0, 10, 20].map((offset) => (
+                    <ul key={offset} className="space-y-1 text-sm text-[color:var(--color-text-primary)]">
+                      {dailyEstimateTable.spikes.slice(offset, offset + 10).map((point, index) => (
+                        <li key={`${point.username}-${point.postDate}`} className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="w-9 shrink-0 text-right text-xs font-medium text-[color:var(--color-text-secondary)]">{offset + index + 1}位</span>
+                          <span className="tabular-nums font-bold">{numberFormat.format(dayViews(point))}</span>
+                          {point.actualViews === null && <span className="text-[10px] text-[color:var(--color-text-secondary)]">推定</span>}
+                          <span>@{point.username}</span>
+                          <span className="text-xs text-[color:var(--color-text-secondary)]">{shortDate(point.postDate)}の投稿</span>
+                          <button
+                            type="button"
+                            className="text-xs text-[color:var(--color-accent)] underline-offset-2 hover:underline"
+                            onClick={() => {
+                              setHistoryUsername(point.username);
+                              showPostsFor(point.username, point.postDate);
+                            }}
+                          >
+                            投稿を見る
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
           </>
