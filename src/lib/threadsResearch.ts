@@ -552,6 +552,45 @@ export interface ProfileHistoryPoint {
   quotesCount: number | null;
 }
 
+export interface DailyPostCount {
+  username: string;
+  /** Post date in JST (YYYY-MM-DD). */
+  postDate: string;
+  postCount: number;
+}
+
+/** Number of root posts per account per JST day (quotes excluded). */
+export async function getDailyPostCounts(
+  userId: string,
+  days = 90
+): Promise<DailyPostCount[]> {
+  await ensureResearchTables();
+  const safeDays = Math.max(1, Math.min(365, Math.floor(days)));
+  const [rows] = await bigquery.query({
+    query: `
+      SELECT
+        username,
+        CAST(DATE(posted_at, 'Asia/Tokyo') AS STRING) AS post_date,
+        COUNT(*) AS post_count
+      FROM ${T_POSTS}
+      WHERE user_id = @userId
+        AND NOT IFNULL(is_quote_post, FALSE)
+        AND DATE(posted_at, 'Asia/Tokyo') >= DATE_SUB(
+          CURRENT_DATE('Asia/Tokyo'),
+          INTERVAL ${safeDays - 1} DAY
+        )
+      GROUP BY username, post_date
+      ORDER BY post_date, username
+    `,
+    params: { userId },
+  });
+  return (rows as Record<string, unknown>[]).map((row) => ({
+    username: String(row.username),
+    postDate: String(row.post_date),
+    postCount: Number(row.post_count ?? 0),
+  }));
+}
+
 /** Daily rolling-seven-day profile snapshots, oldest first for charting. */
 export async function getProfileHistory(
   userId: string,

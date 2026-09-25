@@ -2,12 +2,11 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { DailyPostCount } from '@/lib/threadsResearch';
 import type { DailyViewEstimate } from '@/lib/threadsResearchDailyEstimate';
 import { THREADS_RESEARCH_TARGET_USERNAMES } from '@/lib/threadsResearchTargets';
-import {
-  CompetitorHistoryChart,
-  type CompetitorHistoryPoint,
-} from './competitor-history-chart';
+import { CompetitorDailyChart, type CompetitorDailyPoint } from './competitor-daily-chart';
+import { type CompetitorHistoryPoint } from './competitor-history-chart';
 
 /**
  * Operational competitor research workspace.
@@ -122,6 +121,7 @@ interface WatchlistResult {
   summaries: AccountSummary[];
   history: CompetitorHistoryPoint[];
   dailyEstimates?: DailyViewEstimate[];
+  dailyPostCounts?: DailyPostCount[];
 }
 
 interface CollectedPost {
@@ -322,10 +322,14 @@ const shortDateFormat = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day
 function shortDate(date: string): string {
   return shortDateFormat.format(new Date(`${date}T12:00:00+09:00`));
 }
-function previousDay(date: string): string {
+const isoDateFormat = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' });
+function previousDayIso(date: string): string {
   const d = new Date(`${date}T12:00:00+09:00`);
   d.setDate(d.getDate() - 1);
-  return shortDateFormat.format(d);
+  return isoDateFormat.format(d);
+}
+function jstDateIso(iso: string): string {
+  return isoDateFormat.format(new Date(iso));
 }
 const TARGET_USERNAME_ORDER = new Map<string, number>(
   THREADS_RESEARCH_TARGET_USERNAMES.map((target, index) => [target, index])
@@ -355,6 +359,7 @@ export function CompetitorResearchTab() {
   const [summaries, setSummaries] = useState<AccountSummary[]>([]);
   const [history, setHistory] = useState<CompetitorHistoryPoint[]>([]);
   const [dailyEstimates, setDailyEstimates] = useState<DailyViewEstimate[]>([]);
+  const [dailyPostCounts, setDailyPostCounts] = useState<DailyPostCount[]>([]);
   const [historyUsername, setHistoryUsername] = useState<string>(
     THREADS_RESEARCH_TARGET_USERNAMES[0]
   );
@@ -388,29 +393,81 @@ export function CompetitorResearchTab() {
     [summaries]
   );
 
-  const selectedHistory = useMemo(
-    () => history.filter((point) => point.username === historyUsername),
-    [history, historyUsername]
+  const dailySeries = useMemo<CompetitorDailyPoint[]>(() => {
+    const byKey = new Map<string, CompetitorDailyPoint>();
+    const point = (username: string, postDate: string) => {
+      const key = `${username}|${postDate}`;
+      let entry = byKey.get(key);
+      if (!entry) {
+        entry = { username, postDate, estimatedViews: null, followerDelta: null, postCount: 0, seeded: false };
+        byKey.set(key, entry);
+      }
+      return entry;
+    };
+    for (const estimate of dailyEstimates) {
+      if (estimate.estimatedViews === null) continue;
+      const entry = point(estimate.username, previousDayIso(estimate.snapshotDate));
+      entry.estimatedViews = estimate.estimatedViews;
+      entry.seeded = estimate.seeded;
+    }
+    const followers = new Map<string, CompetitorHistoryPoint[]>();
+    for (const snapshot of history) {
+      if (snapshot.followerCount === null) continue;
+      const list = followers.get(snapshot.username) ?? [];
+      list.push(snapshot);
+      followers.set(snapshot.username, list);
+    }
+    for (const [username, list] of followers) {
+      list.sort((left, right) => left.snapshotDate.localeCompare(right.snapshotDate));
+      for (let index = 1; index < list.length; index += 1) {
+        const entry = point(username, previousDayIso(list[index].snapshotDate));
+        entry.followerDelta = (list[index].followerCount ?? 0) - (list[index - 1].followerCount ?? 0);
+      }
+    }
+    for (const count of dailyPostCounts) {
+      if (!byKey.has(`${count.username}|${count.postDate}`)) continue;
+      point(count.username, count.postDate).postCount = count.postCount;
+    }
+    return [...byKey.values()].sort(
+      (left, right) => left.postDate.localeCompare(right.postDate) || left.username.localeCompare(right.username)
+    );
+  }, [dailyEstimates, dailyPostCounts, history]);
+
+  const selectedDaily = useMemo(
+    () => dailySeries.filter((entry) => entry.username === historyUsername),
+    [dailySeries, historyUsername]
   );
 
   const dailyEstimateTable = useMemo(() => {
-    const dates = [...new Set(dailyEstimates.map((point) => point.snapshotDate))]
-      .sort()
-      .slice(-DAILY_ESTIMATE_DAYS);
-    const rows = THREADS_RESEARCH_TARGET_USERNAMES.map((username) => {
-      const cells = new Map(
-        dailyEstimates
-          .filter((point) => point.username === username)
-          .map((point) => [point.snapshotDate, point] as const)
-      );
-      return { username, cells };
-    });
-    const spikes = dailyEstimates
-      .filter((point) => (point.estimatedViews ?? 0) >= DAILY_SPIKE_THRESHOLD)
+    const dates = [...new Set(dailySeries.map((entry) => entry.postDate))].sort().slice(-DAILY_ESTIMATE_DAYS);
+    const rows = THREADS_RESEARCH_TARGET_USERNAMES.map((username) => ({
+      username,
+      cells: new Map(
+        dailySeries.filter((entry) => entry.username === username).map((entry) => [entry.postDate, entry] as const)
+      ),
+    }));
+    const spikes = dailySeries
+      .filter((entry) => (entry.estimatedViews ?? 0) >= DAILY_SPIKE_THRESHOLD)
       .sort((left, right) => (right.estimatedViews ?? 0) - (left.estimatedViews ?? 0))
       .slice(0, 10);
     return { dates, rows, spikes };
-  }, [dailyEstimates]);
+  }, [dailySeries]);
+
+  const selectedDailyPosts = useMemo(() => {
+    if (selectedSavedUsername !== historyUsername) return new Map<string, CollectedPost[]>();
+    const grouped = new Map<string, CollectedPost[]>();
+    for (const post of collectedPosts) {
+      if (post.isQuotePost) continue;
+      const key = jstDateIso(post.postedAt);
+      const list = grouped.get(key) ?? [];
+      list.push(post);
+      grouped.set(key, list);
+    }
+    for (const list of grouped.values()) {
+      list.sort((left, right) => right.otherReplyCount - left.otherReplyCount);
+    }
+    return grouped;
+  }, [collectedPosts, historyUsername, selectedSavedUsername]);
 
   const loadWatchlist = useCallback(async () => {
     setLoadingWatchlist(true);
@@ -424,6 +481,7 @@ export function CompetitorResearchTab() {
       setSummaries(result.summaries);
       setHistory(result.history ?? []);
       setDailyEstimates(result.dailyEstimates ?? []);
+      setDailyPostCounts(result.dailyPostCounts ?? []);
     } catch (error) {
       setWatchlistError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1352,9 +1410,9 @@ export function CompetitorResearchTab() {
       <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="font-bold text-[color:var(--color-text-primary)]">7日間集計の推移</h3>
+            <h3 className="font-bold text-[color:var(--color-text-primary)]">日別の推移</h3>
             <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
-              各収集日時点の「直近7日間合計」です。投稿別・1日単位の閲覧実績ではありません。
+              1日ごとの推定閲覧数・フォロワー増減・投稿数です。閲覧数はAPIの7日間合計から差分で復元した推定値です。
             </p>
           </div>
           <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
@@ -1382,22 +1440,22 @@ export function CompetitorResearchTab() {
         </div>
 
         <div className="mt-3">
-          <CompetitorHistoryChart data={selectedHistory} />
+          <CompetitorDailyChart data={selectedDaily} />
         </div>
         <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
-          {selectedHistory.length <= 1
-            ? '履歴は本日分から蓄積します。2回目の自動収集後から変化が線で表示されます。'
-            : `${selectedHistory.length}日分のスナップショットを表示しています。`}
+          {selectedDaily.length === 0
+            ? '2回目の自動収集後から日別の値が出ます。'
+            : `${selectedDaily.length}日分を表示しています。最初の1週間の閲覧数は起点の仮定に依存するため粗めです。`}
         </p>
       </section>
 
       <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="font-bold text-[color:var(--color-text-primary)]">日別閲覧数の推定</h3>
+            <h3 className="font-bold text-[color:var(--color-text-primary)]">日別の閲覧数 / 投稿数</h3>
             <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
-              7日間合計の前日差に、7日前の推定値を足し戻して1日分を推定しています。列の日付は収集日で、その前日の投稿分です。
-              最初の1週間は起点を均等割りにしているため粗く、日が経つほど正確になります。
+              セルは「推定閲覧数 / その日の投稿数」。列は投稿した日です。アカウント名を押すと、上のグラフとその日ごとの投稿一覧に切り替わります。
+              閲覧数の0は「投稿なし」ではなく、推定がマイナスになった日（起点の仮定のズレ）です。
             </p>
           </div>
           <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
@@ -1422,7 +1480,18 @@ export function CompetitorResearchTab() {
                 <tbody>
                   {dailyEstimateTable.rows.map((row) => (
                     <tr key={row.username} className="border-b border-[color:var(--color-border)]">
-                      <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">@{row.username}</td>
+                      <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHistoryUsername(row.username);
+                            void selectSavedAccount(row.username);
+                          }}
+                          className={`underline-offset-2 hover:underline ${historyUsername === row.username ? 'text-[color:var(--color-accent)]' : ''}`}
+                        >
+                          @{row.username}
+                        </button>
+                      </td>
                       {dailyEstimateTable.dates.map((date) => {
                         const cell = row.cells.get(date);
                         const value = cell?.estimatedViews ?? null;
@@ -1430,7 +1499,7 @@ export function CompetitorResearchTab() {
                         return (
                           <td
                             key={date}
-                            title={cell ? `7日合計 ${numberFormat.format(cell.sevenDayTotal)}${cell.deltaFromPrevious === null ? '' : ` / 前日差 ${cell.deltaFromPrevious >= 0 ? '+' : ''}${numberFormat.format(cell.deltaFromPrevious)}`}` : undefined}
+                            title={cell?.followerDelta === null || cell?.followerDelta === undefined ? undefined : `フォロワー ${cell.followerDelta >= 0 ? '+' : ''}${numberFormat.format(cell.followerDelta)}`}
                             className={`px-2 py-2 text-right tabular-nums ${
                               spike
                                 ? 'bg-amber-100 font-bold text-amber-900'
@@ -1440,6 +1509,7 @@ export function CompetitorResearchTab() {
                             }`}
                           >
                             {value === null ? '–' : numberFormat.format(value)}
+                            <span className="ml-1 text-[10px] text-[color:var(--color-text-secondary)]">/ {cell?.postCount ?? 0}本</span>
                           </td>
                         );
                       })}
@@ -1449,28 +1519,68 @@ export function CompetitorResearchTab() {
               </table>
             </div>
             <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
-              黄色は1日1万以上の推定。薄い数字は起点の仮定に依存している期間です。セルにカーソルを合わせると7日合計と前日差が出ます。
+              黄色は1日1万以上の推定。薄い数字は起点の仮定に依存している期間です。セルにカーソルを合わせるとフォロワー増減が出ます。
             </p>
             {dailyEstimateTable.spikes.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">跳ねた日（推定1万以上）</h4>
                 <ul className="mt-2 space-y-1 text-sm text-[color:var(--color-text-primary)]">
                   {dailyEstimateTable.spikes.map((point) => (
-                    <li key={`${point.username}-${point.snapshotDate}`} className="flex flex-wrap items-baseline gap-x-2">
+                    <li key={`${point.username}-${point.postDate}`} className="flex flex-wrap items-baseline gap-x-2">
                       <span className="tabular-nums font-bold">{numberFormat.format(point.estimatedViews ?? 0)}</span>
                       <span>@{point.username}</span>
-                      <span className="text-xs text-[color:var(--color-text-secondary)]">
-                        {shortDate(point.snapshotDate)}収集（{previousDay(point.snapshotDate)}の投稿）
-                      </span>
+                      <span className="text-xs text-[color:var(--color-text-secondary)]">{shortDate(point.postDate)}の投稿</span>
                       <button
                         type="button"
                         className="text-xs text-[color:var(--color-accent)] underline-offset-2 hover:underline"
-                        onClick={() => void selectSavedAccount(point.username)}
+                        onClick={() => {
+                          setHistoryUsername(point.username);
+                          void selectSavedAccount(point.username);
+                        }}
                       >
                         投稿を見る
                       </button>
                     </li>
                   ))}
+                </ul>
+              </div>
+            )}
+            {selectedDaily.length > 0 && (
+              <div className="mt-5">
+                <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">@{historyUsername} の日別一覧</h4>
+                {selectedSavedUsername !== historyUsername && (
+                  <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">投稿本文を並べるには、表のアカウント名を押してください。</p>
+                )}
+                <ul className="mt-2 divide-y divide-[color:var(--color-border)]">
+                  {[...selectedDaily].reverse().slice(0, DAILY_ESTIMATE_DAYS).map((entry) => {
+                    const posts = selectedDailyPosts.get(entry.postDate) ?? [];
+                    return (
+                      <li key={entry.postDate} className="py-2 text-sm">
+                        <div className="flex flex-wrap items-baseline gap-x-3">
+                          <span className="w-12 font-medium text-[color:var(--color-text-primary)]">{shortDate(entry.postDate)}</span>
+                          <span className={`tabular-nums ${(entry.estimatedViews ?? 0) >= DAILY_SPIKE_THRESHOLD ? 'font-bold text-amber-900' : ''}`}>
+                            閲覧 {entry.estimatedViews === null ? '–' : numberFormat.format(entry.estimatedViews)}
+                          </span>
+                          <span className="tabular-nums">投稿 {entry.postCount}本</span>
+                          <span className="tabular-nums">
+                            フォロワー {entry.followerDelta === null ? '–' : `${entry.followerDelta >= 0 ? '+' : ''}${numberFormat.format(entry.followerDelta)}`}
+                          </span>
+                        </div>
+                        {posts.length > 0 && (
+                          <ul className="mt-1 space-y-0.5 pl-12 text-xs text-[color:var(--color-text-secondary)]">
+                            {posts.slice(0, 5).map((post) => (
+                              <li key={post.postId} className="flex gap-2">
+                                <span className="shrink-0 tabular-nums">リプ{post.otherReplyCount}</span>
+                                <a href={post.permalink} target="_blank" rel="noreferrer" className="truncate hover:underline">
+                                  {post.text.replace(/\s+/g, ' ').slice(0, 60) || '（本文なし）'}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
