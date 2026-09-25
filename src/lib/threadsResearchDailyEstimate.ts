@@ -22,8 +22,14 @@ export interface DailyViewEstimate {
   sevenDayTotal: number;
   /** Raw difference against the previous snapshot. */
   deltaFromPrevious: number | null;
-  /** Reconstructed single-day views. Null while the account has fewer than two snapshots. */
+  /**
+   * Reconstructed single-day views. Null when there is no previous snapshot, or when a
+   * large post aged out of the seven-day window and the day's gain cannot be separated
+   * from that drop (the raw delta is negative).
+   */
   estimatedViews: number | null;
+  /** Set when estimatedViews is null because of a window drop-out. */
+  unknownReason?: 'dropout';
   /** True while the estimate still depends on the seeded first week. */
   seeded: boolean;
 }
@@ -78,14 +84,16 @@ export function estimateDailyViews(history: ProfileHistoryPoint[]): DailyViewEst
       const previous = series[index - 1].viewsCount ?? 0;
       const delta = current - previous;
       const dropped = dailies[dailies.length - WINDOW_DAYS];
-      const estimate = Math.max(0, Math.round(delta + dropped));
-      dailies.push(estimate);
+      const raw = Math.round(delta + dropped);
+      const estimate = raw >= 0 ? raw : null;
+      dailies.push(estimate ?? 0);
       results.push({
         username,
         snapshotDate: series[index].snapshotDate,
         sevenDayTotal: current,
         deltaFromPrevious: delta,
         estimatedViews: estimate,
+        ...(estimate === null ? { unknownReason: 'dropout' as const } : {}),
         seeded: index - start <= WINDOW_DAYS,
       });
     }

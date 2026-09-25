@@ -21,6 +21,8 @@ export interface CompetitorDailyPoint {
   postCount: number;
   /** True while the estimate still depends on the seeded first week. */
   seeded: boolean;
+  /** Raw change of the seven-day total. Negative means a large post aged out of the window. */
+  deltaFromPrevious: number | null;
 }
 
 interface CompetitorDailyChartProps {

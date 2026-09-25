@@ -331,6 +331,16 @@ function previousDayIso(date: string): string {
 function jstDateIso(iso: string): string {
   return isoDateFormat.format(new Date(iso));
 }
+function signed(value: number): string {
+  return `${value >= 0 ? '+' : ''}${numberFormat.format(value)}`;
+}
+function cellTitle(cell: CompetitorDailyPoint): string {
+  const parts: string[] = [];
+  if (cell.deltaFromPrevious !== null) parts.push(`7日合計の前日差 ${signed(cell.deltaFromPrevious)}`);
+  if (cell.estimatedViews === null && cell.deltaFromPrevious !== null) parts.push('7日前の投稿が集計から抜けたため、この日の増分は算出できません');
+  if (cell.followerDelta !== null) parts.push(`フォロワー ${signed(cell.followerDelta)}`);
+  return parts.join(' / ');
+}
 const TARGET_USERNAME_ORDER = new Map<string, number>(
   THREADS_RESEARCH_TARGET_USERNAMES.map((target, index) => [target, index])
 );
@@ -399,15 +409,16 @@ export function CompetitorResearchTab() {
       const key = `${username}|${postDate}`;
       let entry = byKey.get(key);
       if (!entry) {
-        entry = { username, postDate, estimatedViews: null, followerDelta: null, postCount: 0, seeded: false };
+        entry = { username, postDate, estimatedViews: null, followerDelta: null, postCount: 0, seeded: false, deltaFromPrevious: null };
         byKey.set(key, entry);
       }
       return entry;
     };
     for (const estimate of dailyEstimates) {
-      if (estimate.estimatedViews === null) continue;
+      if (estimate.deltaFromPrevious === null) continue;
       const entry = point(estimate.username, previousDayIso(estimate.snapshotDate));
       entry.estimatedViews = estimate.estimatedViews;
+      entry.deltaFromPrevious = estimate.deltaFromPrevious;
       entry.seeded = estimate.seeded;
     }
     const followers = new Map<string, CompetitorHistoryPoint[]>();
@@ -1455,7 +1466,7 @@ export function CompetitorResearchTab() {
             <h3 className="font-bold text-[color:var(--color-text-primary)]">日別の閲覧数 / 投稿数</h3>
             <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
               セルは「推定閲覧数 / その日の投稿数」。列は投稿した日です。アカウント名を押すと、上のグラフとその日ごとの投稿一覧に切り替わります。
-              閲覧数の0は「投稿なし」ではなく、推定がマイナスになった日（起点の仮定のズレ）です。
+              「不明」は、7日前の大きい投稿が集計から抜けて前日差がマイナスになり、その日の増分を切り分けられない日です（投稿はしています）。
             </p>
           </div>
           <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
@@ -1499,7 +1510,7 @@ export function CompetitorResearchTab() {
                         return (
                           <td
                             key={date}
-                            title={cell?.followerDelta === null || cell?.followerDelta === undefined ? undefined : `フォロワー ${cell.followerDelta >= 0 ? '+' : ''}${numberFormat.format(cell.followerDelta)}`}
+                            title={cell ? cellTitle(cell) : undefined}
                             className={`px-2 py-2 text-right tabular-nums ${
                               spike
                                 ? 'bg-amber-100 font-bold text-amber-900'
@@ -1508,7 +1519,7 @@ export function CompetitorResearchTab() {
                                   : 'text-[color:var(--color-text-primary)]'
                             }`}
                           >
-                            {value === null ? '–' : numberFormat.format(value)}
+                            {value === null ? (cell?.deltaFromPrevious !== null && cell?.deltaFromPrevious !== undefined ? <span className="text-[color:var(--color-text-secondary)]">不明</span> : '–') : numberFormat.format(value)}
                             <span className="ml-1 text-[10px] text-[color:var(--color-text-secondary)]">/ {cell?.postCount ?? 0}本</span>
                           </td>
                         );
@@ -1519,7 +1530,7 @@ export function CompetitorResearchTab() {
               </table>
             </div>
             <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
-              黄色は1日1万以上の推定。薄い数字は起点の仮定に依存している期間です。セルにカーソルを合わせるとフォロワー増減が出ます。
+              黄色は1日1万以上の推定。薄い数字は起点の仮定に依存している期間です。セルにカーソルを合わせると前日差とフォロワー増減が出ます。
             </p>
             {dailyEstimateTable.spikes.length > 0 && (
               <div className="mt-4">
@@ -1559,7 +1570,7 @@ export function CompetitorResearchTab() {
                         <div className="flex flex-wrap items-baseline gap-x-3">
                           <span className="w-12 font-medium text-[color:var(--color-text-primary)]">{shortDate(entry.postDate)}</span>
                           <span className={`tabular-nums ${(entry.estimatedViews ?? 0) >= DAILY_SPIKE_THRESHOLD ? 'font-bold text-amber-900' : ''}`}>
-                            閲覧 {entry.estimatedViews === null ? '–' : numberFormat.format(entry.estimatedViews)}
+                            閲覧 {entry.estimatedViews === null ? (entry.deltaFromPrevious === null ? '–' : `不明（前日差 ${numberFormat.format(entry.deltaFromPrevious)}）`) : numberFormat.format(entry.estimatedViews)}
                           </span>
                           <span className="tabular-nums">投稿 {entry.postCount}本</span>
                           <span className="tabular-nums">
