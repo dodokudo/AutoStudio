@@ -213,3 +213,61 @@ function toIso(value: unknown): string | null {
   const date = raw instanceof Date ? raw : new Date(String(raw));
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
+
+export interface CompetitorPostWithViews {
+  postId: string;
+  username: string;
+  text: string;
+  postedAt: string;
+  /** JST day the post was published. */
+  postDate: string;
+  permalink: string;
+  viewsCount: number | null;
+  otherReplyCount: number;
+  /** Snapshot the view count came from. */
+  snapshotDate: string;
+}
+
+/** Every watched post from the last `days` days with its latest public view count and text. */
+export async function getPostsWithLatestViews(
+  userId: string,
+  days = 130
+): Promise<CompetitorPostWithViews[]> {
+  await ensurePostViewsTable();
+  const safeDays = Math.max(1, Math.min(365, Math.floor(days)));
+  const [rows] = await bigquery.query({
+    query: `
+      WITH latest AS (
+        SELECT post_id, views_count, snapshot_date
+        FROM ${T_POST_VIEWS}
+        WHERE user_id = @userId
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY post_id ORDER BY snapshot_date DESC, collected_at DESC) = 1
+      )
+      SELECT
+        p.post_id, p.username, p.text, p.posted_at, p.permalink,
+        CAST(DATE(p.posted_at, 'Asia/Tokyo') AS STRING) AS post_date,
+        IFNULL(p.other_reply_count, 0) AS other_reply_count,
+        l.views_count,
+        CAST(l.snapshot_date AS STRING) AS snapshot_date
+      FROM ${T_POSTS} p
+      JOIN latest l ON l.post_id = p.post_id
+      WHERE p.user_id = @userId
+        AND NOT IFNULL(p.is_quote_post, FALSE)
+        AND IFNULL(p.media_type, '') != 'REPOST_FACADE'
+        AND p.posted_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${safeDays} DAY)
+      ORDER BY l.views_count DESC NULLS LAST, p.posted_at DESC
+    `,
+    params: { userId },
+  });
+  return (rows as Record<string, unknown>[]).map((row) => ({
+    postId: String(row.post_id),
+    username: String(row.username),
+    text: String(row.text ?? ''),
+    postedAt: toIso(row.posted_at) ?? '',
+    postDate: String(row.post_date),
+    permalink: String(row.permalink ?? ''),
+    viewsCount: row.views_count === null ? null : Number(row.views_count),
+    otherReplyCount: Number(row.other_reply_count ?? 0),
+    snapshotDate: String(row.snapshot_date),
+  }));
+}
