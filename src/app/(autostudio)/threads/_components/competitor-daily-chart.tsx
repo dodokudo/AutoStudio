@@ -132,15 +132,6 @@ export function CompetitorDailyChart({ data }: CompetitorDailyChartProps) {
             strokeDasharray="4 3"
             connectNulls
           />
-          <Line
-            yAxisId="small"
-            type="monotone"
-            dataKey="followerDelta"
-            name="フォロワー増減（1日）"
-            stroke="#10b981"
-            strokeWidth={2}
-            connectNulls
-          />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

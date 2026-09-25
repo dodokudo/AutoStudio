@@ -20,9 +20,9 @@ export async function GET() {
     const [watchlist, summaries, history, dailyPostCounts, postViews] = await Promise.all([
       listWatchlist(THREADS_RESEARCH_OWNER_ID),
       getAccountSummaries(THREADS_RESEARCH_OWNER_ID),
-      getProfileHistory(THREADS_RESEARCH_OWNER_ID, 90),
-      getDailyPostCounts(THREADS_RESEARCH_OWNER_ID, 90),
-      getPostViewHistory(THREADS_RESEARCH_OWNER_ID, 60),
+      getProfileHistory(THREADS_RESEARCH_OWNER_ID, 130),
+      getDailyPostCounts(THREADS_RESEARCH_OWNER_ID, 130),
+      getPostViewHistory(THREADS_RESEARCH_OWNER_ID, 130),
     ]);
     const dailyEstimates = estimateDailyViews(history);
     return NextResponse.json({ watchlist, summaries, history, dailyEstimates, dailyPostCounts, postViews });
