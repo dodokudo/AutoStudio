@@ -75,7 +75,7 @@ export async function listViewTargets(
   skipSnapshotDate?: string
 ): Promise<ViewTarget[]> {
   await ensurePostViewsTable();
-  const safeDays = Math.max(1, Math.min(90, Math.floor(days)));
+  const safeDays = Math.max(1, Math.min(365, Math.floor(days)));
   const [rows] = await bigquery.query({
     query: `
       SELECT p.username, p.post_id, p.permalink, p.posted_at
