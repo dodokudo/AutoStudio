@@ -65,21 +65,34 @@ export interface ViewTarget {
   postedAt: string;
 }
 
-/** Root posts from the last `days` days that have a permalink to open. */
-export async function listViewTargets(userId: string, days = 14): Promise<ViewTarget[]> {
+/**
+ * Root posts from the last `days` days that have a permalink to open.
+ * Posts already snapshotted on `skipSnapshotDate` are left out so a rerun resumes where it stopped.
+ */
+export async function listViewTargets(
+  userId: string,
+  days = 14,
+  skipSnapshotDate?: string
+): Promise<ViewTarget[]> {
+  await ensurePostViewsTable();
   const safeDays = Math.max(1, Math.min(90, Math.floor(days)));
   const [rows] = await bigquery.query({
     query: `
-      SELECT username, post_id, permalink, posted_at
-      FROM ${T_POSTS}
-      WHERE user_id = @userId
-        AND NOT IFNULL(is_quote_post, FALSE)
-        AND IFNULL(media_type, '') != 'REPOST_FACADE'
-        AND permalink IS NOT NULL AND permalink != ''
-        AND posted_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${safeDays} DAY)
-      ORDER BY username, posted_at
+      SELECT p.username, p.post_id, p.permalink, p.posted_at
+      FROM ${T_POSTS} p
+      WHERE p.user_id = @userId
+        AND NOT IFNULL(p.is_quote_post, FALSE)
+        AND IFNULL(p.media_type, '') != 'REPOST_FACADE'
+        AND p.permalink IS NOT NULL AND p.permalink != ''
+        AND p.posted_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${safeDays} DAY)
+        AND (@skipSnapshotDate IS NULL OR p.post_id NOT IN (
+          SELECT post_id FROM ${T_POST_VIEWS}
+          WHERE user_id = @userId AND snapshot_date = DATE(@skipSnapshotDate)
+        ))
+      ORDER BY p.username, p.posted_at
     `,
-    params: { userId },
+    params: { userId, skipSnapshotDate: skipSnapshotDate ?? null },
+    types: { userId: 'STRING', skipSnapshotDate: 'STRING' },
   });
   return (rows as Record<string, unknown>[]).map((row) => ({
     username: String(row.username),

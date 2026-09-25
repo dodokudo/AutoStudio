@@ -51,7 +51,7 @@ async function readViews(context: BrowserContext, url: string): Promise<string |
 async function main(): Promise<void> {
   const days = Number(argValue('days') ?? '14');
   const snapshotDate = todayJst();
-  const targets = await listViewTargets(THREADS_RESEARCH_OWNER_ID, days);
+  const targets = await listViewTargets(THREADS_RESEARCH_OWNER_ID, days, snapshotDate);
   console.log(`[research:views] ${targets.length} posts to read (last ${days} days) for ${snapshotDate}`);
 
   const browser = await chromium.launch({ headless: true });
