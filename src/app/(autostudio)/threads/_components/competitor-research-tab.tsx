@@ -377,7 +377,7 @@ export function CompetitorResearchTab() {
   const [competitorPosts, setCompetitorPosts] = useState<CompetitorPostWithViews[]>([]);
   const [loadingCompetitorPosts, setLoadingCompetitorPosts] = useState(false);
   const [competitorPostsError, setCompetitorPostsError] = useState<string | null>(null);
-  const [postAccountFilter, setPostAccountFilter] = useState<string>('all');
+  const [postScope, setPostScope] = useState<'selected' | 'all'>('selected');
   const [postDateFilter, setPostDateFilter] = useState<string | null>(null);
   const [postSort, setPostSort] = useState<CompetitorPostSort>('views');
   const dailyTableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -542,7 +542,8 @@ export function CompetitorResearchTab() {
   }, []);
 
   const showPostsFor = useCallback((username: string, date: string | null, scroll = true) => {
-    setPostAccountFilter(username);
+    setHistoryUsername(username);
+    setPostScope('selected');
     setPostDateFilter(date);
     setPostSort('views');
     if (!scroll) return;
@@ -1622,10 +1623,10 @@ export function CompetitorResearchTab() {
         posts={competitorPosts}
         loading={loadingCompetitorPosts}
         error={competitorPostsError}
-        usernames={[...THREADS_RESEARCH_TARGET_USERNAMES]}
-        accountFilter={postAccountFilter}
-        onAccountFilterChange={(username) => {
-          setPostAccountFilter(username);
+        selectedUsername={historyUsername}
+        scope={postScope}
+        onScopeChange={(scope) => {
+          setPostScope(scope);
           setPostDateFilter(null);
         }}
         dateFilter={postDateFilter}

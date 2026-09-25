@@ -17,9 +17,10 @@ interface CompetitorPostListProps {
   posts: CompetitorPostWithViews[];
   loading: boolean;
   error: string | null;
-  usernames: string[];
-  accountFilter: string;
-  onAccountFilterChange: (username: string) => void;
+  /** Account chosen on the daily chart. The list follows it unless scope is 'all'. */
+  selectedUsername: string;
+  scope: 'selected' | 'all';
+  onScopeChange: (scope: 'selected' | 'all') => void;
   dateFilter: string | null;
   onDateFilterChange: (date: string | null) => void;
   sort: CompetitorPostSort;
@@ -46,9 +47,9 @@ export function CompetitorPostList({
   posts,
   loading,
   error,
-  usernames,
-  accountFilter,
-  onAccountFilterChange,
+  selectedUsername,
+  scope,
+  onScopeChange,
   dateFilter,
   onDateFilterChange,
   sort,
@@ -98,6 +99,7 @@ export function CompetitorPostList({
     [expandedIds, replies]
   );
 
+  const accountFilter = scope === 'all' ? 'all' : selectedUsername;
   const filtered = useMemo(() => {
     const list = posts.filter(
       (post) =>
@@ -128,20 +130,28 @@ export function CompetitorPostList({
         <div>
           <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">競合の投稿一覧</h2>
           <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-            閲覧数は投稿ページの表示を毎朝読み取った実数（丸めあり）。本文は全文です。
+            上の「日別の推移」で選んだアカウントの投稿が並びます。閲覧数は投稿ページの表示を毎朝読み取った実数（丸めあり）。本文は全文です。
             {posts.length > 0 && ` ${numberFormat.format(filtered.length)}件`}
             {filtered.length > INITIAL_DISPLAY_COUNT && !showAll && `（${INITIAL_DISPLAY_COUNT}件を表示）`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select value={accountFilter} onChange={(event) => onAccountFilterChange(event.target.value)} className={selectClass}>
-            <option value="all">全アカウント</option>
-            {usernames.map((username) => (
-              <option key={username} value={username}>
-                @{username}
-              </option>
-            ))}
-          </select>
+          <div className="inline-flex h-9 overflow-hidden rounded-[var(--radius-sm)] border border-[color:var(--color-border)] text-sm">
+            <button
+              type="button"
+              onClick={() => onScopeChange('selected')}
+              className={`px-3 ${scope === 'selected' ? 'bg-[color:var(--color-text-primary)] text-white' : 'bg-white text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'}`}
+            >
+              @{selectedUsername}
+            </button>
+            <button
+              type="button"
+              onClick={() => onScopeChange('all')}
+              className={`border-l border-[color:var(--color-border)] px-3 ${scope === 'all' ? 'bg-[color:var(--color-text-primary)] text-white' : 'bg-white text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'}`}
+            >
+              全アカウント
+            </button>
+          </div>
           <select value={minViews} onChange={(event) => setMinViews(Number(event.target.value))} className={selectClass}>
             <option value={0}>閲覧数 すべて</option>
             <option value={3000}>3,000以上</option>
