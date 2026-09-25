@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { DailyViewEstimate } from '@/lib/threadsResearchDailyEstimate';
 import { THREADS_RESEARCH_TARGET_USERNAMES } from '@/lib/threadsResearchTargets';
 import {
   CompetitorHistoryChart,
@@ -120,6 +121,7 @@ interface WatchlistResult {
   watchlist: WatchlistEntry[];
   summaries: AccountSummary[];
   history: CompetitorHistoryPoint[];
+  dailyEstimates?: DailyViewEstimate[];
 }
 
 interface CollectedPost {
@@ -314,6 +316,17 @@ function InlineError({ children }: { children: string }) {
 }
 
 const WORKSPACE_ID = 'autostudio';
+const DAILY_ESTIMATE_DAYS = 14;
+const DAILY_SPIKE_THRESHOLD = 10000;
+const shortDateFormat = new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' });
+function shortDate(date: string): string {
+  return shortDateFormat.format(new Date(`${date}T12:00:00+09:00`));
+}
+function previousDay(date: string): string {
+  const d = new Date(`${date}T12:00:00+09:00`);
+  d.setDate(d.getDate() - 1);
+  return shortDateFormat.format(d);
+}
 const TARGET_USERNAME_ORDER = new Map<string, number>(
   THREADS_RESEARCH_TARGET_USERNAMES.map((target, index) => [target, index])
 );
@@ -341,6 +354,7 @@ export function CompetitorResearchTab() {
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
   const [summaries, setSummaries] = useState<AccountSummary[]>([]);
   const [history, setHistory] = useState<CompetitorHistoryPoint[]>([]);
+  const [dailyEstimates, setDailyEstimates] = useState<DailyViewEstimate[]>([]);
   const [historyUsername, setHistoryUsername] = useState<string>(
     THREADS_RESEARCH_TARGET_USERNAMES[0]
   );
@@ -379,6 +393,25 @@ export function CompetitorResearchTab() {
     [history, historyUsername]
   );
 
+  const dailyEstimateTable = useMemo(() => {
+    const dates = [...new Set(dailyEstimates.map((point) => point.snapshotDate))]
+      .sort()
+      .slice(-DAILY_ESTIMATE_DAYS);
+    const rows = THREADS_RESEARCH_TARGET_USERNAMES.map((username) => {
+      const cells = new Map(
+        dailyEstimates
+          .filter((point) => point.username === username)
+          .map((point) => [point.snapshotDate, point] as const)
+      );
+      return { username, cells };
+    });
+    const spikes = dailyEstimates
+      .filter((point) => (point.estimatedViews ?? 0) >= DAILY_SPIKE_THRESHOLD)
+      .sort((left, right) => (right.estimatedViews ?? 0) - (left.estimatedViews ?? 0))
+      .slice(0, 10);
+    return { dates, rows, spikes };
+  }, [dailyEstimates]);
+
   const loadWatchlist = useCallback(async () => {
     setLoadingWatchlist(true);
     setWatchlistError(null);
@@ -390,6 +423,7 @@ export function CompetitorResearchTab() {
       setWatchlist(result.watchlist);
       setSummaries(result.summaries);
       setHistory(result.history ?? []);
+      setDailyEstimates(result.dailyEstimates ?? []);
     } catch (error) {
       setWatchlistError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1355,6 +1389,93 @@ export function CompetitorResearchTab() {
             ? '履歴は本日分から蓄積します。2回目の自動収集後から変化が線で表示されます。'
             : `${selectedHistory.length}日分のスナップショットを表示しています。`}
         </p>
+      </section>
+
+      <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="font-bold text-[color:var(--color-text-primary)]">日別閲覧数の推定</h3>
+            <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
+              7日間合計の前日差に、7日前の推定値を足し戻して1日分を推定しています。列の日付は収集日で、その前日の投稿分です。
+              最初の1週間は起点を均等割りにしているため粗く、日が経つほど正確になります。
+            </p>
+          </div>
+          <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
+        </div>
+
+        {dailyEstimateTable.dates.length === 0 ? (
+          <p className="mt-4 text-sm text-[color:var(--color-text-secondary)]">2日分以上のスナップショットが溜まると表示されます。</p>
+        ) : (
+          <>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-xs">
+                <thead className="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface-muted)] text-[color:var(--color-text-secondary)]">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">アカウント</th>
+                    {dailyEstimateTable.dates.map((date) => (
+                      <th key={date} className="px-2 py-2 text-right font-medium">
+                        {shortDate(date)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyEstimateTable.rows.map((row) => (
+                    <tr key={row.username} className="border-b border-[color:var(--color-border)]">
+                      <td className="px-3 py-2 font-medium text-[color:var(--color-text-primary)]">@{row.username}</td>
+                      {dailyEstimateTable.dates.map((date) => {
+                        const cell = row.cells.get(date);
+                        const value = cell?.estimatedViews ?? null;
+                        const spike = value !== null && value >= DAILY_SPIKE_THRESHOLD;
+                        return (
+                          <td
+                            key={date}
+                            title={cell ? `7日合計 ${numberFormat.format(cell.sevenDayTotal)}${cell.deltaFromPrevious === null ? '' : ` / 前日差 ${cell.deltaFromPrevious >= 0 ? '+' : ''}${numberFormat.format(cell.deltaFromPrevious)}`}` : undefined}
+                            className={`px-2 py-2 text-right tabular-nums ${
+                              spike
+                                ? 'bg-amber-100 font-bold text-amber-900'
+                                : cell?.seeded
+                                  ? 'text-[color:var(--color-text-secondary)]'
+                                  : 'text-[color:var(--color-text-primary)]'
+                            }`}
+                          >
+                            {value === null ? '–' : numberFormat.format(value)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
+              黄色は1日1万以上の推定。薄い数字は起点の仮定に依存している期間です。セルにカーソルを合わせると7日合計と前日差が出ます。
+            </p>
+            {dailyEstimateTable.spikes.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">跳ねた日（推定1万以上）</h4>
+                <ul className="mt-2 space-y-1 text-sm text-[color:var(--color-text-primary)]">
+                  {dailyEstimateTable.spikes.map((point) => (
+                    <li key={`${point.username}-${point.snapshotDate}`} className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="tabular-nums font-bold">{numberFormat.format(point.estimatedViews ?? 0)}</span>
+                      <span>@{point.username}</span>
+                      <span className="text-xs text-[color:var(--color-text-secondary)]">
+                        {shortDate(point.snapshotDate)}収集（{previousDay(point.snapshotDate)}の投稿）
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs text-[color:var(--color-accent)] underline-offset-2 hover:underline"
+                        onClick={() => void selectSavedAccount(point.username)}
+                      >
+                        投稿を見る
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {selectedSavedUsername && profileError && !loadingProfile && (

@@ -9,6 +9,7 @@ import {
   normalizeUsername,
   removeFromWatchlist,
 } from '@/lib/threadsResearch';
+import { estimateDailyViews } from '@/lib/threadsResearchDailyEstimate';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,8 @@ export async function GET() {
       getAccountSummaries(THREADS_RESEARCH_OWNER_ID),
       getProfileHistory(THREADS_RESEARCH_OWNER_ID, 90),
     ]);
-    return NextResponse.json({ watchlist, summaries, history });
+    const dailyEstimates = estimateDailyViews(history);
+    return NextResponse.json({ watchlist, summaries, history, dailyEstimates });
   } catch (error) {
     console.error('[threads/research/watchlist] list failed', error);
     return NextResponse.json(
