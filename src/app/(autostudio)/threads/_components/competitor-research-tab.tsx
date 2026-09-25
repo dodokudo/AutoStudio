@@ -541,10 +541,11 @@ export function CompetitorResearchTab() {
     };
   }, []);
 
-  const showPostsFor = useCallback((username: string, date: string | null) => {
+  const showPostsFor = useCallback((username: string, date: string | null, scroll = true) => {
     setPostAccountFilter(username);
     setPostDateFilter(date);
     setPostSort('views');
+    if (!scroll) return;
     window.setTimeout(() => {
       document.getElementById('competitor-post-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
@@ -1464,48 +1465,6 @@ export function CompetitorResearchTab() {
         )}
       </section>
 
-      <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 className="font-bold text-[color:var(--color-text-primary)]">日別の推移</h3>
-            <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
-              1日ごとの閲覧数（その日に出した投稿の実数、未収集日は推定）と投稿数です。
-            </p>
-          </div>
-          <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
-        </div>
-
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-          {THREADS_RESEARCH_TARGET_USERNAMES.map((target) => {
-            const summary = targetSummaries.find((account) => account.username === target);
-            const selected = historyUsername === target;
-            return (
-              <button
-                key={target}
-                type="button"
-                onClick={() => setHistoryUsername(target)}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selected
-                    ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-white'
-                    : 'border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
-                }`}
-              >
-                {summary?.name || `@${target}`}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-3">
-          <CompetitorDailyChart data={selectedDaily} />
-        </div>
-        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
-          {selectedDaily.length === 0
-            ? '2回目の自動収集後から日別の値が出ます。'
-            : `${selectedDaily.length}日分を表示しています。最初の1週間の閲覧数は起点の仮定に依存するため粗めです。`}
-        </p>
-      </section>
-
       <section className="min-w-0 max-w-full overflow-hidden rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -1580,11 +1539,57 @@ export function CompetitorResearchTab() {
             <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
               黄色は1万以上。左にスクロールすると過去の日付が見られます。セルにカーソルを合わせると内訳（実数・推定・前日差）が出ます。
             </p>
-            {dailyEstimateTable.spikes.length > 0 && (
+          </>
+        )}
+      </section>
+      <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] p-5 sm:p-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="font-bold text-[color:var(--color-text-primary)]">日別の推移</h3>
+            <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
+              1日ごとの閲覧数（その日に出した投稿の実数、未収集日は推定）と投稿数です。
+            </p>
+          </div>
+          <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
+        </div>
+
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+          {THREADS_RESEARCH_TARGET_USERNAMES.map((target) => {
+            const summary = targetSummaries.find((account) => account.username === target);
+            const selected = historyUsername === target;
+            return (
+              <button
+                key={target}
+                type="button"
+                onClick={() => {
+                  setHistoryUsername(target);
+                  showPostsFor(target, null, false);
+                }}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selected
+                    ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-white'
+                    : 'border-[color:var(--color-border)] text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-surface-muted)]'
+                }`}
+              >
+                {summary?.name || `@${target}`}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3">
+          <CompetitorDailyChart data={selectedDaily} />
+        </div>
+        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
+          {selectedDaily.length === 0
+            ? '2回目の自動収集後から日別の値が出ます。'
+            : `${selectedDaily.length}日分を表示しています。アカウントを選ぶと、下の投稿一覧もそのアカウントに切り替わります。`}
+        </p>
+        {dailyEstimateTable.spikes.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">跳ねた日（1万以上）</h4>
                 <ul className="mt-2 space-y-1 text-sm text-[color:var(--color-text-primary)]">
-                  {dailyEstimateTable.spikes.map((point) => (
+              {dailyEstimateTable.spikes.map((point) => (
                     <li key={`${point.username}-${point.postDate}`} className="flex flex-wrap items-baseline gap-x-2">
                       <span className="tabular-nums font-bold">{numberFormat.format(dayViews(point))}</span>
                       {point.actualViews === null && <span className="text-[10px] text-[color:var(--color-text-secondary)]">推定</span>}
@@ -1605,9 +1610,8 @@ export function CompetitorResearchTab() {
                 </ul>
               </div>
             )}
-          </>
-        )}
       </section>
+
 
       <CompetitorPostList
         posts={competitorPosts}
