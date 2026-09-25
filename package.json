@@ -35,6 +35,7 @@
     "ig:sync-competitors": "tsx src/scripts/instagram/syncCompetitorsFromBusinessDiscovery.ts",
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
+    "research:views": "tsx src/scripts/collectThreadsResearchViews.ts",
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
     "lstep:init-metrics": "tsx src/scripts/initMessageMetricsBQ.ts",
     "lstep:check": "tsx src/scripts/checkLstepSetup.ts",
@@ -51,6 +52,7 @@
     "sales:sync": "tsx src/scripts/syncUnivaPayCharges.ts",
     "sales:sync:bank": "tsx src/scripts/syncMfBankSales.ts",
     "lstep:metrics": "npx tsx src/scripts/runMessageMetrics.ts",
+    "lstep:export-corpus": "tsx src/scripts/exportLstepContentCorpus.ts",
     "kpi:sync-tags": "tsx src/scripts/syncTagsToKpi.ts",
     "kpi:daily-metrics": "npx tsx src/scripts/updateDailyMetrics.ts"
   },

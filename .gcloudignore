@@ -1,0 +1,16 @@
+# Cloud Build upload exclusions (Dockerfiles copy the whole tree)
+.git
+.gitignore
+node_modules
+.next
+output
+logs
+tmp
+analysis
+.serena
+.playwright-cli
+.playwright-mcp
+*.log
+*.mov
+*.mp4
+tsconfig.tsbuildinfo

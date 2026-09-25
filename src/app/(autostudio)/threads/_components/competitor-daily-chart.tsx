@@ -23,6 +23,8 @@ export interface CompetitorDailyPoint {
   seeded: boolean;
   /** Raw change of the seven-day total. Negative means a large post aged out of the window. */
   deltaFromPrevious: number | null;
+  /** Sum of the latest public view counts of the posts published that day. Null until collected. */
+  actualViews: number | null;
 }
 
 interface CompetitorDailyChartProps {
@@ -114,10 +116,20 @@ export function CompetitorDailyChart({ data }: CompetitorDailyChartProps) {
           <Line
             yAxisId="views"
             type="monotone"
-            dataKey="estimatedViews"
-            name="推定閲覧数（1日）"
+            dataKey="actualViews"
+            name="閲覧数（その日の投稿の実数）"
             stroke="var(--color-accent)"
             strokeWidth={2.5}
+            connectNulls
+          />
+          <Line
+            yAxisId="views"
+            type="monotone"
+            dataKey="estimatedViews"
+            name="推定閲覧数（7日合計の差分）"
+            stroke="rgba(120, 131, 156, 0.7)"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
             connectNulls
           />
           <Line

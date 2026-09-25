@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { DailyPostCount } from '@/lib/threadsResearch';
 import type { DailyViewEstimate } from '@/lib/threadsResearchDailyEstimate';
+import type { PostViewPoint } from '@/lib/threadsResearchViews';
 import { THREADS_RESEARCH_TARGET_USERNAMES } from '@/lib/threadsResearchTargets';
 import { CompetitorDailyChart, type CompetitorDailyPoint } from './competitor-daily-chart';
 import { type CompetitorHistoryPoint } from './competitor-history-chart';
@@ -122,6 +123,7 @@ interface WatchlistResult {
   history: CompetitorHistoryPoint[];
   dailyEstimates?: DailyViewEstimate[];
   dailyPostCounts?: DailyPostCount[];
+  postViews?: PostViewPoint[];
 }
 
 interface CollectedPost {
@@ -331,11 +333,16 @@ function previousDayIso(date: string): string {
 function jstDateIso(iso: string): string {
   return isoDateFormat.format(new Date(iso));
 }
+function dayViews(entry: CompetitorDailyPoint): number {
+  return entry.actualViews ?? entry.estimatedViews ?? 0;
+}
 function signed(value: number): string {
   return `${value >= 0 ? '+' : ''}${numberFormat.format(value)}`;
 }
 function cellTitle(cell: CompetitorDailyPoint): string {
   const parts: string[] = [];
+  if (cell.actualViews !== null) parts.push(`実数 ${numberFormat.format(cell.actualViews)}（その日に出した投稿の閲覧数の合計、最新の読み取り）`);
+  if (cell.estimatedViews !== null) parts.push(`推定 ${numberFormat.format(cell.estimatedViews)}`);
   if (cell.deltaFromPrevious !== null) parts.push(`7日合計の前日差 ${signed(cell.deltaFromPrevious)}`);
   if (cell.estimatedViews === null && cell.deltaFromPrevious !== null) parts.push('7日前の投稿が集計から抜けたため、この日の増分は算出できません');
   if (cell.followerDelta !== null) parts.push(`フォロワー ${signed(cell.followerDelta)}`);
@@ -370,6 +377,7 @@ export function CompetitorResearchTab() {
   const [history, setHistory] = useState<CompetitorHistoryPoint[]>([]);
   const [dailyEstimates, setDailyEstimates] = useState<DailyViewEstimate[]>([]);
   const [dailyPostCounts, setDailyPostCounts] = useState<DailyPostCount[]>([]);
+  const [postViews, setPostViews] = useState<PostViewPoint[]>([]);
   const [historyUsername, setHistoryUsername] = useState<string>(
     THREADS_RESEARCH_TARGET_USERNAMES[0]
   );
@@ -403,13 +411,22 @@ export function CompetitorResearchTab() {
     [summaries]
   );
 
+  const latestPostViews = useMemo(() => {
+    const latest = new Map<string, PostViewPoint>();
+    for (const view of postViews) {
+      const current = latest.get(view.postId);
+      if (!current || view.snapshotDate > current.snapshotDate) latest.set(view.postId, view);
+    }
+    return latest;
+  }, [postViews]);
+
   const dailySeries = useMemo<CompetitorDailyPoint[]>(() => {
     const byKey = new Map<string, CompetitorDailyPoint>();
     const point = (username: string, postDate: string) => {
       const key = `${username}|${postDate}`;
       let entry = byKey.get(key);
       if (!entry) {
-        entry = { username, postDate, estimatedViews: null, followerDelta: null, postCount: 0, seeded: false, deltaFromPrevious: null };
+        entry = { username, postDate, estimatedViews: null, followerDelta: null, postCount: 0, seeded: false, deltaFromPrevious: null, actualViews: null };
         byKey.set(key, entry);
       }
       return entry;
@@ -435,14 +452,18 @@ export function CompetitorResearchTab() {
         entry.followerDelta = (list[index].followerCount ?? 0) - (list[index - 1].followerCount ?? 0);
       }
     }
+    for (const [, view] of latestPostViews) {
+      if (view.viewsCount === null) continue;
+      const entry = point(view.username, view.postDate);
+      entry.actualViews = (entry.actualViews ?? 0) + view.viewsCount;
+    }
     for (const count of dailyPostCounts) {
-      if (!byKey.has(`${count.username}|${count.postDate}`)) continue;
       point(count.username, count.postDate).postCount = count.postCount;
     }
     return [...byKey.values()].sort(
       (left, right) => left.postDate.localeCompare(right.postDate) || left.username.localeCompare(right.username)
     );
-  }, [dailyEstimates, dailyPostCounts, history]);
+  }, [dailyEstimates, dailyPostCounts, history, latestPostViews]);
 
   const selectedDaily = useMemo(
     () => dailySeries.filter((entry) => entry.username === historyUsername),
@@ -458,8 +479,8 @@ export function CompetitorResearchTab() {
       ),
     }));
     const spikes = dailySeries
-      .filter((entry) => (entry.estimatedViews ?? 0) >= DAILY_SPIKE_THRESHOLD)
-      .sort((left, right) => (right.estimatedViews ?? 0) - (left.estimatedViews ?? 0))
+      .filter((entry) => dayViews(entry) >= DAILY_SPIKE_THRESHOLD)
+      .sort((left, right) => dayViews(right) - dayViews(left))
       .slice(0, 10);
     return { dates, rows, spikes };
   }, [dailySeries]);
@@ -493,6 +514,7 @@ export function CompetitorResearchTab() {
       setHistory(result.history ?? []);
       setDailyEstimates(result.dailyEstimates ?? []);
       setDailyPostCounts(result.dailyPostCounts ?? []);
+      setPostViews(result.postViews ?? []);
     } catch (error) {
       setWatchlistError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1465,8 +1487,8 @@ export function CompetitorResearchTab() {
           <div>
             <h3 className="font-bold text-[color:var(--color-text-primary)]">日別の閲覧数 / 投稿数</h3>
             <p className="mt-1 text-xs leading-5 text-[color:var(--color-text-secondary)]">
-              セルは「推定閲覧数 / その日の投稿数」。列は投稿した日です。アカウント名を押すと、上のグラフとその日ごとの投稿一覧に切り替わります。
-              「不明」は、7日前の大きい投稿が集計から抜けて前日差がマイナスになり、その日の増分を切り分けられない日です（投稿はしています）。
+              セルは「その日に出した投稿の閲覧数の合計 / 投稿数」。閲覧数は投稿ページの表示（「表示2.8万回」）を毎朝読み取った実数で、丸めあり。
+              実数が未収集の日は7日合計からの推定（「推定」付き）を出し、推定できない日は「不明」です。アカウント名を押すと、上のグラフと日別の投稿一覧に切り替わります。
             </p>
           </div>
           <span className="text-xs text-[color:var(--color-text-secondary)]">毎日 4:15 JST 自動更新</span>
@@ -1505,7 +1527,8 @@ export function CompetitorResearchTab() {
                       </td>
                       {dailyEstimateTable.dates.map((date) => {
                         const cell = row.cells.get(date);
-                        const value = cell?.estimatedViews ?? null;
+                        const actual = cell?.actualViews ?? null;
+                        const value = actual ?? cell?.estimatedViews ?? null;
                         const spike = value !== null && value >= DAILY_SPIKE_THRESHOLD;
                         return (
                           <td
@@ -1514,12 +1537,13 @@ export function CompetitorResearchTab() {
                             className={`px-2 py-2 text-right tabular-nums ${
                               spike
                                 ? 'bg-amber-100 font-bold text-amber-900'
-                                : cell?.seeded
+                                : actual === null && cell?.seeded
                                   ? 'text-[color:var(--color-text-secondary)]'
                                   : 'text-[color:var(--color-text-primary)]'
                             }`}
                           >
                             {value === null ? (cell?.deltaFromPrevious !== null && cell?.deltaFromPrevious !== undefined ? <span className="text-[color:var(--color-text-secondary)]">不明</span> : '–') : numberFormat.format(value)}
+                            {actual === null && value !== null && <span className="ml-0.5 text-[10px] text-[color:var(--color-text-secondary)]">推定</span>}
                             <span className="ml-1 text-[10px] text-[color:var(--color-text-secondary)]">/ {cell?.postCount ?? 0}本</span>
                           </td>
                         );
@@ -1530,15 +1554,16 @@ export function CompetitorResearchTab() {
               </table>
             </div>
             <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]">
-              黄色は1日1万以上の推定。薄い数字は起点の仮定に依存している期間です。セルにカーソルを合わせると前日差とフォロワー増減が出ます。
+              黄色は1万以上。セルにカーソルを合わせると内訳（実数・推定・前日差・フォロワー増減）が出ます。
             </p>
             {dailyEstimateTable.spikes.length > 0 && (
               <div className="mt-4">
-                <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">跳ねた日（推定1万以上）</h4>
+                <h4 className="text-sm font-bold text-[color:var(--color-text-primary)]">跳ねた日（1万以上）</h4>
                 <ul className="mt-2 space-y-1 text-sm text-[color:var(--color-text-primary)]">
                   {dailyEstimateTable.spikes.map((point) => (
                     <li key={`${point.username}-${point.postDate}`} className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="tabular-nums font-bold">{numberFormat.format(point.estimatedViews ?? 0)}</span>
+                      <span className="tabular-nums font-bold">{numberFormat.format(dayViews(point))}</span>
+                      {point.actualViews === null && <span className="text-[10px] text-[color:var(--color-text-secondary)]">推定</span>}
                       <span>@{point.username}</span>
                       <span className="text-xs text-[color:var(--color-text-secondary)]">{shortDate(point.postDate)}の投稿</span>
                       <button
@@ -1569,8 +1594,8 @@ export function CompetitorResearchTab() {
                       <li key={entry.postDate} className="py-2 text-sm">
                         <div className="flex flex-wrap items-baseline gap-x-3">
                           <span className="w-12 font-medium text-[color:var(--color-text-primary)]">{shortDate(entry.postDate)}</span>
-                          <span className={`tabular-nums ${(entry.estimatedViews ?? 0) >= DAILY_SPIKE_THRESHOLD ? 'font-bold text-amber-900' : ''}`}>
-                            閲覧 {entry.estimatedViews === null ? (entry.deltaFromPrevious === null ? '–' : `不明（前日差 ${numberFormat.format(entry.deltaFromPrevious)}）`) : numberFormat.format(entry.estimatedViews)}
+                          <span className={`tabular-nums ${dayViews(entry) >= DAILY_SPIKE_THRESHOLD ? 'font-bold text-amber-900' : ''}`}>
+                            閲覧 {entry.actualViews !== null ? numberFormat.format(entry.actualViews) : entry.estimatedViews === null ? (entry.deltaFromPrevious === null ? '–' : `不明（前日差 ${numberFormat.format(entry.deltaFromPrevious)}）`) : `${numberFormat.format(entry.estimatedViews)}（推定）`}
                           </span>
                           <span className="tabular-nums">投稿 {entry.postCount}本</span>
                           <span className="tabular-nums">
@@ -1579,8 +1604,16 @@ export function CompetitorResearchTab() {
                         </div>
                         {posts.length > 0 && (
                           <ul className="mt-1 space-y-0.5 pl-12 text-xs text-[color:var(--color-text-secondary)]">
-                            {posts.slice(0, 5).map((post) => (
+                            {[...posts]
+                              .sort((left, right) => (latestPostViews.get(right.postId)?.viewsCount ?? -1) - (latestPostViews.get(left.postId)?.viewsCount ?? -1))
+                              .slice(0, 8)
+                              .map((post) => (
                               <li key={post.postId} className="flex gap-2">
+                                <span className="w-16 shrink-0 text-right tabular-nums text-[color:var(--color-text-primary)]">
+                                  {latestPostViews.get(post.postId)?.viewsCount === null || latestPostViews.get(post.postId)?.viewsCount === undefined
+                                    ? '–'
+                                    : numberFormat.format(latestPostViews.get(post.postId)?.viewsCount ?? 0)}
+                                </span>
                                 <span className="shrink-0 tabular-nums">リプ{post.otherReplyCount}</span>
                                 <a href={post.permalink} target="_blank" rel="noreferrer" className="truncate hover:underline">
                                   {post.text.replace(/\s+/g, ' ').slice(0, 60) || '（本文なし）'}
