@@ -36,6 +36,7 @@
     "lstep:capture": "tsx src/scripts/captureLstepStorageState.ts",
     "lstep:ingest": "tsx src/scripts/runLstepIngestion.ts",
     "research:views": "tsx src/scripts/collectThreadsResearchViews.ts",
+    "research:backfill": "tsx src/scripts/backfillThreadsResearchAccount.ts",
     "lstep:init": "tsx src/scripts/initLstepBigQuery.ts",
     "lstep:init-metrics": "tsx src/scripts/initMessageMetricsBQ.ts",
     "lstep:check": "tsx src/scripts/checkLstepSetup.ts",

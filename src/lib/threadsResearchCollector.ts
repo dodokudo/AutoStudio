@@ -254,7 +254,7 @@ export async function collectAll(
 }
 
 /**
- * Daily bounded refresh for the eight approved research targets.
+ * Daily bounded refresh for the approved research targets.
  * A three-day overlap catches newly published posts and late self-replies while
  * keeping the cron well below the serverless timeout. Older archive rows remain.
  */
