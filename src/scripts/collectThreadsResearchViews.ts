@@ -27,6 +27,7 @@ const VIEWS_PATTERN = /表示[\d.,]+(万|億)?回|[\d.,]+[KMB]?\s*views?/i;
 const PAGE_TIMEOUT_MS = 30_000;
 const VIEWS_TIMEOUT_MS = 15_000;
 const PAUSE_MS = 800;
+const SAVE_BATCH_SIZE = 50;
 
 function argValue(name: string): string | undefined {
   const prefix = `--${name}=`;
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
   try {
     for (const [username, accountTargets] of byAccount) {
       const snapshots: PostViewSnapshot[] = [];
+      let accountSaved = 0;
       for (const target of accountTargets) {
         let viewsText: string | null = null;
         try {
@@ -86,12 +88,21 @@ async function main(): Promise<void> {
         const viewsCount = viewsText ? parseViewsText(viewsText) : null;
         if (viewsCount !== null) read += 1;
         snapshots.push({ ...target, snapshotDate, viewsCount, viewsText });
+        if (snapshots.length >= SAVE_BATCH_SIZE) {
+          await savePostViewSnapshots(THREADS_RESEARCH_OWNER_ID, snapshotDate, snapshots);
+          accountSaved += snapshots.length;
+          saved += snapshots.length;
+          snapshots.length = 0;
+          console.log(`[research:views] @${username}: ${accountSaved}/${accountTargets.length} posts saved (${read} with views, ${failures} failed)`);
+        }
         await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
       }
-      // Save per account so a crash mid-run keeps what was already read.
-      await savePostViewSnapshots(THREADS_RESEARCH_OWNER_ID, snapshotDate, snapshots);
-      saved += snapshots.length;
-      console.log(`[research:views] @${username}: ${snapshots.length} posts saved (${saved}/${targets.length} total, ${read} with views, ${failures} failed)`);
+      if (snapshots.length > 0) {
+        await savePostViewSnapshots(THREADS_RESEARCH_OWNER_ID, snapshotDate, snapshots);
+        accountSaved += snapshots.length;
+        saved += snapshots.length;
+      }
+      console.log(`[research:views] @${username}: ${accountSaved} posts saved (${saved}/${targets.length} total, ${read} with views, ${failures} failed)`);
     }
   } finally {
     await browser.close();
