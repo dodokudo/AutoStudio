@@ -4,6 +4,7 @@
  *   npm run research:views            # posts from the last 14 days
  *   npm run research:views -- --days=30
  *   npm run research:views -- --days=130 --username=yuki_99_official
+ *   npm run research:views -- --days=130 --username=yuki_99_official --concurrency=4
  *
  * Runs without logging in. Pages are opened one at a time with a short pause so the
  * load on Threads stays negligible.
@@ -53,6 +54,7 @@ async function readViews(context: BrowserContext, url: string): Promise<string |
 async function main(): Promise<void> {
   const days = Number(argValue('days') ?? '14');
   const username = argValue('username')?.replace(/^@/, '').trim().toLowerCase();
+  const concurrency = Math.max(1, Math.floor(Number(argValue('concurrency') ?? '1')));
   const snapshotDate = todayJst();
   const allTargets = await listViewTargets(THREADS_RESEARCH_OWNER_ID, days, snapshotDate);
   const targets = username ? allTargets.filter((target) => target.username.toLowerCase() === username) : allTargets;
@@ -75,32 +77,36 @@ async function main(): Promise<void> {
 
   try {
     for (const [username, accountTargets] of byAccount) {
-      const snapshots: PostViewSnapshot[] = [];
       let accountSaved = 0;
-      for (const target of accountTargets) {
-        let viewsText: string | null = null;
-        try {
-          viewsText = await readViews(context, target.permalink);
-        } catch (error) {
-          failures += 1;
-          console.warn(`[research:views] failed ${target.permalink}: ${error instanceof Error ? error.message : String(error)}`);
+      for (let offset = 0; offset < accountTargets.length; offset += SAVE_BATCH_SIZE) {
+        const batchTargets = accountTargets.slice(offset, offset + SAVE_BATCH_SIZE);
+        const snapshots = new Array<PostViewSnapshot>(batchTargets.length);
+        let nextIndex = 0;
+
+        async function worker(): Promise<void> {
+          while (nextIndex < batchTargets.length) {
+            const index = nextIndex;
+            nextIndex += 1;
+            const target = batchTargets[index];
+            let viewsText: string | null = null;
+            try {
+              viewsText = await readViews(context, target.permalink);
+            } catch (error) {
+              failures += 1;
+              console.warn(`[research:views] failed ${target.permalink}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+            const viewsCount = viewsText ? parseViewsText(viewsText) : null;
+            if (viewsCount !== null) read += 1;
+            snapshots[index] = { ...target, snapshotDate, viewsCount, viewsText };
+            await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
+          }
         }
-        const viewsCount = viewsText ? parseViewsText(viewsText) : null;
-        if (viewsCount !== null) read += 1;
-        snapshots.push({ ...target, snapshotDate, viewsCount, viewsText });
-        if (snapshots.length >= SAVE_BATCH_SIZE) {
-          await savePostViewSnapshots(THREADS_RESEARCH_OWNER_ID, snapshotDate, snapshots);
-          accountSaved += snapshots.length;
-          saved += snapshots.length;
-          snapshots.length = 0;
-          console.log(`[research:views] @${username}: ${accountSaved}/${accountTargets.length} posts saved (${read} with views, ${failures} failed)`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
-      }
-      if (snapshots.length > 0) {
+
+        await Promise.all(Array.from({ length: Math.min(concurrency, batchTargets.length) }, () => worker()));
         await savePostViewSnapshots(THREADS_RESEARCH_OWNER_ID, snapshotDate, snapshots);
         accountSaved += snapshots.length;
         saved += snapshots.length;
+        console.log(`[research:views] @${username}: ${accountSaved}/${accountTargets.length} posts saved (${read} with views, ${failures} failed)`);
       }
       console.log(`[research:views] @${username}: ${accountSaved} posts saved (${saved}/${targets.length} total, ${read} with views, ${failures} failed)`);
     }
