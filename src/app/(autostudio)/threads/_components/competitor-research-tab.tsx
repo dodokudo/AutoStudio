@@ -1392,8 +1392,8 @@ export function CompetitorResearchTab() {
       <section className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--color-border)] px-5 py-4">
           <div>
-            <h3 className="font-bold text-[color:var(--color-text-primary)]">調査対象の8アカウント</h3>
-            <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">指定した8人だけを、アカウント全体の7日間値と保存済み投稿の構成で比較します。</p>
+            <h3 className="font-bold text-[color:var(--color-text-primary)]">調査対象の{THREADS_RESEARCH_TARGET_USERNAMES.length}アカウント</h3>
+            <p className="mt-1 text-xs text-[color:var(--color-text-secondary)]">指定した{THREADS_RESEARCH_TARGET_USERNAMES.length}人だけを、アカウント全体の7日間値と保存済み投稿の構成で比較します。</p>
           </div>
           <button type="button" onClick={() => void loadWatchlist()} disabled={loadingWatchlist} className={secondaryButton}>
             {loadingWatchlist ? '更新中…' : '一覧を更新'}
