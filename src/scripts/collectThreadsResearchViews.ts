@@ -6,8 +6,8 @@
  *   npm run research:views -- --days=130 --username=yuki_99_official
  *   npm run research:views -- --days=130 --username=yuki_99_official --concurrency=4
  *
- * Runs without logging in. Pages are opened one at a time with a short pause so the
- * load on Threads stays negligible.
+ * Runs without logging in. Bounded concurrency and a short pause keep the load on
+ * Threads controlled during large backfills.
  */
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
