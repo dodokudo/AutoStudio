@@ -3,9 +3,10 @@
  *
  *   npm run research:views            # posts from the last 14 days
  *   npm run research:views -- --days=30
+ *   npm run research:views -- --days=130 --username=yuki_99_official
  *
  * Runs without logging in. Pages are opened one at a time with a short pause so the
- * load on Threads stays negligible (eight accounts, roughly a hundred posts).
+ * load on Threads stays negligible.
  */
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
@@ -50,9 +51,13 @@ async function readViews(context: BrowserContext, url: string): Promise<string |
 
 async function main(): Promise<void> {
   const days = Number(argValue('days') ?? '14');
+  const username = argValue('username')?.replace(/^@/, '').trim().toLowerCase();
   const snapshotDate = todayJst();
-  const targets = await listViewTargets(THREADS_RESEARCH_OWNER_ID, days, snapshotDate);
-  console.log(`[research:views] ${targets.length} posts to read (last ${days} days) for ${snapshotDate}`);
+  const allTargets = await listViewTargets(THREADS_RESEARCH_OWNER_ID, days, snapshotDate);
+  const targets = username ? allTargets.filter((target) => target.username.toLowerCase() === username) : allTargets;
+  console.log(
+    `[research:views] ${targets.length} posts to read (last ${days} days${username ? `, @${username}` : ''}) for ${snapshotDate}`,
+  );
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ locale: 'ja-JP', userAgent: USER_AGENT });
