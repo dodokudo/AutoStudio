@@ -8,4 +8,5 @@ export const THREADS_RESEARCH_TARGET_USERNAMES = [
   'yama_threads',
   'reborn_rhino_mama',
   'yuki_99_official',
+  'riku__ma55',
 ] as const;
