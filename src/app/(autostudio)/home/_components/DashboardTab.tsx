@@ -28,6 +28,14 @@ async function fetcher(url: string) {
   return result;
 }
 const number = (value: number) => value.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+const KPI_CARD_KEYS = [
+  'targetRevenue',
+  'targetFrontendPurchases',
+  'targetBackendPurchases',
+  'targetLineRegistrations',
+  'targetThreadsFollowers',
+  'targetInstagramFollowers',
+];
 export function DashboardTab({
   data,
   kpiTarget,
@@ -131,9 +139,8 @@ export function DashboardTab({
             {daysElapsed === 0 ? '開始前' : `${daysElapsed} / ${totalDays}日`}
           </span>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {rows
-            .filter((row) => ['targetRevenue', 'targetBackendPurchases', 'targetLineRegistrations'].includes(row.key))
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {KPI_CARD_KEYS.flatMap((key) => rows.filter((row) => row.key === key))
             .map((row) => (
               <div key={row.key} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-4">
                 <p className="text-sm font-medium">{row.label}</p>
@@ -164,9 +171,7 @@ export function DashboardTab({
             </thead>
             <tbody>
               {rows
-                .filter(
-                  (row) => !['targetRevenue', 'targetBackendPurchases', 'targetLineRegistrations'].includes(row.key)
-                )
+                .filter((row) => !KPI_CARD_KEYS.includes(row.key))
                 .map((row) => (
                   <tr key={row.key} className="border-b border-[color:var(--color-border)]">
                     <th className="py-3 text-left font-medium">{row.label}</th>
