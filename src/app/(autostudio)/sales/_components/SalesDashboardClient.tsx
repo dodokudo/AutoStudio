@@ -1892,7 +1892,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       addDepositedByPaymentDate(paymentDate, sale.amount, false, paymentDate);
     }
 
-    // 入金予定（売上日ベース）は表示期間の売上から計算
+    // 入金予定（売上日ベース）は表示期間の売上から計算。翌月末払いなど、期間外の入金予定も含める。
     for (const tx of displayTransactions) {
       if (tx.isGrouped) {
         for (const item of tx.items) {
@@ -1906,7 +1906,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
             }
           } else {
             const manualPaymentDate = item.paymentDate ?? item.date;
-            if (manualPaymentDate > today && manualPaymentDate >= rangeStart && manualPaymentDate <= rangeEnd) {
+            if (manualPaymentDate > today) {
               pending += item.amount;
               const dateKey = toLocalDateStr(manualPaymentDate);
               pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + item.amount);
@@ -1923,7 +1923,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         }
       } else if (tx.source === 'manual') {
         const manualPaymentDate = tx.paymentDate ?? tx.date;
-        if (manualPaymentDate > today && manualPaymentDate >= rangeStart && manualPaymentDate <= rangeEnd) {
+        if (manualPaymentDate > today) {
           pending += tx.amount;
           const dateKey = toLocalDateStr(manualPaymentDate);
           pendingByDate.set(dateKey, (pendingByDate.get(dateKey) ?? 0) + tx.amount);
