@@ -283,14 +283,22 @@ async function fetchUserInsightsDailySeries(client: BigQuery, projectId: string)
 
 async function fetchStoryDailyCounts(client: BigQuery, projectId: string, userId: string): Promise<DailyContentStat[]> {
   const query = `
+    WITH stories AS (
+      SELECT
+        instagram_id,
+        DATE(timestamp, 'Asia/Tokyo') AS published_date,
+        MAX(reach) AS reach
+      FROM \`${projectId}.${DEFAULT_DATASET}.instagram_story_metric_snapshots\`
+      WHERE user_id = @user_id
+        AND timestamp IS NOT NULL
+        AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+      GROUP BY instagram_id, published_date
+    )
     SELECT
-      FORMAT_DATE('%Y-%m-%d', DATE(timestamp, 'Asia/Tokyo')) AS date,
+      FORMAT_DATE('%Y-%m-%d', published_date) AS date,
       COUNT(*) AS count,
       MAX(COALESCE(reach, 0)) AS views
-    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_stories\`
-    WHERE user_id = @user_id
-      AND timestamp IS NOT NULL
-      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+    FROM stories
     GROUP BY date
     ORDER BY date DESC
   `;

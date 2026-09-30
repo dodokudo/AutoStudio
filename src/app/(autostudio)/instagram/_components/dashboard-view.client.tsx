@@ -853,8 +853,8 @@ export function InstagramDashboardView({ data }: Props) {
                       <th className="px-3 py-2 text-right">クリック</th>
                       <th className="px-3 py-2 text-right">LINE</th>
                       <th className="px-3 py-2 text-right">ストーリー投稿</th>
-                      <th className="px-3 py-2 text-right">ストーリー閲覧</th>
-                      <th className="px-3 py-2 text-right">閲覧率</th>
+                      <th className="px-3 py-2 text-right" title="その日に投稿したストーリーの最大リーチ">ストーリー閲覧</th>
+                      <th className="px-3 py-2 text-right" title="ストーリーの最大リーチ ÷ その日のフォロワー数">閲覧率</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[color:var(--color-border)]">
