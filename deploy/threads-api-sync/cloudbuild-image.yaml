@@ -1,0 +1,11 @@
+# gcr.io/mark-454114/autostudio-threads-sync:latest を threads-api-sync の Dockerfile から作り直す。
+# 実運用のジョブ autostudio-threads-sync-6h / autostudio-threads-sync はこのイメージを SYNC_MODE 付きで使っている。
+# 反映: gcloud builds submit --config=deploy/threads-api-sync/cloudbuild-image.yaml --project=mark-454114 .
+#       その後 gcloud run jobs update <job> --image=gcr.io/mark-454114/autostudio-threads-sync:latest でダイジェストを更新
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/autostudio-threads-sync:latest', '-f', 'deploy/threads-api-sync/Dockerfile', '.']
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', 'gcr.io/$PROJECT_ID/autostudio-threads-sync:latest']
+images:
+  - gcr.io/$PROJECT_ID/autostudio-threads-sync:latest

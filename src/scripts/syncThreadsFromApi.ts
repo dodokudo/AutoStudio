@@ -434,14 +434,20 @@ async function syncPosts(bigQueryClient: BigQuery, accessToken: string, account:
   // 既存のpost_idを取得
   const [existingRows] = await bigQueryClient.query({
     query: `
-      SELECT post_id
+      SELECT post_id, impressions_total, likes_total
       FROM \`${PROJECT_ID}.${DATASET_ID}.threads_posts\`
       WHERE COALESCE(account_key, 'main') = @account_key
         AND COALESCE(threads_user_id, '10012809578833342') = @threads_user_id
     `,
     params: { account_key: account.key, threads_user_id: account.threadsUserId },
   });
-  const existingPostIds = new Set((existingRows as Array<{post_id: string}>).map(r => r.post_id));
+  const existingTotals = new Map(
+    (existingRows as Array<{ post_id: string; impressions_total: number | null; likes_total: number | null }>).map((r) => [
+      r.post_id,
+      { impressions: Number(r.impressions_total ?? 0), likes: Number(r.likes_total ?? 0) },
+    ])
+  );
+  const existingPostIds = new Set(existingTotals.keys());
 
   // 新規投稿のみINSERT
   const newPosts = postsWithInsights.filter(p => !existingPostIds.has(p.post_id));
@@ -498,6 +504,10 @@ async function syncPosts(bigQueryClient: BigQuery, accessToken: string, account:
       }
     }
   }
+
+  // 投稿別の増分を日次テーブルに積む（同期のたびに前回との差分を1行）。
+  // 累計しか残さないと「投稿日の後にどれだけ伸びたか」が追えないため。
+  await recordPostStatsDeltas(bigQueryClient, postsWithInsights, existingTotals);
 
   console.log(`[syncThreadsFromApi] Posts synced successfully`);
 }
@@ -646,6 +656,50 @@ async function ensureCommentsTable(bigQueryClient: BigQuery): Promise<void> {
 
     await table.create({ schema });
     console.log('[syncThreadsFromApi] threads_comments table created');
+  }
+}
+
+
+async function recordPostStatsDeltas(
+  bigQueryClient: BigQuery,
+  posts: Array<{ post_id: string; impressions_total: number; likes_total: number }>,
+  existingTotals: Map<string, { impressions: number; likes: number }>
+): Promise<void> {
+  const rows = posts
+    .map((post) => {
+      const previous = existingTotals.get(post.post_id);
+      const impressionsDelta = post.impressions_total - (previous?.impressions ?? 0);
+      const likesDelta = post.likes_total - (previous?.likes ?? 0);
+      return { post_id: post.post_id, impressionsDelta, likesDelta };
+    })
+    // 初回取得で累計が入る分も含めて、動きがあった投稿だけ残す
+    .filter((row) => row.impressionsDelta !== 0 || row.likesDelta !== 0);
+  if (rows.length === 0) return;
+
+  const values = rows
+    .map((_row, index) => `(@p${index}, CURRENT_DATE('Asia/Tokyo'), @i${index}, @l${index}, CURRENT_TIMESTAMP())`)
+    .join(',\n');
+  const params: Record<string, unknown> = {};
+  const types: Record<string, string> = {};
+  rows.forEach((row, index) => {
+    params[`p${index}`] = row.post_id;
+    params[`i${index}`] = row.impressionsDelta;
+    params[`l${index}`] = row.likesDelta;
+    types[`p${index}`] = 'STRING';
+    types[`i${index}`] = 'INT64';
+    types[`l${index}`] = 'INT64';
+  });
+  try {
+    await bigQueryClient.query({
+      query: `INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.threads_post_stats_daily\`
+        (post_id, date, impressions_delta, likes_delta, collected_at)
+        VALUES ${values}`,
+      params,
+      types,
+    });
+    console.log(`[syncThreadsFromApi] Recorded ${rows.length} post stat deltas`);
+  } catch (error) {
+    console.error('[syncThreadsFromApi] Failed to record post stat deltas:', error);
   }
 }
 
