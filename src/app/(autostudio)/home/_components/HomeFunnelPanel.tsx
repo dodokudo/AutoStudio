@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { FunnelAnalysisResult, FunnelDefinition, FunnelStepResult } from '@/lib/lstep/funnel';
 
 interface HomeFunnelPanelProps {
@@ -269,7 +270,9 @@ export function HomeFunnelPanel({ startDate, endDate }: HomeFunnelPanelProps) {
         <div className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <div className="space-y-3">
             {loading ? (
-              <p className="text-sm text-[color:var(--color-text-muted)]">読み込み中...</p>
+              <div className="flex justify-center py-4">
+                <LoadingSpinner label="ファネルを読み込み中" />
+              </div>
             ) : null}
             {error ? (
               <p className="text-sm text-[color:var(--color-danger)]">{error}</p>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { dashboardCardClass } from '@/components/dashboard/styles';
 
 type ReportMode = 'monthly' | 'weekly';
@@ -192,7 +193,9 @@ export function ReportTab({ currentMonth }: { currentMonth: string }) {
 
       {loading ? (
         <Card className={dashboardCardClass}>
-          <p className="text-sm text-[color:var(--color-text-muted)]">レポートを読み込み中...</p>
+          <div className="flex justify-center py-4">
+            <LoadingSpinner label="レポートを読み込み中" />
+          </div>
         </Card>
       ) : null}
 

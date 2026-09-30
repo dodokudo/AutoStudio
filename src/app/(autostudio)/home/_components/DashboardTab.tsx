@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { Card } from '@/components/ui/card';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import type { HomeDashboardData } from '@/lib/home/dashboard';
 import type { KpiTarget } from '@/lib/home/kpi-types';
@@ -95,7 +96,7 @@ export function DashboardTab({
             ].includes(key)
             ? '未入力'
             : isLoading
-              ? '読込中…'
+              ? (<LoadingSpinner size="sm" label={`${label}を読み込み中`} />)
               : '—'
           : format(value),
       goal: target > 0 ? format(target) : '未設定',
@@ -199,7 +200,9 @@ export function DashboardTab({
       ) : (
         !planError && (
           <Card className={dashboardCardClass}>
-            <p className="text-sm">月間タスクを読み込み中…</p>
+            <div className="flex justify-center py-4">
+              <LoadingSpinner label="月間タスクを読み込み中" />
+            </div>
           </Card>
         )
       )}
@@ -230,7 +233,9 @@ export function DashboardTab({
       </Card>
       {isLoading ? (
         <Card className={dashboardCardClass}>
-          <p className="text-sm">日別実績を読み込み中…</p>
+          <div className="flex justify-center py-4">
+            <LoadingSpinner label="日別実績を読み込み中" />
+          </div>
         </Card>
       ) : (
         <>

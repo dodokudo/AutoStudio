@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { DashboardTabsInteractive } from '@/components/dashboard/DashboardTabsInteractive';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { KpiTarget, KpiTargetInput } from '@/lib/home/kpi-types';
 import { isMonth } from '@/lib/home/monthly-plan-types';
 import type { HomeDashboardData } from '@/lib/home/dashboard';
@@ -73,9 +74,9 @@ export function HomeDashboardClient({
         </label>
       </div>
       {pending ? (
-        <p role="status" className="text-sm text-[color:var(--color-text-muted)]">
-          対象月を読み込み中…
-        </p>
+        <div className="flex justify-end">
+          <LoadingSpinner size="sm" label="対象月を読み込み中" />
+        </div>
       ) : null}
       <fieldset disabled={pending} className="min-w-0">
         {activeTab === 'dashboard' && (
