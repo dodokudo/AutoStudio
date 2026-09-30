@@ -8,7 +8,7 @@ export const revalidate = 300;
 
 const getCachedInstagramDashboardData = unstable_cache(
   async (projectId: string) => getInstagramDashboardData(projectId),
-  ['instagram-dashboard'],
+  ['instagram-dashboard-v2-reel-counts'],
   { revalidate: 300 },
 );
 

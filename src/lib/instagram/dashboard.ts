@@ -309,14 +309,19 @@ async function fetchStoryDailyCounts(client: BigQuery, projectId: string, userId
 
 async function fetchReelDailyCounts(client: BigQuery, projectId: string, userId: string): Promise<DailyContentStat[]> {
   const query = `
+    WITH latest_per_reel AS (
+      SELECT instagram_id, timestamp, views
+      FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reel_metric_snapshots\`
+      WHERE user_id = @user_id
+        AND timestamp IS NOT NULL
+        AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY instagram_id ORDER BY snapshot_at DESC) = 1
+    )
     SELECT
       FORMAT_DATE('%Y-%m-%d', DATE(timestamp, 'Asia/Tokyo')) AS date,
-      COUNT(*) AS count,
+      COUNT(DISTINCT instagram_id) AS count,
       MAX(COALESCE(views, 0)) AS views
-    FROM \`${projectId}.${DEFAULT_DATASET}.instagram_reels\`
-    WHERE user_id = @user_id
-      AND timestamp IS NOT NULL
-      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+    FROM latest_per_reel
     GROUP BY date
     ORDER BY date DESC
   `;
