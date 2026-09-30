@@ -1,401 +1,237 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
 import { Card } from '@/components/ui/card';
 import { dashboardCardClass } from '@/components/dashboard/styles';
 import type { HomeDashboardData } from '@/lib/home/dashboard';
 import type { KpiTarget } from '@/lib/home/kpi-types';
-import { calculateAchievementRate } from '@/lib/home/kpi-types';
-import { PacePredictionCard } from './PacePredictionCard';
+import type { DailyActuals, MonthlyActuals } from '@/lib/home/monthly-actuals';
+import {
+  activityFields,
+  conversionRows,
+  goalFields,
+  monthDates,
+  percentage,
+  type MonthlyPlan,
+} from '@/lib/home/monthly-plan-types';
 import { LineSourceBreakdown } from './LineSourceBreakdown';
 import { HomeFunnelPanel } from './HomeFunnelPanel';
 import { DailyTrendChart } from './DailyTrendChart';
 import { DailyDetailsTable } from './DailyDetailsTable';
+import { ActivityActualsForm, MonthlyPlanSection } from './MonthlyPlanSection';
 
-// ============================================================
-// 型定義
-// ============================================================
-
-interface DashboardTabProps {
+async function fetcher(url: string) {
+  const response = await fetch(url);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? '読み込みに失敗しました');
+  return result;
+}
+const number = (value: number) => value.toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+export function DashboardTab({
+  data,
+  kpiTarget,
+  currentMonth,
+}: {
   data: HomeDashboardData;
   kpiTarget: KpiTarget | null;
   currentMonth: string;
-}
-
-interface MonthlyActualsResponse {
-  success: boolean;
-  data: {
-    month: string;
-    revenue: number;
-    lineRegistrations: number;
-    seminarParticipants: number;
-    frontendPurchases: number;
-    backendPurchases: number;
-    daily?: Array<{
-      date: string;
-      revenue: number;
-      lineRegistrations: number;
-      threadsFollowerDelta: number;
-      instagramFollowerDelta: number;
-      frontendPurchases: number;
-      backendPurchases: number;
-    }>;
-  };
-}
-
-// ============================================================
-// ユーティリティ
-// ============================================================
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch');
-  return res.json();
-};
-
-function getDaysInMonth(month: string): number {
-  const [year, monthNum] = month.split('-').map(Number);
-  return new Date(year, monthNum, 0).getDate();
-}
-
-function getDaysElapsed(month: string): number {
-  const now = new Date();
-  const [year, monthNum] = month.split('-').map(Number);
-
-  if (now.getFullYear() !== year || now.getMonth() + 1 !== monthNum) {
-    const targetDate = new Date(year, monthNum - 1, 1);
-    if (targetDate < now) {
-      return getDaysInMonth(month);
-    }
-    return 0;
-  }
-
-  return now.getDate();
-}
-
-// ============================================================
-// コンポーネント
-// ============================================================
-
-export function DashboardTab({ data, kpiTarget, currentMonth }: DashboardTabProps) {
-  const totalDays = getDaysInMonth(currentMonth);
-  const daysElapsed = getDaysElapsed(currentMonth);
-  const remainingDays = Math.max(0, totalDays - daysElapsed);
-
-  // 実績データをAPIから取得
-  const { data: actualsResponse, error: actualsError } = useSWR<MonthlyActualsResponse>(
-    `/api/home/monthly-actuals?month=${currentMonth}`,
-    fetcher,
-    { refreshInterval: 60000 } // 1分ごとに更新
-  );
-  const { data: dailyResponse, error: dailyError, isLoading: isDailyLoading } = useSWR<MonthlyActualsResponse>(
+}) {
+  const [saving, setSaving] = useState(false);
+  const [funnelOpen, setFunnelOpen] = useState(false);
+  const {
+    data: response,
+    error: actualsError,
+    isLoading,
+  } = useSWR<{ data: MonthlyActuals & { daily: DailyActuals[] } }>(
     `/api/home/monthly-actuals?month=${currentMonth}&daily=true`,
     fetcher,
     { refreshInterval: 60000 }
   );
-
-  const actuals = useMemo(() => {
-    if (!actualsResponse?.data) {
-      return {
-        revenue: 0,
-        lineRegistrations: 0,
-        seminarParticipants: 0,
-        frontendPurchases: 0,
-        backendPurchases: 0,
-      };
+  const {
+    data: plan,
+    error: planError,
+    mutate,
+  } = useSWR<MonthlyPlan>(`/api/home/monthly-plan?month=${currentMonth}`, fetcher, { revalidateOnFocus: false });
+  const actuals = response?.data;
+  const daily = actuals?.daily ?? [];
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
+  const totalDays = Number(monthDates(currentMonth).end.slice(-2));
+  const daysElapsed =
+    currentMonth > today.slice(0, 7) ? 0 : currentMonth < today.slice(0, 7) ? totalDays : Number(today.slice(-2));
+  const baseActuals: Record<string, number | null> = {
+    targetRevenue: actuals?.revenue ?? null,
+    targetBackendPurchases: actuals?.backendPurchases ?? null,
+    targetFrontendPurchases: actuals?.frontendPurchases ?? null,
+    targetLineRegistrations: actuals?.lineRegistrations ?? null,
+    targetThreadsFollowers: actuals ? daily.reduce((sum, d) => sum + d.threadsFollowerDelta, 0) : null,
+    targetInstagramFollowers: actuals ? daily.reduce((sum, d) => sum + d.instagramFollowerDelta, 0) : null,
+    ...Object.fromEntries(activityFields.map(([key, , target]) => [target, plan?.activities[key] ?? null])),
+  };
+  const rows = goalFields.map(([key, label, unit]) => {
+    const value = baseActuals[key];
+    const target = kpiTarget?.[key] ?? 0;
+    const format = (n: number) => (key === 'targetRevenue' ? `${number(n)}円` : `${number(n)}${unit}`);
+    return {
+      key,
+      label,
+      value,
+      target,
+      display:
+        value == null
+          ? [
+              'targetSeminarRegistrations',
+              'targetSeminarParticipants',
+              'targetConsultationRegistrations',
+              'targetConsultationsCompleted',
+            ].includes(key)
+            ? '未入力'
+            : isLoading
+              ? '読込中…'
+              : '—'
+          : format(value),
+      goal: target > 0 ? format(target) : '未設定',
+      rate: percentage(value, target),
+    };
+  });
+  async function savePlan(next: MonthlyPlan) {
+    setSaving(true);
+    try {
+      const response = await fetch('/api/home/monthly-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? '保存に失敗しました');
+      await mutate(result, { revalidate: false });
+    } finally {
+      setSaving(false);
     }
-    return {
-      revenue: actualsResponse.data.revenue,
-      lineRegistrations: actualsResponse.data.lineRegistrations,
-      seminarParticipants: actualsResponse.data.seminarParticipants,
-      frontendPurchases: actualsResponse.data.frontendPurchases,
-      backendPurchases: actualsResponse.data.backendPurchases,
-    };
-  }, [actualsResponse]);
-
-  const dailyData = useMemo(() => {
-    return dailyResponse?.data?.daily ?? [];
-  }, [dailyResponse]);
-
-  // KPI進捗計算
-
-  const progressBoard = useMemo(() => {
-    if (!kpiTarget || totalDays <= 0) return null;
-
-    const formatNumber = (value: number) => new Intl.NumberFormat('ja-JP').format(Math.round(value));
-    const formatCurrency = (value: number) => {
-      if (value >= 10000) return `${formatNumber(value / 10000)}万円`;
-      return `${formatNumber(value)}円`;
-    };
-
-    const baseDays = kpiTarget?.workingDays && kpiTarget.workingDays > 0 ? kpiTarget.workingDays : totalDays;
-    const expectedRate = baseDays > 0 ? Math.min(100, (daysElapsed / baseDays) * 100) : 0;
-    const expectedValue = (target: number) => (target * expectedRate) / 100;
-
-    const threadsCurrent = data.followerBreakdown.find((item) => item.platform === 'threads')?.count ?? 0;
-    const instagramCurrent = data.followerBreakdown.find((item) => item.platform === 'instagram')?.count ?? 0;
-    const threadsIncrease = Math.max(0, threadsCurrent - data.followerStarts.threads);
-    const instagramIncrease = Math.max(0, instagramCurrent - data.followerStarts.instagram);
-
-    const getStatus = (paceAchievementRate: number) => {
-      // 期待進捗に対する達成率が100%を基準とする
-      const margin = 10; // 10%のマージン
-      if (paceAchievementRate >= 100 + margin) return { label: '先行', tone: 'text-green-600' };
-      if (paceAchievementRate <= 100 - margin) return { label: '遅れ', tone: 'text-red-600' };
-      return { label: '予定通り', tone: 'text-[color:var(--color-text-muted)]' };
-    };
-
-    const rows = [
-      {
-        label: '売上',
-        current: actuals.revenue,
-        target: kpiTarget.targetRevenue,
-        unit: 'currency',
-      },
-      {
-        label: 'フロント購入',
-        current: actuals.frontendPurchases,
-        target: kpiTarget.targetFrontendPurchases,
-        unit: '件',
-      },
-      {
-        label: 'バック購入',
-        current: actuals.backendPurchases,
-        target: kpiTarget.targetBackendPurchases,
-        unit: '件',
-      },
-      {
-        label: 'LINE登録',
-        current: actuals.lineRegistrations,
-        target: kpiTarget.targetLineRegistrations,
-        unit: '件',
-      },
-      {
-        label: 'Threads',
-        current: threadsIncrease,
-        target: kpiTarget.targetThreadsFollowers,
-        unit: '人',
-      },
-      {
-        label: 'Instagram',
-        current: instagramIncrease,
-        target: kpiTarget.targetInstagramFollowers,
-        unit: '人',
-      },
-    ];
-
-    const formatValue = (value: number, unit: string) => {
-      if (unit === 'currency') return formatCurrency(value);
-      return `${formatNumber(value)}${unit}`;
-    };
-
-    return rows.map((row) => {
-      const expected = row.target > 0 ? expectedValue(row.target) : 0;
-      // 目標に対する達成率（プログレスバー表示用）
-      const targetAchievementRate = row.target > 0 ? (row.current / row.target) * 100 : 0;
-      // 期待進捗に対する達成率（表示用）
-      const progressRate = expected > 0 ? (row.current / expected) * 100 : 0;
-      const diff = progressRate - expectedRate;
-      const status = getStatus(progressRate);
-      const targetPerDay = baseDays > 0 ? row.target / baseDays : 0;
-      const remainingDays = Math.max(0, totalDays - daysElapsed);
-      const remaining = Math.max(0, row.target - row.current);
-      const remainingPerDay = remainingDays > 0 ? remaining / remainingDays : 0;
-
-      const isPurchase = row.label === 'フロント購入' || row.label === 'バック購入';
-      const targetPerWeek = targetPerDay * 7;
-      const remainingPerWeek = remainingPerDay * 7;
-
-      const targetPaceLabel = row.unit === 'currency'
-        ? `目標 ${formatCurrency(targetPerDay)}/日`
-        : isPurchase
-          ? `目標 ${formatNumber(targetPerWeek)}${row.unit}/週`
-          : `目標 ${formatNumber(targetPerDay)}${row.unit}/日`;
-
-      const remainingPaceLabel = row.unit === 'currency'
-        ? `残り ${formatCurrency(remainingPerDay)}/日`
-        : isPurchase
-          ? `残り ${formatNumber(remainingPerWeek)}${row.unit}/週`
-          : `残り ${formatNumber(remainingPerDay)}${row.unit}/日`;
-      return {
-        ...row,
-        targetAchievementRate,
-        progressRate,
-        expected,
-        expectedRate,
-        diff,
-        status,
-        displayCurrent: formatValue(row.current, row.unit),
-        displayTarget: formatValue(row.target, row.unit),
-        displayExpected: formatValue(expected, row.unit),
-        targetPaceLabel,
-        remainingPaceLabel,
-      };
-    });
-  }, [kpiTarget, totalDays, daysElapsed, actuals, data.followerBreakdown, data.followerStarts]);
-
-  // ペース予測計算
-  const pacePredictions = useMemo(() => {
-    if (!kpiTarget || daysElapsed === 0) return null;
-
-    const dailyRate = (actual: number) => actual / daysElapsed;
-    const projected = (actual: number) => dailyRate(actual) * totalDays;
-
-    return {
-      revenue: {
-        metric: 'revenue',
-        label: '売上',
-        currentActual: actuals.revenue,
-        projectedMonthEnd: projected(actuals.revenue),
-        target: kpiTarget.targetRevenue,
-        projectedAchievementRate: calculateAchievementRate(projected(actuals.revenue), kpiTarget.targetRevenue),
-        remainingDays,
-        requiredDailyRate: remainingDays > 0 ? (kpiTarget.targetRevenue - actuals.revenue) / remainingDays : 0,
-      },
-      lineRegistrations: {
-        metric: 'lineRegistrations',
-        label: 'LINE登録',
-        currentActual: actuals.lineRegistrations,
-        projectedMonthEnd: projected(actuals.lineRegistrations),
-        target: kpiTarget.targetLineRegistrations,
-        projectedAchievementRate: calculateAchievementRate(projected(actuals.lineRegistrations), kpiTarget.targetLineRegistrations),
-        remainingDays,
-        requiredDailyRate: remainingDays > 0 ? (kpiTarget.targetLineRegistrations - actuals.lineRegistrations) / remainingDays : 0,
-      },
-    };
-  }, [kpiTarget, actuals, daysElapsed, totalDays, remainingDays]);
-
-  // LINE登録流入元
-  const lineSourceData = useMemo(() => {
-    return data.lineRegistrationBySource || [];
-  }, [data.lineRegistrationBySource]);
-
-  // ファネル転換率
-
-  // KPI目標が設定されていない場合
+  }
+  const rates = conversionRows({
+    line: actuals?.lineRegistrations ?? null,
+    seminarApplications: plan?.activities.seminarRegistrations ?? null,
+    seminarAttendance: plan?.activities.seminarParticipants ?? null,
+    consultationApplications: plan?.activities.consultationRegistrations ?? null,
+    consultations: plan?.activities.consultationsCompleted ?? null,
+    backend: actuals?.backendPurchases ?? null,
+  });
   return (
     <div className="space-y-6">
-      {/* エラー表示 */}
-      {actualsError && (
-        <Card className={`${dashboardCardClass} text-center py-4`}>
-          <p className="text-sm text-red-500">実績データの取得に失敗しました</p>
-        </Card>
+      {(actualsError || planError) && (
+        <p role="alert" className="text-sm text-red-500">
+          {actualsError ? '実績' : '月間タスク'}の読み込みに失敗しました。ページを再読み込みしてください。
+        </p>
       )}
-      {dailyError && (
-        <Card className={`${dashboardCardClass} text-center py-4`}>
-          <p className="text-sm text-red-500">デイリー実績の取得に失敗しました</p>
-        </Card>
-      )}
-
-      {progressBoard ? (
-        <Card className={dashboardCardClass}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">本日時点の進捗</h2>
-              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                {new Date().toLocaleDateString('ja-JP')} / 経過 {daysElapsed}日 / {totalDays}日
-              </p>
-            </div>
-            <div className="text-xs text-[color:var(--color-text-muted)]">
-              予定進捗 {((daysElapsed / totalDays) * 100).toFixed(1)}%
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {progressBoard.map((row) => (
-              <div key={row.label} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-4 py-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-[color:var(--color-text-secondary)]">{row.label}</span>
-                  <span className={`text-xs font-semibold ${row.status.tone}`}>{row.status.label}</span>
-                </div>
-                <div className="mt-2 text-base font-semibold text-[color:var(--color-text-primary)]">
-                  {row.displayCurrent} / {row.displayTarget}
-                </div>
-                <div className="mt-2">
-                  <div className="relative h-2 w-full rounded-full bg-[color:var(--color-border)]">
+      <Card className={dashboardCardClass}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">月の目標と実績</h2>
+          <span className="text-xs text-[color:var(--color-text-muted)]">
+            {daysElapsed === 0 ? '開始前' : `${daysElapsed} / ${totalDays}日`}
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {rows
+            .filter((row) => ['targetRevenue', 'targetBackendPurchases', 'targetLineRegistrations'].includes(row.key))
+            .map((row) => (
+              <div key={row.key} className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-4">
+                <p className="text-sm font-medium">{row.label}</p>
+                <p className="mt-2 text-xl font-semibold">{row.display}</p>
+                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                  目標 {row.goal} · 達成率 {row.rate}
+                </p>
+                {row.target > 0 && row.value !== null && (
+                  <div className="mt-3 h-2 rounded-full bg-[color:var(--color-border)]">
                     <div
-                      className={`h-full rounded-full transition-all ${row.status.tone === 'text-green-600' ? 'bg-green-500' : row.status.tone === 'text-red-600' ? 'bg-red-500' : 'bg-[color:var(--color-accent)]'}`}
-                      style={{ width: `${Math.min(100, Math.max(0, row.targetAchievementRate))}%` }}
-                    />
-                    <div
-                      className="absolute top-[-2px] h-3 w-1 rounded-full bg-[color:var(--color-text-primary)]"
-                      style={{ left: `${Math.min(100, Math.max(0, row.expectedRate))}%`, transform: 'translateX(-50%)' }}
+                      className="h-2 rounded-full bg-[color:var(--color-accent)]"
+                      style={{ width: `${Math.max(0, Math.min(100, (row.value / row.target) * 100))}%` }}
                     />
                   </div>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
-                  <span>達成率 {row.progressRate.toFixed(1)}%</span>
-                  <span>本来 {row.displayExpected}</span>
-                </div>
-                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                  {row.targetPaceLabel}
-                </div>
-                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                  {row.remainingPaceLabel}
-                </div>
+                )}
+              </div>
+            ))}
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[color:var(--color-border)]">
+                <th className="py-3 text-left">項目</th>
+                <th className="py-3 text-right">実績</th>
+                <th className="py-3 text-right">目標</th>
+                <th className="py-3 text-right">達成率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows
+                .filter(
+                  (row) => !['targetRevenue', 'targetBackendPurchases', 'targetLineRegistrations'].includes(row.key)
+                )
+                .map((row) => (
+                  <tr key={row.key} className="border-b border-[color:var(--color-border)]">
+                    <th className="py-3 text-left font-medium">{row.label}</th>
+                    <td className="py-3 text-right">{row.display}</td>
+                    <td className="py-3 text-right">{row.goal}</td>
+                    <td className="py-3 text-right">{row.rate}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+        {!kpiTarget && (
+          <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">
+            「KPI目標設定」でこの月の目標を設定できます。
+          </p>
+        )}
+        {plan && (
+          <div className="mt-4">
+            <ActivityActualsForm plan={plan} onSave={savePlan} saving={saving} />
+          </div>
+        )}
+      </Card>
+      {plan ? (
+        <MonthlyPlanSection plan={plan} onSave={savePlan} saving={saving} />
+      ) : (
+        !planError && (
+          <Card className={dashboardCardClass}>
+            <p className="text-sm">月間タスクを読み込み中…</p>
+          </Card>
+        )
+      )}
+      <Card className={dashboardCardClass}>
+        <details>
+          <summary className="cursor-pointer font-medium">転換率</summary>
+          <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">選択月の件数比</p>
+          <div className="mt-3 space-y-3 text-sm">
+            {rates.map(([label, rate]) => (
+              <div key={label} className="flex justify-between gap-4">
+                <span>{label}</span>
+                <span>{rate}</span>
               </div>
             ))}
           </div>
-        </Card>
-      ) : null}
-
-      {!kpiTarget && (
-        <Card className={`${dashboardCardClass} text-center py-6`}>
-          <p className="text-[color:var(--color-text-secondary)]">
-            KPI目標が設定されていません。
-          </p>
-          <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-            「KPI目標設定」タブで目標を入力してください。
-          </p>
-        </Card>
-      )}
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        {/* 今月ペース予測 */}
-        {pacePredictions ? (
-          <PacePredictionCard
-            predictions={pacePredictions}
-            daysElapsed={daysElapsed}
-            totalDays={totalDays}
-          />
-        ) : (
-          <div />
-        )}
-
-        {/* LINE登録流入元別 */}
-        <LineSourceBreakdown data={lineSourceData} />
-      </section>
-
-      {/* ファネル（ホーム専用表示） */}
-      <HomeFunnelPanel startDate={data.period.start} endDate={data.period.end} />
-
-      {/* デイリー推移グラフ */}
-      {isDailyLoading ? (
-        <Card className={`${dashboardCardClass} text-center py-4`}>
-          <p className="text-sm text-[color:var(--color-text-muted)]">デイリー実績を読み込み中...</p>
+        </details>
+      </Card>
+      <LineSourceBreakdown data={data.lineRegistrationBySource || []} />
+      <Card className={dashboardCardClass}>
+        <details onToggle={(event) => setFunnelOpen(event.currentTarget.open)}>
+          <summary className="cursor-pointer font-medium">ファネル詳細</summary>
+          {funnelOpen && (
+            <div className="mt-4">
+              <HomeFunnelPanel startDate={data.period.start} endDate={data.period.end} />
+            </div>
+          )}
+        </details>
+      </Card>
+      {isLoading ? (
+        <Card className={dashboardCardClass}>
+          <p className="text-sm">日別実績を読み込み中…</p>
         </Card>
       ) : (
-        <DailyTrendChart data={dailyData} />
-      )}
-
-      {/* デイリー詳細テーブル */}
-      {isDailyLoading ? (
-        <Card className={`${dashboardCardClass} text-center py-4`}>
-          <p className="text-sm text-[color:var(--color-text-muted)]">デイリー詳細を読み込み中...</p>
-        </Card>
-      ) : (
-        <DailyDetailsTable
-          data={dailyData}
-          kpiTarget={kpiTarget}
-          daysElapsed={daysElapsed}
-          totalDays={totalDays}
-          followerTotals={{
-            threadsCurrent: data.followerBreakdown.find((item) => item.platform === 'threads')?.count ?? 0,
-            instagramCurrent: data.followerBreakdown.find((item) => item.platform === 'instagram')?.count ?? 0,
-            threadsStart: data.followerStarts.threads,
-            instagramStart: data.followerStarts.instagram,
-          }}
-        />
+        <>
+          <DailyTrendChart data={daily} />
+          <DailyDetailsTable data={daily} kpiTarget={kpiTarget} daysElapsed={daysElapsed} totalDays={totalDays} />
+        </>
       )}
     </div>
   );

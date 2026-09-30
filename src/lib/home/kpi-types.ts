@@ -14,6 +14,9 @@ export interface KpiTargetInput {
   targetRevenue: number;
   targetLineRegistrations: number;
   targetSeminarParticipants: number;
+  targetSeminarRegistrations: number;
+  targetConsultationRegistrations: number;
+  targetConsultationsCompleted: number;
   targetFrontendPurchases: number;
   targetBackendPurchases: number;
   targetThreadsFollowers: number;
@@ -140,6 +143,9 @@ export function getDefaultKpiTarget(month: string): KpiTargetInput {
     targetRevenue: 0,
     targetLineRegistrations: 0,
     targetSeminarParticipants: 0,
+    targetSeminarRegistrations: 0,
+    targetConsultationRegistrations: 0,
+    targetConsultationsCompleted: 0,
     targetFrontendPurchases: 0,
     targetBackendPurchases: 0,
     targetThreadsFollowers: 0,

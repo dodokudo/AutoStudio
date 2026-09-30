@@ -1,3 +1,4 @@
+import { isMonth } from '@/lib/home/monthly-plan-types';
 import { NextRequest, NextResponse } from 'next/server';
 import { getMonthlyActuals, getDailyActuals } from '@/lib/home/monthly-actuals';
 
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 月フォーマット検証
-    if (!/^\d{4}-\d{2}$/.test(month)) {
+    if (!isMonth(month)) {
       return NextResponse.json(
         { success: false, error: 'Invalid month format. Use YYYY-MM.' },
         { status: 400 }

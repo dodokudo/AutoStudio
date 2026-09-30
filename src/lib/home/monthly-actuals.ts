@@ -1,6 +1,7 @@
 /**
  * 月次実績データ取得
  */
+import { getMonthlyPlan } from './monthly-plan';
 import { createBigQueryClient, resolveProjectId } from '../bigquery';
 import { getChargeCategories, getManualSales, type SalesCategoryId } from '@/lib/sales/categories';
 import { getAllGroups, type TransactionGroupItem } from '@/lib/sales/groups';
@@ -17,7 +18,7 @@ export interface MonthlyActuals {
   month: string; // 'YYYY-MM'
   revenue: number;
   lineRegistrations: number;
-  seminarParticipants: number;
+  seminarParticipants: number | null;
   frontendPurchases: number;
   backendPurchases: number;
 }
@@ -59,7 +60,7 @@ async function getMonthlyRevenue(month: string): Promise<number> {
 
   const [year, monthNum] = month.split('-').map(Number);
   const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
-  const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0]; // 月末日
+  const endDate = new Date(Date.UTC(year, monthNum, 0)).toISOString().split('T')[0]; // 月末日
 
   try {
     // UnivaPayの課金 + 手動売上
@@ -85,8 +86,8 @@ async function getMonthlyRevenue(month: string): Promise<number> {
     const typedRows = rows as Array<{ total_revenue: number }>;
     return Number(typedRows?.[0]?.total_revenue ?? 0);
   } catch (error) {
-    console.error('[monthly-actuals] Failed to get revenue:', error);
-    return 0;
+    console.error('[monthly-actuals] Failed to get revenue:', error instanceof Error ? error.message : 'query failed');
+    throw new Error('売上実績を取得できませんでした');
   }
 }
 
@@ -217,7 +218,7 @@ async function getMonthlyLineRegistrations(month: string): Promise<number> {
 
   const [year, monthNum] = month.split('-').map(Number);
   const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
-  const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0];
+  const endDate = new Date(Date.UTC(year, monthNum, 0)).toISOString().split('T')[0];
 
   try {
     const [rows] = await client.query({
@@ -236,45 +237,14 @@ async function getMonthlyLineRegistrations(month: string): Promise<number> {
     const typedRows = rows as Array<{ registrations: number }>;
     return Number(typedRows?.[0]?.registrations ?? 0);
   } catch (error) {
-    console.error('[monthly-actuals] Failed to get LINE registrations:', error);
-    return 0;
+    console.error('[monthly-actuals] Failed to get LINE registrations:', error instanceof Error ? error.message : 'query failed');
+    throw new Error('LINE登録実績を取得できませんでした');
   }
 }
 
-/**
- * 月次のセミナー参加数を取得（個別相談申込をセミナーとしてカウント）
- */
-async function getMonthlySeminarParticipants(month: string): Promise<number> {
-  const client = createBigQueryClient(PROJECT_ID, process.env.LSTEP_BQ_LOCATION);
-  const datasetId = process.env.LSTEP_BQ_DATASET ?? 'autostudio_lstep';
-
-  const [year, monthNum] = month.split('-').map(Number);
-  const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
-  const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0];
-
-  try {
-    // th_consultation_applied タグを持つユーザーをカウント
-    const [rows] = await client.query({
-      query: `
-        WITH latest AS (
-          SELECT MAX(snapshot_date) AS snapshot_date FROM \`${PROJECT_ID}.${datasetId}.user_core\`
-        )
-        SELECT COUNT(DISTINCT user_id) AS participants
-        FROM \`${PROJECT_ID}.${datasetId}.user_tags\`
-        WHERE snapshot_date = (SELECT snapshot_date FROM latest)
-          AND tag_name IN ('th_consultation_applied', 'consultation_applied', 'seminar_applied')
-          AND tag_added_at IS NOT NULL
-          AND DATE(TIMESTAMP(tag_added_at), 'Asia/Tokyo') BETWEEN @startDate AND @endDate
-      `,
-      params: { startDate, endDate },
-    });
-
-    const typedRows = rows as Array<{ participants: number }>;
-    return Number(typedRows?.[0]?.participants ?? 0);
-  } catch (error) {
-    console.error('[monthly-actuals] Failed to get seminar participants:', error);
-    return 0;
-  }
+/** 月次のセミナー参加実績（入力済みの月次累計） */
+async function getMonthlySeminarParticipants(month: string): Promise<number | null> {
+  return (await getMonthlyPlan(month)).activities.seminarParticipants;
 }
 
 /**
@@ -283,13 +253,13 @@ async function getMonthlySeminarParticipants(month: string): Promise<number> {
 async function getMonthlyPurchases(month: string): Promise<{ frontend: number; backend: number }> {
   const [year, monthNum] = month.split('-').map(Number);
   const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
-  const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0];
+  const endDate = new Date(Date.UTC(year, monthNum, 0)).toISOString().split('T')[0];
 
   try {
     return await getPurchaseCountsByDateRange(startDate, endDate);
   } catch (error) {
-    console.error('[monthly-actuals] Failed to get purchases:', error);
-    return { frontend: 0, backend: 0 };
+    console.error('[monthly-actuals] Failed to get purchases:', error instanceof Error ? error.message : 'query failed');
+    throw new Error('購入実績を取得できませんでした');
   }
 }
 
@@ -324,11 +294,11 @@ export async function getDailyActualsByRange(startDate: string, endDate: string)
 
   // 日付配列を生成
   const dates: string[] = [];
-  const cursor = new Date(`${startDate}T00:00:00`);
-  const last = new Date(`${endDate}T00:00:00`);
+  const cursor = new Date(`${startDate}T00:00:00Z`);
+  const last = new Date(`${endDate}T00:00:00Z`);
   while (cursor <= last) {
     dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   try {
@@ -403,7 +373,7 @@ export async function getDailyActualsByRange(startDate: string, endDate: string)
     const threadsDeltaMap = new Map<string, number>();
     let previousFollowers: number | null = null;
     for (const metric of threadsDaily) {
-      const delta = previousFollowers === null ? 0 : Math.max(0, metric.followers - previousFollowers);
+      const delta = previousFollowers === null ? 0 : metric.followers - previousFollowers;
       threadsDeltaMap.set(metric.date, delta);
       previousFollowers = metric.followers;
     }
@@ -412,7 +382,7 @@ export async function getDailyActualsByRange(startDate: string, endDate: string)
     const instagramDeltaMap = new Map<string, number>();
     let previousInstagram: number | null = null;
     for (const metric of instagramDaily) {
-      const delta = previousInstagram === null ? 0 : Math.max(0, metric.followers - previousInstagram);
+      const delta = previousInstagram === null ? 0 : metric.followers - previousInstagram;
       instagramDeltaMap.set(metric.date, delta);
       previousInstagram = metric.followers;
     }
@@ -459,24 +429,15 @@ export async function getDailyActualsByRange(startDate: string, endDate: string)
       backendPurchases: backendMap.get(date) ?? 0,
     }));
   } catch (error) {
-    console.error('[monthly-actuals] Failed to get daily actuals:', error);
-    // 空のデータを返す
-    return dates.map((date) => ({
-      date,
-      revenue: 0,
-      lineRegistrations: 0,
-      threadsFollowerDelta: 0,
-      instagramFollowerDelta: 0,
-      frontendPurchases: 0,
-      backendPurchases: 0,
-    }));
+    console.error('[monthly-actuals] Failed to get daily actuals:', error instanceof Error ? error.message : 'query failed');
+    throw new Error('日別実績を取得できませんでした');
   }
 }
 
 export async function getDailyActuals(month: string): Promise<DailyActuals[]> {
   const [year, monthNum] = month.split('-').map(Number);
   const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
-  const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0];
+  const endDate = new Date(Date.UTC(year, monthNum, 0)).toISOString().split('T')[0];
   return getDailyActualsByRange(startDate, endDate);
 }
 

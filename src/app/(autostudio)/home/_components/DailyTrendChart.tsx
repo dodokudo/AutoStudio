@@ -68,7 +68,7 @@ export function DailyTrendChart({ data }: DailyTrendChartProps) {
   const [selectedMetric, setSelectedMetric] = useState<MetricType>('line');
 
   // 今日までのデータのみフィルタ
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
   const filteredData = data.filter((d) => d.date <= today);
 
   // チャートデータを整形

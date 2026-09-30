@@ -16,8 +16,14 @@ const TABLE = 'kpi_targets';
 // ============================================================
 
 /** テーブル存在確認・作成 */
+let tableReady: Promise<void> | undefined;
 export async function ensureKpiTargetsTable(): Promise<void> {
-  const client = createBigQueryClient(PROJECT_ID);
+  tableReady ??= initializeKpiTargetsTable().catch(error => { tableReady = undefined; throw error; });
+  return tableReady;
+}
+
+async function initializeKpiTargetsTable(): Promise<void> {
+  const client = createBigQueryClient(PROJECT_ID, 'US');
   const dataset = client.dataset(DATASET);
 
   // データセット作成
@@ -40,6 +46,9 @@ export async function ensureKpiTargetsTable(): Promise<void> {
     { name: 'target_backend_purchases', type: 'INT64', mode: 'REQUIRED' },
     { name: 'target_threads_followers', type: 'INT64', mode: 'REQUIRED' },
     { name: 'target_instagram_followers', type: 'INT64', mode: 'REQUIRED' },
+    { name: 'target_seminar_registrations', type: 'INT64', mode: 'NULLABLE' },
+    { name: 'target_consultation_registrations', type: 'INT64', mode: 'NULLABLE' },
+    { name: 'target_consultations_completed', type: 'INT64', mode: 'NULLABLE' },
     { name: 'created_at', type: 'TIMESTAMP', mode: 'REQUIRED' },
     { name: 'updated_at', type: 'TIMESTAMP', mode: 'REQUIRED' },
   ];
@@ -52,16 +61,18 @@ export async function ensureKpiTargetsTable(): Promise<void> {
   }
 
   await client.query({
-    query: `ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\` ADD COLUMN IF NOT EXISTS target_threads_followers INT64`,
-  });
-  await client.query({
-    query: `ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\` ADD COLUMN IF NOT EXISTS target_instagram_followers INT64`,
+    query: `ALTER TABLE \`${PROJECT_ID}.${DATASET}.${TABLE}\`
+      ADD COLUMN IF NOT EXISTS target_seminar_registrations INT64,
+      ADD COLUMN IF NOT EXISTS target_consultation_registrations INT64,
+      ADD COLUMN IF NOT EXISTS target_consultations_completed INT64,
+      ADD COLUMN IF NOT EXISTS target_threads_followers INT64,
+      ADD COLUMN IF NOT EXISTS target_instagram_followers INT64`,
   });
 }
 
 /** KPI目標を取得 */
 export async function getKpiTarget(month: string): Promise<KpiTarget | null> {
-  const client = createBigQueryClient(PROJECT_ID);
+  const client = createBigQueryClient(PROJECT_ID, 'US');
 
   const [rows] = await client.query({
     query: `
@@ -69,6 +80,9 @@ export async function getKpiTarget(month: string): Promise<KpiTarget | null> {
         id,
         target_month,
         working_days,
+        target_seminar_registrations,
+        target_consultation_registrations,
+        target_consultations_completed,
         target_revenue,
         target_line_registrations,
         target_seminar_participants,
@@ -92,6 +106,9 @@ export async function getKpiTarget(month: string): Promise<KpiTarget | null> {
     id: String(row.id),
     targetMonth: String(row.target_month),
     workingDays: Number(row.working_days),
+    targetSeminarRegistrations: Number(row.target_seminar_registrations ?? 0),
+    targetConsultationRegistrations: Number(row.target_consultation_registrations ?? 0),
+    targetConsultationsCompleted: Number(row.target_consultations_completed ?? 0),
     targetRevenue: Number(row.target_revenue),
     targetLineRegistrations: Number(row.target_line_registrations),
     targetSeminarParticipants: Number(row.target_seminar_participants),
@@ -108,7 +125,7 @@ export async function getKpiTarget(month: string): Promise<KpiTarget | null> {
 export async function saveKpiTarget(input: KpiTargetInput): Promise<KpiTarget> {
   await ensureKpiTargetsTable();
 
-  const client = createBigQueryClient(PROJECT_ID);
+  const client = createBigQueryClient(PROJECT_ID, 'US');
   const id = `kpi_${input.targetMonth}_${Date.now()}`;
 
   await client.query({
@@ -119,6 +136,9 @@ export async function saveKpiTarget(input: KpiTargetInput): Promise<KpiTarget> {
           @id as id,
           @targetMonth as target_month,
           @workingDays as working_days,
+          @targetSeminarRegistrations as target_seminar_registrations,
+          @targetConsultationRegistrations as target_consultation_registrations,
+          @targetConsultationsCompleted as target_consultations_completed,
           @targetRevenue as target_revenue,
           @targetLineRegistrations as target_line_registrations,
           @targetSeminarParticipants as target_seminar_participants,
@@ -133,6 +153,9 @@ export async function saveKpiTarget(input: KpiTargetInput): Promise<KpiTarget> {
       WHEN MATCHED THEN
         UPDATE SET
           working_days = S.working_days,
+          target_seminar_registrations = S.target_seminar_registrations,
+          target_consultation_registrations = S.target_consultation_registrations,
+          target_consultations_completed = S.target_consultations_completed,
           target_revenue = S.target_revenue,
           target_line_registrations = S.target_line_registrations,
           target_seminar_participants = S.target_seminar_participants,
@@ -142,13 +165,16 @@ export async function saveKpiTarget(input: KpiTargetInput): Promise<KpiTarget> {
           target_instagram_followers = S.target_instagram_followers,
           updated_at = S.updated_at
       WHEN NOT MATCHED THEN
-        INSERT (id, target_month, working_days, target_revenue, target_line_registrations, target_seminar_participants, target_frontend_purchases, target_backend_purchases, target_threads_followers, target_instagram_followers, created_at, updated_at)
-        VALUES (S.id, S.target_month, S.working_days, S.target_revenue, S.target_line_registrations, S.target_seminar_participants, S.target_frontend_purchases, S.target_backend_purchases, S.target_threads_followers, S.target_instagram_followers, S.created_at, S.updated_at)
+        INSERT (target_consultation_registrations, target_consultations_completed, target_seminar_registrations, id, target_month, working_days, target_revenue, target_line_registrations, target_seminar_participants, target_frontend_purchases, target_backend_purchases, target_threads_followers, target_instagram_followers, created_at, updated_at)
+        VALUES (S.target_consultation_registrations, S.target_consultations_completed, S.target_seminar_registrations, S.id, S.target_month, S.working_days, S.target_revenue, S.target_line_registrations, S.target_seminar_participants, S.target_frontend_purchases, S.target_backend_purchases, S.target_threads_followers, S.target_instagram_followers, S.created_at, S.updated_at)
     `,
     params: {
       id,
       targetMonth: input.targetMonth,
       workingDays: input.workingDays,
+      targetSeminarRegistrations: input.targetSeminarRegistrations ?? 0,
+      targetConsultationRegistrations: input.targetConsultationRegistrations ?? 0,
+      targetConsultationsCompleted: input.targetConsultationsCompleted ?? 0,
       targetRevenue: input.targetRevenue,
       targetLineRegistrations: input.targetLineRegistrations,
       targetSeminarParticipants: input.targetSeminarParticipants,

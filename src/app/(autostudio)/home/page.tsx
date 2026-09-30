@@ -3,7 +3,7 @@ import { Banner } from '@/components/ui/banner';
 import { getHomeDashboardData } from '@/lib/home/dashboard';
 import { getKpiTarget } from '@/lib/home/kpi-targets';
 import { HomeDashboardClient } from './_components/HomeDashboardClient';
-import { resolveDateRange, isUnifiedRangePreset, formatDateInput } from '@/lib/dateRangePresets';
+import { isMonth, monthDates } from '@/lib/home/monthly-plan-types';
 
 const getCachedHomeDashboardData = unstable_cache(
   async (startDateISO: string, endDateISO: string, rangeValue: string) => {
@@ -17,57 +17,34 @@ const getCachedHomeDashboardData = unstable_cache(
   { revalidate: 1800 }
 );
 
-const getCachedKpiTarget = unstable_cache(
-  async (month: string) => {
-    return getKpiTarget(month).catch(() => null);
-  },
-  ['kpi-target'],
-  { revalidate: 1800 }
-);
-
-function getCurrentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
 export default async function HomePage({
   searchParams,
 }: {
   searchParams?: Promise<Record<string, string | string[]>>;
 }) {
   const params = await searchParams;
-  const rangeParam = typeof params?.range === 'string' ? params.range : undefined;
-  const startParam = typeof params?.start === 'string' ? params.start : undefined;
-  const endParam = typeof params?.end === 'string' ? params.end : undefined;
-
-  const selectedValue = isUnifiedRangePreset(rangeParam) ? rangeParam : 'this-month';
-  const resolvedRange = resolveDateRange(selectedValue, startParam, endParam, { includeToday: true });
-  const rangeValueForUi = resolvedRange.preset;
-  const customStart = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.start) : startParam;
-  const customEnd = rangeValueForUi === 'custom' ? formatDateInput(resolvedRange.end) : endParam;
-
-  const currentMonth = getCurrentMonth();
+  const monthParam = params?.month;
+  const currentMonth = isMonth(monthParam) ? monthParam : new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit' }).format(new Date());
+  const { start, end } = monthDates(currentMonth);
 
   try {
     // 並列でデータを取得
     const [dashboardData, kpiTarget] = await Promise.all([
       getCachedHomeDashboardData(
-        resolvedRange.start.toISOString(),
-        resolvedRange.end.toISOString(),
-        resolvedRange.preset,
+        `${start}T00:00:00`,
+        `${end}T23:59:59`,
+        'custom',
       ),
-      getCachedKpiTarget(currentMonth),
+      getKpiTarget(currentMonth),
     ]);
 
     return (
       <div className="section-stack">
         <HomeDashboardClient
+          key={currentMonth}
           initialDashboardData={dashboardData}
           initialKpiTarget={kpiTarget}
           currentMonth={currentMonth}
-          selectedRange={rangeValueForUi}
-          customStart={customStart}
-          customEnd={customEnd}
         />
       </div>
     );

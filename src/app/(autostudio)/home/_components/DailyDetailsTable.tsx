@@ -23,12 +23,7 @@ interface DailyDetailsTableProps {
   kpiTarget?: KpiTarget | null;
   daysElapsed: number;
   totalDays: number;
-  followerTotals: {
-    threadsCurrent: number;
-    instagramCurrent: number;
-    threadsStart: number;
-    instagramStart: number;
-  };
+
 }
 
 // ============================================================
@@ -64,9 +59,9 @@ function isWeekend(dateStr: string): boolean {
 // コンポーネント
 // ============================================================
 
-export function DailyDetailsTable({ data, kpiTarget, daysElapsed, totalDays, followerTotals }: DailyDetailsTableProps) {
+export function DailyDetailsTable({ data, kpiTarget }: DailyDetailsTableProps) {
   // 今日までのデータのみフィルタ
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
   const filteredData = useMemo(() => {
     return data.filter((d) => d.date <= today);
   }, [data, today]);
@@ -112,7 +107,7 @@ export function DailyDetailsTable({ data, kpiTarget, daysElapsed, totalDays, fol
   }, [totals, kpiTarget]);
 
 
-  if (data.length === 0) {
+  if (filteredData.length === 0) {
     return (
       <Card className="p-6">
         <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">

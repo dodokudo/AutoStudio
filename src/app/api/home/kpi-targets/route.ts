@@ -1,3 +1,5 @@
+import { revalidatePath } from 'next/cache';
+import { isMonth } from '@/lib/home/monthly-plan-types';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getKpiTarget,
@@ -6,7 +8,7 @@ import {
   type KpiTargetInput,
 } from '@/lib/home/kpi-targets';
 
-export const revalidate = 300;
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/home/kpi-targets?month=YYYY-MM
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 月フォーマット検証
-    if (!/^\d{4}-\d{2}$/.test(month)) {
+    if (!isMonth(month)) {
       return NextResponse.json(
         { success: false, error: 'Invalid month format. Use YYYY-MM.' },
         { status: 400 }
@@ -81,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 月フォーマット検証
-    if (!/^\d{4}-\d{2}$/.test(body.targetMonth)) {
+    if (!isMonth(body.targetMonth)) {
       return NextResponse.json(
         { success: false, error: 'Invalid targetMonth format. Use YYYY-MM.' },
         { status: 400 }
@@ -91,6 +93,9 @@ export async function POST(request: NextRequest) {
     const input: KpiTargetInput = {
       targetMonth: body.targetMonth,
       workingDays: Number(body.workingDays),
+      targetSeminarRegistrations: Number(body.targetSeminarRegistrations ?? 0),
+      targetConsultationRegistrations: Number(body.targetConsultationRegistrations ?? 0),
+      targetConsultationsCompleted: Number(body.targetConsultationsCompleted ?? 0),
       targetRevenue: Number(body.targetRevenue),
       targetLineRegistrations: Number(body.targetLineRegistrations),
       targetSeminarParticipants: Number(body.targetSeminarParticipants),
@@ -99,6 +104,10 @@ export async function POST(request: NextRequest) {
       targetThreadsFollowers: Number(body.targetThreadsFollowers),
       targetInstagramFollowers: Number(body.targetInstagramFollowers),
     };
+
+    if (Object.entries(input).some(([key, value]) => key !== 'targetMonth' && (!Number.isSafeInteger(value) || Number(value) < 0))) {
+      return NextResponse.json({ success: false, error: '目標は0以上の整数で入力してください' }, { status: 400 });
+    }
 
     // 数値バリデーション
     if (input.workingDays < 1 || input.workingDays > 31) {
@@ -109,6 +118,7 @@ export async function POST(request: NextRequest) {
     }
 
     const saved = await saveKpiTarget(input);
+    revalidatePath('/home');
 
     return NextResponse.json({
       success: true,
