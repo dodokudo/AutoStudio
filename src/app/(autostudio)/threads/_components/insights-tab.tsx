@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { PostInsight } from '@/lib/threadsInsightsData';
+import { compareNullableDescending, followConversionRate, summarizeTreeFollows, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
 import type { ThreadsAccountKey, ThreadsConcreteAccountKey } from '@/lib/threadsAccounts';
 import { Card } from '@/components/ui/card';
 import { InsightsCard } from './insights-card';
@@ -75,7 +76,7 @@ interface InsightsTabProps {
   accountKey: ThreadsAccountKey;
 }
 
-type TopContentSort = 'postedAt' | 'views' | 'likes';
+type TopContentSort = 'postedAt' | 'views' | 'likes' | 'follows' | 'profileVisits' | 'followConversion' | 'treeFollows';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export function InsightsTab({
@@ -95,6 +96,7 @@ export function InsightsTab({
   const [showDailyTable, setShowDailyTable] = useState(true);
   const [showAccountOverview, setShowAccountOverview] = useState(true);
   const [posts, setPosts] = useState<PostInsight[]>(initialPosts ?? []);
+  const [supplementalStatus, setSupplementalStatus] = useState<SupplementalStatus>('not_configured');
   const [postsLoading, setPostsLoading] = useState(!initialPosts || initialPosts.length === 0);
   const numberFormatter = new Intl.NumberFormat('ja-JP');
   const dateFormatter = new Intl.DateTimeFormat('ja-JP', { month: '2-digit', day: '2-digit' });
@@ -102,12 +104,8 @@ export function InsightsTab({
 
   // 投稿データを遅延読み込み
   useEffect(() => {
-    if (initialPosts && initialPosts.length > 0) {
-      setPosts(initialPosts);
-      setPostsLoading(false);
-      return;
-    }
-
+    const controller = new AbortController();
+    setPostsLoading(true);
     const fetchPosts = async () => {
       try {
         const presetValue = isUnifiedRangePreset(selectedRangeValue) ? selectedRangeValue : '7d';
@@ -116,19 +114,23 @@ export function InsightsTab({
         const endDate = formatDateInput(end);
 
         const params = new URLSearchParams({ startDate, endDate, account: accountKey });
-        const res = await fetch(`/api/threads/posts?${params.toString()}`);
+        const res = await fetch(`/api/threads/posts?${params.toString()}`, { signal: controller.signal });
         if (!res.ok) throw new Error('Failed to fetch posts');
         const data = await res.json();
         setPosts(data.posts ?? []);
+        setSupplementalStatus(data.supplementalStatus ?? 'not_configured');
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error('[InsightsTab] Failed to load posts:', error);
         setPosts([]);
+        setSupplementalStatus('unavailable');
       } finally {
-        setPostsLoading(false);
+        if (!controller.signal.aborted) setPostsLoading(false);
       }
     };
 
     fetchPosts();
+    return () => controller.abort();
   }, [initialPosts, selectedRangeValue, customStart, customEnd, accountKey]);
 
   const chartData = (performanceSeries ?? []).map((item) => {
@@ -209,10 +211,23 @@ export function InsightsTab({
       permalink: post.permalink ?? null,
       accountKey: (post.accountKey === 'sub' ? 'sub' : 'main') as ThreadsConcreteAccountKey,
       commentData: post.commentData ?? [],
+      supplementalInsights: post.supplementalInsights ?? null,
+      tree: summarizeTreeFollows([
+        { id: post.postedThreadId, insights: post.supplementalInsights },
+        ...post.commentData.map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
+      ]),
     }));
 
     entries.sort((a, b) => {
       switch (topContentSort) {
+        case 'treeFollows':
+          return compareNullableDescending(a.tree.complete ? a.tree.follows : null, b.tree.complete ? b.tree.follows : null);
+        case 'follows':
+          return compareNullableDescending(a.supplementalInsights?.follows, b.supplementalInsights?.follows);
+        case 'profileVisits':
+          return compareNullableDescending(a.supplementalInsights?.profileVisits, b.supplementalInsights?.profileVisits);
+        case 'followConversion':
+          return compareNullableDescending(followConversionRate(a.supplementalInsights), followConversionRate(b.supplementalInsights));
         case 'views':
           return (b.views ?? 0) - (a.views ?? 0);
         case 'likes':
@@ -597,6 +612,7 @@ export function InsightsTab({
             sortOption={topContentSort}
             onSortChange={setTopContentSort}
             accountKey={accountKey}
+            supplementalStatus={supplementalStatus}
           />
         </>
       )}

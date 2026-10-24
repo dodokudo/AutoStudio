@@ -131,7 +131,8 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   }
 
   // Public paths - skip auth
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  // This exact route authenticates its own dedicated ingestion key.
+  if (pathname === '/api/threads/insights/import' || PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next();
   }
 

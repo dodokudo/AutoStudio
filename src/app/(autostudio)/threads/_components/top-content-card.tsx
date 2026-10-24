@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
+import { followConversionRate, summarizeTreeFollows, type SupplementalPostInsights, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
+import { SupplementalMetrics } from './supplemental-metrics';
 import {
   THREADS_ACCOUNTS,
   getThreadsAccount,
@@ -10,9 +12,11 @@ import {
   type ThreadsConcreteAccountKey,
 } from '@/lib/threadsAccounts';
 
-type SortOption = 'postedAt' | 'views' | 'likes';
+type SortOption = 'postedAt' | 'views' | 'likes' | 'follows' | 'profileVisits' | 'followConversion' | 'treeFollows';
 
 interface PostCommentData {
+  supplementalInsights?: SupplementalPostInsights | null;
+  permalink?: string | null;
   commentId: string;
   parentPostId: string;
   text: string;
@@ -31,6 +35,7 @@ type TopContentPost = {
   permalink?: string | null;
   accountKey?: ThreadsConcreteAccountKey;
   commentData?: PostCommentData[];
+  supplementalInsights?: SupplementalPostInsights | null;
 };
 
 interface TopContentCardProps {
@@ -38,6 +43,7 @@ interface TopContentCardProps {
   sortOption: SortOption;
   onSortChange: (option: SortOption) => void;
   accountKey: ThreadsAccountKey;
+  supplementalStatus?: SupplementalStatus;
 }
 
 const COMMENT_SLOT_LIMIT = 7;
@@ -153,12 +159,13 @@ function truncateText(text: string, maxLength = 80) {
   return `${cleaned.slice(0, maxLength)}…`;
 }
 
-function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
+function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalStatus }: {
   post: TopContentCardProps['posts'][number];
   isExpanded: boolean;
   onToggle: () => void;
   rank?: number;
   onReserve: (post: TopContentPost) => void;
+  supplementalStatus: SupplementalStatus;
 }) {
   const isTop10 = rank !== undefined && rank <= 10;
   const sourceAccount = post.accountKey ? getThreadsAccount(post.accountKey) : null;
@@ -167,6 +174,12 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
   const hasComments = commentData.length > 0;
   const { transitions: transitionRates, overallRate } = calculateTransitionRates(post.views, commentData);
   const eligibility = useMemo(() => evaluateEligibility(post), [post]);
+  const supplemental = post.supplementalInsights;
+  const tree = summarizeTreeFollows([
+    { id: post.id, insights: supplemental },
+    ...commentData.map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
+  ]);
+  const missingLabel = post.accountKey === 'sub' ? '対象外' : supplementalStatus === 'unavailable' ? '確認できません' : '未取得';
 
   return (
     <div
@@ -243,6 +256,14 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
         </div>
       </div>
 
+      <SupplementalMetrics insights={supplemental} missingLabel={missingLabel} expanded={isExpanded} />
+      {hasComments && (
+        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]" title="登録済みの親投稿・本人返信の各取得時点の累計を合算。アカウントの純増や重複排除した人数ではありません。">
+          ツリー内フォロー数 {tree.complete ? '合計' : '取得済み分'} <strong>{tree.follows === null ? missingLabel : tree.follows.toLocaleString()}</strong>
+          <span className="ml-2 text-[10px]">登録済み{tree.knownNodes}件中{tree.measuredNodes}件取得</span>
+        </p>
+      )}
+
       {/* コメント欄遷移率表示 */}
       {transitionRates.length > 0 && (
         <div className="mt-2 rounded-md bg-gradient-to-r from-purple-50 to-indigo-50 p-2 border border-purple-100">
@@ -307,7 +328,9 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
               <div className="flex items-center gap-2 text-[10px] text-gray-400 mb-1">
                 <span className="font-medium text-purple-600">コメント{idx + 1}</span>
                 <span>閲覧 {comment.views.toLocaleString()}</span>
+                {comment.permalink && <a href={comment.permalink} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()} className="text-[color:var(--color-accent)]">返信を開く</a>}
               </div>
+              <SupplementalMetrics insights={comment.supplementalInsights} missingLabel={missingLabel} expanded />
               <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
             </div>
           ))}
@@ -318,7 +341,7 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve }: {
   );
 }
 
-export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: TopContentCardProps) {
+export function TopContentCard({ posts, sortOption, onSortChange, accountKey, supplementalStatus = 'not_configured' }: TopContentCardProps) {
   const [showAll, setShowAll] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [reserveTarget, setReserveTarget] = useState<TopContentPost | null>(null);
@@ -337,6 +360,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: 
 
   const displayedPosts = showAll ? posts : posts.slice(0, INITIAL_DISPLAY_COUNT);
   const hasMore = posts.length > INITIAL_DISPLAY_COUNT;
+  const measuredCount = posts.filter((post) => post.supplementalInsights?.follows != null).length;
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -432,15 +456,26 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: 
           </p>
         </div>
         <select
+          aria-label="投稿の並べ替え"
           value={sortOption}
           onChange={(event) => onSortChange(event.target.value as SortOption)}
           className="h-9 w-40 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
         >
           <option value="views">閲覧数</option>
           <option value="likes">いいね数</option>
+          <option value="follows">フォロー獲得数</option>
+          <option value="treeFollows">ツリー内フォロー合計</option>
+          <option value="profileVisits">プロフィール訪問数</option>
+          <option value="followConversion">フォロー転換率</option>
           <option value="postedAt">投稿日</option>
         </select>
       </header>
+      <p className="mb-3 text-xs text-[color:var(--color-text-muted)]">
+        フォロー獲得・プロフィール訪問は各取得時点の累計です。転換率はフォロー獲得数 ÷ プロフィール訪問数。
+        {accountKey !== 'sub' && ` フォロー数取得済み ${measuredCount}/${posts.filter((post) => post.accountKey !== 'sub').length}件。`}
+        {supplementalStatus === 'unavailable' ? '追加指標の読み込みに失敗しました。再読み込みしてください。' :
+          supplementalStatus === 'not_configured' ? '追加指標は連携準備中です。' : '未取得の投稿は順位比較の対象外です。'}
+      </p>
       {successMessage && (
         <div className="mb-3 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
           {successMessage}
@@ -459,8 +494,18 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey }: 
                 post={post}
                 isExpanded={expandedIds.has(post.id)}
                 onToggle={() => toggleExpanded(post.id)}
-                rank={index + 1}
+                rank={
+                  (sortOption === 'treeFollows' && !summarizeTreeFollows([
+                    { id: post.id, insights: post.supplementalInsights },
+                    ...(post.commentData ?? []).map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
+                  ]).complete) ||
+                  (sortOption === 'follows' && post.supplementalInsights?.follows == null) ||
+                  (sortOption === 'profileVisits' && post.supplementalInsights?.profileVisits == null) ||
+                  (sortOption === 'followConversion' && followConversionRate(post.supplementalInsights) === null)
+                    ? undefined : index + 1
+                }
                 onReserve={openReserveModal}
+                supplementalStatus={supplementalStatus}
               />
             ))}
           </div>

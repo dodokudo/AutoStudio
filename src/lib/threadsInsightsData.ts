@@ -2,6 +2,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import { createBigQueryClient, resolveProjectId } from './bigquery';
 import type { ThreadsAccountKey } from './threadsAccounts';
 import type { ThreadInsights } from './threadsApi';
+import type { SupplementalPostInsights } from './threadsSupplementalMetrics';
 
 const DATASET = 'autostudio_threads';
 const PROJECT_ID = resolveProjectId();
@@ -9,6 +10,8 @@ const POSTS_LIMIT = 200;
 const CACHE_TTL_MS = 1000 * 60 * 30;
 
 export interface PostComment {
+  supplementalInsights?: SupplementalPostInsights | null;
+  permalink?: string | null;
   commentId: string;
   parentPostId: string;
   text: string;
@@ -18,6 +21,7 @@ export interface PostComment {
 }
 
 export interface PostInsight {
+  supplementalInsights?: SupplementalPostInsights | null;
   planId: string;
   postedThreadId: string;
   permalink: string | null;
@@ -220,6 +224,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
             parent_post_id,
             text,
             timestamp,
+            permalink,
             depth,
             views
           FROM \`${PROJECT_ID}.${DATASET}.threads_comments\`
@@ -239,6 +244,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
           parentPostId,
           text: toPlain(row.text),
           timestamp: normalizeTimestamp(row.timestamp),
+          permalink: toPlain(row.permalink) || null,
           depth: Number(row.depth ?? 0),
           views: Number(row.views ?? 0),
         };

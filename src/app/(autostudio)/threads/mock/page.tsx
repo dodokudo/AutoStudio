@@ -225,7 +225,7 @@ const COMPETITOR_PROFILES = [
 
 export default function ThreadsUiRefreshMock() {
   const [activeTab, setActiveTab] = useState<TabKey>('post');
-  const [topContentSort, setTopContentSort] = useState<'postedAt' | 'views' | 'likes'>('views');
+  const [topContentSort, setTopContentSort] = useState<'postedAt' | 'views' | 'likes' | 'follows' | 'profileVisits' | 'followConversion' | 'treeFollows'>('views');
   const [selectedCompetitorId, setSelectedCompetitorId] = useState<string>(COMPETITOR_PROFILES[0].id);
 
   const activeCompetitor = useMemo(
