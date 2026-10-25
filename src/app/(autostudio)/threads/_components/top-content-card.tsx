@@ -180,6 +180,17 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
     ...commentData.map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
   ]);
   const missingLabel = post.accountKey === 'sub' ? '対象外' : supplementalStatus === 'unavailable' ? '確認できません' : '未取得';
+  const metricsSummary = (
+    <div>
+      <SupplementalMetrics insights={supplemental} missingLabel={missingLabel} expanded={isExpanded} embedded={!isExpanded && transitionRates.length > 0} />
+      {hasComments && (
+        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]" title="登録済みの親投稿・本人返信の累計を合算。アカウントの純増や重複排除した人数ではありません。">
+          ツリー内フォロー数 {tree.complete ? '合計' : '取得済み分'} <strong>{tree.follows === null ? missingLabel : tree.follows.toLocaleString()}</strong>
+          <span className="ml-2 text-[10px]">登録済み{tree.knownNodes}件中{tree.measuredNodes}件取得</span>
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -256,14 +267,6 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
         </div>
       </div>
 
-      <SupplementalMetrics insights={supplemental} missingLabel={missingLabel} expanded={isExpanded} />
-      {hasComments && (
-        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]" title="登録済みの親投稿・本人返信の各取得時点の累計を合算。アカウントの純増や重複排除した人数ではありません。">
-          ツリー内フォロー数 {tree.complete ? '合計' : '取得済み分'} <strong>{tree.follows === null ? missingLabel : tree.follows.toLocaleString()}</strong>
-          <span className="ml-2 text-[10px]">登録済み{tree.knownNodes}件中{tree.measuredNodes}件取得</span>
-        </p>
-      )}
-
       {/* コメント欄遷移率表示 */}
       {transitionRates.length > 0 && (
         <div className="mt-2 rounded-md bg-gradient-to-r from-purple-50 to-indigo-50 p-2 border border-purple-100">
@@ -309,12 +312,14 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
               </span>
             </div>
           )}
+          {!isExpanded && metricsSummary}
         </div>
       )}
 
       <p className="mt-2 text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
         {isExpanded ? cleanContent(post.content) : truncateText(post.content)}
       </p>
+      {(isExpanded || transitionRates.length === 0) && metricsSummary}
 
       {/* コメント本文（展開時のみ表示） */}
       {isExpanded && hasComments && (
@@ -330,8 +335,8 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
                 <span>閲覧 {comment.views.toLocaleString()}</span>
                 {comment.permalink && <a href={comment.permalink} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()} className="text-[color:var(--color-accent)]">返信を開く</a>}
               </div>
-              <SupplementalMetrics insights={comment.supplementalInsights} missingLabel={missingLabel} expanded />
               <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
+              <SupplementalMetrics insights={comment.supplementalInsights} missingLabel={missingLabel} expanded />
             </div>
           ))}
         </div>
