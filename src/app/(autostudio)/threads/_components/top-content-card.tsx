@@ -230,7 +230,6 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
         </div>
         <div className="flex items-center gap-3">
           <span>閲覧 {post.views.toLocaleString()}</span>
-          <span>いいね {post.likes.toLocaleString()}</span>
           {post.permalink ? (
             <a
               href={post.permalink}
