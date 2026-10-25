@@ -12,7 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { PostInsight } from '@/lib/threadsInsightsData';
-import { compareNullableDescending, summarizeTreeInsights, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
+import { compareNullableDescending, summarizeTreeInsights, treeInsightSortValue, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
 import type { ThreadsAccountKey, ThreadsConcreteAccountKey } from '@/lib/threadsAccounts';
 import { Card } from '@/components/ui/card';
 import { InsightsCard } from './insights-card';
@@ -222,12 +222,9 @@ export function InsightsTab({
       switch (topContentSort) {
         case 'treeFollows':
         case 'follows':
-          return compareNullableDescending(a.tree.followsComplete ? a.tree.follows : null, b.tree.followsComplete ? b.tree.follows : null);
         case 'profileVisits':
-          return compareNullableDescending(a.tree.profileVisitsComplete ? a.tree.profileVisits : null, b.tree.profileVisitsComplete ? b.tree.profileVisits : null);
         case 'followConversion':
-          return compareNullableDescending(a.tree.followsComplete && a.tree.profileVisitsComplete ? a.tree.conversionRate : null,
-            b.tree.followsComplete && b.tree.profileVisitsComplete ? b.tree.conversionRate : null);
+          return compareNullableDescending(treeInsightSortValue(a.tree, topContentSort), treeInsightSortValue(b.tree, topContentSort));
         case 'views':
           return (b.views ?? 0) - (a.views ?? 0);
         case 'likes':

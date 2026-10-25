@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   compareNullableDescending, followConversionRate, normalizeThreadsPostUrl, matchSupplementalPost, summarizeTreeFollows,
-  validateSupplementalBatch, summarizeTreeInsights,
+  validateSupplementalBatch, summarizeTreeInsights, treeInsightSortValue,
 } from './threadsSupplementalMetrics';
 
 const sample = { snapshot_at: '2026-10-24T00:00:00+09:00', post_url: 'https://www.threads.com/@kudooo_ai/post/DeOpK-YERN9', follows: 0 };
@@ -35,6 +35,23 @@ test('tree conversions use summed counts, deduplicate IDs and never divide incom
   assert.equal(summarizeTreeInsights([node('1', 0, 0)]).conversionRate, null);
   assert.equal(summarizeTreeInsights([{ id: '1' }]).follows, null);
   assert.equal(summarizeTreeInsights([]).followsComplete, false);
+});
+
+test('ranking follows displayed values for complete and partial trees, with unknowns last', () => {
+  const tree = (id: string, follows: number | null, profileVisits: number | null, partial = false) => ({
+    id, summary: summarizeTreeInsights([
+      { id, insights: { follows, profileVisits, views: null, snapshotAt: sample.snapshot_at } },
+      ...(partial ? [{ id: `${id}-missing` }] : []),
+    ]),
+  });
+  const rows = [tree('complete', 38, 2701), tree('partial', 50, 3000, true), tree('zero', 0, 100), tree('unknown', null, null), tree('mismatched', 1, null)];
+  for (const metric of ['follows', 'profileVisits', 'followConversion', 'treeFollows'] as const) {
+    const sorted = [...rows].sort((a, b) => compareNullableDescending(treeInsightSortValue(a.summary, metric), treeInsightSortValue(b.summary, metric)));
+    assert.equal(sorted[0].id, 'partial');
+    assert.equal(sorted[1].id, 'complete');
+  }
+  const rates = rows.map((row) => treeInsightSortValue(row.summary, 'followConversion')).sort(compareNullableDescending);
+  assert.deepEqual(rates, [50 / 3000 * 100, 38 / 2701 * 100, 0, null, null]);
 });
 
 test('normalizes legacy domains, query strings and trailing slashes', () => {

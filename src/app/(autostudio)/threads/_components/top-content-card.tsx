@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
-import { summarizeTreeInsights, type SupplementalPostInsights, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
+import { summarizeTreeInsights, treeInsightSortValue, type SupplementalPostInsights, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
 import { SupplementalMetrics } from './supplemental-metrics';
 import {
   THREADS_ACCOUNTS,
@@ -473,7 +473,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
       <p className="mb-3 text-xs text-[color:var(--color-text-muted)]">
         フォロー獲得・プロフィール訪問はツリー全体の累計です。転換率は合計フォロー数 ÷ 合計プロフィール訪問数。
         {supplementalStatus === 'unavailable' ? '追加指標の読み込みに失敗しました。再読み込みしてください。' :
-          supplementalStatus === 'not_configured' ? '追加指標は連携準備中です。' : '未取得を含む指標は順位比較の対象外です。'}
+          supplementalStatus === 'not_configured' ? '追加指標は連携準備中です。' : '表示中の数値で並べ替え、未取得・算出不可は末尾に表示します。'}
       </p>
       {successMessage && (
         <div className="mb-3 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
@@ -499,9 +499,8 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
                   isExpanded={expandedIds.has(post.id)}
                   onToggle={() => toggleExpanded(post.id)}
                   rank={
-                    ((sortOption === 'follows' || sortOption === 'treeFollows') && !tree.followsComplete) ||
-                    (sortOption === 'profileVisits' && !tree.profileVisitsComplete) ||
-                    (sortOption === 'followConversion' && (!tree.followsComplete || !tree.profileVisitsComplete || tree.conversionRate === null))
+                    (sortOption === 'follows' || sortOption === 'treeFollows' || sortOption === 'profileVisits' || sortOption === 'followConversion') &&
+                    treeInsightSortValue(tree, sortOption) === null
                       ? undefined : index + 1
                   }
                   onReserve={openReserveModal}

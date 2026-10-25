@@ -80,6 +80,15 @@ export function summarizeTreeInsights(nodes: Array<{ id: string; insights?: Supp
   };
 }
 
+export function treeInsightSortValue(
+  tree: ReturnType<typeof summarizeTreeInsights>,
+  metric: 'follows' | 'treeFollows' | 'profileVisits' | 'followConversion',
+): number | null {
+  // Rank the same observed values shown in the card, including partial trees.
+  if (metric === 'followConversion') return tree.conversionRate;
+  return metric === 'profileVisits' ? tree.profileVisits : tree.follows;
+}
+
 export type SupplementalStatus = 'ready' | 'not_configured' | 'unavailable';
 
 export class SupplementalValidationError extends Error {}
