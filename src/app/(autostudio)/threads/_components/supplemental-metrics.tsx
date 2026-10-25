@@ -31,7 +31,7 @@ export function SupplementalMetrics({ insights, missingLabel, expanded = false, 
   ];
   return (
     <div className={embedded
-      ? 'mt-2 border-t border-purple-200 pt-2 text-xs'
+      ? 'min-w-0 text-xs'
       : 'mt-2 rounded-md bg-[color:var(--color-surface-muted)] px-3 py-2 text-xs'}>
       <dl className={expanded ? 'grid grid-cols-[repeat(auto-fit,minmax(100px,1fr))] gap-3' : 'flex flex-wrap gap-x-4 gap-y-2'}>
         {metrics.map(({ label, value }) => (
@@ -41,6 +41,19 @@ export function SupplementalMetrics({ insights, missingLabel, expanded = false, 
           </div>
         ))}
       </dl>
+      {expanded && (
+        <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-2 border-t border-[color:var(--color-border)] pt-2">
+          {[
+            { label: 'フォロワーからの閲覧', value: insights?.metrics?.views_from_followers },
+            { label: 'フォロワー外からの閲覧', value: insights?.metrics?.views_from_non_followers },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex items-baseline gap-x-2">
+              <dt className="text-[color:var(--color-text-muted)] whitespace-nowrap">{label}</dt>
+              <dd className="font-semibold whitespace-nowrap">{count(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {partial && <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">取得済み分</p>}
     </div>
   );

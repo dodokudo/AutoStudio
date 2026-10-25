@@ -293,15 +293,17 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
             })}
           </div>
           {/* メイン→最終コメント欄の全体遷移率 */}
-          {overallRate !== null && transitionRates.length > 1 && (
-            <div className="mt-1 pt-1 border-t border-purple-200 flex items-center gap-1 text-[10px]">
-              <span className="text-gray-500">全体遷移率:</span>
-              <span className={`font-bold ${overallRate >= 1 ? 'text-blue-600' : 'text-gray-500'}`}>
-                {overallRate.toFixed(2)}%
-              </span>
-            </div>
-          )}
-          {metricsSummary}
+          <div className="mt-1 flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-purple-200 pt-2 text-xs">
+            {overallRate !== null && transitionRates.length > 1 && (
+              <div className="flex items-baseline gap-1 whitespace-nowrap">
+                <span className="text-gray-500">全体遷移率:</span>
+                <span className={`font-bold ${overallRate >= 1 ? 'text-blue-600' : 'text-gray-500'}`}>
+                  {overallRate.toFixed(2)}%
+                </span>
+              </div>
+            )}
+            {metricsSummary}
+          </div>
         </div>
       )}
 
