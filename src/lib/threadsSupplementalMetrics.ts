@@ -58,6 +58,25 @@ export function summarizeTreeFollows(nodes: Array<{ id: string; insights?: Suppl
   };
 }
 
+export function summarizeTreeInsights(nodes: Array<{ id: string; insights?: SupplementalPostInsights | null }>) {
+  const unique = [...new Map(nodes.map((node) => [node.id, node])).values()];
+  const sum = (key: 'follows' | 'profileVisits') => {
+    const measured = unique.filter((node) => node.insights?.[key] != null);
+    return {
+      value: measured.length ? measured.reduce((total, node) => total + node.insights![key]!, 0) : null,
+      complete: unique.length > 0 && measured.length === unique.length,
+    };
+  };
+  const follows = sum('follows');
+  const visits = sum('profileVisits');
+  return {
+    follows: follows.value, profileVisits: visits.value,
+    followsComplete: follows.complete, profileVisitsComplete: visits.complete,
+    conversionRate: follows.complete && visits.complete
+      ? followConversionRate({ follows: follows.value, profileVisits: visits.value }) : null,
+  };
+}
+
 export type SupplementalStatus = 'ready' | 'not_configured' | 'unavailable';
 
 export class SupplementalValidationError extends Error {}
@@ -126,7 +145,7 @@ export function validateSupplementalBatch(input: unknown, now = new Date()): Sup
   return { source: 'muse_threads', account_username: 'kudooo_ai', snapshots };
 }
 
-export function followConversionRate(insights?: SupplementalPostInsights | null): number | null {
+export function followConversionRate(insights?: Pick<SupplementalPostInsights, 'follows' | 'profileVisits'> | null): number | null {
   if (insights?.follows == null || insights.profileVisits == null || insights.profileVisits <= 0) return null;
   return insights.follows / insights.profileVisits * 100;
 }

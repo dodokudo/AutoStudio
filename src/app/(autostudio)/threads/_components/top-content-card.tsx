@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/card';
-import { followConversionRate, summarizeTreeFollows, type SupplementalPostInsights, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
+import { summarizeTreeInsights, type SupplementalPostInsights, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
 import { SupplementalMetrics } from './supplemental-metrics';
 import {
   THREADS_ACCOUNTS,
@@ -175,22 +175,12 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
   const { transitions: transitionRates, overallRate } = calculateTransitionRates(post.views, commentData);
   const eligibility = useMemo(() => evaluateEligibility(post), [post]);
   const supplemental = post.supplementalInsights;
-  const tree = summarizeTreeFollows([
+  const tree = summarizeTreeInsights([
     { id: post.id, insights: supplemental },
     ...commentData.map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
   ]);
   const missingLabel = post.accountKey === 'sub' ? '対象外' : supplementalStatus === 'unavailable' ? '確認できません' : '未取得';
-  const metricsSummary = (
-    <div>
-      <SupplementalMetrics insights={supplemental} missingLabel={missingLabel} expanded={isExpanded} embedded={!isExpanded && transitionRates.length > 0} />
-      {hasComments && (
-        <p className="mt-2 text-xs text-[color:var(--color-text-secondary)]" title="登録済みの親投稿・本人返信の累計を合算。アカウントの純増や重複排除した人数ではありません。">
-          ツリー内フォロー数 {tree.complete ? '合計' : '取得済み分'} <strong>{tree.follows === null ? missingLabel : tree.follows.toLocaleString()}</strong>
-          <span className="ml-2 text-[10px]">登録済み{tree.knownNodes}件中{tree.measuredNodes}件取得</span>
-        </p>
-      )}
-    </div>
-  );
+  const metricsSummary = <SupplementalMetrics insights={tree} tree={tree} missingLabel={missingLabel} embedded={transitionRates.length > 0} />;
 
   return (
     <div
@@ -312,14 +302,20 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
               </span>
             </div>
           )}
-          {!isExpanded && metricsSummary}
+          {metricsSummary}
         </div>
       )}
 
+      {transitionRates.length === 0 && metricsSummary}
+      {isExpanded && (
+        <div className="mt-3">
+          <p className="text-xs font-medium text-gray-500">メイン投稿</p>
+          <SupplementalMetrics insights={supplemental} missingLabel={missingLabel} expanded />
+        </div>
+      )}
       <p className="mt-2 text-sm text-[color:var(--color-text-primary)] whitespace-pre-wrap">
         {isExpanded ? cleanContent(post.content) : truncateText(post.content)}
       </p>
-      {(isExpanded || transitionRates.length === 0) && metricsSummary}
 
       {/* コメント本文（展開時のみ表示） */}
       {isExpanded && hasComments && (
@@ -335,8 +331,8 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
                 <span>閲覧 {comment.views.toLocaleString()}</span>
                 {comment.permalink && <a href={comment.permalink} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()} className="text-[color:var(--color-accent)]">返信を開く</a>}
               </div>
-              <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
               <SupplementalMetrics insights={comment.supplementalInsights} missingLabel={missingLabel} expanded />
+              <p className="mt-2 text-gray-700 whitespace-pre-wrap">{comment.text}</p>
             </div>
           ))}
         </div>
@@ -365,7 +361,6 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
 
   const displayedPosts = showAll ? posts : posts.slice(0, INITIAL_DISPLAY_COUNT);
   const hasMore = posts.length > INITIAL_DISPLAY_COUNT;
-  const measuredCount = posts.filter((post) => post.supplementalInsights?.follows != null).length;
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -462,24 +457,22 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
         </div>
         <select
           aria-label="投稿の並べ替え"
-          value={sortOption}
+          value={sortOption === 'treeFollows' ? 'follows' : sortOption}
           onChange={(event) => onSortChange(event.target.value as SortOption)}
           className="h-9 w-40 rounded-[var(--radius-sm)] border border-[color:var(--color-border)] bg-white px-3 text-sm text-[color:var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)]"
         >
           <option value="views">閲覧数</option>
           <option value="likes">いいね数</option>
           <option value="follows">フォロー獲得数</option>
-          <option value="treeFollows">ツリー内フォロー合計</option>
           <option value="profileVisits">プロフィール訪問数</option>
           <option value="followConversion">フォロー転換率</option>
           <option value="postedAt">投稿日</option>
         </select>
       </header>
       <p className="mb-3 text-xs text-[color:var(--color-text-muted)]">
-        フォロー獲得・プロフィール訪問は各取得時点の累計です。転換率はフォロー獲得数 ÷ プロフィール訪問数。
-        {accountKey !== 'sub' && ` フォロー数取得済み ${measuredCount}/${posts.filter((post) => post.accountKey !== 'sub').length}件。`}
+        フォロー獲得・プロフィール訪問はツリー全体の累計です。転換率は合計フォロー数 ÷ 合計プロフィール訪問数。
         {supplementalStatus === 'unavailable' ? '追加指標の読み込みに失敗しました。再読み込みしてください。' :
-          supplementalStatus === 'not_configured' ? '追加指標は連携準備中です。' : '未取得の投稿は順位比較の対象外です。'}
+          supplementalStatus === 'not_configured' ? '追加指標は連携準備中です。' : '未取得を含む指標は順位比較の対象外です。'}
       </p>
       {successMessage && (
         <div className="mb-3 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
@@ -493,26 +486,28 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
       ) : (
         <>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {displayedPosts.map((post, index) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                isExpanded={expandedIds.has(post.id)}
-                onToggle={() => toggleExpanded(post.id)}
-                rank={
-                  (sortOption === 'treeFollows' && !summarizeTreeFollows([
-                    { id: post.id, insights: post.supplementalInsights },
-                    ...(post.commentData ?? []).map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
-                  ]).complete) ||
-                  (sortOption === 'follows' && post.supplementalInsights?.follows == null) ||
-                  (sortOption === 'profileVisits' && post.supplementalInsights?.profileVisits == null) ||
-                  (sortOption === 'followConversion' && followConversionRate(post.supplementalInsights) === null)
-                    ? undefined : index + 1
-                }
-                onReserve={openReserveModal}
-                supplementalStatus={supplementalStatus}
-              />
-            ))}
+            {displayedPosts.map((post, index) => {
+              const tree = summarizeTreeInsights([
+                { id: post.id, insights: post.supplementalInsights },
+                ...(post.commentData ?? []).map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
+              ]);
+              return (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  isExpanded={expandedIds.has(post.id)}
+                  onToggle={() => toggleExpanded(post.id)}
+                  rank={
+                    ((sortOption === 'follows' || sortOption === 'treeFollows') && !tree.followsComplete) ||
+                    (sortOption === 'profileVisits' && !tree.profileVisitsComplete) ||
+                    (sortOption === 'followConversion' && tree.conversionRate === null)
+                      ? undefined : index + 1
+                  }
+                  onReserve={openReserveModal}
+                  supplementalStatus={supplementalStatus}
+                />
+              );
+            })}
           </div>
           {hasMore && (
             <div className="mt-4 flex justify-center">

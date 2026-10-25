@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   compareNullableDescending, followConversionRate, normalizeThreadsPostUrl, matchSupplementalPost, summarizeTreeFollows,
-  validateSupplementalBatch,
+  validateSupplementalBatch, summarizeTreeInsights,
 } from './threadsSupplementalMetrics';
 
 const sample = { snapshot_at: '2026-10-24T00:00:00+09:00', post_url: 'https://www.threads.com/@kudooo_ai/post/DeOpK-YERN9', follows: 0 };
@@ -15,6 +15,23 @@ test('retains a measured zero, missing metrics and JST date separately', () => {
   assert.equal(row.profile_visits, null);
   assert.equal(row.snapshot_date, '2026-10-24');
   assert.equal(row.snapshot_at, '2026-10-23T15:00:00.000Z');
+});
+
+test('tree conversions use summed counts, deduplicate IDs and never divide incomplete cohorts', () => {
+  const node = (id: string, follows: number | null, profileVisits: number | null) => ({
+    id, insights: { follows, profileVisits, views: null, snapshotAt: sample.snapshot_at },
+  });
+  const rows = [node('1', 27, 1660), node('2', 2, 153), node('3', 9, 828), node('4', 0, 60)];
+  assert.deepEqual(summarizeTreeInsights([...rows, rows[3]]), {
+    follows: 38, profileVisits: 2701, followsComplete: true, profileVisitsComplete: true, conversionRate: 38 / 2701 * 100,
+  });
+  assert.deepEqual(summarizeTreeInsights([node('1', 27, null), node('2', null, 153)]), {
+    follows: 27, profileVisits: 153, followsComplete: false, profileVisitsComplete: false, conversionRate: null,
+  });
+  assert.equal(summarizeTreeInsights([node('1', 0, 100)]).conversionRate, 0);
+  assert.equal(summarizeTreeInsights([node('1', 0, 0)]).conversionRate, null);
+  assert.equal(summarizeTreeInsights([{ id: '1' }]).follows, null);
+  assert.equal(summarizeTreeInsights([]).followsComplete, false);
 });
 
 test('normalizes legacy domains, query strings and trailing slashes', () => {

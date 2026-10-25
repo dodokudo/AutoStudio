@@ -12,7 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { PostInsight } from '@/lib/threadsInsightsData';
-import { compareNullableDescending, followConversionRate, summarizeTreeFollows, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
+import { compareNullableDescending, summarizeTreeInsights, type SupplementalStatus } from '@/lib/threadsSupplementalMetrics';
 import type { ThreadsAccountKey, ThreadsConcreteAccountKey } from '@/lib/threadsAccounts';
 import { Card } from '@/components/ui/card';
 import { InsightsCard } from './insights-card';
@@ -212,7 +212,7 @@ export function InsightsTab({
       accountKey: (post.accountKey === 'sub' ? 'sub' : 'main') as ThreadsConcreteAccountKey,
       commentData: post.commentData ?? [],
       supplementalInsights: post.supplementalInsights ?? null,
-      tree: summarizeTreeFollows([
+      tree: summarizeTreeInsights([
         { id: post.postedThreadId, insights: post.supplementalInsights },
         ...post.commentData.map((comment) => ({ id: comment.commentId, insights: comment.supplementalInsights })),
       ]),
@@ -221,13 +221,12 @@ export function InsightsTab({
     entries.sort((a, b) => {
       switch (topContentSort) {
         case 'treeFollows':
-          return compareNullableDescending(a.tree.complete ? a.tree.follows : null, b.tree.complete ? b.tree.follows : null);
         case 'follows':
-          return compareNullableDescending(a.supplementalInsights?.follows, b.supplementalInsights?.follows);
+          return compareNullableDescending(a.tree.followsComplete ? a.tree.follows : null, b.tree.followsComplete ? b.tree.follows : null);
         case 'profileVisits':
-          return compareNullableDescending(a.supplementalInsights?.profileVisits, b.supplementalInsights?.profileVisits);
+          return compareNullableDescending(a.tree.profileVisitsComplete ? a.tree.profileVisits : null, b.tree.profileVisitsComplete ? b.tree.profileVisits : null);
         case 'followConversion':
-          return compareNullableDescending(followConversionRate(a.supplementalInsights), followConversionRate(b.supplementalInsights));
+          return compareNullableDescending(a.tree.conversionRate, b.tree.conversionRate);
         case 'views':
           return (b.views ?? 0) - (a.views ?? 0);
         case 'likes':
