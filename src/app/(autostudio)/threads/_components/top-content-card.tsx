@@ -293,7 +293,7 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
             })}
           </div>
           {/* メイン→最終コメント欄の全体遷移率 */}
-          <div className="mt-1 flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-purple-200 pt-2 text-xs">
+          <div className="mt-1 flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-purple-200 pt-2 text-[10px]">
             {overallRate !== null && transitionRates.length > 1 && (
               <div className="flex items-baseline gap-1 whitespace-nowrap">
                 <span className="text-gray-500">全体遷移率:</span>
