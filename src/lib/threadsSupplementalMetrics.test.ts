@@ -23,12 +23,15 @@ test('tree conversions use summed counts, deduplicate IDs and never divide incom
   });
   const rows = [node('1', 27, 1660), node('2', 2, 153), node('3', 9, 828), node('4', 0, 60)];
   assert.deepEqual(summarizeTreeInsights([...rows, rows[3]]), {
-    follows: 38, profileVisits: 2701, followsComplete: true, profileVisitsComplete: true, conversionRate: 38 / 2701 * 100,
+    follows: 38, profileVisits: 2701, followsComplete: true, profileVisitsComplete: true, conversionComparable: true, conversionRate: 38 / 2701 * 100,
   });
   assert.deepEqual(summarizeTreeInsights([node('1', 27, null), node('2', null, 153)]), {
-    follows: 27, profileVisits: 153, followsComplete: false, profileVisitsComplete: false, conversionRate: null,
+    follows: 27, profileVisits: 153, followsComplete: false, profileVisitsComplete: false, conversionComparable: false, conversionRate: null,
   });
   assert.equal(summarizeTreeInsights([node('1', 0, 100)]).conversionRate, 0);
+  const partial = summarizeTreeInsights([node('1', 5, 200), { id: '2' }]);
+  assert.equal(partial.conversionRate, 2.5);
+  assert.equal(partial.followsComplete, false);
   assert.equal(summarizeTreeInsights([node('1', 0, 0)]).conversionRate, null);
   assert.equal(summarizeTreeInsights([{ id: '1' }]).follows, null);
   assert.equal(summarizeTreeInsights([]).followsComplete, false);

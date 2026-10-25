@@ -226,7 +226,8 @@ export function InsightsTab({
         case 'profileVisits':
           return compareNullableDescending(a.tree.profileVisitsComplete ? a.tree.profileVisits : null, b.tree.profileVisitsComplete ? b.tree.profileVisits : null);
         case 'followConversion':
-          return compareNullableDescending(a.tree.conversionRate, b.tree.conversionRate);
+          return compareNullableDescending(a.tree.followsComplete && a.tree.profileVisitsComplete ? a.tree.conversionRate : null,
+            b.tree.followsComplete && b.tree.profileVisitsComplete ? b.tree.conversionRate : null);
         case 'views':
           return (b.views ?? 0) - (a.views ?? 0);
         case 'likes':

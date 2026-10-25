@@ -18,7 +18,7 @@ function plain(value: unknown): string {
   return String(value && typeof value === 'object' && 'value' in value ? value.value : value ?? '');
 }
 
-export async function resolveSupplementalPosts(batch: SupplementalBatch) {
+export async function findSupplementalPostCandidates(batch: SupplementalBatch) {
   const client = createBigQueryClient(projectId);
   const [rows] = await client.query({
     query: `SELECT P.post_id, P.permalink, P.post_id AS root_post_id, 'post' AS node_type
@@ -38,7 +38,12 @@ export async function resolveSupplementalPosts(batch: SupplementalBatch) {
     params: { codes: batch.snapshots.map((row) => row.post_url.split('/post/')[1]) },
     maximumBytesBilled: '1000000000',
   });
-  return batch.snapshots.map((snapshot) => matchSupplementalPost(snapshot, rows as KnownSupplementalPost[]));
+  return rows as KnownSupplementalPost[];
+}
+
+export async function resolveSupplementalPosts(batch: SupplementalBatch) {
+  const rows = await findSupplementalPostCandidates(batch);
+  return batch.snapshots.map((snapshot) => matchSupplementalPost(snapshot, rows));
 }
 
 // Both ingestion and the temporary-table integration check use this SQL.
@@ -68,6 +73,8 @@ export function supplementalMergeSql(target = table): string {
     WHEN MATCHED AND S.snapshot_at > T.snapshot_at THEN UPDATE SET
       ${fields.filter((name) => !['snapshot_date', 'source', 'account_key', 'post_id'].includes(name)).map((name) => `${name} = S.${name}`).join(', ')},
       received_at = CURRENT_TIMESTAMP()
+    WHEN MATCHED AND S.snapshot_at = T.snapshot_at AND S.payload_json IS DISTINCT FROM T.payload_json THEN UPDATE SET
+      payload_json = S.payload_json, root_post_id = S.root_post_id, node_type = S.node_type, received_at = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN INSERT (${fields.join(', ')}, received_at)
       VALUES (${fields.map((name) => `S.${name}`).join(', ')}, CURRENT_TIMESTAMP());
 
@@ -87,7 +94,7 @@ export async function saveSupplementalInsights(batch: SupplementalBatch) {
   const [metadata] = await client.dataset(DATASET).getMetadata();
   const location = String(metadata.location);
   // Stable job IDs make an exact retry (including concurrent retries) reuse the same write.
-  const jobId = `threads_insights_${createHash('sha256').update(`${table}:${serialized}`).digest('hex')}`;
+  const jobId = `threads_insights_${createHash('sha256').update(`${table}:${supplementalMergeSql()}:${serialized}`).digest('hex')}`;
   let job;
   try {
     [job] = await client.createQueryJob({

@@ -499,7 +499,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
                   rank={
                     ((sortOption === 'follows' || sortOption === 'treeFollows') && !tree.followsComplete) ||
                     (sortOption === 'profileVisits' && !tree.profileVisitsComplete) ||
-                    (sortOption === 'followConversion' && tree.conversionRate === null)
+                    (sortOption === 'followConversion' && (!tree.followsComplete || !tree.profileVisitsComplete || tree.conversionRate === null))
                       ? undefined : index + 1
                   }
                   onReserve={openReserveModal}

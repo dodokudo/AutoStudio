@@ -69,10 +69,13 @@ export function summarizeTreeInsights(nodes: Array<{ id: string; insights?: Supp
   };
   const follows = sum('follows');
   const visits = sum('profileVisits');
+  const conversionComparable = unique.some((node) => node.insights?.follows != null) && unique.every((node) =>
+    (node.insights?.follows != null) === (node.insights?.profileVisits != null));
   return {
     follows: follows.value, profileVisits: visits.value,
     followsComplete: follows.complete, profileVisitsComplete: visits.complete,
-    conversionRate: follows.complete && visits.complete
+    conversionComparable,
+    conversionRate: conversionComparable
       ? followConversionRate({ follows: follows.value, profileVisits: visits.value }) : null,
   };
 }

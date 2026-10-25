@@ -1,0 +1,8 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '--build-arg', 'SOURCE_REVISION=${_REVISION}', '-t', 'gcr.io/$PROJECT_ID/autostudio-threads-drive-import:${_REVISION}', '-f', 'deploy/threads-drive-import/Dockerfile', '.']
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', 'gcr.io/$PROJECT_ID/autostudio-threads-drive-import:${_REVISION}']
+images:
+  - 'gcr.io/$PROJECT_ID/autostudio-threads-drive-import:${_REVISION}'
+timeout: 1200s
