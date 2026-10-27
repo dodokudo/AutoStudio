@@ -15,6 +15,7 @@ import {
 type SortOption = 'postedAt' | 'views' | 'likes' | 'follows' | 'profileVisits' | 'followConversion' | 'treeFollows';
 
 interface PostCommentData {
+  supplementalOnly?: boolean;
   supplementalInsights?: SupplementalPostInsights | null;
   permalink?: string | null;
   commentId: string;
@@ -65,7 +66,7 @@ function evaluateEligibility(post: TopContentPost): ReservationEligibility {
   if (cleanedMain.length > TEXT_LENGTH_LIMIT) {
     return { eligible: false, reason: '本文500字超' };
   }
-  const comments = post.commentData ?? [];
+  const comments = (post.commentData ?? []).filter((comment) => !comment.supplementalOnly);
   if (comments.length < 2) {
     return { eligible: false, reason: 'コメ<2' };
   }
@@ -107,6 +108,7 @@ interface TransitionResult {
 }
 
 function calculateTransitionRates(postViews: number, comments: PostCommentData[]): TransitionResult {
+  comments = comments.filter((comment) => !comment.supplementalOnly);
   if (comments.length === 0 || postViews === 0) {
     return { transitions: [], overallRate: null, lastCommentViews: null };
   }
@@ -328,7 +330,7 @@ function PostCard({ post, isExpanded, onToggle, rank, onReserve, supplementalSta
               className="rounded-md bg-gray-50 p-2 text-xs"
             >
               <div className="flex items-center gap-2 text-[10px] text-gray-400 mb-1">
-                <span className="font-medium text-purple-600">コメント{idx + 1}</span>
+                <span className="font-medium text-purple-600">{comment.supplementalOnly ? '本人返信' : `コメント${idx + 1}`}</span>
                 <span>閲覧 {comment.views.toLocaleString()}</span>
                 {comment.permalink && <a href={comment.permalink} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()} className="text-[color:var(--color-accent)]">返信を開く</a>}
               </div>
@@ -380,7 +382,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
     setScheduledAt(getDefaultScheduledAt());
     setTargetAccountKey(post.accountKey ?? (accountKey === 'all' ? 'main' : accountKey));
     setDraftMainText(cleanContent(post.content ?? ''));
-    setDraftComments((post.commentData ?? []).slice(0, COMMENT_SLOT_LIMIT).map((c) => cleanContent(c.text ?? '')));
+    setDraftComments((post.commentData ?? []).filter((c) => !c.supplementalOnly).slice(0, COMMENT_SLOT_LIMIT).map((c) => cleanContent(c.text ?? '')));
     setSubmitError(null);
   };
 
@@ -543,7 +545,7 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
               </button>
             </header>
             {(() => {
-              const originalComments = reserveTarget.commentData ?? [];
+              const originalComments = (reserveTarget.commentData ?? []).filter((c) => !c.supplementalOnly);
               const originalCount = originalComments.length;
               const overflow = Math.max(0, originalCount - COMMENT_SLOT_LIMIT);
               return (

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertDriveTreeMatch, driveBatches, parseThreadsDriveCsv, snapshotFileDate } from './threadsDriveCsv';
+import { assertDriveTreeMatch, driveBatches, parseThreadsDriveCsv, planDriveReplyRegistrations, snapshotFileDate } from './threadsDriveCsv';
 import { SUPPLEMENTAL_METRICS } from './threadsSupplementalMetrics';
 
 const now = new Date('2026-10-25T00:00:00Z');
@@ -61,4 +61,21 @@ test('Blank classification remains unknown and can match a registered reply with
   assertDriveTreeMatch(row, { root_post_id: base.post_id, node_type: 'post' });
   assert.throws(() => assertDriveTreeMatch(row, { root_post_id: '', node_type: 'unknown' }));
   assert.throws(() => parseThreadsDriveCsv(csv([{ ...base, is_self_reply: '', parent_post_id: '999' }]), undefined, now));
+});
+
+test('Recover only unregistered explicit own replies with a verified root; preserve unknown metadata', () => {
+  const [reply] = parseThreadsDriveCsv(csv([{ ...base, post_id: '123', post_url: 'https://www.threads.com/@kudooo_ai/post/newreply',
+    is_self_reply: 'true', parent_post_id: base.post_id, posted_at: '' }]), undefined, now);
+  const root = { post_id: base.post_id, permalink: base.post_url, root_post_id: base.post_id, node_type: 'post' as const, account_key: 'main' };
+  assert.deepEqual(planDriveReplyRegistrations([reply], [root]), [reply]);
+  assert.equal(reply.posted_at, null);
+  for (const catalog of [[], [{ ...root, account_key: 'sub' }], [{ ...root, permalink: base.post_url.replace('kudooo_ai', 'other') }],
+    [root, { ...root, node_type: 'reply' as const }],
+    [root, { ...root, post_id: '123' }], [root, { ...root, post_id: '999', permalink: reply.post_url }]]) {
+    assert.deepEqual(planDriveReplyRegistrations([reply], catalog), []);
+  }
+  assert.deepEqual(planDriveReplyRegistrations([{ ...reply, is_self_reply: null }], [root]), []);
+  assert.deepEqual(planDriveReplyRegistrations([reply, { ...reply, post_id: '999' }], [root]), []);
+  const registered = { ...root, post_id: '123', permalink: reply.post_url, node_type: 'reply' as const };
+  assert.deepEqual(planDriveReplyRegistrations([reply], [root, registered]), []);
 });

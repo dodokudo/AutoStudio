@@ -20,6 +20,7 @@ function plain(value: unknown): string {
 
 export async function findSupplementalPostCandidates(batch: SupplementalBatch) {
   const client = createBigQueryClient(projectId);
+  const [driveRepliesExist] = await client.dataset(DATASET).table('threads_drive_replies').exists();
   const [rows] = await client.query({
     query: `SELECT P.post_id, P.permalink, P.post_id AS root_post_id, 'post' AS node_type
       FROM \`${projectId}.${DATASET}.threads_posts\` P
@@ -34,7 +35,14 @@ export async function findSupplementalPostCandidates(batch: SupplementalBatch) {
         AND COALESCE(P.account_key, 'main') = 'main'
       WHERE COALESCE(C.account_key, 'main') = 'main'
         AND REGEXP_EXTRACT(C.permalink, r'/post/([A-Za-z0-9_-]+)') IN UNNEST(@codes)
-        AND REGEXP_CONTAINS(P.permalink, r'^https://(www\\.)?threads\\.(com|net)/@kudooo_ai/post/')`,
+        AND REGEXP_CONTAINS(P.permalink, r'^https://(www\\.)?threads\\.(com|net)/@kudooo_ai/post/')
+      ${driveRepliesExist ? `UNION ALL
+      SELECT D.post_id, D.post_url AS permalink, D.root_post_id, 'reply' AS node_type
+      FROM \`${projectId}.${DATASET}.threads_drive_replies\` D
+      JOIN \`${projectId}.${DATASET}.threads_posts\` P ON P.post_id = D.root_post_id
+        AND COALESCE(P.account_key, 'main') = 'main'
+      WHERE REGEXP_EXTRACT(D.post_url, r'/post/([A-Za-z0-9_-]+)') IN UNNEST(@codes)
+        AND REGEXP_CONTAINS(P.permalink, r'^https://(www\\.)?threads\\.(com|net)/@kudooo_ai/post/')` : ''}`,
     params: { codes: batch.snapshots.map((row) => row.post_url.split('/post/')[1]) },
     maximumBytesBilled: '1000000000',
   });

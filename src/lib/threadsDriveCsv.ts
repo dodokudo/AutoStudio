@@ -1,5 +1,5 @@
 import { parse } from 'csv-parse/sync';
-import { SUPPLEMENTAL_METRICS, validateSupplementalBatch, type SupplementalBatch, type SupplementalSnapshot } from './threadsSupplementalMetrics';
+import { normalizeThreadsPostUrl, SUPPLEMENTAL_METRICS, validateSupplementalBatch, type KnownSupplementalPost, type SupplementalBatch, type SupplementalSnapshot } from './threadsSupplementalMetrics';
 
 export const THREADS_INSIGHTS_FOLDER = '1hRfvcpd3kMkAdSmNFyPD-dpX1Sf_QCHS';
 export const MAX_SNAPSHOT_BYTES = 20 * 1024 * 1024;
@@ -86,4 +86,20 @@ export function assertDriveTreeMatch(expected: DriveSnapshot, actual: { root_pos
       actual.root_post_id !== (expected.parent_post_id ?? expected.post_id)) {
     throw new Error(`CSV tree differs from registered owner tree: ${expected.post_id}`);
   }
+}
+
+export type DriveCatalogEntry = KnownSupplementalPost & { account_key: string };
+
+// Only recover explicitly classified own replies whose root already belongs to this account.
+export function planDriveReplyRegistrations(rows: DriveSnapshot[], catalog: DriveCatalogEntry[]) {
+  const normalize = (url: string) => { try { return normalizeThreadsPostUrl(url); } catch { return null; } };
+  return rows.filter((row) => {
+    if (row.is_self_reply !== true || !row.post_id || !row.parent_post_id) return false;
+    if (catalog.some((entry) => entry.post_id === row.post_id || normalize(entry.permalink) === row.post_url)) return false;
+    if (rows.some((other) => other.post_id !== row.post_id && other.post_url === row.post_url)) return false;
+    const parents = catalog.filter((entry) => entry.post_id === row.parent_post_id);
+    return parents.length > 0 && parents.every((entry) => entry.account_key === 'main' &&
+      entry.node_type === 'post' && entry.root_post_id === row.parent_post_id && normalize(entry.permalink) !== null) &&
+      new Set(parents.map((entry) => normalize(entry.permalink))).size === 1;
+  });
 }

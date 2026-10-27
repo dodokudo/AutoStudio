@@ -26,7 +26,8 @@ export async function createThreadsDriveImportState() {
   if (Number(acquired[0]?.acquired) !== 1) throw new Error('Drive import lock state is invalid');
   return {
     async alreadyImported(fileId: string, version: string) {
-      return (await query(`SELECT file_id FROM ${files} WHERE file_id = @fileId AND version = @version`, { fileId, version })).length > 0;
+      return (await query(`SELECT file_id FROM ${files} WHERE file_id = @fileId AND version = @version
+        AND COALESCE(ARRAY_LENGTH(JSON_QUERY_ARRAY(report_json, '$.pending')), 0) = 0`, { fileId, version })).length > 0;
     },
     async complete(fileId: string, version: string, rowCount: number, report: unknown) {
       await query(`MERGE ${files} T USING (SELECT @fileId AS file_id) S ON T.file_id = S.file_id

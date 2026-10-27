@@ -10,6 +10,7 @@ const POSTS_LIMIT = 200;
 const CACHE_TTL_MS = 1000 * 60 * 30;
 
 export interface PostComment {
+  supplementalOnly?: boolean;
   supplementalInsights?: SupplementalPostInsights | null;
   permalink?: string | null;
   commentId: string;
@@ -226,10 +227,22 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
             timestamp,
             permalink,
             depth,
-            views
+            views,
+            FALSE AS supplemental_only
           FROM \`${PROJECT_ID}.${DATASET}.threads_comments\`
           WHERE ${commentConditions}
-          ORDER BY parent_post_id, depth ASC
+          UNION ALL
+          SELECT D.post_id AS comment_id, D.root_post_id AS parent_post_id, D.caption AS text,
+            D.posted_at AS timestamp, D.post_url AS permalink, CAST(NULL AS INT64) AS depth,
+            D.views, TRUE AS supplemental_only
+          FROM \`${PROJECT_ID}.${DATASET}.threads_drive_replies\` D
+          WHERE D.root_post_id IN UNNEST(@postIds)
+            ${accountKeys.length > 0 ? "AND 'main' IN UNNEST(@accountKeys)" : ''}
+            AND NOT EXISTS (SELECT 1 FROM \`${PROJECT_ID}.${DATASET}.threads_comments\` C
+              WHERE C.comment_id = D.post_id)
+            AND NOT EXISTS (SELECT 1 FROM \`${PROJECT_ID}.${DATASET}.threads_comments\` C
+              WHERE C.permalink = D.post_url)
+          ORDER BY parent_post_id, supplemental_only, depth ASC
         `,
         params: commentParams,
       });
@@ -247,6 +260,7 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
           permalink: toPlain(row.permalink) || null,
           depth: Number(row.depth ?? 0),
           views: Number(row.views ?? 0),
+          supplementalOnly: Boolean(row.supplemental_only),
         };
 
         if (!commentsByPostId.has(parentPostId)) {
@@ -258,7 +272,8 @@ export async function getThreadsInsightsData(options: ThreadsInsightsDataOptions
       for (const post of posts) {
         const postComments = commentsByPostId.get(post.postedThreadId) || [];
         post.commentData = postComments.sort(
-          (a, b) => a.depth - b.depth || (a.timestamp ?? '').localeCompare(b.timestamp ?? ''),
+          (a, b) => Number(a.supplementalOnly) - Number(b.supplementalOnly) || a.depth - b.depth ||
+            (a.timestamp ?? '').localeCompare(b.timestamp ?? '') || a.commentId.localeCompare(b.commentId),
         );
       }
     }
