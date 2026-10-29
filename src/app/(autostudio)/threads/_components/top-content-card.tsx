@@ -472,11 +472,12 @@ export function TopContentCard({ posts, sortOption, onSortChange, accountKey, su
           <option value="postedAt">投稿日</option>
         </select>
       </header>
-      <p className="mb-3 text-xs text-[color:var(--color-text-muted)]">
-        フォロー獲得・プロフィール訪問はツリー全体の累計です。転換率は合計フォロー数 ÷ 合計プロフィール訪問数。
-        {supplementalStatus === 'unavailable' ? '追加指標の読み込みに失敗しました。再読み込みしてください。' :
-          supplementalStatus === 'not_configured' ? '追加指標は連携準備中です。' : '表示中の数値で並べ替え、未取得・算出不可は末尾に表示します。'}
-      </p>
+      {(supplementalStatus === 'unavailable' || supplementalStatus === 'not_configured') && (
+        <p className="mb-3 text-xs text-[color:var(--color-text-muted)]">
+          {supplementalStatus === 'unavailable' ? '追加指標の読み込みに失敗しました。再読み込みしてください。' :
+            '追加指標は連携準備中です。'}
+        </p>
+      )}
       {successMessage && (
         <div className="mb-3 rounded-[var(--radius-sm)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
           {successMessage}
