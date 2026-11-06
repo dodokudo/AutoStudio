@@ -8,6 +8,7 @@ import { getLineRegistrationsDailyByDateRange } from '@/lib/lstep/analytics';
 import { resolveProjectId } from '@/lib/bigquery';
 import { enrichSalesIdentities } from '@/lib/sales/elmeIdentities';
 import { createSalesNameResolver, isUnknownSalesName } from '@/lib/sales/identity';
+import { getCurrentSalesCustomerLinks } from '@/lib/sales/customerLinks';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -54,6 +55,7 @@ async function getDashboard(startParam: string, endParam: string) {
     customerProfiles,
     analycaCustomers,
     lineDailyRegistrations,
+    customerLinks,
   ] = await Promise.all([
     getSalesSummary(startDate.toISOString(), endDate.toISOString()),
     getSalesSummary(cashflowStartDate, endDate.toISOString()),
@@ -75,6 +77,10 @@ async function getDashboard(startParam: string, endParam: string) {
           endDateStr,
         ).catch(() => [])
       : Promise.resolve([]),
+    getCurrentSalesCustomerLinks().catch((error) => {
+      console.error('[api/sales/dashboard] Customer identity links unavailable:', error);
+      return null;
+    }),
   ]);
 
   const chargeIds = summary.charges.map(c => c.id);
@@ -141,7 +147,8 @@ async function getDashboard(startParam: string, endParam: string) {
     },
     categories,
     manualSales: enrichManual(manualSales),
-    identityWarnings: identityResult.warnings,
+    identityWarnings: [...identityResult.warnings, ...(customerLinks === null ? ['顧客IDの対応表を取得できませんでした。再読み込みしてください。'] : [])],
+    customerLinks: customerLinks ?? [],
     groups,
     customerProfiles,
     analycaCustomers,

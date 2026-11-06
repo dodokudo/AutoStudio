@@ -42,6 +42,7 @@ export interface FormIdentity {
   answerId: string;
   respondentId: string;
   lineName: string;
+  lineUserId?: string;
 }
 
 export function parseFormIdentities(rows: unknown[][]): FormIdentity[] {
@@ -55,7 +56,8 @@ export function parseFormIdentities(rows: unknown[][]): FormIdentity[] {
     if (isUnknownSalesName(name) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return [];
     return [{ name, email, answerId: String(row[header.indexOf('回答ID')] ?? ''),
       respondentId: String(row[header.indexOf('回答者ID')] ?? ''),
-      lineName: String(row[header.indexOf('LINE名')] ?? '') }];
+      lineName: String(row[header.indexOf('LINE名')] ?? ''),
+      lineUserId: String(row[header.indexOf('LINE ユーザーID')] ?? '') }];
   });
 }
 

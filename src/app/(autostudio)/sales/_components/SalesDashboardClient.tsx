@@ -6,6 +6,8 @@ import { Table } from '@/components/ui/table';
 import { AnalycaSalesView } from './AnalycaSalesView';
 import { SalesProfitView } from './SalesProfitView';
 import { SalesAttributionEditor } from './SalesAttributionEditor';
+import { SalesCustomerIdentity } from './SalesCustomerIdentity';
+import type { SalesCustomerLink } from '@/lib/sales/customerIdentity';
 import { calculateCommission, COURSE_SALES_CATEGORIES, type SalesAttribution } from '@/lib/sales/commissions';
 import { canonicalSalesName, isUnknownSalesName } from '@/lib/sales/identity';
 import {
@@ -163,6 +165,7 @@ interface AnalycaCustomerIdentity {
 
 interface GroupedPurchase {
   id: string;
+  revenueKeys: string[];
   customerKey?: string;
   date: Date;
   paymentDate: Date;
@@ -206,6 +209,7 @@ function buildGroupedPurchases(
     if (charge.status !== 'successful') continue;
     rows.push({
       id: charge.id,
+      revenueKeys: [`charge:${charge.id}`],
       customerKey: isUnknownSalesName(charge.metadata?.['univapay-name'])
         ? `unresolved:${charge.subscription_id || charge.transaction_token_id || charge.id}` : undefined,
       date: new Date(charge.created_on),
@@ -223,6 +227,7 @@ function buildGroupedPurchases(
   for (const sale of manualSales) {
     rows.push({
       id: sale.id,
+      revenueKeys: [`manual:${sale.id}`],
       customerKey: isUnknownSalesName(sale.customerName) ? `manual:${sale.id}` : undefined,
       date: new Date(`${sale.transactionDate}T00:00:00`),
       paymentDate: new Date(`${sale.paymentDate ?? sale.transactionDate}T00:00:00`),
@@ -278,6 +283,7 @@ function buildGroupedPurchases(
 
     result.push({
       id: group.id,
+      revenueKeys: groupRows.flatMap(row => row.revenueKeys),
       customerKey: isUnknownSalesName(customerName) ? `group:${group.id}` : undefined,
       date: new Date(Math.min(...groupRows.map((item) => item.date.getTime()))),
       paymentDate: new Date(Math.max(...groupRows.map((item) => item.paymentDate.getTime()))),
@@ -335,6 +341,7 @@ interface SalesDashboardClientProps {
     };
     deferred?: boolean;
     identityWarnings?: string[];
+    customerLinks?: SalesCustomerLink[];
   };
 }
 
@@ -363,6 +370,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
   const { dateRange } = initialData;
   const summary = summaryState;
   const charges = fullData?.charges ?? initialData.charges;
+  const customerLinkMap = useMemo(() => new Map((fullData?.customerLinks ?? initialData.customerLinks ?? []).map(link => [link.revenueKey, link])), [fullData?.customerLinks, initialData.customerLinks]);
+  const customerLinksFor = (keys: string[]) => keys.flatMap(key => customerLinkMap.has(key) ? [customerLinkMap.get(key)!] : []);
   const numberFormatter = new Intl.NumberFormat('ja-JP');
   const dateFormatter = new Intl.DateTimeFormat('ja-JP', {
     year: 'numeric',
@@ -1463,6 +1472,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
 
     type SummaryAccumulator = {
       customerKey: string;
+      revenueKeys: string[];
       displayName: string;
       profile: CustomerProfile | null;
       ltv: number;
@@ -1493,6 +1503,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       const isBackendPurchase = isInitialBackendPurchase || purchase.category === 'backend_renewal';
 
       if (existing) {
+        existing.revenueKeys.push(...purchase.revenueKeys);
         existing.ltv += purchase.amount;
         existing.purchaseCount += 1;
         if (isFrontendPurchase) {
@@ -1545,6 +1556,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
 
       map.set(customerKey, {
         customerKey,
+        revenueKeys: [...purchase.revenueKeys],
         displayName: matchedProfile?.displayName || (isUnknownSalesName(purchase.customerName)
           ? `購入者名未確認（${customerKey.slice(-8)}）` : purchase.customerName),
         profile: matchedProfile,
@@ -2461,6 +2473,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                     <tr key={buyer.customerKey} className="border-t border-[color:var(--color-border)]">
                       <td className="px-3 py-2 whitespace-nowrap font-medium text-[color:var(--color-text-primary)]">
                         {buyer.displayName}
+                        <SalesCustomerIdentity links={customerLinksFor(buyer.revenueKeys)} />
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <select
@@ -3501,6 +3514,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                         ) : (
                           <span>{tx.customerName}</span>
                         )}
+                        <SalesCustomerIdentity links={customerLinksFor(tx.items.map(item => `${item.source === 'univapay' ? 'charge' : 'manual'}:${item.id}`))} paymentMethod={tx.paymentMethods.length === 1 ? tx.paymentMethods[0] : ''} />
                       </td>
                       <td className="px-3 py-2">
                         {chargeItem && !tx.isGrouped ? (
