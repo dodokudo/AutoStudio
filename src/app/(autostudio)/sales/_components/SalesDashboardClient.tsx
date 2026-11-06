@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { Fragment, useMemo, useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
 import { AnalycaSalesView } from './AnalycaSalesView';
 import { SalesProfitView } from './SalesProfitView';
+import { SalesAttributionEditor } from './SalesAttributionEditor';
+import { defaultAttribution, type SalesAttribution } from '@/lib/sales/commissions';
 import { canonicalSalesName, isUnknownSalesName } from '@/lib/sales/identity';
 import {
   Bar,
@@ -337,6 +339,22 @@ interface SalesDashboardClientProps {
 }
 
 export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashboardClientProps) {
+  const [attributions, setAttributions] = useState<SalesAttribution[]>([]);
+  const [attributionsLoading, setAttributionsLoading] = useState(true);
+  const [attributionsError, setAttributionsError] = useState('');
+  const [editingAttribution, setEditingAttribution] = useState<string | null>(null);
+  const attributionMap = useMemo(() => new Map(attributions.map(row => [row.revenueKey, row])), [attributions]);
+  const attributionSaved = (value: SalesAttribution) => setAttributions(current => [...current.filter(row => row.revenueKey !== value.revenueKey), value]);
+  useEffect(() => {
+    let canceled = false;
+    fetch('/api/sales/attributions', { cache: 'no-store' }).then(async response => {
+      if (!response.ok) throw new Error('紹介者・営業担当を取得できませんでした。再読み込みしてください');
+      const payload = await response.json();
+      if (!canceled) setAttributions(payload.attributions ?? []);
+    }).catch(error => { if (!canceled) setAttributionsError(error.message); })
+      .finally(() => { if (!canceled) setAttributionsLoading(false); });
+    return () => { canceled = true; };
+  }, []);
   const [fullData, setFullData] = useState<typeof initialData | null>(initialData.deferred ? null : initialData);
   const [summaryState, setSummaryState] = useState(initialData.summary);
   const { dateRange } = initialData;
@@ -1349,14 +1367,16 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           id: charge.id,
           revenueKey: `charge:${charge.id}`,
           amount: charge.charged_amount,
-          category: (customerData.categories[charge.id] ?? 'other') as SalesCategoryId,
+          category: (categories[charge.id] ?? customerData.categories[charge.id] ?? 'other') as SalesCategoryId,
           paymentDate: toLocalDateKey(new Date(charge.created_on)),
+          revenueDate: toLocalDateKey(new Date(charge.created_on)),
           isCardPayment: true,
           ...customer,
         };
       });
 
-    const manualRows = customerData.manualSales.map((sale) => {
+    const manualRows = customerData.manualSales.map((originalSale) => {
+      const sale = manualSales.find(current => current.id === originalSale.id) ?? originalSale;
       const canonicalName = canonicalCustomerName(sale.customerName);
       const normalizedName = normalizeCustomerKey(canonicalName);
       const profile = aliasToProfile.get(normalizedName);
@@ -1370,6 +1390,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         amount: sale.amount,
         category: sale.category ?? 'other',
         paymentDate: sale.paymentDate || sale.transactionDate,
+        revenueDate: sale.transactionDate,
         isCardPayment: /(クレジット|クレカ|credit|card|univapay)/i.test(sale.paymentMethod),
         ...customer,
       };
@@ -1386,6 +1407,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     });
   }, [
     customerProfiles,
+    categories,
+    manualSales,
     fullData,
     initialData.analycaCustomers,
     initialData.customerData,
@@ -1394,7 +1417,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
   const selectedRangeRevenueItems = useMemo(
     () =>
       allRevenueItems.filter(
-        (item) => item.paymentDate >= dateRange.from && item.paymentDate <= dateRange.to
+        (item) => item.revenueDate >= dateRange.from && item.revenueDate <= dateRange.to
       ),
     [allRevenueItems, dateRange.from, dateRange.to],
   );
@@ -1983,6 +2006,9 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
   if (view === 'profit') {
     return (
       <SalesProfitView
+        attributions={attributions}
+        attributionsLoading={attributionsLoading}
+        attributionsError={attributionsError}
         revenueItems={selectedRangeRevenueItems}
         dateRange={dateRange}
         revenueLoading={!fullData && !!initialData.deferred}
@@ -2697,7 +2723,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       </div>
 
       {/* カテゴリ別売上 */}
-      <SalesProfitView revenueItems={selectedRangeRevenueItems} dateRange={dateRange} compact revenueLoading={!fullData && !!initialData.deferred} />
+      <SalesProfitView revenueItems={selectedRangeRevenueItems} dateRange={dateRange} compact revenueLoading={!fullData && !!initialData.deferred} attributions={attributions} attributionsLoading={attributionsLoading} attributionsError={attributionsError} />
       <Card className="p-6">
         <div className="flex flex-col gap-4">
           <div>
@@ -3319,7 +3345,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       </Card>
 
       {/* 全取引一覧 */}
-      <Card className="p-6">
+      <Card className="p-6" id="transactions">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
@@ -3339,6 +3365,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
             </button>
           )}
         </div>
+        {attributionsError && <p role="alert" className="mt-3 text-sm text-red-700">{attributionsError}</p>}
         <div className="mt-4 overflow-x-auto">
           {displayTransactions.length > 0 ? (
             <table className="w-full text-sm">
@@ -3349,6 +3376,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                   <th className="px-3 py-2 text-right">金額</th>
                   <th className="px-3 py-2">顧客名</th>
                   <th className="px-3 py-2">カテゴリ</th>
+                  <th className="px-3 py-2">紹介者</th>
+                  <th className="px-3 py-2">営業担当</th>
                   <th className="px-3 py-2">支払方法</th>
                   <th className="px-3 py-2">操作</th>
                 </tr>
@@ -3358,12 +3387,25 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                   const isEditing = editingCustomerName === tx.id;
                   const manualItem = tx.items.find(i => i.source === 'manual');
                   const chargeItem = tx.items.find(i => i.source === 'univapay');
+                  const commissionItems = tx.items.map(item => ({
+                    id: item.id, revenueKey: `${item.source === 'univapay' ? 'charge' : 'manual'}:${item.id}`,
+                    amount: item.amount, category: item.category ?? 'other', customerName: tx.customerName,
+                    paymentDate: toLocalDateKey(item.paymentDate ?? item.date),
+                  }));
+                  const rules = commissionItems.map(item => attributionMap.get(item.revenueKey) ?? defaultAttribution(item));
+                  const attributionLabel = (role: 'referral' | 'salesperson') => {
+                    const labels = [...new Set(rules.map(rule => role === 'referral'
+                      ? rule.referralStatus === 'assigned' ? rule.referrerName : rule.referralStatus === 'none' ? 'なし' : '未設定'
+                      : rule.salespersonStatus === 'assigned' ? rule.salespersonName : rule.salespersonStatus === 'none' ? 'なし' : '未設定'))];
+                    return labels.length === 1 ? labels[0] : '明細ごとに設定';
+                  };
 
                   // 未グループ化アイテムの選択状態
                   const itemType = tx.source === 'univapay' ? 'charge' : tx.source === 'manual' ? 'manual' : null;
                   const isSelected = itemType ? selectedItems.has(`${itemType}:${tx.id}`) : false;
 
                   return (
+                    <Fragment key={tx.id}>
                     <tr
                       key={tx.id}
                       className={`hover:bg-[color:var(--color-surface-muted)] ${
@@ -3450,6 +3492,11 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                           </span>
                         )}
                       </td>
+                      {(['referral', 'salesperson'] as const).map(role => <td key={role} className="px-3 py-2">
+                        <button type="button" aria-label={`${tx.customerName}の${role === 'referral' ? '紹介者' : '営業担当'}を設定`} className="whitespace-nowrap rounded border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm text-blue-600 disabled:opacity-50" disabled={attributionsLoading || !!attributionsError} onClick={() => setEditingAttribution(editingAttribution === tx.id ? null : tx.id)}>
+                          {attributionsLoading ? '読み込み中' : attributionLabel(role)}
+                        </button>
+                      </td>)}
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
                           {tx.paymentMethods.map((method, idx) => (
@@ -3511,6 +3558,11 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                         </div>
                       </td>
                     </tr>
+                    {editingAttribution === tx.id && <tr><td colSpan={9} className="space-y-3 bg-[color:var(--color-surface-muted)] p-3">
+                      {commissionItems.map(item => <SalesAttributionEditor key={item.revenueKey} item={item} attribution={attributionMap.get(item.revenueKey)} attributions={attributions} onSaved={attributionSaved} />)}
+                      <button type="button" className="text-sm text-blue-600" onClick={() => setEditingAttribution(null)}>閉じる</button>
+                    </td></tr>}
+                    </Fragment>
                   );
                 })}
               </tbody>

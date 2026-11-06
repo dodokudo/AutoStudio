@@ -96,15 +96,6 @@ const mapMoneyForwardCategory = (categoryName: string): ExpenseCategoryId => {
   return 'other';
 };
 
-const MONEY_FORWARD_DIRECT_COST_CATEGORIES = new Set([
-  '交通費',
-  'SaaS',
-  'コンサル・講座参加費',
-  '通信費',
-  'ATM・手数料',
-  '宿泊',
-]);
-
 export async function getMoneyForwardExpenses(
   startDate: string,
   endDate: string,
@@ -216,9 +207,8 @@ export async function getMoneyForwardExpenses(
       id: `moneyforward:${String(row.mf_id)}`,
       amount: Number(row.amount),
       category: mapMoneyForwardCategory(customCategory.name),
-      expenseType: MONEY_FORWARD_DIRECT_COST_CATEGORIES.has(customCategory.name)
-        ? 'direct' as const
-        : 'operating' as const,
+      // Imported overhead is not a product's direct cost. Direct costs are explicitly registered.
+      expenseType: 'operating' as const,
       businessUnit: 'shared' as const,
       description,
       expenseDate: String(row.expense_date),

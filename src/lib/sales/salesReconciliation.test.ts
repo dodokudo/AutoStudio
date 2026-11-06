@@ -3,9 +3,22 @@ import assert from 'node:assert/strict';
 import { calculateCommission, defaultAttribution, validateAttribution } from './commissions';
 import { canonicalSalesName, createSalesNameResolver, isUnknownSalesName, matchFormIdentity, parseFormIdentities } from './identity';
 import { enrichSalesIdentities } from './elmeIdentities';
+import { calculateGrossProfit } from './profit';
 import type { UnivaPayCharge } from '../univapay/client';
 
 const sale = { id: 'a', revenueKey: 'charge:a', amount: 110000, category: 'frontend', paymentDate: '2026-11-06' };
+test('粗利は紹介・営業報酬と直接原価を差し引き、人件費や諸経費は差し引かない', () => {
+  const costs = [
+    { amount: 22000, expenseType: 'direct' },
+    { amount: 11000, expenseType: 'direct' },
+    { amount: 3960, expenseType: 'direct' },
+    { amount: 50000, expenseType: 'operating' },
+    { amount: 5000, expenseType: 'operating' },
+  ];
+  assert.equal(calculateGrossProfit(110000, costs).grossProfit, 73040);
+  assert.equal(calculateGrossProfit(110000, costs).directCosts, 36960);
+  assert.equal(calculateGrossProfit(0, []).grossMargin, null);
+});
 test('紹介20%と営業10%は同じ売上額を基準に別々に計算する', () => {
   const rule = { ...defaultAttribution(sale), referralStatus: 'assigned' as const, referrerName: '紹介者', salespersonStatus: 'assigned' as const, salespersonName: '担当者' };
   assert.deepEqual(calculateCommission(sale, rule), { referral: 22000, salesperson: 11000, total: 33000, pending: false, attribution: rule });
