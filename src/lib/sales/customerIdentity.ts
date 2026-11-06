@@ -124,6 +124,7 @@ export function mergeCustomerLink(previous: SalesCustomerLink | undefined, next:
   const conflict = (['elmeId', 'lstepId', 'lineUserId'] as const).some(key => previous[key] && next[key] && previous[key] !== next[key]);
   if (conflict || next.status !== 'confirmed') return { ...previous, status: 'conflict', reason: '保存済みIDを維持。再照合の結果を確認してください' };
   return { ...next, elmeId: previous.elmeId || next.elmeId, lstepId: previous.lstepId || next.lstepId,
+    customerKey: previous.lstepId || next.lstepId ? `lstep:${previous.lstepId || next.lstepId}` : `elme:${previous.elmeId || next.elmeId}`,
     lineUserId: previous.lineUserId || next.lineUserId, registeredDate: previous.registeredDate || next.registeredDate,
     dateEvidence: previous.dateEvidence || next.dateEvidence, sources: unique([...previous.sources, ...next.sources]) };
 }

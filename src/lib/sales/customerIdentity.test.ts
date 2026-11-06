@@ -30,6 +30,7 @@ test('保存済みIDを上書きせず、空欄のみ追加する', () => {
   assert.equal(mergeCustomerLink(row, { ...row, elmeId: 'wrong' }).elmeId, row.elmeId);
   assert.equal(mergeCustomerLink(row, { ...row, elmeId: 'wrong' }).status, 'conflict');
   assert.equal(mergeCustomerLink({ ...row, lstepId: '' }, row).lstepId, 'step-1');
+  assert.equal(mergeCustomerLink(row, { ...row, lstepId: '', customerKey: 'elme:elme-1' }).customerKey, 'lstep:step-1');
   assert.equal(mergeCustomerLink(row, { ...row, status: 'pending', elmeId: '' }).elmeId, row.elmeId);
 });
 test('顧客シートの列名で読み、空欄IDは許容する', () => {
