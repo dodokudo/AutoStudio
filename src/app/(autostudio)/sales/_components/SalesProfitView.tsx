@@ -193,7 +193,7 @@ export function SalesProfitView({ revenueItems, dateRange, compact = false, reve
           expenseDate: item.revenueDate ?? item.paymentDate,
           createdAt: '',
           source: 'manual',
-          sourceCategory: '決済手数料',
+          sourceCategory: 'カード決済手数料',
           sourceGroup: '売上原価',
           sourceColor: '#9333ea',
           sourceAccount: 'クレジットカード',
@@ -346,17 +346,20 @@ export function SalesProfitView({ revenueItems, dateRange, compact = false, reve
   if (loading || revenueLoading || attributionsLoading) return <Card className="p-6"><p className="text-sm">売上・原価を読み込み中です</p></Card>;
   if (loadError || attributionsError) return <Card className="p-6"><p role="alert" className="text-sm text-red-700">{attributionsError || errorMessage}</p></Card>;
 
+  const hasRegisteredDirectCosts = expenses.some(expense => expense.expenseType === 'direct' && expense.amount !== 0);
+
   if (compact) return <Card className="p-6">
     <h2 className="text-lg font-semibold">売上・粗利</h2>
     <div className="mt-4 grid grid-cols-2 gap-4">
       <div><p className="text-sm">売上</p><p className="mt-1 text-2xl font-bold">¥{numberFormatter.format(metrics.revenue)}</p></div>
       <div><p className="text-sm">粗利</p><p className="mt-1 text-2xl font-bold">¥{numberFormatter.format(metrics.grossProfit)}</p></div>
     </div>
-    <div className="mt-4 overflow-auto"><table className="w-full text-right text-sm"><thead><tr className="border-b"><th className="p-2 text-left">月</th><th>売上</th><th>紹介報酬</th><th>営業報酬</th><th>その他直接原価</th><th>粗利</th></tr></thead><tbody>{monthlyRows.map((row) => {
+    <div className="mt-4 overflow-auto"><table className="w-full text-right text-sm"><thead><tr className="border-b"><th className="p-2 text-left">月</th><th>売上</th><th>紹介報酬</th><th>営業報酬</th><th>カード決済手数料（3.6%）</th>{hasRegisteredDirectCosts && <th>登録済み直接原価</th>}<th>粗利</th></tr></thead><tbody>{monthlyRows.map((row) => {
       const monthCommissions = commissions.filter(c => (c.item.revenueDate ?? c.item.paymentDate).startsWith(row.month));
       const referral = monthCommissions.reduce((sum, c) => sum + c.referral, 0);
       const salesperson = monthCommissions.reduce((sum, c) => sum + c.salesperson, 0);
-      return <tr className="border-b" key={row.month}><td className="p-2 text-left">{row.month}</td><td>¥{numberFormatter.format(row.revenue)}</td><td>¥{numberFormatter.format(referral)}</td><td>¥{numberFormatter.format(salesperson)}</td><td>¥{numberFormatter.format(row.directCosts - referral - salesperson)}</td><td>¥{numberFormatter.format(row.grossProfit)}</td></tr>;
+      const cardFees = cardFeeExpenses.filter(expense => expense.expenseDate.startsWith(row.month)).reduce((sum, expense) => sum + expense.amount, 0);
+      return <tr className="border-b" key={row.month}><td className="p-2 text-left">{row.month}</td><td>¥{numberFormatter.format(row.revenue)}</td><td>¥{numberFormatter.format(referral)}</td><td>¥{numberFormatter.format(salesperson)}</td><td>¥{numberFormatter.format(cardFees)}</td>{hasRegisteredDirectCosts && <td>¥{numberFormatter.format(row.directCosts - referral - salesperson - cardFees)}</td>}<td>¥{numberFormatter.format(row.grossProfit)}</td></tr>;
     })}</tbody></table></div>
   </Card>;
 
@@ -378,7 +381,7 @@ export function SalesProfitView({ revenueItems, dateRange, compact = false, reve
             ¥{numberFormatter.format(metrics.directCosts)}
           </p>
           <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-            決済手数料 ¥{numberFormatter.format(metrics.cardProcessingFees)}・紹介／営業報酬 ¥{numberFormatter.format(commissionExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
+            カード決済手数料（3.6%） ¥{numberFormatter.format(metrics.cardProcessingFees)}・紹介／営業報酬 ¥{numberFormatter.format(commissionExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
           </p>
         </Card>
         <Card className="p-4">

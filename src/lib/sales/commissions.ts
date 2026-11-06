@@ -1,7 +1,7 @@
 export const REFERRAL_RATE = 0.2;
 export const SALESPERSON_RATE = 0.1;
 export const SALESPERSON_START = '2026-11-01';
-export const COURSE_SALES_CATEGORIES = new Set(['frontend', 'backend', 'backend_performance', 'backend_renewal']);
+export const COURSE_SALES_CATEGORIES = new Set(['frontend', 'backend']);
 export type AttributionStatus = 'unknown' | 'none' | 'assigned';
 export interface SalesAttribution {
   revenueKey: string;
@@ -27,6 +27,9 @@ export function defaultAttribution(item: CommissionRevenue): SalesAttribution {
 }
 
 export function calculateCommission(item: CommissionRevenue, attribution?: SalesAttribution) {
+  if (!COURSE_SALES_CATEGORIES.has(item.category)) {
+    return { referral: 0, salesperson: 0, total: 0, pending: false, attribution: defaultAttribution(item) };
+  }
   const rule = attribution ?? defaultAttribution(item);
   const referral = rule.referralStatus === 'assigned' ? Math.round(item.amount * REFERRAL_RATE) : 0;
   const salesperson = item.paymentDate >= SALESPERSON_START && rule.salespersonStatus === 'assigned'

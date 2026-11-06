@@ -6,7 +6,7 @@ import { Table } from '@/components/ui/table';
 import { AnalycaSalesView } from './AnalycaSalesView';
 import { SalesProfitView } from './SalesProfitView';
 import { SalesAttributionEditor } from './SalesAttributionEditor';
-import { defaultAttribution, type SalesAttribution } from '@/lib/sales/commissions';
+import { calculateCommission, COURSE_SALES_CATEGORIES, type SalesAttribution } from '@/lib/sales/commissions';
 import { canonicalSalesName, isUnknownSalesName } from '@/lib/sales/identity';
 import {
   Bar,
@@ -343,6 +343,9 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
   const [attributionsLoading, setAttributionsLoading] = useState(true);
   const [attributionsError, setAttributionsError] = useState('');
   const [editingAttribution, setEditingAttribution] = useState<string | null>(null);
+  const [transactionCategoryFilter, setTransactionCategoryFilter] = useState('all');
+  const [transactionSort, setTransactionSort] = useState('date_desc');
+  const [transactionSearch, setTransactionSearch] = useState('');
   const attributionMap = useMemo(() => new Map(attributions.map(row => [row.revenueKey, row])), [attributions]);
   const attributionSaved = (value: SalesAttribution) => setAttributions(current => [...current.filter(row => row.revenueKey !== value.revenueKey), value]);
   useEffect(() => {
@@ -885,6 +888,27 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
 
     return result.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [allTransactions, groups]);
+
+  const filteredTransactions = useMemo(() => {
+    const search = normalizeCustomerKey(transactionSearch);
+    const rows = displayTransactions.flatMap(tx => {
+      if (search && !normalizeCustomerKey(tx.customerName).includes(search)) return [];
+      const items = tx.items.filter(item => transactionCategoryFilter === 'all' ||
+        (transactionCategoryFilter === 'unclassified' ? !item.category : item.category === transactionCategoryFilter));
+      if (!items.length) return [];
+      return [{ ...tx, items, amount: items.reduce((sum, item) => sum + item.amount, 0),
+        category: items.find(item => item.category)?.category ?? null,
+        date: new Date(Math.max(...items.map(item => item.date.getTime()))),
+        paymentMethods: [...new Set(items.map(item => item.paymentMethod))] }];
+    });
+    return rows.sort((a, b) => {
+      if (transactionSort === 'date_asc') return a.date.getTime() - b.date.getTime();
+      if (transactionSort === 'amount_desc') return b.amount - a.amount || b.date.getTime() - a.date.getTime();
+      if (transactionSort === 'amount_asc') return a.amount - b.amount || b.date.getTime() - a.date.getTime();
+      if (transactionSort === 'name') return a.customerName.localeCompare(b.customerName, 'ja');
+      return b.date.getTime() - a.date.getTime();
+    });
+  }, [displayTransactions, transactionCategoryFilter, transactionSort, transactionSearch]);
 
   // グループ化を考慮した集計値
   const groupedStats = useMemo(() => {
@@ -3346,14 +3370,29 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
 
       {/* 全取引一覧 */}
       <Card className="p-6" id="transactions">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
               取引一覧
             </h2>
             <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-              期間内の全取引（UnivaPay + 手動入力）を日付順に表示
+              {filteredTransactions.length}件を表示
             </p>
+          </div>
+          <div className="ml-auto flex flex-wrap items-end gap-3">
+            <label className="text-xs text-[color:var(--color-text-secondary)]">名前で検索
+              <input aria-label="取引一覧の名前検索" value={transactionSearch} onChange={e => { setTransactionSearch(e.target.value); setEditingAttribution(null); setSelectedItems(new Set()); }} className="mt-1 block w-40 rounded border border-[color:var(--color-border)] bg-white px-2 py-2 text-sm" placeholder="顧客名" />
+            </label>
+            <label className="text-xs text-[color:var(--color-text-secondary)]">カテゴリ
+              <select aria-label="取引一覧のカテゴリ絞り込み" value={transactionCategoryFilter} onChange={e => { setTransactionCategoryFilter(e.target.value); setEditingAttribution(null); setSelectedItems(new Set()); }} className="mt-1 block rounded border border-[color:var(--color-border)] bg-white px-2 py-2 text-sm">
+                <option value="all">すべて</option>{SALES_CATEGORIES.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}<option value="unclassified">未分類</option>
+              </select>
+            </label>
+            <label className="text-xs text-[color:var(--color-text-secondary)]">並び替え
+              <select aria-label="取引一覧の並び替え" value={transactionSort} onChange={e => setTransactionSort(e.target.value)} className="mt-1 block rounded border border-[color:var(--color-border)] bg-white px-2 py-2 text-sm">
+                <option value="date_desc">日付が新しい順</option><option value="date_asc">日付が古い順</option><option value="amount_desc">金額が高い順</option><option value="amount_asc">金額が低い順</option><option value="name">名前順</option>
+              </select>
+            </label>
           </div>
           {selectedItems.size >= 2 && (
             <button
@@ -3367,7 +3406,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         </div>
         {attributionsError && <p role="alert" className="mt-3 text-sm text-red-700">{attributionsError}</p>}
         <div className="mt-4 overflow-x-auto">
-          {displayTransactions.length > 0 ? (
+          {filteredTransactions.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[color:var(--color-border)] text-left text-xs uppercase tracking-wide text-[color:var(--color-text-secondary)]">
@@ -3383,7 +3422,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--color-border)]">
-                {displayTransactions.map((tx) => {
+                {filteredTransactions.map((tx) => {
                   const isEditing = editingCustomerName === tx.id;
                   const manualItem = tx.items.find(i => i.source === 'manual');
                   const chargeItem = tx.items.find(i => i.source === 'univapay');
@@ -3392,7 +3431,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                     amount: item.amount, category: item.category ?? 'other', customerName: tx.customerName,
                     paymentDate: toLocalDateKey(item.paymentDate ?? item.date),
                   }));
-                  const rules = commissionItems.map(item => attributionMap.get(item.revenueKey) ?? defaultAttribution(item));
+                  const eligibleItems = commissionItems.filter(item => COURSE_SALES_CATEGORIES.has(item.category));
+                  const rules = commissionItems.map(item => calculateCommission(item, attributionMap.get(item.revenueKey)).attribution);
                   const attributionLabel = (role: 'referral' | 'salesperson') => {
                     const labels = [...new Set(rules.map(rule => role === 'referral'
                       ? rule.referralStatus === 'assigned' ? rule.referrerName : rule.referralStatus === 'none' ? 'なし' : '未設定'
@@ -3493,8 +3533,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                         )}
                       </td>
                       {(['referral', 'salesperson'] as const).map(role => <td key={role} className="px-3 py-2">
-                        <button type="button" aria-label={`${tx.customerName}の${role === 'referral' ? '紹介者' : '営業担当'}を設定`} className="whitespace-nowrap rounded border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm text-blue-600 disabled:opacity-50" disabled={attributionsLoading || !!attributionsError} onClick={() => setEditingAttribution(editingAttribution === tx.id ? null : tx.id)}>
-                          {attributionsLoading ? '読み込み中' : attributionLabel(role)}
+                        <button type="button" aria-label={`${tx.customerName}の${role === 'referral' ? '紹介者' : '営業担当'}を設定`} className="whitespace-nowrap rounded border border-[color:var(--color-border)] bg-white px-2 py-1 text-sm text-blue-600 disabled:opacity-50" disabled={!eligibleItems.length || attributionsLoading || !!attributionsError} onClick={() => setEditingAttribution(editingAttribution === tx.id ? null : tx.id)}>
+                          {!eligibleItems.length ? '対象外' : attributionsLoading ? '読み込み中' : attributionLabel(role)}
                         </button>
                       </td>)}
                       <td className="px-3 py-2">
@@ -3559,7 +3599,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                       </td>
                     </tr>
                     {editingAttribution === tx.id && <tr><td colSpan={9} className="space-y-3 bg-[color:var(--color-surface-muted)] p-3">
-                      {commissionItems.map(item => <SalesAttributionEditor key={item.revenueKey} item={item} attribution={attributionMap.get(item.revenueKey)} attributions={attributions} onSaved={attributionSaved} />)}
+                      {eligibleItems.map(item => <SalesAttributionEditor key={item.revenueKey} item={item} attribution={attributionMap.get(item.revenueKey)} attributions={attributions} onSaved={attributionSaved} />)}
                       <button type="button" className="text-sm text-blue-600" onClick={() => setEditingAttribution(null)}>閉じる</button>
                     </td></tr>}
                     </Fragment>
@@ -3569,7 +3609,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
             </table>
           ) : (
             <p className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
-              取引データがありません
+              条件に一致する取引がありません
             </p>
           )}
         </div>

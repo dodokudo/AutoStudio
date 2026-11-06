@@ -35,6 +35,15 @@ test('未確認と明示的な報酬なしを区別し、10月は営業報酬を
   assert.equal(calculateCommission(sale, { ...defaultAttribution(sale), referralStatus: 'none', salespersonStatus: 'none' }).pending, false);
   assert.equal(validateAttribution({ ...defaultAttribution(sale), referralStatus: 'assigned', referrerName: '' }), false);
 });
+test('継続・成果報酬・ANALYCA・法人案件は紹介者が登録されていても報酬を計上しない', () => {
+  const rule = { ...defaultAttribution(sale), referralStatus: 'assigned' as const, referrerName: '紹介者', salespersonStatus: 'assigned' as const, salespersonName: '担当者' };
+  for (const category of ['backend_renewal', 'backend_performance', 'analyca', 'corporate', 'other']) {
+    const result = calculateCommission({ ...sale, category }, rule);
+    assert.equal(result.total, 0, category);
+    assert.equal(result.pending, false, category);
+  }
+  assert.equal(calculateCommission({ ...sale, category: 'backend' }, rule).total, 33000);
+});
 test('決済ごとに計算するので分割売上を契約総額として扱わない', () => {
   const payment = { ...sale, amount: 33000 };
   assert.equal(calculateCommission(payment, { ...defaultAttribution(payment), referralStatus: 'assigned', referrerName: '紹介者', salespersonStatus: 'none' }).total, 6600);
