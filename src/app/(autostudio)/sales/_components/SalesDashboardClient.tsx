@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
 import { AnalycaSalesView } from './AnalycaSalesView';
 import { SalesProfitView } from './SalesProfitView';
+import { canonicalSalesName, isUnknownSalesName } from '@/lib/sales/identity';
 import {
   Bar,
   BarChart,
@@ -117,9 +118,10 @@ interface TransactionGroup {
   items: Array<{ itemType: 'charge' | 'manual'; itemId: string }>;
 }
 
-type CustomerStatus = 'contracting' | 'active' | 'paused' | 'cancelled' | 'needs_review';
+type CustomerStatus = 'frontend' | 'contracting' | 'active' | 'paused' | 'cancelled' | 'needs_review';
 
 const CUSTOMER_STATUS_OPTIONS: Array<{ id: CustomerStatus; label: string }> = [
+  { id: 'frontend', label: 'フロント購入済み' },
   { id: 'contracting', label: '初回契約中' },
   { id: 'active', label: '継続中' },
   { id: 'paused', label: '休止' },
@@ -128,6 +130,7 @@ const CUSTOMER_STATUS_OPTIONS: Array<{ id: CustomerStatus; label: string }> = [
 ];
 
 const CUSTOMER_STATUS_STYLES: Record<CustomerStatus, string> = {
+  frontend: 'border-blue-200 bg-blue-50 text-blue-700',
   contracting: 'border-blue-300 bg-blue-50 text-blue-700',
   active: 'border-emerald-300 bg-emerald-50 text-emerald-700',
   paused: 'border-amber-300 bg-amber-50 text-amber-700',
@@ -158,6 +161,7 @@ interface AnalycaCustomerIdentity {
 
 interface GroupedPurchase {
   id: string;
+  customerKey?: string;
   date: Date;
   paymentDate: Date;
   amount: number;
@@ -186,7 +190,7 @@ const CUSTOMER_DISPLAY_NAMES_BY_ALIAS = new Map([
 const MERGED_CUSTOMER_DISPLAY_NAMES = new Set(['内山明', '眞下渚', '佐藤弥生']);
 
 const canonicalCustomerName = (value: string) =>
-  CUSTOMER_DISPLAY_NAMES_BY_ALIAS.get(normalizeCustomerKey(value)) ?? value;
+  canonicalSalesName(CUSTOMER_DISPLAY_NAMES_BY_ALIAS.get(normalizeCustomerKey(value)) ?? value);
 
 function buildGroupedPurchases(
   charges: Charge[],
@@ -200,6 +204,8 @@ function buildGroupedPurchases(
     if (charge.status !== 'successful') continue;
     rows.push({
       id: charge.id,
+      customerKey: isUnknownSalesName(charge.metadata?.['univapay-name'])
+        ? `unresolved:${charge.subscription_id || charge.transaction_token_id || charge.id}` : undefined,
       date: new Date(charge.created_on),
       paymentDate: new Date(charge.created_on),
       amount: charge.charged_amount,
@@ -215,6 +221,7 @@ function buildGroupedPurchases(
   for (const sale of manualSales) {
     rows.push({
       id: sale.id,
+      customerKey: isUnknownSalesName(sale.customerName) ? `manual:${sale.id}` : undefined,
       date: new Date(`${sale.transactionDate}T00:00:00`),
       paymentDate: new Date(`${sale.paymentDate ?? sale.transactionDate}T00:00:00`),
       amount: sale.amount,
@@ -259,8 +266,8 @@ function buildGroupedPurchases(
     }
 
     const customerName = canonicalCustomerName(
-      group.name.trim() ||
-      groupRows.find((item) => item.customerName !== '-')?.customerName ||
+      (!isUnknownSalesName(group.name) ? group.name.trim() : '') ||
+      groupRows.find((item) => !isUnknownSalesName(item.customerName))?.customerName ||
       '-',
     );
     const category =
@@ -269,6 +276,7 @@ function buildGroupedPurchases(
 
     result.push({
       id: group.id,
+      customerKey: isUnknownSalesName(customerName) ? `group:${group.id}` : undefined,
       date: new Date(Math.min(...groupRows.map((item) => item.date.getTime()))),
       paymentDate: new Date(Math.max(...groupRows.map((item) => item.paymentDate.getTime()))),
       amount: groupRows.reduce((sum, item) => sum + item.amount, 0),
@@ -324,6 +332,7 @@ interface SalesDashboardClientProps {
       groups?: TransactionGroup[];
     };
     deferred?: boolean;
+    identityWarnings?: string[];
   };
 }
 
@@ -1328,7 +1337,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           identity?.displayName ||
           canonicalName ||
           identityName ||
-          `ANALYCA会員 ${shortId}`,
+          (analycaUserId || identity ? `ANALYCA会員 ${shortId}` : `購入者名未確認（${shortId}）`),
       };
     };
 
@@ -1338,6 +1347,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         const customer = resolveCustomer(charge);
         return {
           id: charge.id,
+          revenueKey: `charge:${charge.id}`,
           amount: charge.charged_amount,
           category: (customerData.categories[charge.id] ?? 'other') as SalesCategoryId,
           paymentDate: toLocalDateKey(new Date(charge.created_on)),
@@ -1356,6 +1366,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       };
       return {
         id: sale.id,
+        revenueKey: `manual:${sale.id}`,
         amount: sale.amount,
         category: sale.category ?? 'other',
         paymentDate: sale.paymentDate || sale.transactionDate,
@@ -1426,10 +1437,9 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     const map = new Map<string, SummaryAccumulator>();
 
     for (const purchase of allTimeCoursePurchases) {
-      if (!purchase.customerName || purchase.customerName === '-') continue;
       const normalizedName = normalizeCustomerKey(purchase.customerName);
       const matchedProfile = aliasToProfile.get(normalizedName) ?? null;
-      const customerKey = matchedProfile?.customerKey ?? normalizedName;
+      const customerKey = matchedProfile?.customerKey ?? purchase.customerKey ?? normalizedName;
       const existing = map.get(customerKey);
       const isFrontendPurchase = purchase.category === 'frontend';
       const isInitialBackendPurchase = ['backend', 'backend_performance'].includes(purchase.category);
@@ -1488,7 +1498,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
 
       map.set(customerKey, {
         customerKey,
-        displayName: matchedProfile?.displayName || purchase.customerName,
+        displayName: matchedProfile?.displayName || (isUnknownSalesName(purchase.customerName)
+          ? `購入者名未確認（${customerKey.slice(-8)}）` : purchase.customerName),
         profile: matchedProfile,
         ltv: purchase.amount,
         purchaseCount: 1,
@@ -1545,10 +1556,17 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           : !summary.lastRenewalDate && initialContractEndDate && initialContractEndDate >= now
             ? 'contracting'
             : hasBackend
-              ? 'cancelled'
-              : 'needs_review';
-      const status = summary.profile?.status ?? inferredStatus;
+              ? 'needs_review'
+              : 'frontend';
+      const statusUpdatedByRenewal = summary.profile?.status === 'contracting' && inferredStatus === 'active' &&
+        !!summary.lastRenewalDate && summary.lastRenewalDate > new Date(summary.profile.updatedAt);
+      const status = statusUpdatedByRenewal ? 'active' : summary.profile?.status ?? inferredStatus;
       const nextContractEndDate = renewalContractEndDate ?? initialContractEndDate;
+      const statusNeedsReview = !!summary.profile && !statusUpdatedByRenewal && (
+        (summary.profile.status === 'contracting' && (!!summary.lastRenewalDate || (!!initialContractEndDate && initialContractEndDate < now))) ||
+        (summary.profile.status === 'active' && !!nextContractEndDate && nextContractEndDate < now) ||
+        (['paused', 'cancelled'].includes(summary.profile.status) && summary.lastPurchaseDate > new Date(summary.profile.updatedAt))
+      );
 
       return {
         ...summary,
@@ -1559,6 +1577,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
         hasInitialBackend,
         hasBackend,
         status,
+        statusNeedsReview,
+        statusUpdatedByRenewal,
         courseName: summary.profile?.courseName ?? '',
         lineDisplayName: summary.profile?.lineDisplayName ?? '',
         aliases: summary.profile?.aliases ?? [],
@@ -1699,7 +1719,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
   const unmatchedCoursePurchases = useMemo(() => {
     return allTimeCoursePurchases
       .filter((purchase) => {
-        if (purchase.customerName !== '-') return false;
+        if (!isUnknownSalesName(purchase.customerName)) return false;
         if (view === 'frontend') return purchase.category === 'frontend';
         if (view === 'backend') {
           return ['backend', 'backend_performance', 'backend_renewal'].includes(purchase.category);
@@ -1965,6 +1985,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       <SalesProfitView
         revenueItems={selectedRangeRevenueItems}
         dateRange={dateRange}
+        revenueLoading={!fullData && !!initialData.deferred}
       />
     );
   }
@@ -1974,6 +1995,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       view === 'frontend' ? 'フロントエンド' : view === 'backend' ? 'バックエンド' : '講座';
     return (
       <>
+        {(fullData?.identityWarnings ?? []).map((warning) => <p key={warning} role="alert" className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{warning}</p>)}
+        {unmatchedCoursePurchases.length > 0 && <p className="text-sm text-amber-800">名前未確認の購入も一覧・売上に含めています。同一人物か確認できていないため、購入者数・CVRは暫定です。</p>}
         <div className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
           view === 'frontend' ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
         }`}>
@@ -2409,6 +2432,8 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                             <option key={option.id} value={option.id}>{option.label}</option>
                           ))}
                         </select>
+                        {buyer.statusNeedsReview && <p className="mt-1 text-xs text-amber-700">保存済みステータスの更新確認が必要</p>}
+                        {buyer.statusUpdatedByRenewal && <p className="mt-1 text-xs text-emerald-700">新しい継続入金を反映</p>}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right font-medium tabular-nums">
                         ¥{numberFormatter.format(buyer.ltv)}
@@ -2557,7 +2582,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                         {formatJapanDate(purchase.date)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap font-medium text-[color:var(--color-text-primary)]">
-                        {purchase.customerName}
+                        {isUnknownSalesName(purchase.customerName) ? '購入者名未確認' : purchase.customerName}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">
                         ¥{numberFormatter.format(purchase.amount)}
@@ -2589,6 +2614,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
 
   return (
     <>
+      {(fullData?.identityWarnings ?? []).map((warning) => <p key={warning} role="alert" className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{warning}</p>)}
       {/* サマリーカード */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="p-4">
@@ -2671,6 +2697,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       </div>
 
       {/* カテゴリ別売上 */}
+      <SalesProfitView revenueItems={selectedRangeRevenueItems} dateRange={dateRange} compact revenueLoading={!fullData && !!initialData.deferred} />
       <Card className="p-6">
         <div className="flex flex-col gap-4">
           <div>

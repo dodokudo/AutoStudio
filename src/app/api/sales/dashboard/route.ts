@@ -6,7 +6,8 @@ import { getCustomerProfiles } from '@/lib/sales/customerProfiles';
 import { getAnalycaCustomerIdentities } from '@/lib/sales/analycaCustomers';
 import { getLineRegistrationsDailyByDateRange } from '@/lib/lstep/analytics';
 import { resolveProjectId } from '@/lib/bigquery';
-import { formatDateInput } from '@/lib/dateRangePresets';
+import { enrichSalesIdentities } from '@/lib/sales/elmeIdentities';
+import { createSalesNameResolver, isUnknownSalesName } from '@/lib/sales/identity';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -23,26 +24,23 @@ function isValidDate(value: string | null): value is string {
 }
 
 async function getDashboard(startParam: string, endParam: string) {
-  const startDate = new Date(`${startParam}T00:00:00`);
-  const endDate = new Date(`${endParam}T23:59:59`);
+  const startDate = new Date(`${startParam}T00:00:00+09:00`);
+  const endDate = new Date(`${endParam}T23:59:59.999+09:00`);
 
-  const startDateStr = formatDateInput(startDate);
-  const endDateStr = formatDateInput(endDate);
+  const startDateStr = startParam;
+  const endDateStr = endParam;
 
   const cashflowStart = new Date(startDate);
   cashflowStart.setDate(cashflowStart.getDate() - 31);
   const cashflowStartDate = cashflowStart.toISOString();
 
-  const monthlyStart = new Date();
-  monthlyStart.setHours(0, 0, 0, 0);
-  monthlyStart.setMonth(monthlyStart.getMonth() - 11);
-  monthlyStart.setDate(1);
-  const monthlyEnd = new Date();
-  monthlyEnd.setHours(0, 0, 0, 0);
-  const monthlyStartDate = monthlyStart.toISOString();
-  const monthlyEndDate = monthlyEnd.toISOString();
-  const monthlyStartDateStr = formatDateInput(monthlyStart);
-  const monthlyEndDateStr = formatDateInput(monthlyEnd);
+  const now = new Date();
+  const monthlyEndDateStr = new Date(now.getTime() + 9 * 60 * 60_000).toISOString().slice(0, 10);
+  const monthlyStart = new Date(`${monthlyEndDateStr.slice(0, 7)}-01T00:00:00Z`);
+  monthlyStart.setUTCMonth(monthlyStart.getUTCMonth() - 11);
+  const monthlyStartDateStr = monthlyStart.toISOString().slice(0, 10);
+  const monthlyStartDate = new Date(`${monthlyStartDateStr}T00:00:00+09:00`).toISOString();
+  const monthlyEndDate = now.toISOString();
 
   const [
     summary,
@@ -100,9 +98,28 @@ async function getDashboard(startParam: string, endParam: string) {
     customerCategories[id] = cat;
   }
 
+  const allCharges = [...new Map([...customerSummary.charges, ...monthlySummary.charges, ...summary.charges, ...cashflowSummary.charges].map((charge) => [charge.id, charge])).values()];
+  const identityResult = await enrichSalesIdentities(allCharges, customerProfiles);
+  const enrichedById = new Map(identityResult.charges.map((charge) => [charge.id, charge]));
+  const enrich = (charges: typeof summary.charges) => charges.map((charge) => enrichedById.get(charge.id) ?? charge);
+  const resolveName = createSalesNameResolver(customerProfiles);
+  const enrichManual = (sales: typeof manualSales) => sales.map((sale) => ({ ...sale, customerName: resolveName(sale.customerName) }));
+
+  // Explicit saved categories win. Product metadata provides a fallback for new charges.
+  for (const charge of allCharges) {
+    const metadata = charge.metadata ?? {};
+    const courseName = metadata.courseName ?? Object.entries(metadata).find(([key]) => key.replace(/[^a-zA-Z]/g, '') === 'courseName')?.[1];
+    const category = metadata.analycaUserId ? 'analyca'
+      : courseName === 'Threads×AI運用マスター講座' ? 'frontend' : undefined;
+    if (!category) continue;
+    for (const map of [categories, monthlyCategories, customerCategories]) {
+      if (!map[charge.id]) map[charge.id] = category;
+    }
+  }
+
   const groups = Array.from(groupsMap.values()).map(({ group, items }) => ({
     id: group.id,
-    name: group.name,
+    name: isUnknownSalesName(group.name) ? '' : resolveName(group.name),
     items: items.map((i: { itemType: 'charge' | 'manual'; itemId: string }) => ({
       itemType: i.itemType,
       itemId: i.itemId,
@@ -116,30 +133,31 @@ async function getDashboard(startParam: string, endParam: string) {
       failedCount: summary.failedCount,
       pendingCount: summary.pendingCount,
     },
-    charges: summary.charges,
-    cashflowCharges: cashflowSummary.charges,
+    charges: enrich(summary.charges),
+    cashflowCharges: enrich(cashflowSummary.charges),
     dateRange: {
       from: startDateStr,
       to: endDateStr,
     },
     categories,
-    manualSales,
+    manualSales: enrichManual(manualSales),
+    identityWarnings: identityResult.warnings,
     groups,
     customerProfiles,
     analycaCustomers,
     lineDailyRegistrations,
     monthlyData: {
-      charges: monthlySummary.charges,
+      charges: enrich(monthlySummary.charges),
       categories: monthlyCategories,
-      manualSales: monthlyManualSales,
+      manualSales: enrichManual(monthlyManualSales),
       groups,
       rangeStart: monthlyStartDateStr,
       rangeEnd: monthlyEndDateStr,
     },
     customerData: {
-      charges: customerSummary.charges,
+      charges: enrich(customerSummary.charges),
       categories: customerCategories,
-      manualSales: customerManualSales,
+      manualSales: enrichManual(customerManualSales),
       groups,
     },
   };

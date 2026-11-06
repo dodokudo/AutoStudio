@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Table } from '@/components/ui/table';
+import { SalesCommissionPanel } from './SalesCommissionPanel';
+import { calculateCommission, type SalesAttribution } from '@/lib/sales/commissions';
 import {
   Bar,
   CartesianGrid,
@@ -29,6 +31,8 @@ import {
 
 export interface ProfitRevenueItem {
   id: string;
+  revenueKey?: string;
+  customerName?: string;
   amount: number;
   category: string;
   paymentDate: string;
@@ -36,6 +40,8 @@ export interface ProfitRevenueItem {
 }
 
 interface SalesProfitViewProps {
+  compact?: boolean;
+  revenueLoading?: boolean;
   revenueItems: ProfitRevenueItem[];
   dateRange: {
     from: string;
@@ -75,10 +81,12 @@ const monthKeysBetween = (startDate: string, endDate: string) => {
   return keys;
 };
 
-export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProps) {
+export function SalesProfitView({ revenueItems, dateRange, compact = false, revenueLoading = false }: SalesProfitViewProps) {
   const numberFormatter = useMemo(() => new Intl.NumberFormat('ja-JP'), []);
   const [expenses, setExpenses] = useState<SalesExpense[]>([]);
+  const [attributions, setAttributions] = useState<SalesAttribution[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -98,17 +106,19 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
     let canceled = false;
     const loadExpenses = async () => {
       setLoading(true);
+      setLoadError(false);
       setErrorMessage('');
       try {
-        const response = await fetch(
-          `/api/sales/expenses?start=${dateRange.from}&end=${dateRange.to}`,
-          { cache: 'no-store' },
-        );
-        if (!response.ok) throw new Error('費用データを取得できませんでした');
-        const payload = await response.json();
-        if (!canceled) setExpenses(payload.expenses ?? []);
+        const [response, attributionResponse] = await Promise.all([
+          fetch(`/api/sales/expenses?start=${dateRange.from}&end=${dateRange.to}`, { cache: 'no-store' }),
+          fetch('/api/sales/attributions', { cache: 'no-store' }),
+        ]);
+        if (!response.ok || !attributionResponse.ok) throw new Error('費用・報酬データを取得できませんでした。利益は未確定です');
+        const [payload, attributionPayload] = await Promise.all([response.json(), attributionResponse.json()]);
+        if (!canceled) { setExpenses(payload.expenses ?? []); setAttributions(attributionPayload.attributions ?? []); }
       } catch (error) {
         if (!canceled) {
+          setLoadError(true);
           setErrorMessage(error instanceof Error ? error.message : '費用データを取得できませんでした');
         }
       } finally {
@@ -191,9 +201,22 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
         .filter((expense) => expense.amount > 0),
     [numberFormatter, revenueItems],
   );
+  const commissions = useMemo(() => {
+    const map = new Map(attributions.map((row) => [row.revenueKey, row]));
+    return revenueItems.map((item) => ({ item, ...calculateCommission(item, map.get(item.revenueKey ?? item.id)) }));
+  }, [attributions, revenueItems]);
+  const pendingCommissions = commissions.filter((row) => row.pending);
+  const commissionExpenses = useMemo<ProfitExpense[]>(() => commissions.flatMap((row) =>
+    (['referral', 'salesperson'] as const).flatMap((role) => row[role] > 0 ? [{
+      id: `${role}:${row.item.revenueKey ?? row.item.id}`, amount: row[role], category: 'outsourcing' as const,
+      expenseType: 'direct' as const, businessUnit: COURSE_CATEGORIES.has(row.item.category) ? 'course' as const : 'shared' as const,
+      description: `${role === 'referral' ? row.attribution.referrerName : row.attribution.salespersonName} / ${row.item.customerName || '購入者名未確認'} / ${role === 'referral' ? '20%' : '10%'}`,
+      expenseDate: row.item.paymentDate, createdAt: '', source: 'manual' as const,
+      sourceCategory: role === 'referral' ? '紹介報酬' : '営業報酬', sourceGroup: '売上原価', sourceLabel: '支払予定',
+    }] : [])), [commissions]);
   const profitExpenses = useMemo<ProfitExpense[]>(
-    () => [...expenses, ...cardFeeExpenses],
-    [cardFeeExpenses, expenses],
+    () => [...expenses, ...cardFeeExpenses, ...commissionExpenses],
+    [cardFeeExpenses, expenses, commissionExpenses],
   );
 
   const metrics = useMemo(() => {
@@ -346,8 +369,33 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
       )
     : [];
 
+  if (loading || revenueLoading) return <Card className="p-6"><p className="text-sm">売上・経費・報酬を読み込み中です</p></Card>;
+  if (loadError) return <Card className="p-6"><p role="alert" className="text-sm text-red-700">{errorMessage}</p></Card>;
+
+  const profitNotice = <p className="text-sm text-amber-800">
+    {pendingCommissions.length > 0 ? `販売経由が未確認の売上${pendingCommissions.length}件（¥${numberFormatter.format(pendingCommissions.reduce((sum, row) => sum + row.item.amount, 0))}）があります。利益は暫定です。` : '登録済み売上・経費・報酬をもとにした暫定利益です。'}
+    {commissionExpenses.length > 0 && ' 支払済み報酬を経費に登録している場合は二重計上の照合が必要です。'}
+  </p>;
+
+  if (compact) return <Card className="p-6">
+    <h2 className="text-lg font-semibold">月別利益（暫定）</h2>
+    <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">決済・入金日を基準に集計しています。</p>
+    <div className="mt-3">{profitNotice}</div>
+    <div className="mt-4 grid grid-cols-2 gap-4">
+      <div><p className="text-sm">粗利益（売上 − 報酬・直接原価）</p><p className="mt-1 text-2xl font-bold">¥{numberFormatter.format(metrics.grossProfit)}</p></div>
+      <div><p className="text-sm">経費差引後利益</p><p className="mt-1 text-2xl font-bold">¥{numberFormatter.format(metrics.operatingProfit)}</p></div>
+    </div>
+    <div className="mt-4 overflow-auto"><table className="w-full text-right text-sm"><thead><tr className="border-b"><th className="p-2 text-left">月</th><th>売上</th><th>紹介報酬</th><th>営業報酬</th><th>粗利益（暫定）</th><th>経費差引後（暫定）</th><th>経由未確認</th></tr></thead><tbody>{monthlyRows.map((row) => {
+      const monthCommissions = commissions.filter((c) => c.item.paymentDate.startsWith(row.month));
+      return <tr className="border-b" key={row.month}><td className="p-2 text-left">{row.month}</td><td>¥{numberFormatter.format(row.revenue)}</td><td>¥{numberFormatter.format(monthCommissions.reduce((sum, c) => sum + c.referral, 0))}</td><td>¥{numberFormatter.format(monthCommissions.reduce((sum, c) => sum + c.salesperson, 0))}</td><td>¥{numberFormatter.format(row.grossProfit)}</td><td>¥{numberFormatter.format(row.profit)}</td><td>{monthCommissions.filter((c) => c.pending).length}件</td></tr>;
+    })}</tbody></table></div>
+    <a className="mt-4 inline-block text-sm text-blue-600" href="/sales?tab=profit&range=this-year">販売経由・報酬を設定する</a>
+  </Card>;
+
   return (
     <>
+      {profitNotice}
+      <SalesCommissionPanel items={revenueItems} attributions={attributions} onSaved={(value) => setAttributions((current) => [...current.filter((row) => row.revenueKey !== value.revenueKey), value])} />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">売上</p>
@@ -364,18 +412,18 @@ export function SalesProfitView({ revenueItems, dateRange }: SalesProfitViewProp
             ¥{numberFormatter.format(metrics.directCosts + metrics.operatingCosts)}
           </p>
           <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-            MoneyForward ¥{numberFormatter.format(metrics.moneyForwardCosts)}・手入力 ¥{numberFormatter.format(metrics.manualCosts)}・決済手数料 ¥{numberFormatter.format(metrics.cardProcessingFees)}
+            MoneyForward ¥{numberFormatter.format(metrics.moneyForwardCosts)}・手入力 ¥{numberFormatter.format(metrics.manualCosts)}・決済手数料 ¥{numberFormatter.format(metrics.cardProcessingFees)}・紹介／営業報酬 ¥{numberFormatter.format(commissionExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">粗利益</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">粗利益（暫定）</p>
           <p className="mt-1 text-2xl font-bold text-[color:var(--color-text-primary)]">
             ¥{numberFormatter.format(metrics.grossProfit)}
           </p>
           <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">売上 − 直接原価</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">営業利益</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-muted)]">経費差引後利益（暫定）</p>
           <p className={`mt-1 text-2xl font-bold ${
             metrics.operatingProfit >= 0 ? 'text-emerald-700' : 'text-red-700'
           }`}>

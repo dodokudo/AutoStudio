@@ -5,6 +5,7 @@ const DATASET = 'autostudio_sales';
 const TABLE = 'customer_profiles';
 
 export const CUSTOMER_STATUSES = [
+  'frontend',
   'contracting',
   'active',
   'paused',

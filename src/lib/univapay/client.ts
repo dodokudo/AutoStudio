@@ -85,6 +85,7 @@ async function fetchUnivaPay<T>(
 
   const response = await fetch(url.toString(), {
     method: 'GET',
+    signal: AbortSignal.timeout(15000),
     headers: {
       'Authorization': getAuthHeader(),
       'Content-Type': 'application/json',
@@ -126,6 +127,15 @@ export async function getCharge(chargeId: string): Promise<UnivaPayCharge> {
   }
 
   return fetchUnivaPay<UnivaPayCharge>(`/stores/${storeId}/charges/${chargeId}`);
+}
+
+/** Only retain the contact fields needed for identity matching, never card details. */
+export async function getTransactionContact(tokenId: string): Promise<{ email: string; name: string }> {
+  if (!UNIVAPAY_STORE_ID) throw new Error('UNIVAPAY_STORE_ID is not configured');
+  const token = await fetchUnivaPay<{ email?: string; metadata?: Record<string, string> }>(
+    `/stores/${UNIVAPAY_STORE_ID}/tokens/${encodeURIComponent(tokenId)}`,
+  );
+  return { email: token.email ?? '', name: token.metadata?.['univapay-name'] ?? '' };
 }
 
 /**
