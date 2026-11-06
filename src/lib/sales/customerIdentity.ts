@@ -5,6 +5,11 @@ export const IDENTITY_CATEGORIES = new Set(['frontend', 'backend', 'backend_rene
 export interface GuardianIdentity {
   name: string; email: string; elmeId: string; lstepId: string;
   registeredDate: string; dateEvidence: string; source: string;
+  idEvidence?: string;
+}
+export interface ReviewedSalesIdentity {
+  revenueKey: string; guardianSource: string; lstepId: string; customerKey: string; evidence: string;
+  expected: { amount: number; date: string; category: string; name: string };
 }
 export interface PaymentTag {
   userId: string; paymentMethod: string; classificationStatus: string;
@@ -12,6 +17,7 @@ export interface PaymentTag {
 }
 export interface SalesCustomerLink {
   revenueKey: string;
+  saleType: 'charge' | 'manual'; saleId: string; customerKey: string;
   elmeId: string; lstepId: string; lineUserId: string;
   customerName: string; lineName: string;
   registeredDate: string; dateEvidence: string;
@@ -24,7 +30,7 @@ const text = (value: unknown) => String(value ?? '').trim();
 const emailKey = (value: string) => value.normalize('NFKC').trim().toLowerCase();
 const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
 
-export function parseGuardianIdentities(rows: unknown[][], tab: string): GuardianIdentity[] {
+export function parseGuardianIdentities(rows: unknown[][], tab: string, notes: Record<string, string> = {}): GuardianIdentity[] {
   const headerRow = rows.findIndex(row => row.includes('エルメ友だちID') && row.includes('メールアドレス'));
   if (headerRow < 0) throw new Error(`顧客シートのID列がありません: ${tab}`);
   const headers = rows[headerRow].map(text);
@@ -35,6 +41,7 @@ export function parseGuardianIdentities(rows: unknown[][], tab: string): Guardia
     if (!elmeId && !lstepId) return [];
     return [{ name: read(row, '名前'), email: emailKey(read(row, 'メールアドレス')), elmeId, lstepId,
       registeredDate: read(row, '購入日（確認済）'), dateEvidence: read(row, '購入日根拠'),
+      idEvidence: notes[`${tab}:${headerRow + index + 2}`] ?? '',
       source: `https://docs.google.com/spreadsheets/d/${GUARDIAN_CUSTOMER_SHEET}/edit#range=${encodeURIComponent(`${tab}!A${headerRow + index + 2}`)}` }];
   });
 }
@@ -53,6 +60,7 @@ export function matchSalesCustomer(input: {
   revenueKey: string; email: string; elmeId?: string; paymentMethod: string;
 }, forms: FormIdentity[], guardian: GuardianIdentity[], tags: PaymentTag[], now: string): SalesCustomerLink {
   const base: SalesCustomerLink = { revenueKey: input.revenueKey, elmeId: '', lstepId: '', lineUserId: '',
+    saleType: input.revenueKey.startsWith('charge:') ? 'charge' : 'manual', saleId: input.revenueKey.slice(input.revenueKey.indexOf(':') + 1), customerKey: '',
     customerName: '', lineName: '', registeredDate: '', dateEvidence: '', status: 'pending',
     reason: '', sources: [], matchedAt: now };
   const email = emailKey(input.email);
@@ -77,7 +85,7 @@ export function matchSalesCustomer(input: {
   const dates = unique(rows.map(row => row.registeredDate));
   const lstepId = lstepIds[0] ?? '';
   const paymentTag = tags.find(row => row.userId === lstepId);
-  return { ...base, elmeId, lstepId, lineUserId: lineIds[0] ?? '', customerName: form?.name ?? rows[0]?.name ?? '',
+  return { ...base, elmeId, lstepId, customerKey: lstepId ? `lstep:${lstepId}` : `elme:${elmeId}`, lineUserId: lineIds[0] ?? '', customerName: form?.name ?? rows[0]?.name ?? '',
     lineName: form?.lineName ?? '', registeredDate: dates.length === 1 ? dates[0] : '',
     dateEvidence: dates.length === 1 ? unique(rows.map(row => row.dateEvidence)).join(' / ') : '',
     status: 'confirmed', reason: lstepId ? '' : '顧客シートのLステップID未登録',
@@ -85,12 +93,52 @@ export function matchSalesCustomer(input: {
     paymentTag, paymentTagReason: lstepId ? assessPaymentTag(paymentTag, input.paymentMethod, now) : '' };
 }
 
+// Explicit per-sale review can link bank transfers and backend-only customers without an Elme ID.
+// The caller must compare expected financial fields with the current sale before using the review.
+export function applyReviewedIdentity(base: SalesCustomerLink, review: ReviewedSalesIdentity, guardian: GuardianIdentity[], forms: FormIdentity[], tags: PaymentTag[], method: string, now: string): SalesCustomerLink {
+  if (base.revenueKey !== review.revenueKey || !review.evidence.trim() || !review.customerKey) throw new Error('Invalid identity review');
+  const source = guardian.find(row => row.source === review.guardianSource && row.lstepId === review.lstepId && row.idEvidence);
+  if (!source) throw new Error(`Reviewed Guardian ID or evidence changed: ${review.revenueKey}`);
+  if (base.status === 'conflict') return base;
+  const rows = guardian.filter(row => row.lstepId === review.lstepId);
+  const elmeIds = unique([base.elmeId, ...rows.map(row => row.elmeId)]);
+  if (elmeIds.length > 1 || (base.lstepId && base.lstepId !== review.lstepId)) return { ...base, status: 'conflict', reason: '確認済みの顧客IDと契約照合が相違しています' };
+  const elmeId = elmeIds[0] ?? '';
+  const idForms = elmeId ? forms.filter(row => row.respondentId === elmeId) : [];
+  const lineIds = unique([base.lineUserId, ...idForms.map(row => row.lineUserId ?? '')]);
+  if (lineIds.length > 1) return { ...base, status: 'conflict', reason: 'LINEユーザーIDが競合しています' };
+  const dates = unique(rows.map(row => row.registeredDate));
+  const paymentTag = tags.find(row => row.userId === review.lstepId);
+  return { ...base, status: 'confirmed', reason: elmeId ? '' : 'エルメIDは未確認', elmeId, lstepId: review.lstepId,
+    customerKey: `lstep:${review.lstepId}`, lineUserId: lineIds[0] ?? '', customerName: base.customerName || source.name,
+    lineName: base.lineName || idForms[0]?.lineName || '',
+    registeredDate: base.registeredDate || (dates.length === 1 ? dates[0] : ''),
+    dateEvidence: base.dateEvidence || (dates.length === 1 ? unique(rows.map(row => row.dateEvidence)).join(' / ') : ''),
+    sources: unique([...base.sources, ...rows.map(row => row.source), source.idEvidence!, `顧客キー:${review.customerKey}`, review.evidence]),
+    paymentTag, paymentTagReason: assessPaymentTag(paymentTag, method, now), matchedAt: now };
+}
+
 // An import may fill blanks, but cannot silently replace a previously confirmed ID.
 export function mergeCustomerLink(previous: SalesCustomerLink | undefined, next: SalesCustomerLink): SalesCustomerLink {
-  if (!previous?.elmeId) return next;
+  if (!previous || (!previous.elmeId && !previous.lstepId && !previous.lineUserId)) return next;
   const conflict = (['elmeId', 'lstepId', 'lineUserId'] as const).some(key => previous[key] && next[key] && previous[key] !== next[key]);
   if (conflict || next.status !== 'confirmed') return { ...previous, status: 'conflict', reason: '保存済みIDを維持。再照合の結果を確認してください' };
-  return { ...next, elmeId: previous.elmeId, lstepId: previous.lstepId || next.lstepId,
+  return { ...next, elmeId: previous.elmeId || next.elmeId, lstepId: previous.lstepId || next.lstepId,
     lineUserId: previous.lineUserId || next.lineUserId, registeredDate: previous.registeredDate || next.registeredDate,
     dateEvidence: previous.dateEvidence || next.dateEvidence, sources: unique([...previous.sources, ...next.sources]) };
+}
+
+// Explicitly verified common LSTEP IDs can carry independently verified Elme/LINE IDs across purchases.
+export function completeCustomerLinks(links: SalesCustomerLink[]): SalesCustomerLink[] {
+  return links.map(link => {
+    if (link.status !== 'confirmed' || !link.lstepId) return link;
+    const peers = links.filter(row => row.status === 'confirmed' && row.lstepId === link.lstepId);
+    const elmeIds = unique(peers.map(row => row.elmeId));
+    const lineIds = unique(peers.map(row => row.lineUserId));
+    if (elmeIds.length > 1 || lineIds.length > 1) return { ...link, status: 'conflict', reason: '共通LステップIDの顧客情報が競合しています' };
+    const sources = peers.filter(row => row.elmeId || row.lineUserId);
+    return { ...link, elmeId: link.elmeId || elmeIds[0] || '', lineUserId: link.lineUserId || lineIds[0] || '',
+      reason: elmeIds.length && link.reason === 'エルメIDは未確認' ? '' : link.reason,
+      sources: unique([...link.sources, ...sources.filter(row => row.revenueKey !== link.revenueKey).map(row => `確認済みLステップID共有:${row.revenueKey}`)]) };
+  });
 }

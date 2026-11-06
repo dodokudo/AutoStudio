@@ -202,7 +202,12 @@ function buildGroupedPurchases(
   categories: Record<string, string>,
   manualSales: ManualSale[],
   groups: TransactionGroup[],
+  links: Map<string, SalesCustomerLink>,
 ): GroupedPurchase[] {
+  const identityKey = (key: string) => {
+    const link = links.get(key);
+    return link?.status === 'confirmed' ? link.customerKey || (link.lstepId ? `lstep:${link.lstepId}` : link.elmeId ? `elme:${link.elmeId}` : undefined) : undefined;
+  };
   const rows: Array<GroupedPurchase & { itemType: 'charge' | 'manual' }> = [];
 
   for (const charge of charges) {
@@ -210,8 +215,8 @@ function buildGroupedPurchases(
     rows.push({
       id: charge.id,
       revenueKeys: [`charge:${charge.id}`],
-      customerKey: isUnknownSalesName(charge.metadata?.['univapay-name'])
-        ? `unresolved:${charge.subscription_id || charge.transaction_token_id || charge.id}` : undefined,
+      customerKey: identityKey(`charge:${charge.id}`) ?? (isUnknownSalesName(charge.metadata?.['univapay-name'])
+        ? `unresolved:${charge.subscription_id || charge.transaction_token_id || charge.id}` : undefined),
       date: new Date(charge.created_on),
       paymentDate: new Date(charge.created_on),
       amount: charge.charged_amount,
@@ -228,7 +233,7 @@ function buildGroupedPurchases(
     rows.push({
       id: sale.id,
       revenueKeys: [`manual:${sale.id}`],
-      customerKey: isUnknownSalesName(sale.customerName) ? `manual:${sale.id}` : undefined,
+      customerKey: identityKey(`manual:${sale.id}`) ?? (isUnknownSalesName(sale.customerName) ? `manual:${sale.id}` : undefined),
       date: new Date(`${sale.transactionDate}T00:00:00`),
       paymentDate: new Date(`${sale.paymentDate ?? sale.transactionDate}T00:00:00`),
       amount: sale.amount,
@@ -284,7 +289,8 @@ function buildGroupedPurchases(
     result.push({
       id: group.id,
       revenueKeys: groupRows.flatMap(row => row.revenueKeys),
-      customerKey: isUnknownSalesName(customerName) ? `group:${group.id}` : undefined,
+      customerKey: groupRows.every(row => row.customerKey && row.customerKey === groupRows[0].customerKey)
+        ? groupRows[0].customerKey : isUnknownSalesName(customerName) ? `group:${group.id}` : undefined,
       date: new Date(Math.min(...groupRows.map((item) => item.date.getTime()))),
       paymentDate: new Date(Math.max(...groupRows.map((item) => item.paymentDate.getTime()))),
       amount: groupRows.reduce((sum, item) => sum + item.amount, 0),
@@ -1191,8 +1197,9 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       },
       monthlyData.manualSales,
       monthlyData.groups ?? fullData?.groups ?? initialData.groups ?? [],
+      customerLinkMap,
     );
-  }, [fullData, initialData]);
+  }, [fullData, initialData, customerLinkMap]);
 
   const segmentPurchases = useMemo(() => {
     if (view === 'main') return [];
@@ -1269,12 +1276,13 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
           customerData.categories,
           customerData.manualSales,
           customerData.groups ?? fullData?.groups ?? initialData.groups ?? [],
+          customerLinkMap,
         )
       : monthlyGroupedPurchases;
     return rows.filter((purchase) =>
       ['frontend', 'backend', 'backend_performance', 'backend_renewal'].includes(purchase.category)
     );
-  }, [fullData, initialData, monthlyGroupedPurchases]);
+  }, [fullData, initialData, monthlyGroupedPurchases, customerLinkMap]);
 
   const allRevenueItems = useMemo(() => {
     const customerData = fullData?.customerData ?? initialData.customerData;
@@ -1492,11 +1500,24 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
       categories: Set<SalesCategoryId>;
     };
     const map = new Map<string, SummaryAccumulator>();
+    const profileIdentityCandidates = new Map<string, Set<string>>();
+    for (const purchase of allTimeCoursePurchases) {
+      if (!purchase.customerKey?.match(/^(lstep|elme):/)) continue;
+      const profile = aliasToProfile.get(normalizeCustomerKey(purchase.customerName));
+      const aliasKey = profile?.customerKey ?? normalizeCustomerKey(purchase.customerName);
+      const keys = profileIdentityCandidates.get(aliasKey) ?? new Set<string>();
+      keys.add(purchase.customerKey);
+      profileIdentityCandidates.set(aliasKey, keys);
+    }
+    const profileIdentity = (key: string) => {
+      const keys = profileIdentityCandidates.get(key);
+      return keys?.size === 1 ? [...keys][0] : undefined;
+    };
 
     for (const purchase of allTimeCoursePurchases) {
       const normalizedName = normalizeCustomerKey(purchase.customerName);
       const matchedProfile = aliasToProfile.get(normalizedName) ?? null;
-      const customerKey = matchedProfile?.customerKey ?? purchase.customerKey ?? normalizedName;
+      const customerKey = purchase.customerKey ?? (matchedProfile ? profileIdentity(matchedProfile.customerKey) ?? matchedProfile.customerKey : normalizedName);
       const existing = map.get(customerKey);
       const isFrontendPurchase = purchase.category === 'frontend';
       const isInitialBackendPurchase = ['backend', 'backend_performance'].includes(purchase.category);
@@ -1583,7 +1604,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
     for (const item of analycaRevenueItems) {
       const normalizedName = normalizeCustomerKey(canonicalCustomerName(item.customerName));
       const matchedProfile = aliasToProfile.get(normalizedName) ?? null;
-      const customerKey = matchedProfile?.customerKey ?? normalizedName;
+      const customerKey = profileIdentity(matchedProfile?.customerKey ?? normalizedName) ?? matchedProfile?.customerKey ?? normalizedName;
       const summary = map.get(customerKey);
       if (!summary) continue;
       summary.categories.add('analyca');
@@ -2461,7 +2482,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                 <tbody>
                   {visibleBuyerSummaries.map((buyer) => {
                     const profile: CustomerProfile = {
-                      customerKey: buyer.customerKey,
+                      customerKey: buyer.profile?.customerKey ?? buyer.customerKey,
                       displayName: buyer.displayName,
                       status: buyer.status,
                       courseName: buyer.courseName,
@@ -2484,7 +2505,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
                               status: event.target.value as CustomerStatus,
                             })
                           }
-                          disabled={savingCustomerKey === buyer.customerKey}
+                          disabled={savingCustomerKey === profile.customerKey}
                           className={`rounded-[var(--radius-sm)] border px-2 py-1 text-sm font-medium disabled:opacity-50 ${
                             view === 'backend' || view === 'courses'
                               ? CUSTOMER_STATUS_STYLES[buyer.status]

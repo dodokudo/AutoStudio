@@ -11,6 +11,7 @@ export function SalesCustomerIdentity({ links, paymentMethod = '' }: { links: Sa
         const tagReason = link.paymentTagReason || assessPaymentTag(link.paymentTag, paymentMethod, new Date().toISOString());
         return <div key={link.revenueKey} className="space-y-1 break-all">
           {rows.length > 1 && <p>{link.customerName || link.revenueKey}</p>}
+          {link.customerKey && <p>顧客キー：{link.customerKey}</p>}
           <p>エルメID：{link.elmeId || '未確認'}</p>
           <p>LステップID：{link.lstepId || '未確認'}</p>
           <p>LINEユーザーID：{link.lineUserId || '未確認'}</p>

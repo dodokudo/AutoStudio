@@ -9,16 +9,25 @@ import { getChargeCategories, getManualSales } from '../lib/sales/categories';
 import { readElmeIdentities } from '../lib/sales/elmeIdentities';
 import { getTransactionContact } from '../lib/univapay/client';
 import { getPaymentTags, getSalesCustomerLinks, saveCustomerLinks } from '../lib/sales/customerLinks';
-import { IDENTITY_CATEGORIES, matchSalesCustomer, mergeCustomerLink, parseGuardianIdentities } from '../lib/sales/customerIdentity';
+import { IDENTITY_CATEGORIES, applyReviewedIdentity, completeCustomerLinks, matchSalesCustomer, mergeCustomerLink, parseGuardianIdentities, type ReviewedSalesIdentity } from '../lib/sales/customerIdentity';
 
 async function main() {
   const directory = process.argv[2];
   if (!directory || directory.startsWith('--')) throw new Error('Private audit directory required');
   const read = (file: string) => JSON.parse(readFileSync(join(directory, file), 'utf8'));
   const write = (file: string, value: unknown) => writeFileSync(join(directory, file), JSON.stringify(value, null, 2), { mode: 0o600 });
+  const notes: Record<string, string> = {};
+  if (existsSync(join(directory, 'guardianNotes.json'))) {
+    for (const sheet of read('guardianNotes.json').sheets) for (const data of sheet.data ?? []) {
+      if (![46, 53].includes(data.startColumn)) continue;
+      data.rowData?.forEach((row: { values?: { note?: string }[] }, index: number) => {
+        if (row.values?.[0]?.note) notes[`${sheet.properties.title}:${data.startRow + index + 1}`] = row.values[0].note;
+      });
+    }
+  }
   const guardian = [
-    ...parseGuardianIdentities(read('guardianFront.json').values, 'Threads×AIマスター講座メンバーリスト'),
-    ...parseGuardianIdentities(read('guardianBack.json').values, 'SNSマーケ講座メンバーリスト'),
+    ...parseGuardianIdentities(read('guardianFront.json').values, 'Threads×AIマスター講座メンバーリスト', notes),
+    ...parseGuardianIdentities(read('guardianBack.json').values, 'SNSマーケ講座メンバーリスト', notes),
   ];
   const now = new Date().toISOString();
   const client = createBigQueryClient();
@@ -59,7 +68,19 @@ async function main() {
       email: row.note.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? '',
       elmeId: savedMap.get(`manual:${row.id}`)?.elmeId, paymentMethod: row.paymentMethod })),
   ];
-  const links = inputs.map(input => mergeCustomerLink(savedMap.get(input.revenueKey), matchSalesCustomer(input, forms, guardian, tags, now)));
+  const reviews: ReviewedSalesIdentity[] = existsSync(join(directory, 'reviewed-sales-links.json')) ? read('reviewed-sales-links.json') : [];
+  const currentSales = new Map<string, ReviewedSalesIdentity['expected']>([
+    ...courses.map(row => [`charge:${row.id}`, { amount: row.charged_amount, date: new Date(Date.parse(row.created_on) + 9 * 3600000).toISOString().slice(0, 10), category: categoryFor(row), name: row.metadata?.['univapay-name'] ?? '' }] as const),
+    ...manual.map(row => [`manual:${row.id}`, { amount: row.amount, date: row.transactionDate, category: row.category, name: row.customerName }] as const),
+  ]);
+  assert.equal(new Set(reviews.map(row => row.revenueKey)).size, reviews.length, 'Duplicate review');
+  for (const review of reviews) assert.deepEqual(currentSales.get(review.revenueKey), review.expected, `Reviewed sale changed: ${review.revenueKey}`);
+  const links = completeCustomerLinks(inputs.map(input => {
+    let next = matchSalesCustomer(input, forms, guardian, tags, now);
+    const review = reviews.find(row => row.revenueKey === input.revenueKey);
+    if (review) next = applyReviewedIdentity(next, review, guardian, forms, tags, input.paymentMethod, now);
+    return mergeCustomerLink(savedMap.get(input.revenueKey), next);
+  }));
   assert.equal(new Set(links.map(row => row.revenueKey)).size, links.length);
   // The preview includes all source records used in financial aggregates, not just matched sales.
   const totals = () => {

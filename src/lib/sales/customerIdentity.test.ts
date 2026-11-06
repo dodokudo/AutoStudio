@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assessPaymentTag, matchSalesCustomer, mergeCustomerLink, parseGuardianIdentities, type GuardianIdentity, type PaymentTag } from './customerIdentity';
+import { applyReviewedIdentity, assessPaymentTag, completeCustomerLinks, matchSalesCustomer, mergeCustomerLink, parseGuardianIdentities, type GuardianIdentity, type PaymentTag } from './customerIdentity';
 
 const now = '2026-11-07T03:00:00Z';
 const input = { revenueKey: 'charge:1', email: ' A@EXAMPLE.COM ', paymentMethod: 'card' };
@@ -36,4 +36,22 @@ test('顧客シートの列名で読み、空欄IDは許容する', () => {
   const rows = parseGuardianIdentities([[], ['名前', 'LステップユーザーID', 'メールアドレス', 'エルメ友だちID'], ['人', '', 'A@example.com', 'elme']], 'front');
   assert.equal(rows[0].elmeId, 'elme'); assert.equal(rows[0].lstepId, ''); assert.equal(rows[0].email, 'a@example.com');
   assert.match(rows[0].source, /A3/);
+});
+test('契約と別名を確認した銀行振込・バック単独購入はエルメIDなしでも連携する', () => {
+  const base = matchSalesCustomer({ ...input, email: '', revenueKey: 'manual:1' }, [], [], [], now);
+  const review = { revenueKey: 'manual:1', lstepId: 'step-1', guardianSource: 'sheet-row', customerKey: '既存顧客キー', evidence: '契約日・契約額と既存別名を照合', expected: { amount: 100000, date: '2026-11-01', category: 'backend', name: '銀行名義' } };
+  const row = applyReviewedIdentity(base, review, [{ ...guardian, elmeId: '', idEvidence: '確認済みIDメモ' }], [], [tag], 'bank', now);
+  assert.equal(row.status, 'confirmed'); assert.equal(row.elmeId, ''); assert.equal(row.lstepId, 'step-1');
+  assert.equal(row.customerKey, 'lstep:step-1'); assert.equal(row.saleType, 'manual'); assert.equal(row.saleId, '1');
+  assert.ok(row.paymentTagReason);
+  assert.throws(() => applyReviewedIdentity(base, review, [{ ...guardian, elmeId: '' }], [], [tag], 'bank', now));
+  assert.equal(mergeCustomerLink(row, { ...row, lstepId: 'different' }).lstepId, 'step-1');
+});
+test('同じ確認済みLステップIDでフロント・バックを関連付け、明細数は維持する', () => {
+  const first = matchSalesCustomer(input, [form], [guardian], [tag], now);
+  const second = { ...first, revenueKey: 'manual:2', saleId: '2', saleType: 'manual' as const, elmeId: '', lineUserId: '' };
+  const linked = completeCustomerLinks([first, second]);
+  assert.equal(linked.length, 2); assert.equal(linked[1].elmeId, first.elmeId); assert.equal(linked[1].lineUserId, first.lineUserId);
+  assert.equal(linked[1].customerKey, first.customerKey); assert.equal(second.elmeId, '');
+  assert.equal(completeCustomerLinks([first, { ...second, elmeId: 'conflicting' }])[0].status, 'conflict');
 });
