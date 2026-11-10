@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { ELME_IDENTITY_SHEET } from '@/lib/sales/elmeIdentities';
+import { snsAccounts, parseAccountAnswers, matchAccountAnswer } from './accounts';
 import { getChargesFromBigQuery } from '@/lib/sales/charges';
 import { getChargeCategories, getManualSales } from '@/lib/sales/categories';
 import { getSalesCustomerLinks } from '@/lib/sales/customerLinks';
@@ -51,39 +53,7 @@ function sheetAccounts(
   elme: unknown,
   lstep: unknown,
 ): CustomerAccount[] {
-  const accounts: CustomerAccount[] = [];
-  if (text(snsName) || text(snsUrl)) {
-    let url: string | undefined, id: string | undefined;
-    try {
-      const parsed = new URL(text(snsUrl));
-      if (['https:', 'http:'].includes(parsed.protocol)) {
-        url = parsed.href;
-        if (
-          /^(www\.)?(instagram\.com|threads\.net|threads\.com|x\.com|twitter\.com)$/.test(
-            parsed.hostname,
-          )
-        ) {
-          const handle = parsed.pathname
-            .split('/')
-            .filter(Boolean)[0]
-            ?.replace(/^@/, '');
-          if (
-            handle &&
-            !['p', 'reel', 'reels', 'stories', 'share', 't'].includes(handle)
-          )
-            id = handle;
-        }
-      }
-    } catch {
-      if (/^@[a-zA-Z0-9._]+$/.test(text(snsUrl))) id = text(snsUrl).slice(1);
-    }
-    accounts.push({
-      platform: 'SNS',
-      name: text(snsName) || undefined,
-      id: id ? `@${id}` : undefined,
-      url,
-    });
-  }
+  const accounts = snsAccounts(snsName, snsUrl);
   if (text(lineName)) accounts.push({ platform: 'LINE', name: text(lineName) });
   if (text(elme)) accounts.push({ platform: 'エルメ', id: text(elme) });
   if (text(lstep)) accounts.push({ platform: 'Lステップ', id: text(lstep) });
@@ -96,7 +66,7 @@ interface SheetPurchase extends Purchase {
 }
 async function readGuardian(
   services: ServiceDefinition[],
-): Promise<{ purchases: SheetPurchase[]; snapshotAt?: string }> {
+): Promise<{ purchases: SheetPurchase[]; snapshotAt?: string; warnings: string[] }> {
   let snapshot:
     | { capturedAt: string; valueRanges: { values?: unknown[][] }[] }
     | undefined;
@@ -127,18 +97,25 @@ async function readGuardian(
       : process.env.GOOGLE_APPLICATION_CREDENTIALS,
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
-  const result = snapshot
-    ? { data: { valueRanges: snapshot.valueRanges } }
-    : await google
-        .sheets({ version: 'v4', auth })
-        .spreadsheets.values.batchGet(
-          {
-            spreadsheetId: GUARDIAN_CUSTOMER_SHEET,
-            ranges: tabs.map((t) => `'${t.title}'!A1:BG1000`),
-            valueRenderOption: 'UNFORMATTED_VALUE',
-          },
-          { timeout: 20000 },
-        );
+  const api = google.sheets({ version: 'v4', auth });
+  const [result, answersResult] = await Promise.all([
+    snapshot
+      ? Promise.resolve({ data: { valueRanges: snapshot.valueRanges } })
+      : api.spreadsheets.values.batchGet({
+          spreadsheetId: GUARDIAN_CUSTOMER_SHEET,
+          ranges: tabs.map((t) => `'${t.title}'!A1:BG1000`),
+          valueRenderOption: 'UNFORMATTED_VALUE',
+        }, { timeout: 20000 }),
+    api.spreadsheets.values.get({
+      spreadsheetId: ELME_IDENTITY_SHEET,
+      range: "'シート1'!A:I",
+    }, { timeout: 15000 }).then((r) => ({
+      answers: parseAccountAnswers(r.data.values || []), warnings: [] as string[],
+    })).catch(() => ({
+      answers: [],
+      warnings: ['登録時アンケートを取得できませんでした。SNSは顧客管理シートの情報のみ表示しています。'],
+    })),
+  ]);
   const purchases = tabs.flatMap((tab, i) => {
     const rows = result.data.valueRanges?.[i].values || [],
       headers = (rows[1] || []).map(text);
@@ -172,6 +149,14 @@ async function readGuardian(
           : !evidence
             ? date(r[6])
             : null);
+      const accountAnswer = matchAccountAnswer({
+        elmeId: col(r, 'エルメ友だちID'),
+        email: col(r, 'メールアドレス'),
+        name: r[1], lineName: r[3],
+      }, answersResult.answers);
+      const sheetSns = r[tab.category === 'frontend' ? 5 : 4];
+      const hasSheetAccount = snsAccounts(r[2], sheetSns).some((a) => a.id || a.url);
+      const sns = hasSheetAccount ? sheetSns : accountAnswer?.answer || sheetSns;
       const purchased =
         Number(r[tab.category === 'frontend' ? 8 : 14]) > 0 || !!paymentId;
       return [
@@ -182,7 +167,7 @@ async function readGuardian(
           realName: text(r[1]),
           accounts: sheetAccounts(
             r[2],
-            r[tab.category === 'frontend' ? 5 : 4],
+            sns,
             r[3],
             col(r, 'エルメ友だちID'),
             col(r, 'LステップユーザーID'),
@@ -214,7 +199,7 @@ async function readGuardian(
       ];
     });
   });
-  return { purchases, snapshotAt: snapshot?.capturedAt };
+  return { purchases, snapshotAt: snapshot?.capturedAt, warnings: answersResult.warnings };
 }
 let cache: { key: string; expires: number; data: CustomerDataset } | undefined;
 let pending: { key: string; promise: Promise<CustomerDataset> } | undefined;
@@ -268,8 +253,9 @@ async function load(services: ServiceDefinition[]): Promise<CustomerDataset> {
     manual = value(manualResult, [], '手動・銀行売上'),
     links = value(linksResult, [], '顧客ID対応表'),
     analyca = value(analycaResult, [], 'ANALYCA顧客'),
-    sheetResult = value(sheetsResult, { purchases: [] }, '顧客管理シート'),
+    sheetResult = value(sheetsResult, { purchases: [], warnings: [] }, '顧客管理シート'),
     sheets = sheetResult.purchases;
+  warnings.push(...sheetResult.warnings);
   let categories = new Map<string, string>();
   try {
     categories = await getChargeCategories(charges.map((c) => c.id));

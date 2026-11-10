@@ -31,6 +31,7 @@ const yen = (n: number) => `¥${n.toLocaleString('ja-JP')}`;
 const pct = (n: number | null) => (n === null ? '—' : `${n.toFixed(1)}%`);
 const input =
   'rounded-lg border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm outline-none focus:border-[color:var(--color-accent)]';
+const select = `${input} appearance-none rounded-lg pr-9 focus-visible:outline-offset-[-3px] bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2216%22%20height=%2216%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%236b7280%22%20stroke-width=%222%22%3E%3Cpath%20d=%22m6%209%206%206%206-6%22/%3E%3C/svg%3E')] bg-[position:right_0.75rem_center] bg-no-repeat`;
 const button =
   'rounded-lg border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-40';
 const primary =
@@ -76,10 +77,10 @@ function AccountDetails({ customer }: { customer: Customer }) {
   return (
     <div className="space-y-1 text-xs text-gray-500">
       {!accounts.some((a) => a.platform === 'SNS') && (
-        <p className="text-gray-400">SNS：シート未登録</p>
+        <p className="text-gray-400">SNS：回答との紐づけ未確認</p>
       )}
       {accounts.map((a, i) => (
-        <div key={`${a.platform}:${i}`}>
+        <div key={`${a.platform}:${i}`} className="break-words">
           <span className="mr-1 text-gray-400">{a.platform}</span>
           {a.url ? (
             <a
@@ -93,7 +94,7 @@ function AccountDetails({ customer }: { customer: Customer }) {
           ) : (
             <span>{a.name || a.id || '—'}</span>
           )}
-          {a.id && a.id !== a.name && (
+          {a.id && a.name && a.id !== a.name && (
             <p className="break-all text-gray-400">{a.id}</p>
           )}
         </div>
@@ -110,7 +111,7 @@ export function CustomersClient() {
     [service, setService] = useState('frontend'),
     [page, setPage] = useState(0);
   const [sort, setSort] = useState<CustomerSort>('frontend'),
-    [direction, setDirection] = useState<'asc' | 'desc'>('asc');
+    [direction, setDirection] = useState<'asc' | 'desc'>('desc');
   const [followupFilter, setFollowupFilter] = useState('all');
   const [selected, setSelected] = useState<Customer | null>(null);
   const [source, setSource] = useState('frontend'),
@@ -263,6 +264,7 @@ export function CustomersClient() {
   }, [search, service, sort, direction, followupFilter]);
   function selectService(id: string) {
     setService(id);
+    setDirection('desc');
     setSort(
       id === 'frontend'
         ? 'frontend'
@@ -462,11 +464,11 @@ export function CustomersClient() {
                     />
                   </div>
                   <div
-                    className="mt-4 flex items-center gap-4 overflow-x-auto pb-1"
+                    className="mt-4 flex flex-wrap items-center gap-4"
                     role="group"
                     aria-label="顧客一覧の絞り込みと並び替え"
                   >
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {[
                         ...funnelServices,
                         { id: 'both', name: 'フロント・バック両方' },
@@ -477,18 +479,18 @@ export function CustomersClient() {
                           key={s.id}
                           aria-pressed={service === s.id}
                           onClick={() => selectService(s.id)}
-                          className={`inline-flex h-10 items-center whitespace-nowrap rounded-full border px-4 text-xs font-medium ${service === s.id ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
+                          className={`inline-flex h-10 items-center whitespace-nowrap rounded-full border px-4 text-xs font-medium focus-visible:outline-offset-[-3px] ${service === s.id ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
                         >
                           {s.name}
                         </button>
                       ))}
                     </div>
-                    <div className="ml-auto flex shrink-0 items-center gap-3 text-xs text-gray-500">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 xl:ml-auto">
                       <label className="flex items-center gap-2 whitespace-nowrap">
                         相談対応
                         <select
                           aria-label="相談対応の絞り込み"
-                          className={`${input} h-10 w-44`}
+                          className={`${select} h-10 w-48`}
                           value={followupFilter}
                           onChange={(e) => setFollowupFilter(e.target.value)}
                         >
@@ -509,7 +511,7 @@ export function CustomersClient() {
                           onChange={(e) =>
                             setSort(e.target.value as CustomerSort)
                           }
-                          className={`${input} h-10 w-36`}
+                          className={`${select} h-10 w-44`}
                         >
                           <option value="purchase">初回購入日</option>
                           <option value="frontend">フロント購入日</option>
@@ -523,7 +525,7 @@ export function CustomersClient() {
                         onChange={(e) =>
                           setDirection(e.target.value as 'asc' | 'desc')
                         }
-                        className={`${input} h-10 w-24`}
+                        className={`${select} h-10 w-28`}
                       >
                         <option value="asc">
                           {sort === 'name' ? '昇順' : '古い順'}
