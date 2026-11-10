@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatDailyReport, formatWeeklyReport } from './sns-report';
+import { formatDailyReport as formatDaily, formatWeeklyReport } from './sns-report';
 import type { DailyReportData, WeeklyReportData } from './sns-report-data';
+
+const formatDailyReport = (data: DailyReportData) => formatDaily(data, new Date('2026-09-17T06:00:00+09:00'));
 
 const report: DailyReportData = {
   reportDate: '2026-09-16', lineDelta: 4,
@@ -39,7 +41,7 @@ test('flags cached balances when bank synchronization failed', () => {
   const message = formatDailyReport({ ...report, mfBankBalances: [
     { ...report.mfBankBalances![0], status: 'error' },
   ] });
-  assert.match(message, /GMO：¥20,000（連携エラー）/);
+  assert.match(message, /GMO：¥20,000（連携エラー・前回取得値）/);
 });
 
 test('a balance query failure preserves spending and the rest of the report', () => {
@@ -100,4 +102,19 @@ test('weekly story labels match daily and omit removed annotations', () => {
   const missing = formatWeeklyReport({ ...weekly, igStoryReach: null, igStoryViewRate: null });
   assert.match(missing, /閲覧率：未取得/);
   assert.doesNotMatch(missing, /null|NaN|未取得%/);
+});
+
+
+test('stale balances are labeled as previous values and never totaled', () => {
+  const message = formatDaily(report, new Date('2026-09-20T06:00:00+09:00'));
+  assert.match(message, /GMO：¥20,000（更新停止・前回取得値）/);
+  assert.doesNotMatch(message, /- 合計：¥20,000/);
+});
+
+test('missing spending is unknown while a verified zero remains zero', () => {
+  assert.match(formatDailyReport({ ...report, mfExpense: null }), /合計：未取得（更新を確認できません）/);
+  assert.match(formatDailyReport({ ...report, mfExpense: 0 }), /合計：¥0/);
+  const message = formatWeeklyReport({ ...weekly, mfWeekExpense: null, monthMfExpense: null });
+  assert.match(message, /週間合計：未取得/);
+  assert.match(message, /月間合計：未取得/);
 });

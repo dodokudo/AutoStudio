@@ -2,6 +2,7 @@ import { createBigQueryClient, resolveProjectId } from '@/lib/bigquery';
 import { countLineSourceRegistrations } from '@/lib/lstep/dashboard';
 import { getThreadsLinkClicksByRange } from '@/lib/links/analytics';
 import { getBankBalances, type BankBalance } from './bank-balances';
+import { expenseIsAvailable } from './moneyforward-health';
 
 const PROJECT_ID = resolveProjectId();
 const THREADS_DATASET = 'autostudio_threads';
@@ -42,7 +43,7 @@ export interface DailyReportData {
   igCollectedAt: string | null;
 
   // MoneyForward 支出
-  mfExpense: number;
+  mfExpense: number | null;
   mfBankBalances: BankBalance[] | null;
 }
 
@@ -74,7 +75,7 @@ export interface WeeklyReportData {
   igStoryViewRate: number | null;
 
   // Weekly spending
-  mfWeekExpense: number;
+  mfWeekExpense: number | null;
 
   // Monthly cumulative
   monthLabel: string;
@@ -84,14 +85,14 @@ export interface WeeklyReportData {
   monthThImpressions: number | null;
   monthIgFollowerDelta: number | null;
   monthIgReach: number | null;
-  monthMfExpense: number;
+  monthMfExpense: number | null;
 
   // Last month same period
   lastMonthLabel: string;
   lastMonthLineDelta: number;
   lastMonthThFollowerDelta: number | null;
   lastMonthIgFollowerDelta: number | null;
-  lastMonthMfExpense: number;
+  lastMonthMfExpense: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,38 +271,47 @@ async function fetchLineTotalRegistrations(startDate: string, endDate: string): 
 // MoneyForward spending queries
 // ---------------------------------------------------------------------------
 
-async function fetchDailyExpense(date: string): Promise<number> {
-  const client = createBigQueryClient(PROJECT_ID);
-  const [rows] = await client.query({
-    query: `
-      SELECT COALESCE(SUM(amount), 0) AS total
-      FROM \`${PROJECT_ID}.${MF_DATASET}.transactions\`
-      WHERE date = @date
-        AND type = 'expense'
-        AND is_transfer = FALSE
-        AND is_excluded_from_calculation = FALSE
-    `,
-    params: { date },
-  });
-  const row = (rows as Record<string, unknown>[])[0];
-  return Number(row?.total ?? 0);
+async function fetchMoneyForwardSync(): Promise<string | null> {
+  try {
+    const client = createBigQueryClient(PROJECT_ID);
+    // This marker is written only after the full ungrouped data, including transactions, is saved.
+    const [rows] = await client.query({
+      query: `SELECT last_scraped_at FROM \`${PROJECT_ID}.${MF_DATASET}.groups\` WHERE id = '0'`,
+    });
+    return (rows as { last_scraped_at: string | null }[])[0]?.last_scraped_at ?? null;
+  } catch (error) {
+    console.error('[line-report] Failed to fetch MoneyForward sync status:', error);
+    return null;
+  }
 }
 
-async function fetchExpenseRange(startDate: string, endDate: string): Promise<number> {
-  const client = createBigQueryClient(PROJECT_ID);
-  const [rows] = await client.query({
-    query: `
-      SELECT COALESCE(SUM(amount), 0) AS total
-      FROM \`${PROJECT_ID}.${MF_DATASET}.transactions\`
-      WHERE date BETWEEN @startDate AND @endDate
-        AND type = 'expense'
-        AND is_transfer = FALSE
-        AND is_excluded_from_calculation = FALSE
-    `,
-    params: { startDate, endDate },
+async function fetchExpenseRange(startDate: string, endDate: string): Promise<number | null> {
+  try {
+    const client = createBigQueryClient(PROJECT_ID);
+    const [rows] = await client.query({
+      query: `
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM \`${PROJECT_ID}.${MF_DATASET}.transactions\`
+        WHERE date BETWEEN @startDate AND @endDate
+          AND type = 'expense'
+          AND is_transfer = FALSE
+          AND is_excluded_from_calculation = FALSE
+      `,
+      params: { startDate, endDate },
+    });
+    const row = (rows as Record<string, unknown>[])[0];
+    return row?.total == null ? null : Number(row.total);
+  } catch (error) {
+    console.error('[line-report] Failed to fetch MoneyForward spending:', error);
+    return null;
+  }
+}
+
+async function fetchBankBalances(): Promise<BankBalance[] | null> {
+  return getBankBalances().catch((error) => {
+    console.error('[line-report] Failed to fetch bank balances:', error);
+    return null;
   });
-  const row = (rows as Record<string, unknown>[])[0];
-  return Number(row?.total ?? 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +336,7 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     lineFromIg,
     mfExpense,
     mfBankBalances,
+    mfSyncedAt,
   ] = await Promise.all([
     fetchThreadsMetrics(date),
     fetchThreadsMetrics(prevDate),
@@ -337,11 +348,9 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     fetchLineTotalRegistrations(date, date),
     countLineSourceRegistrations(PROJECT_ID, { startDate: date, endDate: date, sourceName: 'Threads' }),
     countLineSourceRegistrations(PROJECT_ID, { startDate: date, endDate: date, sourceName: 'Instagram' }),
-    fetchDailyExpense(date),
-    getBankBalances().catch((error) => {
-      console.error('[line-report] Failed to fetch bank balances:', error);
-      return null;
-    }),
+    fetchExpenseRange(date, date),
+    fetchBankBalances(),
+    fetchMoneyForwardSync(),
   ]);
 
   const thPost = thPostStats[0];
@@ -373,7 +382,7 @@ export async function getDailyReportData(date: string): Promise<DailyReportData>
     igStoryViewRate,
 
     igCollectedAt: igToday.collectedAt,
-    mfExpense,
+    mfExpense: expenseIsAvailable(date, mfSyncedAt, mfBankBalances) ? mfExpense : null,
     mfBankBalances,
   };
 }
@@ -417,6 +426,8 @@ export async function getWeeklyReportData(weekStart: string, weekEnd: string): P
     igLastMonth,
     lineLastMonth,
     mfLastMonthExpense,
+    mfBankBalances,
+    mfSyncedAt,
   ] = await Promise.all([
     fetchThreadsMetricsRange(weekStart, weekEnd),
     getDailyPostStats({ startDate: weekStart, endDate: weekEnd, accountKey: 'main' }),
@@ -438,6 +449,8 @@ export async function getWeeklyReportData(weekStart: string, weekEnd: string): P
     fetchIgInsightsRange(lastMonthStart, lastMonthEnd),
     fetchLineTotalRegistrations(lastMonthStart, lastMonthEnd),
     fetchExpenseRange(lastMonthStart, lastMonthEnd),
+    fetchBankBalances(),
+    fetchMoneyForwardSync(),
   ]);
 
   const sumPosts = (stats: { postCount: number }[]) =>
@@ -471,7 +484,7 @@ export async function getWeeklyReportData(weekStart: string, weekEnd: string): P
       ? Math.round(igStoryWeek.maxReach / igWeek.endFollowers * 1000) / 10
       : null,
 
-    mfWeekExpense,
+    mfWeekExpense: expenseIsAvailable(weekEnd, mfSyncedAt, mfBankBalances) ? mfWeekExpense : null,
 
     monthLabel: monthStart.slice(0, 7),
     monthLineDelta: lineMonth,
@@ -480,12 +493,12 @@ export async function getWeeklyReportData(weekStart: string, weekEnd: string): P
     monthThImpressions: thMonth.totalViews,
     monthIgFollowerDelta: metricDelta(igMonth.endFollowers, igMonth.startFollowers),
     monthIgReach: igMonth.totalReach,
-    monthMfExpense: mfMonthExpense,
+    monthMfExpense: expenseIsAvailable(monthEnd, mfSyncedAt, mfBankBalances) ? mfMonthExpense : null,
 
     lastMonthLabel: lastMonthStart.slice(0, 7),
     lastMonthLineDelta: lineLastMonth,
     lastMonthThFollowerDelta: metricDelta(thLastMonth.endFollowers, thLastMonth.startFollowers),
     lastMonthIgFollowerDelta: metricDelta(igLastMonth.endFollowers, igLastMonth.startFollowers),
-    lastMonthMfExpense: mfLastMonthExpense,
+    lastMonthMfExpense: expenseIsAvailable(lastMonthEnd, mfSyncedAt, mfBankBalances) ? mfLastMonthExpense : null,
   };
 }

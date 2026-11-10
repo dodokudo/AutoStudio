@@ -1,3 +1,4 @@
+import { bankBalanceIssue } from './moneyforward-health';
 import type { DailyReportData, WeeklyReportData } from './sns-report-data';
 
 function sign(n: number | null): string {
@@ -12,7 +13,8 @@ function num(n: number | null): string {
   return n.toLocaleString('ja-JP');
 }
 
-function yen(n: number): string {
+function yen(n: number | null): string {
+  if (n == null) return '未取得（更新を確認できません）';
   return `¥${n.toLocaleString('ja-JP')}`;
 }
 
@@ -24,7 +26,7 @@ function formatDate(dateStr: string): string {
 // Daily
 // ---------------------------------------------------------------------------
 
-export function formatDailyReport(d: DailyReportData): string {
+export function formatDailyReport(d: DailyReportData, now = new Date()): string {
   const lines: string[] = [];
 
   lines.push(`📊 デイリーレポート（${formatDate(d.reportDate)}）`);
@@ -71,13 +73,14 @@ export function formatDailyReport(d: DailyReportData): string {
   } else {
     for (const balance of d.mfBankBalances) {
       const bank = ({ 'GMOあおぞらネット銀行': 'GMO', '楽天銀行': '楽天' } as Record<string, string>)[balance.bank] ?? balance.bank;
-      const warning = balance.amount != null && balance.status !== 'ok' ? '（連携エラー）' : '';
+      const issue = bankBalanceIssue(balance, now);
+      const warning = balance.amount != null && issue ? `（${issue}・前回取得値）` : '';
       lines.push(`- ${bank}：${balance.amount == null ? '未取得' : yen(balance.amount)}${warning}`);
     }
-    if (d.mfBankBalances.every((balance) => balance.amount != null)) {
+    if (d.mfBankBalances.every((balance) => !bankBalanceIssue(balance, now))) {
       lines.push(`- 合計：${yen(d.mfBankBalances.reduce((sum, balance) => sum + balance.amount!, 0))}`);
     } else {
-      lines.push('- 合計：一部の口座残高が未取得のため集計できません');
+      lines.push('- 合計：一部の口座残高が未取得・更新停止のため集計できません');
     }
   }
   lines.push('');
