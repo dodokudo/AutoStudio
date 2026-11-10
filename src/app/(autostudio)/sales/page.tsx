@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Banner } from '@/components/ui/banner';
 import { SalesDashboardClient } from './_components/SalesDashboardClient';
 import { SalesRangeSelector } from './_components/SalesRangeSelector';
@@ -8,9 +9,6 @@ const RANGE_SELECT_OPTIONS = UNIFIED_RANGE_OPTIONS;
 
 const SALES_TABS = [
   { id: 'main', label: 'メイン' },
-  { id: 'courses', label: '講座管理' },
-  { id: 'frontend', label: 'フロントエンド' },
-  { id: 'backend', label: 'バックエンド' },
   { id: 'analyca', label: 'ANALYCA' },
   { id: 'profit', label: '利益管理' },
 ] as const;
@@ -24,6 +22,9 @@ export default async function SalesPage({
 }) {
   const resolvedSearchParams = await searchParams;
   const tabParam = typeof resolvedSearchParams?.tab === 'string' ? resolvedSearchParams.tab : undefined;
+  if (tabParam && ['courses', 'frontend', 'backend'].includes(tabParam)) {
+    redirect(tabParam === 'courses' ? '/customers' : `/customers?service=${tabParam}`);
+  }
   const activeTab: SalesTabKey = SALES_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as SalesTabKey)
     : 'main';

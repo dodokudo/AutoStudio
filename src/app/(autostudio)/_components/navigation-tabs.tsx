@@ -57,6 +57,8 @@ function NavIcon({ id, icon }: { id: string; icon: string }) {
       return <LineGlyph />;
     case 'youtube':
       return <YouTubeGlyph />;
+    case 'customers':
+      return <svg {...strokeProps}><circle cx="9" cy="8" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M21 21v-3a6 6 0 0 0-3-5" /></svg>;
     case 'top':
       return (
         <svg {...strokeProps}>
@@ -158,6 +160,7 @@ const navItems = [
   { id: 'analyca', href: '/analyca', label: 'ANALYCA', icon: '📊' },
   { id: 'launch', href: '/launch', label: 'Launch', icon: '🚀' },
   { id: 'sales', href: '/sales', label: 'Sales', icon: '¥' },
+  { id: 'customers', href: '/customers', label: 'Customers', icon: '◎' },
   { id: 'ads', href: '/ads', label: 'Ads', icon: '📣' },
   { id: 'youtube', href: '/youtube', label: 'YouTube', icon: '▶' },
   { id: 'links', href: '/links', label: 'Links', icon: '🔗' },

@@ -2789,7 +2789,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
               カテゴリ別売上
             </h2>
             <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              売上構成比と転換率をまとめて確認
+              商品別の売上構成を確認
             </p>
           </div>
         </div>
@@ -2870,44 +2870,7 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
               </div>
             </div>
             <div className="space-y-4">
-              <div className="rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-3">
-                <div className="grid items-center gap-2 md:grid-cols-5">
-                  <div>
-                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">LINE登録</p>
-                    <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
-                      {lineRegistrationsInRange !== null ? numberFormatter.format(lineRegistrationsInRange) : '—'}人
-                    </p>
-                  </div>
-                  <div className="text-center text-xs text-[color:var(--color-text-muted)]">
-                    <div className="text-base text-[color:var(--color-text-secondary)]">→</div>
-                    <div>{lineToFrontendRate !== null ? `${lineToFrontendRate.toFixed(1)}%` : '—'}</div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">フロント成約</p>
-                    <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
-                      {numberFormatter.format(frontendCountForRate)}件
-                    </p>
-                  </div>
-                  <div className="text-center text-xs text-[color:var(--color-text-muted)]">
-                    <div className="text-base text-[color:var(--color-text-secondary)]">→</div>
-                    <div>{frontendToBackendRate !== null ? `${frontendToBackendRate.toFixed(1)}%` : '—'}</div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-[color:var(--color-text-muted)]">バック成約</p>
-                    <p className="mt-1 text-xl font-semibold text-[color:var(--color-text-primary)]">
-                      {numberFormatter.format(backendCountForRate)}件
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 border-t border-[color:var(--color-border)] pt-2 text-xs text-[color:var(--color-text-muted)]">
-                  全体転換率（LINE→バック）：
-                  <span className="ml-1 font-medium text-[color:var(--color-text-primary)]">
-                    {lineRegistrationsInRange && lineRegistrationsInRange > 0
-                      ? `${((backendCountForRate / lineRegistrationsInRange) * 100).toFixed(1)}%`
-                      : '—'}
-                  </span>
-                </div>
-              </div>
+              <a href="/customers?tab=conversion" className="block rounded-[var(--radius-md)] border border-[color:var(--color-border)] p-4 text-sm hover:bg-gray-50">購入者とサービス間の転換率は「顧客」で確認 →</a>
               {categoryStatsGrouped.map(cat => {
                 const ratio = groupedStats.totalAmount > 0 ? (cat.amount / groupedStats.totalAmount) * 100 : 0;
                 return (
@@ -3206,84 +3169,6 @@ export function SalesDashboardClient({ initialData, view = 'main' }: SalesDashbo
             </Table>
           </div>
         )}
-      </Card>
-
-      {/* 月別 成約数/転換率 推移 */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-[color:var(--color-text-primary)]">
-          月別 成約数 / 転換率 推移
-        </h2>
-        <p className="mt-1 text-sm text-[color:var(--color-text-secondary)]">
-          日付フィルタの対象外（直近12ヶ月）
-        </p>
-        <div className="mt-4 h-72">
-          {monthlyCounts.length > 0 ? (
-            <ResponsiveContainer>
-              <ComposedChart data={monthlyCounts} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 12, fill: '#475569' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  yAxisId="left"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: '#475569' }}
-                  allowDecimals={false}
-                />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: '#475569' }}
-                  tickFormatter={(value) => `${value}%`}
-                  domain={[0, 100]}
-                />
-                <Tooltip
-                  formatter={(value: number, name: string) => {
-                    if (name === 'フロント→バック率') return [`${value.toFixed(1)}%`, name];
-                    return [value, name];
-                  }}
-                />
-                <Bar
-                  yAxisId="left"
-                  dataKey="frontend"
-                  name="フロント件数"
-                  fill="#3b82f6"
-                  radius={[4, 4, 0, 0]}
-                  opacity={0.85}
-                />
-                <Bar
-                  yAxisId="left"
-                  dataKey="backend"
-                  name="バック件数"
-                  fill="#10b981"
-                  radius={[4, 4, 0, 0]}
-                  opacity={0.85}
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="frontendToBackendRate"
-                  name="フロント→バック率"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[color:var(--color-border)]">
-              <p className="text-sm text-[color:var(--color-text-muted)]">
-                成約数データがありません
-              </p>
-            </div>
-          )}
-        </div>
       </Card>
 
       {/* 手動売上入力 */}

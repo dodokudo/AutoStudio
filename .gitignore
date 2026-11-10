@@ -54,3 +54,6 @@ measure-save.mjs
 # serena local config
 .serena/
 tmp_*.ts
+
+# Local customer service configuration
+/.local/
