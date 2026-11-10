@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { type Followup, validateFollowup } from './followup';
+import { readCustomerRecords, writeCustomerRecord } from './store';
 const directory = () =>
   path.join(process.cwd(), '.local', 'customer-followups');
 const file = (id: string) =>
@@ -10,7 +11,7 @@ const file = (id: string) =>
     createHash('sha256').update(id).digest('hex') + '.json',
   );
 export async function readFollowups(): Promise<Record<string, Followup>> {
-  if (process.env.NODE_ENV === 'production') return {};
+  if (process.env.NODE_ENV === 'production') return readCustomerRecords<Followup>('followups');
   let files: string[];
   try {
     files = await fs.readdir(directory());
@@ -31,13 +32,16 @@ export async function readFollowups(): Promise<Record<string, Followup>> {
   return Object.fromEntries(entries);
 }
 export async function saveFollowup(customerId: string, input: unknown) {
-  if (process.env.NODE_ENV === 'production') throw Error('保存先が未設定です');
   const now = new Date().toISOString(),
     today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
   const followup: Followup = {
     ...validateFollowup(input, today),
     updatedAt: now,
   };
+  if (process.env.NODE_ENV === 'production') {
+    await writeCustomerRecord('followups', customerId, followup);
+    return followup;
+  }
   await fs.mkdir(directory(), { recursive: true });
   const target = file(customerId),
     temp = target + '.' + randomUUID() + '.tmp';

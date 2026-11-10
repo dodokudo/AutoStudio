@@ -3,15 +3,10 @@ import { readServices, saveServices } from '@/lib/customers/services';
 export async function GET() {
   return NextResponse.json({
     services: await readServices(),
-    editable: process.env.NODE_ENV !== 'production',
+    editable: true,
   });
 }
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === 'production')
-    return NextResponse.json(
-      { error: 'ローカル確認版のみ保存できます' },
-      { status: 403 },
-    );
   if (
     request.headers.get('origin') &&
     request.headers.get('origin') !== new URL(request.url).origin

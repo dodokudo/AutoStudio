@@ -4,8 +4,6 @@ import { loadCustomerDataset } from '@/lib/customers/data';
 import { readServices } from '@/lib/customers/services';
 import { buildCustomerRoster } from '@/lib/customers/model';
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === 'production')
-    return NextResponse.json({ error: '保存先が未設定です' }, { status: 403 });
   if (
     request.headers.get('origin') &&
     request.headers.get('origin') !== new URL(request.url).origin
